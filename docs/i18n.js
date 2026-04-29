@@ -312,7 +312,7 @@
   // visits the site for the first time. Bumping it occasionally on
   // major version cuts is fine; the npm fetch handles everything else.
   const VERSION_STORAGE_KEY = "reasonix.version";
-  const VERSION_FALLBACK = "0.12";
+  const VERSION_FALLBACK = "0.16";
   const versionListeners = [];
   let currentVersion = VERSION_FALLBACK;
 

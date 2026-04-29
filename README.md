@@ -72,7 +72,26 @@ command list.
 
 ---
 
-## Web dashboard *(new in 0.12)*
+## At a glance
+
+|                                    | Reasonix       | Claude Code    | Cursor         | Aider          |
+|------------------------------------|----------------|----------------|----------------|----------------|
+| Backend                            | DeepSeek V4    | Anthropic      | OpenAI / Anthropic | any        |
+| Cost / typical task                | **~$0.001–0.005** | ~$0.05–0.50 | $20/mo + usage | varies         |
+| Where it runs                      | terminal       | terminal + IDE | IDE (Electron) | terminal       |
+| License                            | **MIT**        | closed         | closed         | Apache 2       |
+| DeepSeek prefix-cache hit rate     | **94.4%**      | n/a            | n/a            | ~46%           |
+| Reviewable edits (no auto-write)   | **yes** (`/apply`) | yes        | partial        | yes            |
+| MCP servers                        | **first-class**| first-class    | —              | —              |
+
+Numbers from `benchmarks/tau-bench-lite` (8 multi-turn coding tasks ×
+3 repeats, live `deepseek-chat`). Same workload, sole variable is
+prefix stability — committed transcripts in [`benchmarks/`](./benchmarks/).
+The full feature comparison [is below](#why-reasonix-vs-cursor--claude-code--cline--aider).
+
+---
+
+## Web dashboard
 
 Type `/dashboard` inside any session and Reasonix prints a localhost
 URL with a one-time token. Open it for a 13-tab control surface that
@@ -98,15 +117,14 @@ keep alive.
 
 Three things you'd come to Reasonix for, that nothing else combines:
 
-- **The cost economics actually land in your bill.** DeepSeek V4 is
-  ~30× cheaper than Claude Sonnet per token. Cheaper tokens alone
-  isn't the win — *cheap tokens with a 90%+ prefix-cache hit* is.
-  Reasonix's loop is engineered around append-only prompt growth so
-  the cache-stable prefix survives every tool call, which the
-  benchmarks section below verifies end-to-end (94.4% live, vs 46.6%
-  for a generic harness against the same workload). The `/stats`
-  panel tracks "vs Claude Sonnet 4.6" savings every turn so you can
-  watch your bill not happen.
+- **Cost economics that land in your bill.** DeepSeek V4 is ~30×
+  cheaper than Claude Sonnet per token. Cheap tokens alone isn't the
+  win — *cheap tokens with a 90%+ prefix-cache hit* is. Reasonix's
+  loop is engineered around append-only prompt growth so the
+  cache-stable prefix survives every tool call. The benchmarks
+  section verifies this end-to-end: 94.4% live cache hit, versus
+  46.6% for a generic harness on the same workload. The `/stats`
+  panel surfaces "vs Claude Sonnet 4.6" savings on every turn.
 
 - **It lives in your terminal.** Pure CLI — no Electron, no VS Code
   extension, no IDE plugin to wedge into your editor. Sits next to
@@ -311,7 +329,7 @@ assistant
 ```
 
 No allowlist gate — user-typed shell = explicit consent. 60s timeout,
-32k char cap, survives session resume since 0.5.14.
+32k char cap, survives session resume.
 
 **`@path/to/file` — inline a file under "Referenced files."** Start
 typing `@` and a picker appears (↑/↓ navigate, Tab/Enter to insert).
