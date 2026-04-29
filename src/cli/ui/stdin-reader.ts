@@ -27,8 +27,12 @@ export interface KeyEvent {
   mouseScrollUp?: boolean;
   /** Mouse wheel down — symmetric to `mouseScrollUp`. */
   mouseScrollDown?: boolean;
-  /** Left-button press; row/col are 1-based. Release events suppressed. */
+  /** Left-button press; row/col are 1-based. */
   mouseClick?: boolean;
+  /** Left-button motion (button held during drag). Mode 1002 only. */
+  mouseDrag?: boolean;
+  /** Any-button release. Mode 1002 only. */
+  mouseRelease?: boolean;
   mouseRow?: number;
   mouseCol?: number;
 }
@@ -420,7 +424,7 @@ export class StdinReader {
           const col = Number.parseInt(parts[1]!, 10);
           const row = Number.parseInt(parts[2]!, 10);
           if (Number.isFinite(btn) && Number.isFinite(col) && Number.isFinite(row)) {
-            // Wheel up/down come as press-only (uppercase M).
+            // SGR mouse: bit 5 (32) = motion, bit 6 (64) = wheel.
             if (tail === "M" && btn === 64) {
               this.dispatch({ input: "", mouseScrollUp: true, mouseRow: row, mouseCol: col });
               return;
@@ -429,12 +433,18 @@ export class StdinReader {
               this.dispatch({ input: "", mouseScrollDown: true, mouseRow: row, mouseCol: col });
               return;
             }
-            // Left-click press only (button 0 with M; we ignore release `m`).
             if (tail === "M" && btn === 0) {
               this.dispatch({ input: "", mouseClick: true, mouseRow: row, mouseCol: col });
               return;
             }
-            // Other buttons / drag / release → drop silently.
+            if (tail === "M" && btn === 32) {
+              this.dispatch({ input: "", mouseDrag: true, mouseRow: row, mouseCol: col });
+              return;
+            }
+            if (tail === "m") {
+              this.dispatch({ input: "", mouseRelease: true, mouseRow: row, mouseCol: col });
+              return;
+            }
             return;
           }
         }

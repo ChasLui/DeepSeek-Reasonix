@@ -49,6 +49,7 @@ import React from "react";
 import {
   type Cell,
   type Frame,
+  type FrameRow,
   borderLeft,
   empty,
   frameToAnsi,
@@ -897,6 +898,16 @@ export interface AtomViewport {
   totalRows: number;
   /** Highest valid scroll offset (rows). Caller clamps with this. */
   maxScrollRows: number;
+  /** Absolute row index (across all atoms) of the FIRST emitted row. */
+  firstRowAbs: number;
+}
+
+/** Linear-flow selection in absolute log-row + col coordinates. */
+export interface LogSelection {
+  startRow: number;
+  startCol: number;
+  endRow: number;
+  endCol: number;
 }
 
 /**
@@ -914,7 +925,14 @@ export function viewportLog(
   available: number,
 ): AtomViewport {
   if (atoms.length === 0 || available <= 0) {
-    return { atoms: [], topSkip: 0, bottomSkip: 0, totalRows: 0, maxScrollRows: 0 };
+    return {
+      atoms: [],
+      topSkip: 0,
+      bottomSkip: 0,
+      totalRows: 0,
+      maxScrollRows: 0,
+      firstRowAbs: 0,
+    };
   }
   const heights = atoms.map(atomRows);
   const totalRows = heights.reduce((a, b) => a + b, 0);
@@ -943,13 +961,13 @@ export function viewportLog(
     lastEnd = end;
   }
   if (firstIdx === -1) {
-    // Defensive fallback — shouldn't happen with clamped offset.
     return {
       atoms: [atoms[atoms.length - 1]!],
       topSkip: 0,
       bottomSkip: 0,
       totalRows,
       maxScrollRows,
+      firstRowAbs: Math.max(0, totalRows - heights[atoms.length - 1]!),
     };
   }
   const sliced = atoms.slice(firstIdx, lastIdx + 1);
@@ -967,7 +985,47 @@ export function viewportLog(
   if (lastAtom.kind === "frame") {
     bottomSkip = Math.max(0, lastEnd - viewportBottom);
   }
-  return { atoms: sliced, topSkip, bottomSkip, totalRows, maxScrollRows };
+  return {
+    atoms: sliced,
+    topSkip,
+    bottomSkip,
+    totalRows,
+    maxScrollRows,
+    firstRowAbs: firstStart + topSkip,
+  };
+}
+
+/** Cells in the [start, end) col range get `inverse: true` painted on top. */
+function highlightRow(row: FrameRow, fromCol: number, toCol: number): FrameRow {
+  if (fromCol >= toCol) return row;
+  const out: Cell[] = [];
+  let col = 0;
+  for (const cell of row) {
+    const cellEnd = col + (cell.tail ? 0 : cell.width);
+    const inRange = col < toCol && cellEnd > fromCol;
+    out.push(inRange ? { ...cell, inverse: true } : cell);
+    col = cellEnd;
+  }
+  return out;
+}
+
+function rowSelectionRange(
+  sel: LogSelection,
+  absRow: number,
+  rowWidth: number,
+): { from: number; to: number } | null {
+  if (sel.startRow === sel.endRow) {
+    if (absRow !== sel.startRow) return null;
+    return { from: Math.min(sel.startCol, sel.endCol), to: Math.max(sel.startCol, sel.endCol) };
+  }
+  const topRow = sel.startRow < sel.endRow ? sel.startRow : sel.endRow;
+  const topCol = sel.startRow < sel.endRow ? sel.startCol : sel.endCol;
+  const botRow = sel.startRow < sel.endRow ? sel.endRow : sel.startRow;
+  const botCol = sel.startRow < sel.endRow ? sel.endCol : sel.startCol;
+  if (absRow < topRow || absRow > botRow) return null;
+  if (absRow === topRow) return { from: topCol, to: rowWidth };
+  if (absRow === botRow) return { from: 0, to: botCol };
+  return { from: 0, to: rowWidth };
 }
 
 // ─── renderer ────────────────────────────────────────────────────
@@ -981,31 +1039,83 @@ export function viewportLog(
  * Until Phase 4 lands a direct stdout paint layer, this is where
  * Frames meet Ink — each row's ANSI string goes inside `<Text>`.
  */
-export function renderViewport(v: AtomViewport): React.ReactElement {
+export function renderViewport(
+  v: AtomViewport,
+  selection?: LogSelection | null,
+): React.ReactElement {
+  let absRow = v.firstRowAbs;
   return (
     <>
       {v.atoms.map((atom, i) => {
         if (atom.kind === "ink") {
+          absRow += atom.rows;
           return <React.Fragment key={atom.id}>{atom.element}</React.Fragment>;
         }
-        // Frame atom: slice rows by topSkip/bottomSkip if this is the
-        // first/last atom in the viewport.
         const start = i === 0 ? v.topSkip : 0;
         const end =
           i === v.atoms.length - 1 ? atom.frame.rows.length - v.bottomSkip : atom.frame.rows.length;
         const rows = atom.frame.rows.slice(start, end);
-        return (
+        const node = (
           <React.Fragment key={atom.id}>
-            {rows.map((row, ri) => (
-              <Box key={`${atom.id}/${start + ri}`} height={1} flexShrink={0}>
-                <Text>{frameToAnsi({ width: atom.frame.width, rows: [row] })}</Text>
-              </Box>
-            ))}
+            {rows.map((row, ri) => {
+              const rowAbs = absRow + ri;
+              const range = selection
+                ? rowSelectionRange(selection, rowAbs, atom.frame.width)
+                : null;
+              const painted = range ? highlightRow(row, range.from, range.to) : row;
+              return (
+                <Box key={`${atom.id}/${start + ri}`} height={1} flexShrink={0}>
+                  <Text>{frameToAnsi({ width: atom.frame.width, rows: [painted] })}</Text>
+                </Box>
+              );
+            })}
           </React.Fragment>
         );
+        absRow +=
+          atom.frame.rows.length -
+          (i === 0 ? v.topSkip : 0) -
+          (i === v.atoms.length - 1 ? v.bottomSkip : 0);
+        return node;
       })}
     </>
   );
+}
+
+/** Extract plain text from atoms in [startRow, endRow] absolute-row range. */
+export function extractSelection(atoms: readonly LogAtom[], selection: LogSelection): string {
+  const lines: string[] = [];
+  let cursor = 0;
+  for (const atom of atoms) {
+    const atomStart = cursor;
+    const atomEnd = cursor + atomRows(atom);
+    cursor = atomEnd;
+    const top = Math.min(selection.startRow, selection.endRow);
+    const bot = Math.max(selection.startRow, selection.endRow);
+    if (atomEnd <= top || atomStart > bot) continue;
+    if (atom.kind === "ink") {
+      lines.push("(non-text block)");
+      continue;
+    }
+    const w = atom.frame.width;
+    for (let r = 0; r < atom.frame.rows.length; r++) {
+      const absRow = atomStart + r;
+      const range = rowSelectionRange(selection, absRow, w);
+      if (!range) continue;
+      lines.push(rowSliceText(atom.frame.rows[r]!, range.from, range.to));
+    }
+  }
+  return lines.join("\n").replace(/[ \t]+$/gm, "");
+}
+
+function rowSliceText(row: FrameRow, fromCol: number, toCol: number): string {
+  let col = 0;
+  let out = "";
+  for (const cell of row) {
+    const cellEnd = col + (cell.tail ? 0 : cell.width);
+    if (col >= fromCol && cellEnd <= toCol && !cell.tail) out += cell.char;
+    col = cellEnd;
+  }
+  return out;
 }
 
 /**

@@ -38,7 +38,6 @@ import {
   saveReasoningEffort,
 } from "../../config.js";
 import { Eventizer } from "../../core/eventize.js";
-import { frameToAnsi } from "../../frame/index.js";
 import { type ResolvedHook, formatHookOutcomeMessage, loadHooks, runHooks } from "../../hooks.js";
 import { CacheFirstLoop, DeepSeekClient, ImmutablePrefix } from "../../index.js";
 import type { LoopEvent } from "../../loop.js";
@@ -81,8 +80,9 @@ import { SlashArgPicker } from "./SlashArgPicker.js";
 import { SlashSuggestions } from "./SlashSuggestions.js";
 import { WelcomeBanner } from "./WelcomeBanner.js";
 import { WorkspaceConfirm, type WorkspaceConfirmChoice } from "./WorkspaceConfirm.js";
-import { isMouseTrackingOn, setMouseTracking, useAltScreen } from "./alt-screen.js";
+import { useAltScreen } from "./alt-screen.js";
 import { detectBangCommand, formatBangUserMessage } from "./bang.js";
+import { writeClipboard } from "./clipboard.js";
 import {
   describeRepair,
   formatEditResults,
@@ -92,14 +92,19 @@ import {
 import { renderFrame } from "./frame-render.js";
 import { appendGlobalMemory, appendProjectMemory, detectHashMemory } from "./hash-memory.js";
 import { useKeystroke } from "./keystroke-context.js";
-import { eventsToAtoms, renderViewport, viewportLog } from "./log-frame.js";
+import {
+  type LogSelection,
+  eventsToAtoms,
+  extractSelection,
+  renderViewport,
+  viewportLog,
+} from "./log-frame.js";
 import { BottomHint } from "./log-rows.js";
 import { formatLoopStatus } from "./loop.js";
 import { handleMcpBrowseSlash } from "./mcp-browse.js";
 import { formatLongPaste } from "./paste-collapse.js";
 import { resolvePreset } from "./presets.js";
 import { type McpServerSummary, handleSlash, parseSlash, suggestSlashCommands } from "./slash.js";
-import { getStdinReader } from "./stdin-reader.js";
 import { COLOR } from "./theme.js";
 import { TickerProvider } from "./ticker.js";
 import { useCompletionPickers } from "./useCompletionPickers.js";
@@ -248,14 +253,22 @@ export function App({
   useAltScreen();
   const [historical, setHistorical] = useState<DisplayEvent[]>([]);
   const [streaming, setStreaming] = useState<DisplayEvent | null>(null);
-  // Copy-mode toggle: when true, App returns null (no Ink writes) and a
-  // useEffect dumps the rendered log to the main screen so the user can
-  // scroll terminal scrollback + drag-select across multi-screen content.
-  // Any keystroke restores alt-screen and the live TUI.
-  const [copyMode, setCopyMode] = useState(false);
-  // CtxFooter visibility — toggled by `/context`. Default ON; users who
-  // find the 3-row block intrusive can `/context` again to hide it.
   const [ctxFooterVisible, setCtxFooterVisible] = useState(true);
+  const [logSelection, setLogSelection] = useState<LogSelection | null>(null);
+  const dragAnchorRef = useRef<{ row: number; col: number } | null>(null);
+  const logRectRef = useRef<{ topRow: number; bottomRow: number; cols: number }>({
+    topRow: 1,
+    bottomRow: 1,
+    cols: 80,
+  });
+  const autoScrollTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const autoScrollDirRef = useRef<-1 | 0 | 1>(0);
+  const lastDragColRef = useRef(0);
+  const logSnapshotRef = useRef<{
+    firstRowAbs: number;
+    totalRows: number;
+    visibleRows: number;
+  }>({ firstRowAbs: 0, totalRows: 0, visibleRows: 0 });
 
   // Log scroll state — number of events skipped from the END.
   //   0   → at bottom (always show latest, auto-track new events)
@@ -1043,58 +1056,6 @@ export function App({
     currentRootDirRef.current = currentRootDir;
   }, [currentRootDir]);
 
-  // Copy-mode lifecycle: exit alt-screen on entry, dump the rendered log
-  // to main screen so terminal scrollback + native drag-select work, listen
-  // for any key to return. Re-enter alt-screen synchronously inside the
-  // key callback so the next React render lands inside the alt buffer
-  // instead of polluting main screen with TUI rows.
-  useEffect(() => {
-    if (!copyMode) return;
-    const cols = (process.stdout?.columns ?? 80) - 2;
-    const atoms = eventsToAtoms(historicalRef.current, currentRootDirRef.current, cols);
-    const lines: string[] = [];
-    for (const atom of atoms) {
-      if (atom.kind === "frame") {
-        const ansi = frameToAnsi(atom.frame);
-        if (ansi) lines.push(ansi);
-      } else {
-        lines.push(`(${atom.id ?? "ink-block"} omitted from copy dump)`);
-      }
-    }
-    const wasMouseOn = isMouseTrackingOn();
-    setMouseTracking(false);
-    process.stdout.write("\x1b[?1049l");
-    process.stdout.write("\n=== reasonix · copy mode — terminal scrollback active ===\n\n");
-    process.stdout.write(lines.join("\n"));
-    process.stdout.write("\n\n=== end of dump · press any key to return to reasonix ===\n");
-
-    const reader = getStdinReader();
-    let exited = false;
-    const restore = (): void => {
-      if (exited) return;
-      exited = true;
-      process.stdout.write("\x1b[?1049h\x1b[2J\x1b[H");
-      if (wasMouseOn) setMouseTracking(true);
-      setCopyMode(false);
-    };
-    const unsub = reader.subscribe(() => {
-      unsub();
-      restore();
-    });
-    return () => {
-      unsub();
-      if (!exited) {
-        // Component unmounting mid-copy — leave the terminal sane.
-        process.stdout.write("\x1b[?1049h\x1b[2J\x1b[H");
-        if (wasMouseOn) setMouseTracking(true);
-      }
-    };
-  }, [copyMode]);
-
-  const enterCopyMode = useCallback(() => {
-    setCopyMode(true);
-  }, []);
-
   const toggleCtxFooter = useCallback(
     (force?: boolean): boolean => {
       let next = false;
@@ -1436,6 +1397,82 @@ export function App({
     transcriptRef.current?.end();
     process.exit(0);
   }, []);
+
+  const stopAutoScroll = useCallback(() => {
+    if (autoScrollTimerRef.current) {
+      clearInterval(autoScrollTimerRef.current);
+      autoScrollTimerRef.current = null;
+    }
+    autoScrollDirRef.current = 0;
+  }, []);
+
+  const mouseToAbsRow = useCallback((mouseRow: number): number | null => {
+    const { topRow, bottomRow } = logRectRef.current;
+    const { firstRowAbs, visibleRows } = logSnapshotRef.current;
+    if (visibleRows <= 0) return null;
+    const clampedY = Math.max(topRow, Math.min(bottomRow, mouseRow));
+    const rel = clampedY - topRow;
+    return firstRowAbs + Math.min(visibleRows - 1, rel);
+  }, []);
+
+  const startAutoScroll = useCallback(
+    (dir: -1 | 1) => {
+      if (autoScrollDirRef.current === dir) return;
+      stopAutoScroll();
+      autoScrollDirRef.current = dir;
+      autoScrollTimerRef.current = setInterval(() => {
+        const max = scrollMaxRowsRef.current;
+        const cur = scrollTargetRef.current;
+        const next = dir > 0 ? Math.max(0, cur - 1) : Math.min(max, cur + 1);
+        if (next === cur) return;
+        scrollTargetRef.current = next;
+        scrollDisplayedRef.current = next;
+        setLogScrollOffset(next);
+        const anchor = dragAnchorRef.current;
+        if (anchor) {
+          const { firstRowAbs, visibleRows } = logSnapshotRef.current;
+          const focusRow = dir > 0 ? firstRowAbs + visibleRows - 1 : firstRowAbs;
+          setLogSelection({
+            startRow: anchor.row,
+            startCol: anchor.col,
+            endRow: focusRow,
+            endCol: lastDragColRef.current,
+          });
+        }
+      }, 60);
+    },
+    [stopAutoScroll],
+  );
+
+  const finishSelection = useCallback(() => {
+    stopAutoScroll();
+    const sel = logSelection;
+    dragAnchorRef.current = null;
+    if (!sel) return;
+    if (sel.startRow === sel.endRow && sel.startCol === sel.endCol) {
+      setLogSelection(null);
+      return;
+    }
+    const cols = stdout?.columns ?? 80;
+    const atoms = eventsToAtoms(historical, currentRootDir, cols);
+    const text = extractSelection(atoms, sel);
+    if (!text.trim()) {
+      setLogSelection(null);
+      return;
+    }
+    const result = writeClipboard(text);
+    const noun = result.osc52 ? "copied" : "saved";
+    const fileNote = result.filePath ? ` · ${result.filePath}` : "";
+    setHistorical((prev) => [
+      ...prev,
+      {
+        id: `clip-${Date.now()}`,
+        role: "info",
+        text: `▸ ${noun} ${result.size} char${result.size === 1 ? "" : "s"}${fileNote}`,
+      },
+    ]);
+    setLogSelection(null);
+  }, [historical, logSelection, stdout?.columns, currentRootDir, stopAutoScroll]);
   useEffect(() => {
     process.on("SIGINT", quitProcess);
     return () => {
@@ -1486,6 +1523,48 @@ export function App({
     if (ev.mouseScrollDown) {
       if (maxOffset === 0) return;
       animateScrollTo((prev) => Math.max(0, prev - 3));
+      return;
+    }
+    if (ev.mouseClick && ev.mouseRow !== undefined && ev.mouseCol !== undefined) {
+      const { topRow, bottomRow } = logRectRef.current;
+      if (ev.mouseRow < topRow || ev.mouseRow > bottomRow) {
+        if (logSelection) setLogSelection(null);
+        dragAnchorRef.current = null;
+        return;
+      }
+      const absRow = mouseToAbsRow(ev.mouseRow);
+      if (absRow === null) return;
+      const col = Math.max(0, ev.mouseCol - 1);
+      dragAnchorRef.current = { row: absRow, col };
+      lastDragColRef.current = col;
+      setLogSelection({ startRow: absRow, startCol: col, endRow: absRow, endCol: col });
+      return;
+    }
+    if (ev.mouseDrag && ev.mouseRow !== undefined && ev.mouseCol !== undefined) {
+      const anchor = dragAnchorRef.current;
+      if (!anchor) return;
+      const { topRow, bottomRow } = logRectRef.current;
+      const col = Math.max(0, ev.mouseCol - 1);
+      lastDragColRef.current = col;
+      if (ev.mouseRow <= topRow) {
+        startAutoScroll(-1);
+      } else if (ev.mouseRow >= bottomRow) {
+        startAutoScroll(1);
+      } else {
+        stopAutoScroll();
+      }
+      const absRow = mouseToAbsRow(ev.mouseRow);
+      if (absRow === null) return;
+      setLogSelection({
+        startRow: anchor.row,
+        startCol: anchor.col,
+        endRow: absRow,
+        endCol: col,
+      });
+      return;
+    }
+    if (ev.mouseRelease) {
+      finishSelection();
       return;
     }
     if (ev.pageUp) {
@@ -2669,7 +2748,6 @@ export function App({
             return fresh.length;
           },
           setCwd: (newRoot: string) => applyCwdChange(newRoot),
-          enterCopyMode,
           toggleCtxFooter,
           latestVersion,
           refreshLatestVersion,
@@ -3600,7 +3678,6 @@ export function App({
       broadcastDashboardEvent,
       applyCwdChange,
       touchedPaths,
-      enterCopyMode,
       toggleCtxFooter,
       model,
       prefixHash,
@@ -4277,12 +4354,6 @@ export function App({
     [],
   );
 
-  // KeystrokeProvider is mounted by chat.tsx OUTSIDE this component
-  // so `useKeystroke` calls in App's function body see the bus.
-  // Copy mode short-circuits to null so Ink emits no writes while the
-  // user is in main-screen scrollback. The useEffect on `copyMode`
-  // owns the alt-screen toggle + dump + keypress restoration.
-  if (copyMode) return null;
   return (
     <>
       <TickerProvider
@@ -4396,7 +4467,20 @@ export function App({
                   const v = viewportLog(atoms, logScrollOffset, available);
                   scrollMaxRowsRef.current = v.maxScrollRows;
                   lastTotalRowsRef.current = v.totalRows;
-                  return renderViewport(v);
+                  const totalRows = stdout?.rows ?? 30;
+                  const bottomChrome = 1 + (ctxFooterVisible ? 1 : 0) + 3;
+                  const bottomRow = Math.max(1, totalRows - bottomChrome);
+                  logRectRef.current = {
+                    topRow: Math.max(1, bottomRow - logHeight + 1),
+                    bottomRow,
+                    cols,
+                  };
+                  logSnapshotRef.current = {
+                    firstRowAbs: v.firstRowAbs,
+                    totalRows: v.totalRows,
+                    visibleRows: available,
+                  };
+                  return renderViewport(v, logSelection);
                 })()}
                 {/*
           Welcome card on the empty state. Visible only when nothing

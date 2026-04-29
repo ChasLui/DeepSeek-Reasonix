@@ -104,11 +104,6 @@ export const SLASH_COMMANDS: readonly SlashCommandSpec[] = [
     summary:
       "cross-session cost dashboard (today / week / month / all-time · cache hit · vs Claude)",
   },
-  {
-    cmd: "copy",
-    summary:
-      "freeze + dump the rendered log to main screen so terminal scrollback + drag-select can copy across viewports · any key returns",
-  },
   { cmd: "think", summary: "dump the last turn's full R1 reasoning (reasoner only)" },
   {
     cmd: "context",

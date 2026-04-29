@@ -175,19 +175,10 @@ const cwd: SlashHandler = (args, _loop, ctx) => {
   return { info: lines.join("\n") };
 };
 
-const copy: SlashHandler = (_args, _loop, ctx) => {
-  if (!ctx.enterCopyMode) {
-    return { info: "/copy is not available in this context (TUI-internal)." };
-  }
-  ctx.enterCopyMode();
-  return {};
-};
-
 export const handlers: Record<string, SlashHandler> = {
   hook: hooks,
   hooks,
   cwd,
   update,
   stats,
-  copy,
 };

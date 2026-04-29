@@ -263,7 +263,7 @@ export function PromptInput({
           <Text color={barColorAt(0)}>{BAR}</Text>
           <Text dimColor>{continuationIndent.slice(BAR.length)}</Text>
           <Text dimColor>
-            [PgUp/PgDn] scroll log · [End] jump to latest · /copy to dump log for selection
+            [PgUp/PgDn] scroll log · [End] jump to latest · drag to select · auto-scrolls at edge
           </Text>
         </Box>
       ) : null}

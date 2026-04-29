@@ -43,8 +43,6 @@ export interface SlashResult {
 }
 
 export interface SlashContext {
-  /** `/copy` — exit alt-screen so native terminal scrollback / drag-select can copy past viewport. */
-  enterCopyMode?: () => void;
   /** `/context` toggle — returns new visibility; `force` sets directly. */
   toggleCtxFooter?: (force?: boolean) => boolean;
 
