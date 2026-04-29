@@ -1,9 +1,9 @@
 import { Command } from "commander";
 import { readConfig } from "../config.js";
 import { VERSION } from "../index.js";
+import { listSessions } from "../memory/session.js";
+import { applyMemoryStack } from "../memory/user.js";
 import { ESCALATION_CONTRACT } from "../prompt-fragments.js";
-import { listSessions } from "../session.js";
-import { applyMemoryStack } from "../user-memory.js";
 import { chatCommand } from "./commands/chat.js";
 import { codeCommand } from "./commands/code.js";
 import { commitCommand } from "./commands/commit.js";

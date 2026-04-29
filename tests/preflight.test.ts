@@ -14,8 +14,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DeepSeekClient } from "../src/client.js";
 import { CacheFirstLoop } from "../src/loop.js";
-import { ImmutablePrefix } from "../src/memory.js";
-import { DEEPSEEK_CONTEXT_TOKENS } from "../src/telemetry.js";
+import { ImmutablePrefix } from "../src/memory/runtime.js";
+import { DEEPSEEK_CONTEXT_TOKENS } from "../src/telemetry/stats.js";
 import type { ChatMessage } from "../src/types.js";
 
 interface FakeResponseShape {

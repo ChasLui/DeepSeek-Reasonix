@@ -9,7 +9,7 @@ import {
   pendingEditsPath,
   savePendingEdits,
 } from "../src/code/pending-edits.js";
-import { appendSessionMessage, deleteSession, sessionPath } from "../src/session.js";
+import { appendSessionMessage, deleteSession, sessionPath } from "../src/memory/session.js";
 
 function block(overrides: Partial<EditBlock> = {}): EditBlock {
   return {

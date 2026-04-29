@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve as resolvePath } from "node:path";
-import { PROJECT_MEMORY_FILE } from "../../project-memory.js";
+import { PROJECT_MEMORY_FILE } from "../../memory/project.js";
 import type { DashboardContext } from "../context.js";
 import type { ApiResult } from "../router.js";
 

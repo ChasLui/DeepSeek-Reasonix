@@ -1,4 +1,4 @@
-import { DEEPSEEK_CONTEXT_TOKENS, DEFAULT_CONTEXT_TOKENS } from "../../../../telemetry.js";
+import { DEEPSEEK_CONTEXT_TOKENS, DEFAULT_CONTEXT_TOKENS } from "../../../../telemetry/stats.js";
 import { computeCtxBreakdown } from "../../ctx-breakdown.js";
 import type { SlashHandler } from "../dispatch.js";
 import { compactNum, formatToolList } from "../helpers.js";

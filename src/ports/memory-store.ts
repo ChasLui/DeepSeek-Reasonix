@@ -1,6 +1,6 @@
 /** Port: memory pyramid. Today wraps user-memory + project-memory + hash-memory. */
 
-import type { MemoryEntry, MemoryScope, MemoryType } from "../user-memory.js";
+import type { MemoryEntry, MemoryScope, MemoryType } from "../memory/user.js";
 
 export interface MemoryWriteInput {
   name: string;

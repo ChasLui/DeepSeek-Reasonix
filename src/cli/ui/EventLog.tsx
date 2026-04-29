@@ -2,7 +2,7 @@ import { Box, Text, useStdout } from "ink";
 import React from "react";
 import { type TypedPlanState, isPlanStateEmpty } from "../../harvest.js";
 import type { BranchProgress, BranchSummary } from "../../loop.js";
-import type { TurnStats } from "../../telemetry.js";
+import type { TurnStats } from "../../telemetry/stats.js";
 import type { PlanStep } from "../../tools/plan.js";
 import { PlanStateBlock } from "./PlanStateBlock.js";
 import { PlanStepList } from "./PlanStepList.js";

@@ -23,7 +23,7 @@ import {
   bucketCacheHitRatio,
   bucketSavingsFraction,
   readUsageLog,
-} from "../src/usage.js";
+} from "../src/telemetry/usage.js";
 
 function usage(overrides: Partial<Usage> = {}): Usage {
   return new Usage(

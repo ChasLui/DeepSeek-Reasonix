@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { appendUsage } from "../../telemetry/usage.js";
 import type { SubagentEvent, SubagentSink } from "../../tools/subagent.js";
-import { appendUsage } from "../../usage.js";
 import type { DisplayEvent } from "./EventLog.js";
 
 export interface SubagentActivity {

@@ -13,7 +13,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import type { ChatMessage } from "./types.js";
+import type { ChatMessage } from "../types.js";
 
 export interface SessionInfo {
   name: string;

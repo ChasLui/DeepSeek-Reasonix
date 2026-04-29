@@ -6,8 +6,8 @@ import {
   renderMarkdown,
   renderSummaryTable,
   similarity,
-} from "../src/diff.js";
-import type { ReadTranscriptResult, TranscriptRecord } from "../src/transcript.js";
+} from "../src/transcript/diff.js";
+import type { ReadTranscriptResult, TranscriptRecord } from "../src/transcript/log.js";
 
 function mkParsed(records: TranscriptRecord[], task = "t01"): ReadTranscriptResult {
   return {

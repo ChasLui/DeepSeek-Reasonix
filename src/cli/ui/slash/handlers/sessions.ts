@@ -1,4 +1,4 @@
-import { deleteSession, listSessions, pruneStaleSessions } from "../../../../session.js";
+import { deleteSession, listSessions, pruneStaleSessions } from "../../../../memory/session.js";
 import type { SlashHandler } from "../dispatch.js";
 
 const STALE_THRESHOLD_DAYS = 90;

@@ -53,7 +53,8 @@ import {
   DEEPSEEK_CONTEXT_TOKENS,
   DEFAULT_CONTEXT_TOKENS,
   type SessionSummary,
-} from "../../telemetry.js";
+} from "../../telemetry/stats.js";
+import { appendUsage, defaultUsageLogPath } from "../../telemetry/usage.js";
 import type { ToolRegistry } from "../../tools.js";
 import type { ChoiceOption } from "../../tools/choice.js";
 import type { PlanStep, StepCompletion } from "../../tools/plan.js";
@@ -62,8 +63,7 @@ import { registerSkillTools } from "../../tools/skills.js";
 import { formatSubagentResult, spawnSubagent } from "../../tools/subagent.js";
 import { webFetch } from "../../tools/web.js";
 import { registerWorkspaceTool } from "../../tools/workspace.js";
-import { openTranscriptFile, recordFromLoopEvent, writeRecord } from "../../transcript.js";
-import { appendUsage, defaultUsageLogPath } from "../../usage.js";
+import { openTranscriptFile, recordFromLoopEvent, writeRecord } from "../../transcript/log.js";
 import { AtMentionSuggestions } from "./AtMentionSuggestions.js";
 import { ChoiceConfirm, type ChoiceConfirmChoice } from "./ChoiceConfirm.js";
 import { ChromeBar } from "./ChromeBar.js";

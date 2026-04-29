@@ -8,9 +8,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { MemoryStore } from "../src/memory/user.js";
 import { ToolRegistry } from "../src/tools.js";
 import { registerMemoryTools } from "../src/tools/memory.js";
-import { MemoryStore } from "../src/user-memory.js";
 
 describe("memory tools", () => {
   let home: string;

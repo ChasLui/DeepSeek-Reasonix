@@ -1,6 +1,6 @@
 /** Reconstruct session economics from a transcript alone — offline audit, no API key. */
 
-import { Usage } from "./client.js";
+import { Usage } from "../client.js";
 import {
   type SessionSummary,
   type TurnStats,
@@ -8,8 +8,8 @@ import {
   costUsd,
   inputCostUsd,
   outputCostUsd,
-} from "./telemetry.js";
-import { type ReadTranscriptResult, type TranscriptRecord, readTranscript } from "./transcript.js";
+} from "../telemetry/stats.js";
+import { type ReadTranscriptResult, type TranscriptRecord, readTranscript } from "./log.js";
 
 export interface TurnPage {
   turn: number;

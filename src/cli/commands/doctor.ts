@@ -9,7 +9,7 @@ import { loadDotenv } from "../../env.js";
 import { loadHooks } from "../../hooks.js";
 import { indexExists } from "../../index/semantic/builder.js";
 import { checkOllamaStatus } from "../../index/semantic/ollama-launcher.js";
-import { listSessions } from "../../session.js";
+import { listSessions } from "../../memory/session.js";
 import { VERSION } from "../../version.js";
 
 type Level = "ok" | "warn" | "fail";

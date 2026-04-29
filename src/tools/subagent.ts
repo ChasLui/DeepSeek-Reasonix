@@ -2,8 +2,8 @@
 
 import { type DeepSeekClient, Usage } from "../client.js";
 import { CacheFirstLoop } from "../loop.js";
-import { ImmutablePrefix } from "../memory.js";
-import { applyProjectMemory } from "../project-memory.js";
+import { applyProjectMemory } from "../memory/project.js";
+import { ImmutablePrefix } from "../memory/runtime.js";
 import {
   ESCALATION_CONTRACT,
   NEGATIVE_CLAIM_RULE,

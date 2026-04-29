@@ -9,7 +9,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { DeepSeekClient } from "../src/client.js";
 import { CacheFirstLoop } from "../src/loop.js";
-import { ImmutablePrefix } from "../src/memory.js";
+import { ImmutablePrefix } from "../src/memory/runtime.js";
 import { ToolRegistry } from "../src/tools.js";
 import type { ChatMessage } from "../src/types.js";
 

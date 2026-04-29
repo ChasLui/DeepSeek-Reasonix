@@ -1,7 +1,7 @@
 import { render } from "ink";
 import React from "react";
-import { groupRecordsByTurn, replayFromFile } from "../../replay.js";
-import type { TranscriptRecord } from "../../transcript.js";
+import type { TranscriptRecord } from "../../transcript/log.js";
+import { groupRecordsByTurn, replayFromFile } from "../../transcript/replay.js";
 import { ReplayApp } from "../ui/ReplayApp.js";
 
 export interface ReplayOptions {

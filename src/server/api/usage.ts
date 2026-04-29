@@ -1,5 +1,5 @@
-import { cacheSavingsUsd } from "../../telemetry.js";
-import { aggregateUsage, formatLogSize, readUsageLog } from "../../usage.js";
+import { cacheSavingsUsd } from "../../telemetry/stats.js";
+import { aggregateUsage, formatLogSize, readUsageLog } from "../../telemetry/usage.js";
 import type { DashboardContext } from "../context.js";
 import type { ApiResult } from "../router.js";
 

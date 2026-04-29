@@ -16,7 +16,7 @@ import {
   type TurnPair,
   findNextDivergence,
   findPrevDivergence,
-} from "../../diff.js";
+} from "../../transcript/diff.js";
 import { RecordView } from "./RecordView.js";
 
 export interface DiffAppProps {

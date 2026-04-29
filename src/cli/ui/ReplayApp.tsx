@@ -10,8 +10,8 @@
 
 import { Box, Static, Text, useApp, useInput } from "ink";
 import React, { useMemo, useState } from "react";
-import { type TurnPage, computeCumulativeStats } from "../../replay.js";
-import type { TranscriptMeta } from "../../transcript.js";
+import type { TranscriptMeta } from "../../transcript/log.js";
+import { type TurnPage, computeCumulativeStats } from "../../transcript/replay.js";
 import { RecordView } from "./RecordView.js";
 import { StatsPanel } from "./StatsPanel.js";
 

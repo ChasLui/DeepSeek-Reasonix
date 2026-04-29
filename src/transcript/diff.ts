@@ -1,7 +1,7 @@
 /** Transcript diff — pairs assistant_final by turn number; unmatched extras become only_in_a / only_in_b. */
 
+import type { ReadTranscriptResult, TranscriptRecord } from "./log.js";
 import { type ReplayStats, computeReplayStats } from "./replay.js";
-import type { ReadTranscriptResult, TranscriptRecord } from "./transcript.js";
 
 export interface DiffSide {
   label: string;

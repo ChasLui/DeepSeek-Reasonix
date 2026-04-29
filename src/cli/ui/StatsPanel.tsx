@@ -3,7 +3,7 @@ import { Box, Text, useStdout } from "ink";
 import React from "react";
 import stringWidth from "string-width";
 import type { EditMode } from "../../config.js";
-import type { SessionSummary } from "../../telemetry.js";
+import type { SessionSummary } from "../../telemetry/stats.js";
 import { Bar, ChromeRule } from "./primitives.js";
 import { COLOR, GRADIENT } from "./theme.js";
 

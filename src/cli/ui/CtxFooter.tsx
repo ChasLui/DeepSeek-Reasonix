@@ -3,7 +3,7 @@ import { Box, Text, useStdout } from "ink";
 import React, { useMemo } from "react";
 import stringWidth from "string-width";
 import type { CacheFirstLoop } from "../../loop.js";
-import type { SessionSummary } from "../../telemetry.js";
+import type { SessionSummary } from "../../telemetry/stats.js";
 import { computeCtxBreakdown } from "./ctx-breakdown.js";
 import { Bar, ChromeRule, formatTokens } from "./primitives.js";
 import { COLOR } from "./theme.js";

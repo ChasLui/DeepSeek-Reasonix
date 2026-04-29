@@ -10,7 +10,7 @@ import {
   defaultUsageLogPath,
   formatLogSize,
   readUsageLog,
-} from "../../usage.js";
+} from "../../telemetry/usage.js";
 
 export interface StatsOptions {
   /** Optional transcript path. Absent → dashboard mode. */

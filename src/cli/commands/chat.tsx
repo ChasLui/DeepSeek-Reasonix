@@ -14,7 +14,7 @@ import {
   loadSessionMessages,
   rewriteSession,
   sessionPath as sessionPathOf,
-} from "../../session.js";
+} from "../../memory/session.js";
 import { ToolRegistry } from "../../tools.js";
 import { registerChoiceTool } from "../../tools/choice.js";
 import { registerMemoryTools } from "../../tools/memory.js";

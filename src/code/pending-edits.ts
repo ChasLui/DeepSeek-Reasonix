@@ -2,7 +2,7 @@
 
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { sanitizeName, sessionsDir } from "../session.js";
+import { sanitizeName, sessionsDir } from "../memory/session.js";
 import type { EditBlock } from "./edit-blocks.js";
 
 /** Absolute path for the checkpoint file that belongs to this session. */

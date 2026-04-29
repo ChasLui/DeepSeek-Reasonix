@@ -7,7 +7,7 @@ import {
   globalSettingsPath,
   projectSettingsPath,
 } from "../../../../hooks.js";
-import { aggregateUsage, defaultUsageLogPath, readUsageLog } from "../../../../usage.js";
+import { aggregateUsage, defaultUsageLogPath, readUsageLog } from "../../../../telemetry/usage.js";
 import { VERSION, compareVersions, isNpxInstall } from "../../../../version.js";
 import { renderDashboard } from "../../../commands/stats.js";
 import type { SlashHandler } from "../dispatch.js";

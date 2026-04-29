@@ -15,7 +15,7 @@ import {
   stampMissingReasoningForThinkingMode,
   thinkingModeForModel,
 } from "../src/loop.js";
-import { ImmutablePrefix } from "../src/memory.js";
+import { ImmutablePrefix } from "../src/memory/runtime.js";
 import { ToolRegistry } from "../src/tools.js";
 import type { ChatMessage } from "../src/types.js";
 

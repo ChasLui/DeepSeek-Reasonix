@@ -11,7 +11,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
-import { sanitizeName, sessionsDir } from "../session.js";
+import { sanitizeName, sessionsDir } from "../memory/session.js";
 import type { PlanStep } from "../tools/plan.js";
 
 export interface PlanStateOnDisk {

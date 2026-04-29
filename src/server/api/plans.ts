@@ -1,5 +1,5 @@
 import { listPlanArchives } from "../../code/plan-store.js";
-import { listSessions } from "../../session.js";
+import { listSessions } from "../../memory/session.js";
 import type { PlanStep } from "../../tools/plan.js";
 import type { DashboardContext } from "../context.js";
 import type { ApiResult } from "../router.js";

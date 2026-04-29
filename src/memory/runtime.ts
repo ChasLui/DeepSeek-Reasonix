@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { ChatMessage, ToolSpec } from "./types.js";
+import type { ChatMessage, ToolSpec } from "../types.js";
 
 export interface ImmutablePrefixOptions {
   system: string;

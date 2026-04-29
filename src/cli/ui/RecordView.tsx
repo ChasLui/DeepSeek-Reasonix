@@ -10,7 +10,7 @@
 
 import { Box, Text } from "ink";
 import React from "react";
-import type { TranscriptRecord } from "../../transcript.js";
+import type { TranscriptRecord } from "../../transcript/log.js";
 import { PlanStateBlock } from "./PlanStateBlock.js";
 
 export interface RecordViewProps {

@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eventsCommand } from "../src/cli/commands/events.js";
-import { sessionsDir } from "../src/session.js";
+import { sessionsDir } from "../src/memory/session.js";
 
 let dir: string;
 beforeEach(() => {

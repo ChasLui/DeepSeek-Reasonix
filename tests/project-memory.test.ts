@@ -14,7 +14,7 @@ import {
   applyProjectMemory,
   memoryEnabled,
   readProjectMemory,
-} from "../src/project-memory.js";
+} from "../src/memory/project.js";
 
 const BASE = "You are a test assistant.";
 

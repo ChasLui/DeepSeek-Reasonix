@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { applyProjectMemory } from "../src/project-memory.js";
+import { applyProjectMemory } from "../src/memory/project.js";
 import {
   MEMORY_INDEX_FILE,
   MEMORY_INDEX_MAX_CHARS,
@@ -18,7 +18,7 @@ import {
   applyUserMemory,
   projectHash,
   sanitizeMemoryName,
-} from "../src/user-memory.js";
+} from "../src/memory/user.js";
 
 const BASE = "You are a test assistant.";
 

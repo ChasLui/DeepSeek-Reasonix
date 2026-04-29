@@ -10,9 +10,9 @@ import { parseMcpSpec } from "../../mcp/spec.js";
 import { SseTransport } from "../../mcp/sse.js";
 import { type McpTransport, StdioTransport } from "../../mcp/stdio.js";
 import { StreamableHttpTransport } from "../../mcp/streamable-http.js";
+import { appendUsage } from "../../telemetry/usage.js";
 import { ToolRegistry } from "../../tools.js";
-import { openTranscriptFile, recordFromLoopEvent, writeRecord } from "../../transcript.js";
-import { appendUsage } from "../../usage.js";
+import { openTranscriptFile, recordFromLoopEvent, writeRecord } from "../../transcript/log.js";
 
 export interface RunOptions {
   task: string;

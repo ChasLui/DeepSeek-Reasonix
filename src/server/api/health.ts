@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { listSessions } from "../../session.js";
+import { listSessions } from "../../memory/session.js";
 import { VERSION } from "../../version.js";
 import type { DashboardContext } from "../context.js";
 import type { ApiResult } from "../router.js";

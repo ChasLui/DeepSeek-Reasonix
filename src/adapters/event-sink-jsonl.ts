@@ -1,8 +1,8 @@
 import { type WriteStream, chmodSync, createWriteStream, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Event } from "../core/events.js";
+import { sanitizeName, sessionsDir } from "../memory/session.js";
 import type { EventSink } from "../ports/event-sink.js";
-import { sanitizeName, sessionsDir } from "../session.js";
 
 export function eventLogPath(sessionName: string): string {
   return join(sessionsDir(), `${sanitizeName(sessionName)}.events.jsonl`);

@@ -11,7 +11,7 @@ import {
 } from "../src/cli/ui/slash.js";
 import { DeepSeekClient, Usage } from "../src/client.js";
 import { CacheFirstLoop } from "../src/loop.js";
-import { ImmutablePrefix } from "../src/memory.js";
+import { ImmutablePrefix } from "../src/memory/runtime.js";
 import { VERSION } from "../src/version.js";
 
 function makeLoop() {

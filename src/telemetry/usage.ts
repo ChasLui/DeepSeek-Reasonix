@@ -10,14 +10,14 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import type { Usage } from "./client.js";
+import type { Usage } from "../client.js";
 import {
   CLAUDE_SONNET_PRICING,
   DEEPSEEK_PRICING,
   cacheSavingsUsd,
   claudeEquivalentCost,
   costUsd,
-} from "./telemetry.js";
+} from "./stats.js";
 
 /** One turn's snapshot — serialized verbatim as a JSONL line. */
 export interface UsageRecord {

@@ -31,15 +31,15 @@ const NEEDS_PRO_MARKER_PREFIX = "<<<NEEDS_PRO";
 const NEEDS_PRO_MARKER_RE = /^<<<NEEDS_PRO(?::\s*([^>]*))?>>>/;
 /** Buffer cap before flushing — must fit `<<<NEEDS_PRO: reason>>>` without premature flush. */
 const NEEDS_PRO_BUFFER_CHARS = 256;
-import { AppendOnlyLog, type ImmutablePrefix, VolatileScratch } from "./memory.js";
+import { AppendOnlyLog, type ImmutablePrefix, VolatileScratch } from "./memory/runtime.js";
+import { appendSessionMessage, loadSessionMessages, rewriteSession } from "./memory/session.js";
 import { type RepairReport, ToolCallRepair } from "./repair/index.js";
-import { appendSessionMessage, loadSessionMessages, rewriteSession } from "./session.js";
 import {
   DEEPSEEK_CONTEXT_TOKENS,
   DEFAULT_CONTEXT_TOKENS,
   SessionStats,
   type TurnStats,
-} from "./telemetry.js";
+} from "./telemetry/stats.js";
 import { countTokens, estimateRequestTokens } from "./tokenizer.js";
 import { ToolRegistry } from "./tools.js";
 import type { ChatMessage, ToolCall } from "./types.js";

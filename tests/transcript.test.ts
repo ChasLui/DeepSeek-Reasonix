@@ -4,13 +4,13 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Usage } from "../src/client.js";
 import type { LoopEvent } from "../src/loop.js";
-import { SessionStats } from "../src/telemetry.js";
+import { SessionStats } from "../src/telemetry/stats.js";
 import {
   openTranscriptFile,
   parseTranscript,
   recordFromLoopEvent,
   writeRecord,
-} from "../src/transcript.js";
+} from "../src/transcript/log.js";
 
 describe("transcript writer / reader round-trip", () => {
   let tmpDir: string;

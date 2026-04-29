@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AppendOnlyLog, ImmutablePrefix, VolatileScratch } from "../src/memory.js";
+import { AppendOnlyLog, ImmutablePrefix, VolatileScratch } from "../src/memory/runtime.js";
 
 describe("ImmutablePrefix", () => {
   it("fingerprint is stable for identical inputs", () => {

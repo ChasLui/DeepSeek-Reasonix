@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeepSeekClient } from "../src/client.js";
 import { CacheFirstLoop } from "../src/loop.js";
-import { ImmutablePrefix } from "../src/memory.js";
+import { ImmutablePrefix } from "../src/memory/runtime.js";
 import {
   appendSessionMessage,
   deleteSession,
@@ -14,7 +14,7 @@ import {
   sanitizeName,
   sessionPath,
   sessionsDir,
-} from "../src/session.js";
+} from "../src/memory/session.js";
 
 describe("sanitizeName", () => {
   it("keeps alphanumerics, CJK, dashes, underscores", () => {

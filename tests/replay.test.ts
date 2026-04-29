@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { computeCumulativeStats, computeReplayStats, groupRecordsByTurn } from "../src/replay.js";
-import type { TranscriptRecord } from "../src/transcript.js";
+import type { TranscriptRecord } from "../src/transcript/log.js";
+import {
+  computeCumulativeStats,
+  computeReplayStats,
+  groupRecordsByTurn,
+} from "../src/transcript/replay.js";
 
 const mkAssistant = (
   turn: number,

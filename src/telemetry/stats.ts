@@ -1,4 +1,4 @@
-import type { Usage } from "./client.js";
+import type { Usage } from "../client.js";
 
 /** USD per 1M tokens; CNY sheet converted at fixed 7.2 — revisit if FX moves >±5%. */
 export const DEEPSEEK_PRICING: Record<

@@ -2,8 +2,8 @@ import { writeFileSync } from "node:fs";
 import { basename } from "node:path";
 import { render } from "ink";
 import React from "react";
-import { diffTranscripts, renderMarkdown, renderSummaryTable } from "../../diff.js";
-import { readTranscript } from "../../transcript.js";
+import { diffTranscripts, renderMarkdown, renderSummaryTable } from "../../transcript/diff.js";
+import { readTranscript } from "../../transcript/log.js";
 import { DiffApp } from "../ui/DiffApp.js";
 
 export interface DiffOptions {

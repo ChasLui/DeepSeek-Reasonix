@@ -48,8 +48,8 @@ export type {
   BranchSelector,
 } from "./consistency.js";
 
-export { ImmutablePrefix, AppendOnlyLog, VolatileScratch } from "./memory.js";
-export type { ImmutablePrefixOptions } from "./memory.js";
+export { ImmutablePrefix, AppendOnlyLog, VolatileScratch } from "./memory/runtime.js";
+export type { ImmutablePrefixOptions } from "./memory/runtime.js";
 
 export {
   PROJECT_MEMORY_FILE,
@@ -57,8 +57,8 @@ export {
   applyProjectMemory,
   memoryEnabled,
   readProjectMemory,
-} from "./project-memory.js";
-export type { ProjectMemory } from "./project-memory.js";
+} from "./memory/project.js";
+export type { ProjectMemory } from "./memory/project.js";
 
 export {
   MEMORY_INDEX_FILE,
@@ -69,14 +69,14 @@ export {
   applyUserMemory,
   projectHash,
   sanitizeMemoryName,
-} from "./user-memory.js";
+} from "./memory/user.js";
 export type {
   MemoryEntry,
   MemoryScope,
   MemoryStoreOptions,
   MemoryType,
   WriteInput as MemoryWriteInput,
-} from "./user-memory.js";
+} from "./memory/user.js";
 
 export { ToolRegistry } from "./tools.js";
 export type { ToolDefinition, ToolCallContext } from "./tools.js";
@@ -136,8 +136,8 @@ export {
   inputCostUsd,
   outputCostUsd,
   claudeEquivalentCost,
-} from "./telemetry.js";
-export type { TurnStats, SessionSummary } from "./telemetry.js";
+} from "./telemetry/stats.js";
+export type { TurnStats, SessionSummary } from "./telemetry/stats.js";
 
 export {
   ToolCallRepair,
@@ -168,8 +168,8 @@ export {
   sanitizeName as sanitizeSessionName,
   sessionPath,
   sessionsDir,
-} from "./session.js";
-export type { SessionInfo } from "./session.js";
+} from "./memory/session.js";
+export type { SessionInfo } from "./memory/session.js";
 
 export { loadDotenv } from "./env.js";
 
@@ -180,19 +180,24 @@ export {
   recordFromLoopEvent,
   writeMeta,
   writeRecord,
-} from "./transcript.js";
-export type { TranscriptRecord, TranscriptMeta, ReadTranscriptResult } from "./transcript.js";
+} from "./transcript/log.js";
+export type { TranscriptRecord, TranscriptMeta, ReadTranscriptResult } from "./transcript/log.js";
 
-export { computeReplayStats, replayFromFile } from "./replay.js";
-export type { ReplayStats } from "./replay.js";
+export { computeReplayStats, replayFromFile } from "./transcript/replay.js";
+export type { ReplayStats } from "./transcript/replay.js";
 
 export {
   diffTranscripts,
   renderMarkdown as renderDiffMarkdown,
   renderSummaryTable as renderDiffSummary,
   similarity,
-} from "./diff.js";
-export type { DiffReport, DiffSide, TurnPair, RenderOptions as DiffRenderOptions } from "./diff.js";
+} from "./transcript/diff.js";
+export type {
+  DiffReport,
+  DiffSide,
+  TurnPair,
+  RenderOptions as DiffRenderOptions,
+} from "./transcript/diff.js";
 
 export { McpClient } from "./mcp/client.js";
 export type { McpClientOptions } from "./mcp/client.js";
@@ -319,14 +324,14 @@ export {
   defaultUsageLogPath,
   formatLogSize,
   readUsageLog,
-} from "./usage.js";
+} from "./telemetry/usage.js";
 export type {
   AggregateOptions,
   AppendUsageInput,
   UsageAggregate,
   UsageBucket,
   UsageRecord,
-} from "./usage.js";
+} from "./telemetry/usage.js";
 export type {
   HookConfig,
   HookEvent,

@@ -2,8 +2,8 @@ import {
   PROJECT_MEMORY_FILE,
   memoryEnabled,
   readProjectMemory,
-} from "../../../../project-memory.js";
-import { type MemoryScope, MemoryStore } from "../../../../user-memory.js";
+} from "../../../../memory/project.js";
+import { type MemoryScope, MemoryStore } from "../../../../memory/user.js";
 import type { SlashHandler } from "../dispatch.js";
 import { resolveMemoryTarget } from "../helpers.js";
 

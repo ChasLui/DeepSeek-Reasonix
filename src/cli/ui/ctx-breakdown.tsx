@@ -2,7 +2,7 @@ import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
 import type { CacheFirstLoop } from "../../loop.js";
-import { DEEPSEEK_CONTEXT_TOKENS, DEFAULT_CONTEXT_TOKENS } from "../../telemetry.js";
+import { DEEPSEEK_CONTEXT_TOKENS, DEFAULT_CONTEXT_TOKENS } from "../../telemetry/stats.js";
 import { countTokens } from "../../tokenizer.js";
 import { formatTokens } from "./primitives.js";
 import { COLOR } from "./theme.js";

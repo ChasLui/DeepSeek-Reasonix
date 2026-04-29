@@ -7,7 +7,7 @@ import {
   costUsd,
   inputCostUsd,
   outputCostUsd,
-} from "../src/telemetry.js";
+} from "../src/telemetry/stats.js";
 
 // Derive expected figures from the pricing table so the tests don't
 // re-bake stale constants every time DeepSeek updates the price sheet.

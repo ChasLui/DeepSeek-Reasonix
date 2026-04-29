@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import type { MemoryScope, MemoryStore } from "../../../user-memory.js";
+import type { MemoryScope, MemoryStore } from "../../../memory/user.js";
 import type { SlashResult } from "./types.js";
 
 /** Bare names try project scope first (more specific) before falling back to global. */

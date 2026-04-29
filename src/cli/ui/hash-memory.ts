@@ -3,7 +3,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { PROJECT_MEMORY_FILE } from "../../project-memory.js";
+import { PROJECT_MEMORY_FILE } from "../../memory/project.js";
 
 const PROJECT_HEADER = `# Reasonix project memory
 

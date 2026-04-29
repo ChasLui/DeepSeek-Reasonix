@@ -11,8 +11,8 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { applyProjectMemory, memoryEnabled } from "./project-memory.js";
-import { applySkillsIndex } from "./skills.js";
+import { applySkillsIndex } from "../skills.js";
+import { applyProjectMemory, memoryEnabled } from "./project.js";
 
 export const USER_MEMORY_DIR = "memory";
 export const MEMORY_INDEX_FILE = "MEMORY.md";

@@ -21,7 +21,7 @@
 import { basename, resolve } from "node:path";
 import { loadEditMode, loadProjectShellAllowed } from "../../config.js";
 import { bootstrapSemanticSearchInCodeMode } from "../../index/semantic/tool.js";
-import { sanitizeName } from "../../session.js";
+import { sanitizeName } from "../../memory/session.js";
 import { ToolRegistry } from "../../tools.js";
 import { registerChoiceTool } from "../../tools/choice.js";
 import { registerFilesystemTools } from "../../tools/filesystem.js";

@@ -1,12 +1,12 @@
 /** Writes are eager but the prefix is NOT re-loaded mid-session — keeps prompt-cache stable. */
 
-import type { ToolRegistry } from "../tools.js";
 import {
   type MemoryScope,
   MemoryStore,
   type MemoryType,
   sanitizeMemoryName,
-} from "../user-memory.js";
+} from "../memory/user.js";
+import type { ToolRegistry } from "../tools.js";
 
 export interface MemoryToolsOptions {
   /** Sandbox root for the `project` scope. Omit for chat mode. */

@@ -2,7 +2,7 @@ import { Box, Text, useStdout } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
 import stringWidth from "string-width";
-import type { SessionSummary } from "../../telemetry.js";
+import type { SessionSummary } from "../../telemetry/stats.js";
 import { ChromeRule } from "./primitives.js";
 import { COLOR, GRADIENT } from "./theme.js";
 
