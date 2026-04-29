@@ -1,40 +1,10 @@
-/**
- * One place that defines what each preset means. Both `slash.ts`
- * (in-chat `/preset`) and the wizard (first-run setup) read from here.
- *
- * Presets are the single vocabulary we teach new users: they don't need
- * to know model IDs, reasoning effort, or thinking mode independently
- * — they pick "fast / smart / max" and we translate.
- *
- * Design rules (v0.6+):
- *   - Branching (`branch >= 2`) is NEVER in a preset. Self-consistency
- *     sampling is `N×` cost; auto-enabling it would ambush users into
- *     multi-dollar turns without asking. Opt-in only via `/branch N`.
- *   - Harvest (Pillar-2 plan-state extraction) is NEVER in a preset.
- *     In practice it's display sugar — the typed plan state hasn't
- *     fed back into orchestration decisions (branch trigger) often
- *     enough to pay for the extra round-trip. Opt-in only via
- *     `/harvest on`.
- *   - The three tiers differ on only TWO knobs: model (flash/pro) and
- *     reasoning effort (high/max). Same on-the-wire billing axis,
- *     easy to reason about, easy to budget.
- */
+/** Preset table — branch and harvest stay off here so users never get ambushed into N× cost without opting in. */
 
 import type { PresetName } from "../../config.js";
 
 export interface PresetSettings {
   model: string;
-  /**
-   * Reasoning-effort cap. `high` = shorter chain of thought; `max` =
-   * agent-class default (deeper, more output). Effort is now decoupled
-   * from preset — a separate `/effort` knob lets users tune it
-   * orthogonally. The PRESETS table just picks the safest default.
-   */
   reasoningEffort: "high" | "max";
-  /**
-   * Auto-escalation switch. `auto` keeps the legacy NEEDS_PRO + failure
-   * threshold behavior; `flash` and `pro` lock to the chosen model.
-   */
   autoEscalate: boolean;
   /** Pillar-2 harvest. Always false in presets — opt-in via /harvest. */
   harvest: boolean;
@@ -42,11 +12,7 @@ export interface PresetSettings {
   branch: number;
 }
 
-/**
- * The three real presets. Old names (`fast / smart / max`) stay alive
- * as aliases mapped through `resolvePreset` so a config.json that
- * predates this rename still works without a migration script.
- */
+/** Old names `fast`/`smart`/`max` aliased via `resolvePreset` so legacy configs still load. */
 export const PRESETS: Record<"auto" | "flash" | "pro", PresetSettings> = {
   // auto — flash baseline + auto-escalate to pro when the model emits
   // <<<NEEDS_PRO>>> OR after 3+ tool failure signals in one turn.
@@ -98,18 +64,7 @@ export const PRESET_DESCRIPTIONS: Record<
   },
 };
 
-/**
- * Resolve a preset name (canonical or legacy) to its settings.
- * Canonical names (`auto | flash | pro`) hit the PRESETS table.
- * Legacy names from the v0.5–v0.11 vocabulary still resolve to their
- * old behavior so a `~/.reasonix/config.json` written by an older
- * Reasonix doesn't suddenly start producing different model + effort
- * choices on upgrade:
- *   - `fast`  → flash with effort=high (cheaper, predictable)
- *   - `smart` → auto    (flash + max + auto-escalate; the old default)
- *   - `max`   → pro     (pro + max)
- * Anything else collapses to `auto`.
- */
+/** Legacy aliases: fast→flash+high, smart→auto, max→pro. Unknown names fall through to auto. */
 export function resolvePreset(name: PresetName | undefined): PresetSettings {
   if (name === "auto" || name === "flash" || name === "pro") return PRESETS[name];
   if (name === "fast") return { ...PRESETS.flash, reasoningEffort: "high" };

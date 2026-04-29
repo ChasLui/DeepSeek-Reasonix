@@ -1,27 +1,4 @@
-/**
- * Per-session plan persistence.
- *
- * The structured plan that the model submits via `submit_plan` (and
- * subsequently mutates via `mark_step_complete` / `revise_plan`) is a
- * meaningful artifact of the user's work. Without persistence it
- * evaporates the moment the terminal closes — which means the user
- * loses context every time they take a coffee break, and the rich
- * checkpoint / revise / progress UX has nothing to attach to in
- * resumed sessions.
- *
- * This module ships the smallest useful piece: read/write a plan
- * state JSON next to the session's JSONL log. App.tsx loads on
- * mount and saves after every state change. Storage path mirrors
- * the JSONL convention: `~/.reasonix/sessions/<sanitized>.plan.json`.
- *
- * What's persisted: the structured `steps[]` (with risk levels), the
- * set of completedStepIds, and an updatedAt timestamp. The plan's
- * markdown body is NOT persisted here — it lives in the JSONL log
- * (it was a tool result), so resuming the session replays it
- * naturally if the user wants to re-read it. We only carry forward
- * the live state needed to keep mark_step_complete and revise_plan
- * meaningful.
- */
+/** Persists structured plan state alongside the JSONL log; markdown body lives in the log (it was a tool result) and replays on resume. */
 
 import {
   existsSync,
@@ -44,17 +21,7 @@ export interface PlanStateOnDisk {
   completedStepIds: string[];
   /** ISO8601 timestamp of the last write. */
   updatedAt: string;
-  /**
-   * Markdown body the model submitted via submit_plan. Persisted so
-   * Time Travel replay can show the full proposal without going back
-   * to the JSONL log. Optional — older / minimal plans may lack it.
-   */
   body?: string;
-  /**
-   * Optional one-sentence human-friendly title. Surfaces in the
-   * PlanConfirm header, the resume banner, and /plans listings so
-   * the user identifies plans by intent rather than file path.
-   */
   summary?: string;
 }
 
@@ -62,11 +29,6 @@ export function planStatePath(sessionName: string): string {
   return join(sessionsDir(), `${sanitizeName(sessionName)}.plan.json`);
 }
 
-/**
- * Read the persisted plan for this session, if any. Returns `null`
- * for missing / unreadable / malformed files — callers should treat
- * the absence of a stored plan as "no plan yet", not a hard error.
- */
 export function loadPlanState(sessionName: string): PlanStateOnDisk | null {
   const path = planStatePath(sessionName);
   if (!existsSync(path)) return null;
@@ -109,12 +71,7 @@ export function loadPlanState(sessionName: string): PlanStateOnDisk | null {
   }
 }
 
-/**
- * Persist the current plan state. Called whenever the in-memory plan
- * meaningfully changes (submit, complete, revise). Best-effort: a
- * write failure logs to stderr but doesn't propagate — losing the
- * persisted copy is annoying but shouldn't crash the TUI.
- */
+/** Best-effort: write failure logs to stderr instead of crashing the TUI. */
 export function savePlanState(
   sessionName: string,
   steps: PlanStep[],
@@ -150,23 +107,7 @@ export function clearPlanState(sessionName: string): void {
   }
 }
 
-/**
- * Move the active plan to a timestamped .done.json archive when the
- * model has marked every step complete. Future Time-Travel replay
- * will load these archives; for now the archive just exists as a
- * historical artifact and frees the active plan.json so the next
- * session starts fresh.
- *
- * Returns the archive path on success, or null if there was nothing
- * to archive (no active plan) / the rename failed (logged to stderr,
- * not propagated — losing the archive is annoying but shouldn't
- * crash the TUI).
- *
- * The timestamp uses ISO 8601 with a millisecond suffix and `:` and
- * `.` swapped for `-` so the filename is filesystem-safe on Windows.
- * Two archives created within the same millisecond would collide;
- * we append a short random suffix to dodge that.
- */
+/** Random suffix avoids same-millisecond collision; `:`/`.` swapped for Windows-safe filenames. */
 export function archivePlanState(sessionName: string): string | null {
   const active = planStatePath(sessionName);
   if (!existsSync(active)) return null;
@@ -187,13 +128,6 @@ export function archivePlanState(sessionName: string): string | null {
   }
 }
 
-/**
- * Summary of one archived (completed) plan, as returned by
- * `listPlanArchives`. The `completedAt` ISO string comes from the
- * archive file's stored `updatedAt` (or its mtime as fallback) so it
- * survives across machines / clock skew. `path` is absolute and ready
- * for a future `/replay` to read directly.
- */
 export interface PlanArchiveSummary {
   path: string;
   completedAt: string;
@@ -205,17 +139,6 @@ export interface PlanArchiveSummary {
   summary?: string;
 }
 
-/**
- * List all archived `.done.json` files for this session, newest
- * first. Used by `/plans` to give the user a project-local history.
- * Cross-project listing is intentionally NOT supported here — a plan
- * lives next to its session, and resuming it just means switching
- * back to that project's directory.
- *
- * Robust to missing dir / unreadable entries: a corrupt archive is
- * skipped, not propagated. Worst case the user sees a shorter list
- * than reality.
- */
 export function listPlanArchives(sessionName: string): PlanArchiveSummary[] {
   const dir = sessionsDir();
   if (!existsSync(dir)) return [];
@@ -270,12 +193,7 @@ export function listPlanArchives(sessionName: string): PlanArchiveSummary[] {
   return summaries;
 }
 
-/**
- * Render `updatedAt` as a short relative-time string for the resume
- * notice ("2h ago", "3 days ago"). Falls back to the raw ISO string
- * for anything beyond a week so users don't see misleading
- * "47 days ago" approximations.
- */
+/** Falls back to raw ISO string past a week — "47 days ago" misleads more than it helps. */
 export function relativeTime(updatedAt: string, now: number = Date.now()): string {
   const t = Date.parse(updatedAt);
   if (Number.isNaN(t)) return updatedAt;

@@ -1,16 +1,5 @@
 import type { SlashHandler } from "../dispatch.js";
 
-/**
- * `/dashboard [stop]` — boot the embedded web dashboard attached to
- * the current session. The actual server start / state capture lives
- * in App.tsx (`startDashboard` callback), which has direct refs to
- * the live loop, tool registry, MCP servers, and edit-mode state.
- * The slash handler is just the user-facing input + output bridge.
- *
- * Sub-commands:
- *   /dashboard          → boot if not running, print URL; if running, print existing URL
- *   /dashboard stop     → tear down the server
- */
 const dashboard: SlashHandler = (args, _loop, ctx) => {
   if (!ctx.startDashboard || !ctx.getDashboardUrl) {
     return {

@@ -1,25 +1,4 @@
-/**
- * `/api/settings` — read + mutate persistent config.
- *
- *   GET  /api/settings  → { apiKey: redacted, baseUrl, preset,
- *                           reasoningEffort, search, model, sessions }
- *   POST /api/settings  { apiKey?, baseUrl?, preset?, reasoningEffort?,
- *                         search? }
- *
- * Field-level rules:
- *   - apiKey: write-only on the wire. GET returns a redacted form
- *     (`sk-abcd…wxyz`), never the raw value, so a screenshot of the
- *     dashboard doesn't leak credentials. POST accepts a fresh key
- *     (validated via isPlausibleKey).
- *   - baseUrl: free-form string; restart needed.
- *   - preset / reasoningEffort: persisted; some take effect next turn,
- *     some next session — the SPA shows a hint per field.
- *   - search: persisted; takes effect next session (tools registered
- *     at start).
- *
- * Mutations write through `writeConfig` which chmod 600s the file.
- * Audit hook fires per field changed.
- */
+/** apiKey is write-only on the wire; GET always returns a redacted form so dashboard screenshots don't leak credentials. */
 
 import {
   isPlausibleKey,

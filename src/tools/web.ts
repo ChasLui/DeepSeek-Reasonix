@@ -1,19 +1,4 @@
-/**
- * Built-in web search + fetch tools.
- *
- *   - `web_search(query, topK?)` — Mojeek's public search page. No API
- *     key, no signup. We originally shipped this backed by DuckDuckGo's
- *     HTML endpoint, but DDG started serving anti-bot interstitials
- *     (HTTP 202 with a challenge page) for every unauthenticated POST.
- *     Mojeek runs its own independent index, is bot-friendly, and
- *     returns parseable HTML.
- *   - `web_fetch(url)` — HTTP GET + naïve HTML-to-text extraction.
- *
- * Both are registered by default on `reasonix chat` / `reasonix code`;
- * set `search: false` in config (or `REASONIX_SEARCH=off`) to turn
- * them off. The model decides when to call them based on the query —
- * no slash command required.
- */
+/** web_search uses Mojeek (DDG returns anti-bot 202 to unauthenticated POSTs); web_fetch sniffs HTML to text. */
 
 import type { ToolRegistry } from "../tools.js";
 
@@ -47,16 +32,7 @@ export interface WebSearchOptions {
 const DEFAULT_FETCH_MAX_CHARS = 32_000;
 const DEFAULT_FETCH_TIMEOUT_MS = 15_000;
 const DEFAULT_TOPK = 5;
-/**
- * Hard cap on raw response body size before HTML stripping. The
- * extracted text gets capped further at {@link DEFAULT_FETCH_MAX_CHARS},
- * but `await resp.text()` would otherwise read the entire body into
- * memory first — a malicious or misconfigured server pointing at
- * `https://example.com/big.iso` (or simply a docs site that serves
- * a 50MB HTML changelog) would balloon Reasonix's heap before the
- * char cap applies. 10MB is comfortably above any reasonable page
- * (typical: 100KB-2MB) and bounds the worst case regardless.
- */
+/** Bytes cap applied before `resp.text()` — char cap can't fire until the body is fully buffered. */
 const FETCH_MAX_BYTES = 10 * 1024 * 1024;
 // Real-browser UA. Servers like Mojeek are bot-friendly but still gate
 // obvious scraper UAs; a stock Chrome string avoids the fast-path block.
@@ -64,16 +40,7 @@ const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const MOJEEK_ENDPOINT = "https://www.mojeek.com/search";
 
-/**
- * Search the public web via Mojeek. Returns up to `topK` ranked
- * results with title, url, snippet.
- *
- * Mojeek is an independent index (not a Google/Bing front-end) which
- * means coverage on niche or very recent topics can be thinner, but
- * it's reliable from scripts and doesn't gate on cookies or sessions.
- * If the response has 0 results we distinguish "truly empty" from
- * "layout changed or blocked" so the caller isn't left guessing.
- */
+/** Distinguishes "truly 0 results" from "layout changed / blocked" so callers can tell. */
 export async function webSearch(
   query: string,
   opts: WebSearchOptions = {},
@@ -103,20 +70,7 @@ export async function webSearch(
   return results;
 }
 
-/**
- * Extract results from a Mojeek search page.
- *
- * Mojeek's stable shape (as of April 2026):
- *   <a … class="ob" href="URL"> … breadcrumb … </a>
- *   <h2><a class="title" href="URL">Title</a></h2>
- *   <p class="s">snippet text …</p>
- *
- * We do two tolerant passes — title anchors, then snippet paragraphs —
- * and pair them positionally. Attribute order inside a tag varies
- * between versions, so each pass captures the whole element and we
- * re-extract href / inner text with a second regex. Exported for
- * unit testing against a fixture.
- */
+/** Title-anchor + snippet-paragraph passes paired positionally — robust to attribute reorder. */
 export function parseMojeekResults(html: string): SearchResult[] {
   const titles: string[] = [];
   const titleAnchorRe = /<a\b[^>]*\bclass="title"[^>]*>[\s\S]*?<\/a>/g;
@@ -154,11 +108,6 @@ export function parseMojeekResults(html: string): SearchResult[] {
   return results;
 }
 
-/**
- * Download a URL, strip HTML down to readable text, return it. Times
- * out at 15s, caps extracted text at 32k chars to fit the tool-result
- * budget.
- */
 export async function webFetch(url: string, opts: WebFetchOptions = {}): Promise<PageContent> {
   const maxChars = opts.maxChars ?? DEFAULT_FETCH_MAX_CHARS;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
@@ -198,14 +147,7 @@ export async function webFetch(url: string, opts: WebFetchOptions = {}): Promise
   return { url, title, text: finalText, truncated };
 }
 
-/**
- * Stream a Response body into a string, aborting once the byte total
- * crosses {@link maxBytes}. `await resp.text()` reads the entire body
- * eagerly — for a chunked-encoded response without a Content-Length
- * header, that's a heap-balloon vector. Streaming with a hard cap
- * fixes both the unknown-length case and any server that lies about
- * Content-Length.
- */
+/** Streams + caps so chunked responses (or servers lying about Content-Length) can't balloon the heap. */
 async function readBodyCapped(resp: Response, maxBytes: number): Promise<string> {
   if (!resp.body) return await resp.text();
   const reader = resp.body.getReader();
@@ -240,12 +182,6 @@ async function readBodyCapped(resp: Response, maxBytes: number): Promise<string>
   return out;
 }
 
-/**
- * Strip HTML to readable text. Removes scripts/styles/nav/footer/aside
- * blocks first, then tags, then collapses whitespace. Not a Readability
- * clone — purpose-built to keep the extracted text small enough for the
- * tool-result budget while preserving paragraph breaks.
- */
 export function htmlToText(html: string): string {
   let s = html;
   s = s.replace(/<script[\s\S]*?<\/script>/gi, "");
@@ -292,11 +228,6 @@ export interface WebToolsOptions {
   maxFetchChars?: number;
 }
 
-/**
- * Register `web_search` + `web_fetch` on a ToolRegistry. The model
- * invokes them automatically when a question needs current info —
- * no slash command from the user is required.
- */
 export function registerWebTools(registry: ToolRegistry, opts: WebToolsOptions = {}): ToolRegistry {
   const defaultTopK = opts.defaultTopK ?? DEFAULT_TOPK;
   const maxFetchChars = opts.maxFetchChars ?? DEFAULT_FETCH_MAX_CHARS;

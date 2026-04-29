@@ -1,14 +1,3 @@
-/**
- * `reasonix mcp inspect <spec>` — connect to one MCP server, list
- * everything it exposes (tools, resources, prompts), print a
- * human-readable summary. Useful as:
- *   - a diagnostic tool for "does my MCP server even work?"
- *   - a discovery tool for "what can this server do?"
- *   - the only CLI surface for the resources+prompts methods added
- *     in 0.4.5 (chat mode consumes tools but hasn't wired up the
- *     other two families yet).
- */
-
 import { McpClient } from "../../mcp/client.js";
 import { inspectMcpServer } from "../../mcp/inspect.js";
 import type { InspectionReport } from "../../mcp/inspect.js";

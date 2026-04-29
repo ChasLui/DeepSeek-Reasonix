@@ -1,28 +1,4 @@
-/**
- * `/api/events` — Server-Sent Events stream of live dashboard events.
- *
- * Keeps the response open. Server pushes one SSE frame per event the
- * web client cares about: streaming assistant deltas, tool calls,
- * final answers, busy-state changes. The client opens this once at
- * mount via `EventSource` and keeps it open for the session.
- *
- * Wire shape per frame:
- *   `data: <json>\n\n` — JSON is a `DashboardEvent` envelope.
- *
- * No event type / id headers — single channel keeps the client side
- * trivial (`onmessage` handler does it all).
- *
- * Lifecycle:
- *   - Subscribe via `ctx.subscribeEvents` on connect.
- *   - Write a `ping` event every 25s to keep proxies / browsers from
- *     dropping the connection on idle.
- *   - On client disconnect (`req.on("close")`) call the unsubscribe
- *     fn returned by subscribeEvents and clear the heartbeat timer.
- *   - On server close, the abort signal trips and we end the response.
- *
- * Auth is handled BEFORE this function is called (token check in the
- * main dispatcher); we just trust ctx + req here.
- */
+/** SSE stream of DashboardEvents; 25s ping keeps proxies from dropping idle connections. */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { DashboardContext, DashboardEvent } from "../context.js";

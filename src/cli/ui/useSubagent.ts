@@ -17,21 +17,9 @@ export interface UseSubagentParams {
 export interface UseSubagentResult {
   /** Live state for an in-flight subagent, null when none is running. */
   activity: SubagentActivity | null;
-  /**
-   * Ref captured by the loop's `subagentRunner` closure so even
-   * late-spawned subagents find the current handler. Consumers pass
-   * this to `spawnSubagent({ sink })`.
-   */
   sinkRef: React.MutableRefObject<SubagentSink>;
 }
 
-/**
- * Subagent UI wiring. `start` opens the activity row; each `progress`
- * updates iter + elapsed in place; `end` clears the row and posts a
- * one-line summary (with inline cost) into Historical. Only one
- * subagent is active at a time in the MVP — overlapping events just
- * replace the prior activity.
- */
 export function useSubagent({ session, setHistorical }: UseSubagentParams): UseSubagentResult {
   const [activity, setActivity] = useState<SubagentActivity | null>(null);
   const sinkRef = useRef<SubagentSink>({ current: null });

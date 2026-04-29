@@ -7,23 +7,6 @@ import {
 import { BUILTIN_ALLOWLIST } from "../../../../tools/shell.js";
 import type { SlashHandler } from "../dispatch.js";
 
-/**
- * `/permissions` family. Mirrors /memory's shape — bare lists state,
- * subcommands manage it. Two layers exist:
- *
- *   1. Builtin allowlist — baked into shell.ts (`BUILTIN_ALLOWLIST`),
- *      always on. Read-only here.
- *   2. Per-project allowlist — `~/.reasonix/config.json`, populated by
- *      "always allow" picks on ShellConfirm. Add / remove / clear here.
- *
- * Edit-mode (review / auto / yolo) is also surfaced at the top so users
- * see "yolo skips all of this" without having to re-derive it from /mode.
- *
- * Subcommands:
- *   add <prefix...>      — append a prefix (multi-token OK: "git push origin")
- *   remove <prefix|N>    — drop by exact prefix or 1-based project index
- *   clear confirm        — wipe every project entry (typed literal "confirm")
- */
 const permissions: SlashHandler = (args, _loop, ctx) => {
   const sub = (args[0] ?? "").toLowerCase();
   const root = ctx.codeRoot;

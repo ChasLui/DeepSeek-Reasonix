@@ -1,13 +1,4 @@
-/**
- * Replay — reconstruct session economics from a transcript file.
- *
- * Given a transcript written by App.tsx or the bench runner, rebuild a
- * SessionSummary-compatible aggregate (turn count, total cost, cache-hit
- * ratio, vs-Claude estimate) without replaying the LLM calls.
- *
- * The whole point is offline auditing: a reader should be able to reproduce
- * the headline numbers from a transcript alone, without an API key.
- */
+/** Reconstruct session economics from a transcript alone — offline audit, no API key. */
 
 import { Usage } from "./client.js";
 import {
@@ -20,22 +11,11 @@ import {
 } from "./telemetry.js";
 import { type ReadTranscriptResult, type TranscriptRecord, readTranscript } from "./transcript.js";
 
-/**
- * A single turn's worth of records — the unit of navigation in replay TUI.
- * Records are grouped by their `turn` field, preserving file order within
- * each group (so tool events interleave with assistant_final events the
- * way they were actually emitted).
- */
 export interface TurnPage {
   turn: number;
   records: TranscriptRecord[];
 }
 
-/**
- * Group transcript records into turn-pages. Pages are returned in ascending
- * turn order. Records without a numeric turn (meta lines, malformed) are
- * already filtered by the transcript reader, so this sees clean input.
- */
 export function groupRecordsByTurn(records: TranscriptRecord[]): TurnPage[] {
   const byTurn = new Map<number, TranscriptRecord[]>();
   for (const rec of records) {
@@ -48,11 +28,6 @@ export function groupRecordsByTurn(records: TranscriptRecord[]): TurnPage[] {
     .map(([turn, records]) => ({ turn, records }));
 }
 
-/**
- * Cumulative replay stats up to and including pages[0..upToIdx]. Returns
- * empty stats if upToIdx < 0. Used by replay TUI's sidebar to show "stats
- * so far" as the user scrolls through a transcript.
- */
 export function computeCumulativeStats(pages: TurnPage[], upToIdx: number): ReplayStats {
   if (upToIdx < 0) return computeReplayStats([]);
   const flat: TranscriptRecord[] = [];
@@ -82,10 +57,6 @@ export interface ReplayStats extends SessionSummary {
   totalSubgoals: number;
 }
 
-/**
- * Parse a transcript file and compute replay stats. Throws only on I/O
- * errors; malformed lines inside the file are skipped silently.
- */
 export function replayFromFile(path: string): { parsed: ReadTranscriptResult; stats: ReplayStats } {
   const parsed = readTranscript(path);
   return { parsed, stats: computeReplayStats(parsed.records) };

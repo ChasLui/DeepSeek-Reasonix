@@ -20,71 +20,16 @@ import {
   truncateForModelByTokens,
 } from "./mcp/registry.js";
 
-/**
- * Threshold above which a single tool-call's `arguments` JSON gets
- * automatically shrunk as soon as the tool has responded. 800 tokens
- * (~3 KB) leaves small/typical edits byte-verbatim while catching
- * whole-file rewrites and sprawling SEARCH/REPLACE payloads that
- * otherwise re-pay their cost on every subsequent turn's prompt.
- */
 const ARGS_COMPACT_THRESHOLD_TOKENS = 800;
-/**
- * Cap applied to every tool RESULT in the log when a turn ends. Big
- * `read_file` / `search_content` outputs (typical: 3-15 KB) are what
- * each subsequent turn's prompt keeps paying for, even at 98% cache
- * hit; the cache-hit price × tokens × turns × flash-or-pro rate is
- * how $5 sessions turn into $50 over a long project.
- *
- * 3000 tokens is the knee of the curve: enough head+tail to keep a
- * file excerpt recognisable as a citation reference, small enough
- * that 10 reads ≈ 30K carry-cost instead of 100K+. The model can
- * always re-read the file if it needs fresh detail — one extra
- * `read_file` call is vastly cheaper than dragging raw content
- * through every future turn.
- */
+/** Per-turn cap on tool RESULTS — 3k is enough head+tail to cite, model can re-read for detail. */
 const TURN_END_RESULT_CAP_TOKENS = 3000;
 
-/**
- * How many visible failure signals in a single turn before the
- * remaining model calls auto-escalate to pro. Pitched conservatively:
- * 1-2 retries are normal even for pro (indentation drift, stale context),
- * 3+ means flash is genuinely stuck on this task and continuing at the
- * cheap tier wastes tokens + user time. Announced in the UI when it
- * fires — no silent upgrades.
- */
 const FAILURE_ESCALATION_THRESHOLD = 3;
-/**
- * Model used when the current turn auto-escalates (either from the
- * `/pro` slash arming or the failure threshold). Hard-coded rather
- * than plumbing a separate option because the semantics are exactly
- * "use DeepSeek's stronger tier for this turn" — any deployment
- * custom enough to need a different escalation model would already
- * be constructing loops directly and can override at that layer.
- */
 const ESCALATION_MODEL = "deepseek-v4-pro";
-/**
- * Self-report marker: when flash's first line of output is exactly
- * this string, the loop aborts the current call and retries the
- * turn on {@link ESCALATION_MODEL}. The model is instructed (via
- * system prompts) to emit this only when the task is clearly beyond
- * its ability — complex architecture refactors, subtle invariants,
- * design tradeoffs the model can't resolve confidently. Keeps most
- * users off the pro tier while giving flash a self-aware escape
- * hatch for tasks it would otherwise botch.
- */
-/**
- * Two accepted forms:
- *   - `<<<NEEDS_PRO>>>`              — bare marker, no reason
- *   - `<<<NEEDS_PRO: <reason text>>>>` — model includes a one-sentence
- *     rationale that gets surfaced in the escalation warning. Reason
- *     can be empty (treated as bare); leading/trailing whitespace is
- *     trimmed.
- */
+/** Accepts `<<<NEEDS_PRO>>>` or `<<<NEEDS_PRO: reason>>>` (reason trimmed, may be empty). */
 const NEEDS_PRO_MARKER_PREFIX = "<<<NEEDS_PRO";
 const NEEDS_PRO_MARKER_RE = /^<<<NEEDS_PRO(?::\s*([^>]*))?>>>/;
-/** Max chars of assistant content we buffer before flushing in the
- *  streaming path. Bumped from 80 → 256 to leave room for the
- *  optional reason text without prematurely flushing it. */
+/** Buffer cap before flushing — must fit `<<<NEEDS_PRO: reason>>>` without premature flush. */
 const NEEDS_PRO_BUFFER_CHARS = 256;
 import { AppendOnlyLog, type ImmutablePrefix, VolatileScratch } from "./memory.js";
 import { type RepairReport, ToolCallRepair } from "./repair/index.js";
@@ -102,33 +47,15 @@ import type { ChatMessage, ToolCall } from "./types.js";
 export type EventRole =
   | "assistant_delta"
   | "assistant_final"
-  /**
-   * Emitted as `tool_calls[].function.arguments` streams in. A tool
-   * call with a large arguments payload produces no `content` or
-   * `reasoning_content` bytes — this is the only signal the UI has
-   * that the stream is alive during that window.
-   */
+  /** Only liveness signal during a large-args tool call (no content/reasoning bytes). */
   | "tool_call_delta"
-  /**
-   * Yielded immediately before a tool is dispatched. Lets the TUI put
-   * up a "▸ tool<X> running…" spinner while the tool's Promise is
-   * pending — otherwise the UI looks frozen whenever a tool call
-   * takes more than a few hundred ms (a big `filesystem_edit_file`
-   * is a typical trigger).
-   */
+  /** Pre-dispatch ping so the TUI can show a spinner during long tool awaits. */
   | "tool_start"
   | "tool"
   | "done"
   | "error"
   | "warning"
-  /**
-   * Transient "what's happening right now" indicator. Emitted during
-   * silent phases — between a tool result and the next iteration's
-   * first streaming byte, and right before harvest — so the TUI can
-   * show a spinner with explanatory text instead of looking frozen.
-   * The UI clears it on the next primary event (assistant_delta,
-   * tool_start, tool, assistant_final, error).
-   */
+  /** Transient indicator for silent phases; UI clears on next primary event. */
   | "status"
   | "branch_start"
   | "branch_progress"
@@ -155,26 +82,13 @@ export interface LoopEvent {
   content: string;
   reasoningDelta?: string;
   toolName?: string;
-  /**
-   * Raw JSON-string arguments the model sent for a tool call (role === "tool").
-   * Populated so transcripts can persist *why* a tool was called, not just
-   * what it returned. Needed by `reasonix diff` to explain divergences.
-   */
+  /** Raw args JSON — needed by `reasonix diff` to explain why a tool was called. */
   toolArgs?: string;
   /** Cumulative arguments-string length for `role === "tool_call_delta"`. */
   toolCallArgsChars?: number;
-  /**
-   * Zero-based index of the tool call this delta belongs to. Surfaces
-   * multi-tool turns: on a response emitting 4 write_file calls the UI
-   * can show "building call 3/?" instead of a context-free spinner.
-   */
+  /** Zero-based index of the tool call this delta belongs to (multi-tool progress). */
   toolCallIndex?: number;
-  /**
-   * Count of prior tool calls (this turn) whose arguments have finished
-   * streaming into valid JSON. Not all ready calls have been dispatched
-   * yet — dispatch still happens post-stream — but the user gets "2
-   * ready" progress feedback while later calls keep streaming.
-   */
+  /** Count of tool calls whose args have parsed as valid JSON (UI progress, not dispatch gate). */
   toolCallReadyCount?: number;
   stats?: TurnStats;
   planState?: TypedPlanState;
@@ -182,15 +96,7 @@ export interface LoopEvent {
   branch?: BranchSummary;
   branchProgress?: BranchProgress;
   error?: string;
-  /**
-   * True on `assistant_final` events emitted by the no-tools fallback
-   * when the loop hit its budget, was aborted, or tripped the
-   * token-context guard. Consumers that act on assistant text (notably
-   * the code-mode edit applier) MUST treat these as display-only —
-   * the model is "wrapping up," not proposing new work. Applying
-   * SEARCH/REPLACE blocks found in a forced summary caused the
-   * "analysis became edits" bug in v0.4.1 and earlier.
-   */
+  /** Display-only — code-mode applier MUST skip SEARCH/REPLACE in forced-summary text. */
   forcedSummary?: boolean;
 }
 
@@ -201,95 +107,28 @@ export interface CacheFirstLoopOptions {
   model?: string;
   maxToolIters?: number;
   stream?: boolean;
-  /**
-   * Pillar 2 — structured harvesting of R1 reasoning into a typed plan state.
-   * Pass `true` for defaults or an options object. Off by default (adds a
-   * cheap but non-zero V3 call per turn).
-   */
   harvest?: boolean | HarvestOptions;
-  /**
-   * Self-consistency branching. Pass a number for just a budget (e.g. 3) or
-   * a full `BranchOptions` object. Disables streaming for the branched turn
-   * because all samples must complete before selection. Auto-enables harvest
-   * since the default selector scores samples by plan-state uncertainty.
-   */
+  /** Branching disables streaming (need all samples) and force-enables harvest (selector input). */
   branch?: number | BranchOptions;
-  /**
-   * Reasoning-effort cap. See {@link ReconfigurableOptions} — default
-   * `max` for Reasonix (agent-class use per DeepSeek V4 docs).
-   */
   reasoningEffort?: "high" | "max";
-  /**
-   * Master switch for auto-escalation paths. See ReconfigurableOptions
-   * — defaults to `true` (current behavior); the `flash` and `pro`
-   * presets pass `false` to lock the running session to one model.
-   */
   autoEscalate?: boolean;
-  /**
-   * Soft USD budget for the entire session. When set, the loop:
-   *   - Emits a one-shot warning event when cumulative cost crosses 80%
-   *   - Refuses to run the next turn once cumulative cost ≥ budget,
-   *     yielding an error that explains how to bump or clear the cap
-   *
-   * Default `undefined` — no cap, no warnings. Reasonix is the cost-
-   * focused agent; the budget is opt-in so users new to the tool
-   * don't get blocked at $0.50 wondering what happened, but heavy /
-   * headless / CI users have a clean circuit breaker available.
-   */
+  /** Soft USD cap — warns at 80%, refuses next turn at 100%. Opt-in (default no cap). */
   budgetUsd?: number;
-  /**
-   * Session name. When set, the loop pre-loads the session's prior messages
-   * into its log on construction, and appends every new log entry to
-   * `~/.reasonix/sessions/<name>.jsonl` so the next run can resume.
-   */
   session?: string;
-  /**
-   * Resolved hook list — loaded from `<project>/.reasonix/settings.json`
-   * + `~/.reasonix/settings.json` by the CLI before constructing the loop.
-   * The loop dispatches `PreToolUse` and `PostToolUse` events itself; the
-   * CLI handles `UserPromptSubmit` and `Stop` since they live at the App
-   * boundary. Empty / unset → no hooks fire (the runtime cost of an empty
-   * filter is one ms). See `src/hooks.ts` for the full contract.
-   */
+  /** PreToolUse + PostToolUse only — UserPromptSubmit / Stop live at the App boundary. */
   hooks?: ResolvedHook[];
-  /**
-   * `cwd` reported to hooks via the stdin payload. Defaults to `process.cwd()`.
-   * `reasonix code` overrides this to the sandbox root so a hook that does
-   * `cd $REASONIX_CWD` lands in the project, not in the user's shell home.
-   */
+  /** `cwd` reported to hooks; `reasonix code` sets this to the sandbox root, not shell home. */
   hookCwd?: string;
 }
 
-/**
- * Pillar 1 — Cache-First Loop.
- *
- * - prefix is immutable (cache target)
- * - log is append-only (preserves prior-turn prefix)
- * - scratch is per-turn volatile (never sent upstream)
- *
- * Yields a stream of events so a TUI can render progressively.
- */
 export interface ReconfigurableOptions {
   model?: string;
   harvest?: boolean | HarvestOptions;
   branch?: number | BranchOptions;
   stream?: boolean;
-  /**
-   * Reasoning-effort cap sent per turn (V4 thinking mode only;
-   * deepseek-chat ignores it). Reasonix pins `max` by default because
-   * DeepSeek's V4 docs flag Claude-Code-style agent loops as the
-   * canonical `max` use case. `/effort high` lets a user step down
-   * mid-session for cheaper, faster turns on simple tasks.
-   */
+  /** V4 thinking mode only; deepseek-chat ignores. */
   reasoningEffort?: "high" | "max";
-  /**
-   * Master switch for the auto-escalation paths — both the
-   * `<<<NEEDS_PRO>>>` marker scavenge and the failure-count threshold.
-   * `true` (default) preserves the original "flash baseline, jump to
-   * pro when struggling" behavior. `false` locks the active turn to
-   * whatever `model` is set to — used by the `flash` and `pro` presets
-   * which want a hard model commitment.
-   */
+  /** `false` pins to `model` — kills both NEEDS_PRO marker scavenge and failure-count threshold. */
   autoEscalate?: boolean;
 }
 
@@ -311,41 +150,14 @@ export class CacheFirstLoop {
   harvestOptions: HarvestOptions;
   branchEnabled: boolean;
   branchOptions: BranchOptions;
-  /** See ReconfigurableOptions — mutable so `/effort` can flip mid-session. */
   reasoningEffort: "high" | "max";
-  /**
-   * Auto-escalation toggle. `true` lets the loop self-promote to pro
-   * mid-turn (NEEDS_PRO marker / failure threshold); `false` keeps it
-   * pinned to `model`. Mutable so the dashboard's preset switcher can
-   * flip it live alongside `model`.
-   */
   autoEscalate = true;
-  /**
-   * Soft USD budget — see {@link CacheFirstLoopOptions.budgetUsd}.
-   * Mutable so `/budget` slash can set / change / clear it mid-session.
-   * `null` (the default) disables all budget checks.
-   */
   budgetUsd: number | null;
-  /**
-   * Set the first time a turn crosses 80% of the budget so the warning
-   * doesn't repeat every turn afterwards. Cleared by `setBudget` (any
-   * change re-arms the warning, including raising the cap above the
-   * current spend).
-   */
+  /** One-shot 80% warning latch — cleared by setBudget so a bump re-arms at the new boundary. */
   private _budgetWarned = false;
   sessionName: string | null;
 
-  /**
-   * Hook list, mutable so `/hooks reload` can swap it without
-   * reconstructing the loop. Default empty — the filter cost on a
-   * tool call is one array length check.
-   */
   hooks: ResolvedHook[];
-  /**
-   * `cwd` reported to hook stdin. Mutable so `/cwd` can switch the
-   * working directory mid-session — the App keeps it in sync with
-   * the same currentRootDir that drives tool re-registration.
-   */
   hookCwd: string;
 
   /** Number of messages that were pre-loaded from the session file. */
@@ -353,70 +165,24 @@ export class CacheFirstLoop {
 
   private _turn = 0;
   private _streamPreference: boolean;
-  /**
-   * AbortController per active turn. Threaded through the DeepSeek
-   * HTTP calls AND every tool dispatch so Esc actually cancels the
-   * in-flight network/subprocess work — not "we'll get to it after
-   * the current call finishes." Re-created at the start of each
-   * `step()` (the prior turn's signal has already fired).
-   */
+  /** Threaded through HTTP + every tool dispatch so Esc cancels in-flight work, not after. */
   private _turnAbort: AbortController = new AbortController();
 
-  /**
-   * "Next turn should run on pro, regardless of this.model." Set by the
-   * `/pro` slash command; consumed at the next turn's start (flipping
-   * `_escalateThisTurn` on and self-clearing) so it's a fire-and-forget
-   * single-turn upgrade. Survives across multiple slash inputs so
-   * typing `/pro` and then hesitating a while before submitting a real
-   * message still applies.
-   */
   private _proArmedForNextTurn = false;
-  /**
-   * Active for the current turn only — true means every model call
-   * this turn uses pro instead of `this.model`. Turned on by EITHER
-   * the pro-armed consumption OR the mid-turn auto-escalation
-   * threshold (see `_turnFailureCount`). Cleared at turn end.
-   */
   private _escalateThisTurn = false;
-  /**
-   * Visible-failure count for the current turn. Incremented by tool
-   * dispatch paths when a result matches a known "flash is struggling"
-   * shape (SEARCH-not-found errors, scavenge / truncation / storm
-   * repair fires). Once it hits {@link FAILURE_ESCALATION_THRESHOLD},
-   * the remainder of the turn's model calls auto-upgrade to pro so
-   * the user doesn't watch flash retry the same edit 5 times.
-   */
   private _turnFailureCount = 0;
-  /**
-   * Per-type breakdown of failure signals counted toward the turn's
-   * auto-escalation threshold. Surfaced in the warning when the
-   * threshold trips so the user sees what kind of trouble flash
-   * actually hit ("3× search-mismatch, 2× truncated") rather than
-   * just a bare count. Reset alongside _turnFailureCount.
-   */
   private _turnFailureTypes: Record<string, number> = {};
 
   constructor(opts: CacheFirstLoopOptions) {
     this.client = opts.client;
     this.prefix = opts.prefix;
     this.tools = opts.tools ?? new ToolRegistry();
-    // Library fallback aligns with the CLI's new default: flash, not
-    // pro. Callers who want pro pass it explicitly — pro-by-default
-    // was ~12× more expensive than most deployments needed.
     this.model = opts.model ?? "deepseek-v4-flash";
     this.reasoningEffort = opts.reasoningEffort ?? "max";
     if (opts.autoEscalate !== undefined) this.autoEscalate = opts.autoEscalate;
     this.budgetUsd =
       typeof opts.budgetUsd === "number" && opts.budgetUsd > 0 ? opts.budgetUsd : null;
-    // Iter cap is a safety net, not the primary stop condition. The
-    // primary stop is the token-context guard inside step(): after
-    // every model response we check whether the prompt is already past
-    // 80% of the model's context window, and if so divert to the
-    // forced-summary path. 64 is high enough that exploration almost
-    // never exhausts it before the token guard fires first — which
-    // is the point: let the real constraint (context window) drive
-    // the decision, keep the iter cap as a last-resort backstop for
-    // the case where something spins without growing the prompt.
+    // Last-resort backstop — primary stop is the token-context guard inside step().
     this.maxToolIters = opts.maxToolIters ?? 64;
     this.hooks = opts.hooks ?? [];
     this.hookCwd = opts.hookCwd ?? process.cwd();
@@ -447,11 +213,7 @@ export class CacheFirstLoop {
     this.stream = this.branchEnabled ? false : this._streamPreference;
 
     const allowedNames = new Set([...this.prefix.toolSpecs.map((s) => s.function.name)]);
-    // Mutation predicate sourced from the ToolRegistry: a tool is
-    // mutating unless it declares `readOnly: true` (or has a per-call
-    // `readOnlyCheck` that returns true on the actual args). The storm
-    // breaker uses this to clear its window after edit/write/shell, so
-    // legitimate read → edit → verify cycles aren't mistaken for storms.
+    // Storm breaker clears its window on mutating calls so read → edit → verify isn't a storm.
     const registry = this.tools;
     const isMutating = (call: ToolCall): boolean => {
       const name = call.function?.name;
@@ -476,24 +238,12 @@ export class CacheFirstLoop {
     };
     this.repair = new ToolCallRepair({ allowedToolNames: allowedNames, isMutating });
 
-    // Session resume: pre-load prior messages into the log if a session name
-    // is provided. New messages appended to the log are also persisted.
-    //
-    // Heal-on-load: if a previous run (or a pre-alpha.6 client) stored a
-    // tool result bigger than the cap, the next API call would blow past
-    // DeepSeek's 131k-token limit *before the user even types anything*.
-    // Truncating here lets the user pick up their session history without
-    // losing the conversational context around the oversized call.
+    // Heal-on-load: oversized tool results would 400 the next call before the user types.
     this.sessionName = opts.session ?? null;
     if (this.sessionName) {
       const prior = loadSessionMessages(this.sessionName);
       const shrunk = healLoadedMessagesByTokens(prior, DEFAULT_MAX_RESULT_TOKENS);
-      // On thinking-mode sessions, stamp empty `reasoning_content` on any
-      // assistant turn that's missing the field. Covers sessions written
-      // by pre-fix builds (0.5.14 → 0.6.0) where the stamp was gated on
-      // `reasoning.length > 0` — those files carry assistant turns with
-      // the field absent, and the next API call 400s on resume even
-      // though we're no longer producing such messages.
+      // Thinking-mode sessions: API 400s if any historical assistant turn lacks reasoning_content.
       const stamped = stampMissingReasoningForThinkingMode(shrunk.messages, this.model);
       const messages = stamped.messages;
       const healedCount = shrunk.healedCount + stamped.stampedCount;
@@ -501,11 +251,7 @@ export class CacheFirstLoop {
       for (const msg of messages) this.log.append(msg);
       this.resumedMessageCount = messages.length;
       if (healedCount > 0) {
-        // Persist the healed log back to disk so the damage doesn't
-        // re-surface on the next session load — otherwise `heal →
-        // append → resume → heal → …` would keep noticing the same
-        // broken tail every restart. Non-fatal on I/O error: the
-        // in-memory log is already healed so this session still works.
+        // Persist healed log so the same break isn't re-noticed every restart.
         try {
           rewriteSession(this.sessionName, messages);
         } catch {
@@ -520,55 +266,7 @@ export class CacheFirstLoop {
     }
   }
 
-  /**
-   * Shrink the log by re-truncating oversized tool results to a tighter
-   * token cap, and persist the result back to disk so the next launch
-   * doesn't re-inherit a fat session file. Returns a summary the TUI
-   * can display.
-   *
-   * The cap is in DeepSeek V3 tokens (not chars) — so CJK text gets
-   * capped at the same effective context footprint as English instead
-   * of slipping past a char cap at 2× the token cost. Default 4000
-   * tokens, matching the token-aware dispatch cap from 0.5.2.
-   *
-   * Only tool-role messages are touched (same rationale as
-   * {@link healLoadedMessages}). User and assistant messages carry
-   * authored intent we can't mechanically shrink without losing
-   * meaning.
-   */
-  /**
-   * Conservative args-only shrink fired after every tool response —
-   * strictly about ONE thing: stop oversized `edit_file` / `write_file`
-   * arguments from riding every future turn's prompt.
-   *
-   * Why this is worth doing AUTOMATICALLY (not just on /compact):
-   * Each tool-call arguments string sticks in the log verbatim. On a
-   * coding session with ~10 edits, that's 20-40K tokens of stale
-   * SEARCH/REPLACE text riding along on every turn. Even at a 98.9%
-   * cache hit rate the input cost still adds up linearly (cache-hit
-   * price × tokens × turns). Compacting IMMEDIATELY after the tool
-   * responds means the next turn's prompt is already smaller — the
-   * shrink is a one-time write that saves every future prompt.
-   *
-   * Threshold rationale: 800 tokens ≈ 3 KB. A typical 20-line edit's
-   * args land well under that; massive rewrites (whole-file content,
-   * 100+ line refactors) land above and get the compaction. Small
-   * edits stay byte-verbatim so nothing common-case changes.
-   *
-   * Safety: we ONLY shrink args whose tool has ALREADY responded.
-   * Structurally that's every call in `log.toMessages()` at this
-   * point — the current turn's assistant/tool pairing is by
-   * construction closed by the time we get here (append happens
-   * AFTER dispatch). The in-flight assistant message being built
-   * lives in scratch, not the log, so this pass can't touch it.
-   *
-   * Model impact: the model may occasionally want to reference the
-   * exact SEARCH text of a prior edit — it then reads the file
-   * directly (which shows current state) or looks at the preceding
-   * assistant text (which has its plan). Losing the stale args is a
-   * net win: one extra read_file vs. dragging N KB of stale text
-   * through every subsequent turn.
-   */
+  /** Shrink huge edit_file/write_file args post-dispatch — tool result already explains. */
   private compactToolCallArgsAfterResponse(): void {
     const before = this.log.toMessages();
     const { messages, healedCount } = shrinkOversizedToolCallArgsByTokens(
@@ -586,25 +284,7 @@ export class CacheFirstLoop {
     }
   }
 
-  /**
-   * Fired at the END of a turn (just before `done` is yielded). Shrinks
-   * every tool RESULT in the log that exceeds {@link TURN_END_RESULT_CAP_TOKENS}
-   * to a tight cap so the NEXT turn's prompt doesn't re-pay for big
-   * reads or searches done earlier. Unlike the reactive 40/80%
-   * thresholds which react to context pressure, this runs unconditionally
-   * — the win is preventive: each turn's big outputs get trimmed before
-   * they ride into the next prompt. Saves compounding cost on long
-   * sessions.
-   *
-   * Why compact the JUST-finished turn's results too (not just older
-   * turns)? The same-turn iters already consumed the raw content to
-   * make their decisions — the log is only carried forward for future
-   * prompts. And "let me re-read the file" is vastly cheaper than
-   * "carry this 12KB result in every future turn's prompt forever."
-   *
-   * Safe by construction: args-compact for THIS turn already ran
-   * inside `compactToolCallArgsAfterResponse`; this pass is orthogonal.
-   */
+  /** Preventive end-of-turn shrink — trim big results before they ride into the next prompt. */
   private autoCompactToolResultsOnTurnEnd(): void {
     const before = this.log.toMessages();
     const shrunk = shrinkOversizedToolResultsByTokens(before, TURN_END_RESULT_CAP_TOKENS);
@@ -625,21 +305,7 @@ export class CacheFirstLoop {
     charsSaved: number;
   } {
     const before = this.log.toMessages();
-    // Two-pass shrink: first the tool RESULTS (the classic compact
-    // concern — big read_file output, search_content hits), then the
-    // tool-call ARGS (edit_file / write_file search/replace payloads,
-    // which on a coding session can out-weigh results 2-3x).
-    //
-    // Order matters: we want the args-shrink to see any messages whose
-    // results were just trimmed, so tokensSaved is independently
-    // accumulated from both passes and charsSaved is summed the same
-    // way.
-    //
-    // Using shrink* (not healLoadedMessages) — the full heal would
-    // strip a dangling `assistant.tool_calls` tail, which during an
-    // active turn is legitimate state. Structural healing is only
-    // appropriate at session LOAD; mid-session compact is about
-    // payload shrinkage, not pairing.
+    // Two-pass results+args. NOT healLoadedMessages — would strip an in-flight tool_calls tail.
     const resultsPass = shrinkOversizedToolResultsByTokens(before, maxTokens);
     const argsPass = shrinkOversizedToolCallArgsByTokens(resultsPass.messages, maxTokens);
     const messages = argsPass.messages;
@@ -670,17 +336,7 @@ export class CacheFirstLoop {
     }
   }
 
-  /**
-   * Start a fresh conversation WITHOUT exiting. Drops every message
-   * in the in-memory log AND rewrites the session file to empty so
-   * a resume won't re-hydrate the old turns. Unlike `/forget`, which
-   * deletes the session entirely, this keeps the session name and
-   * config intact — it's the "new chat" button.
-   *
-   * The immutable prefix (system prompt + tool specs) is preserved
-   * — that's the cache-first invariant, not part of the conversation.
-   * Returns the number of messages dropped so the UI can show it.
-   */
+  /** "New chat" — drops messages but keeps session + immutable prefix (cache-first invariant). */
   clearLog(): { dropped: number } {
     const dropped = this.log.length;
     this.log.compactInPlace([]);
@@ -695,12 +351,6 @@ export class CacheFirstLoop {
     return { dropped };
   }
 
-  /**
-   * Reconfigure model/harvest/branch/stream mid-session. The loop's log,
-   * scratch, and stats are preserved — only the per-turn behavior changes.
-   * Used by the TUI's slash commands and by library callers who want to
-   * flip a knob between turns.
-   */
   configure(opts: ReconfigurableOptions): void {
     if (opts.model !== undefined) this.model = opts.model;
     if (opts.stream !== undefined) this._streamPreference = opts.stream;
@@ -734,23 +384,13 @@ export class CacheFirstLoop {
     this.stream = this.branchEnabled ? false : this._streamPreference;
   }
 
-  /**
-   * Set / change / clear the soft USD budget. `null` (or any non-
-   * positive number) disables the cap entirely. Re-arms the 80%
-   * warning so a user who bumps the cap mid-session sees a fresh
-   * threshold message at the new boundary.
-   */
+  /** `null` disables the cap; any change re-arms the 80% warning. */
   setBudget(usd: number | null): void {
     this.budgetUsd = typeof usd === "number" && usd > 0 ? usd : null;
     this._budgetWarned = false;
   }
 
-  /**
-   * Arm pro for the next turn (consumed at turn start). Called by
-   * `/pro`. Idempotent — repeated calls stay armed, `disarmPro()`
-   * clears. Separate from `/preset max` which persistently switches
-   * this.model; armed state is strictly single-turn.
-   */
+  /** Single-turn upgrade consumed at next step() — distinct from `/preset max` (persistent). */
   armProForNextTurn(): void {
     this._proArmedForNextTurn = true;
   }
@@ -767,26 +407,11 @@ export class CacheFirstLoop {
     return this._escalateThisTurn;
   }
 
-  /**
-   * Model the current model call should use. Defaults to `this.model`;
-   * upgrades to {@link ESCALATION_MODEL} when the turn is armed for
-   * pro (via `/pro`) or has hit the failure-escalation threshold.
-   * Same thinking + effort policy applies regardless — pro defaults
-   * to thinking=enabled and effort=max, which the current turn wanted
-   * anyway when flash was struggling.
-   */
   private modelForCurrentCall(): string {
     return this._escalateThisTurn ? ESCALATION_MODEL : this.model;
   }
 
-  /**
-   * Parse the escalation marker out of the model's leading content.
-   * Returns `{ matched: true, reason? }` for both bare and reason-
-   * carrying forms. Only the FIRST line matters — the model is
-   * instructed to emit the marker as the first output token if at
-   * all. Matches anywhere else in the text are normal content
-   * references (e.g. the user asked about the marker itself).
-   */
+  /** Anchored to lead — mid-text matches are normal content (user asking about the marker). */
   private parseEscalationMarker(content: string): { matched: boolean; reason?: string } {
     const m = NEEDS_PRO_MARKER_RE.exec(content.trimStart());
     if (!m) return { matched: false };
@@ -799,14 +424,7 @@ export class CacheFirstLoop {
     return this.parseEscalationMarker(content).matched;
   }
 
-  /**
-   * Could `buf` STILL plausibly become the full marker as more chunks
-   * arrive? Drives the streaming buffer's flush decision: while this
-   * is true we keep accumulating; once it's false (or the buffer
-   * exceeds the byte limit) we flush so the user isn't staring at a
-   * delayed display for arbitrary content that just happens to start
-   * with `<`.
-   */
+  /** Drives streaming flush — while plausibly partial, keep accumulating; else flush. */
   private looksLikePartialEscalationMarker(buf: string): boolean {
     const t = buf.trimStart();
     if (t.length === 0) return true;
@@ -815,23 +433,12 @@ export class CacheFirstLoop {
     }
     if (!t.startsWith(NEEDS_PRO_MARKER_PREFIX)) return false;
     const rest = t.slice(NEEDS_PRO_MARKER_PREFIX.length);
-    // After `<<<NEEDS_PRO`, valid next chars are `>` (closing the
-    // marker) or `:` (start of the reason). Anything else means this
-    // was real content that happened to share a prefix.
+    // Only `>` (close) or `:` (reason) are valid after the prefix.
     if (rest[0] !== ">" && rest[0] !== ":") return false;
     return true;
   }
 
-  /**
-   * Check whether a tool result string looks like a "flash struggled"
-   * signal and, if so, increment the turn's failure counter. Escalates
-   * the REST of the current turn to pro once the threshold is hit.
-   * Idempotent after escalation — further failures don't re-escalate,
-   * but the turn is already on pro so it doesn't matter.
-   *
-   * Return: `true` when this call tipped the turn into escalation
-   * mode (so the loop can surface a one-time warning to the user).
-   */
+  /** Returns true ONLY on the tipping call — caller surfaces a one-shot warning. */
   private noteToolFailureSignal(resultJson: string, repair?: RepairReport): boolean {
     let bumped = false;
     const bump = (kind: string, by = 1): void => {
@@ -843,11 +450,7 @@ export class CacheFirstLoop {
     if (resultJson.includes('"error"') && resultJson.includes("search text not found")) {
       bump("search-mismatch");
     }
-    // ToolCallRepair fires mean the MODEL's output was malformed
-    // (truncation, hallucinated tool markup, repeated same call).
-    // Each flavor counts as one failure signal AND gets its own tag
-    // in the breakdown so the warning can say "3× truncated" instead
-    // of an opaque "3 repair signals".
+    // Per-flavor tagging so the warning can say "3× truncated" not "3 repair signals".
     if (repair) {
       if (repair.scavenged > 0) bump("scavenged", repair.scavenged);
       if (repair.truncationsFixed > 0) bump("truncated", repair.truncationsFixed);
@@ -865,12 +468,6 @@ export class CacheFirstLoop {
     return false;
   }
 
-  /**
-   * Render `_turnFailureTypes` as a comma-separated breakdown like
-   * "2× search-mismatch, 1× truncated" for the auto-escalation
-   * warning. Empty if no types have been recorded yet (defensive —
-   * the warning sites only call this after a bump).
-   */
   private formatFailureBreakdown(): string {
     const parts = Object.entries(this._turnFailureTypes)
       .filter(([, n]) => n > 0)
@@ -879,43 +476,18 @@ export class CacheFirstLoop {
   }
 
   private buildMessages(pendingUser: string | null): ChatMessage[] {
-    // Full tool_calls ↔ tool pairing validation. DeepSeek 400s on
-    // both sides of this contract — unpaired assistant.tool_calls
-    // ("insufficient tool messages following") OR stray tool entries
-    // ("tool must be a response to a preceding tool_calls"). A corrupted
-    // session from an earlier build can have either. Rather than
-    // applying a bunch of narrow tail-trim heuristics, rebuild the
-    // message stream through the same validator used at load time so
-    // the payload we hand to the API is well-formed by construction.
+    // DeepSeek 400s on either unpaired tool_calls or stray tool entries — heal before sending.
     const healed = healLoadedMessages(this.log.toMessages(), DEFAULT_MAX_RESULT_CHARS);
     const msgs: ChatMessage[] = [...this.prefix.toMessages(), ...healed.messages];
     if (pendingUser !== null) msgs.push({ role: "user", content: pendingUser });
     return msgs;
   }
 
-  /**
-   * Signal the currently-running {@link step} to stop **now**. Cancels
-   * the in-flight network request (DeepSeek HTTP/SSE) AND any tool call
-   * currently dispatching (MCP `notifications/cancelled` + promise
-   * reject). The loop itself also sees `signal.aborted` at each
-   * iteration boundary and exits quickly instead of looping again.
-   * Called by the TUI on Esc.
-   */
   abort(): void {
     this._turnAbort.abort();
   }
 
-  /**
-   * Drop everything in the log after (and including) the most recent
-   * user message. Used by `/retry` so the caller can re-send that
-   * message with a fresh turn instead of layering another response on
-   * top of the prior exchange. Returns the content of the dropped user
-   * message, or `null` if there isn't one yet.
-   *
-   * Persists by rewriting the session file — otherwise the next
-   * launch would rehydrate the old exchange and `/retry` would seem
-   * to have done nothing.
-   */
+  /** Drop the last user message + everything after; caller re-sends. Persists to session file. */
   retryLastUser(): string | null {
     const entries = this.log.entries;
     let lastUserIdx = -1;
@@ -928,9 +500,6 @@ export class CacheFirstLoop {
     if (lastUserIdx < 0) return null;
     const raw = entries[lastUserIdx]!.content;
     const userText = typeof raw === "string" ? raw : "";
-    // Keep everything strictly before the user message. The caller
-    // will submit the text again through the normal path, which
-    // re-appends the user turn on first successful API response.
     const preserved = entries.slice(0, lastUserIdx).map((m) => ({ ...m }));
     this.log.compactInPlace(preserved);
     if (this.sessionName) {
@@ -1573,15 +1142,7 @@ export class CacheFirstLoop {
       //      tool_calls"). The summary is about what was LEARNED so far,
       //      not what we intended to do next.
       const ctxMax = DEEPSEEK_CONTEXT_TOKENS[this.model] ?? DEFAULT_CONTEXT_TOKENS;
-      // Proactive tier: between 40% and 80%, pre-shrink oversized tool
-      // results to a moderate cap (4k tokens) so the next iter doesn't
-      // slam straight into the 80% reactive path — which shrinks far
-      // more aggressively (1k tokens) and risks losing useful tail
-      // info. Lowered from 60% to 40% (v0.6) because cost compounds:
-      // carrying a 10K-token read_file through even 3-4 more turns
-      // costs more than the one-shot compact. The turn-end auto-compact
-      // already caps results at 3K, so this threshold mostly catches
-      // multi-iter turns where one tool returned a huge payload mid-turn.
+      // Proactive 40-80% pre-shrink to 4k so we don't fall into the 80% reactive 1k cap.
       if (usage) {
         const ratio = usage.promptTokens / ctxMax;
         if (ratio > 0.4 && ratio <= 0.8) {
@@ -1860,22 +1421,7 @@ export class CacheFirstLoop {
     return final;
   }
 
-  /**
-   * Build an assistant message for the log. The `producingModel` arg is
-   * the model that actually generated this turn (flash, pro, the
-   * forced-summary flash call, `this.model` for synthetics, etc.) —
-   * NOT `this.model`, because escalation + forced-summary can both
-   * route a single turn to a different model.
-   *
-   * The single invariant this encodes: if the producing model is
-   * thinking-mode, `reasoning_content` MUST be present on the
-   * persisted message — even as an empty string. DeepSeek's validator
-   * 400s the NEXT request if any historical thinking-mode assistant
-   * turn is missing it. We used to gate on `reasoning.length > 0`,
-   * which silently dropped the field whenever the stream emitted zero
-   * reasoning deltas or the API returned `reasoning_content: null` —
-   * both legitimate edge cases the 0.5.15/0.5.18 fixes missed.
-   */
+  /** Thinking-mode producer ⇒ reasoning_content MUST be set (even ""), or next call 400s. */
   private assistantMessage(
     content: string,
     toolCalls: ToolCall[],
@@ -1890,50 +1436,20 @@ export class CacheFirstLoop {
     return msg;
   }
 
-  /**
-   * Synthetic assistant message (abort notices, future system injections)
-   * — no real API round trip. Delegates to {@link assistantMessage} with
-   * `this.model` as the stand-in producer, so the same thinking-mode
-   * invariant applies: reasoner sessions get an empty-string
-   * `reasoning_content`; V3 sessions get nothing.
-   */
+  /** Abort notices etc — uses this.model as stand-in producer for the thinking-mode stamp. */
   private syntheticAssistantMessage(content: string): ChatMessage {
     return this.assistantMessage(content, [], this.model, "");
   }
 }
 
-/**
- * True when the model emits `reasoning_content` and therefore requires
- * it round-tripped on follow-up requests.
- *   - `deepseek-reasoner`: legacy R1 alias (= v4-flash thinking mode)
- *   - `deepseek-v4-flash` / `deepseek-v4-pro`: default to thinking mode
- *     per the V4 docs (2026-04)
- *   - `deepseek-chat`: non-thinking compat alias → false
- *
- * Exported so tests can lock the behavior down as DeepSeek adds more
- * model variants.
- */
+/** True when the model emits reasoning_content and requires it round-tripped on follow-ups. */
 export function isThinkingModeModel(model: string): boolean {
   if (model.includes("reasoner")) return true;
   if (model === "deepseek-v4-flash" || model === "deepseek-v4-pro") return true;
   return false;
 }
 
-/**
- * What `extra_body.thinking.type` value to send for a given model. Pins
- * the mode explicitly rather than relying on the server default, which
- * removes one source of ambiguity when DeepSeek validates the request's
- * `reasoning_content` round-trip.
- *
- *   - `deepseek-chat`                   → "disabled" (non-thinking alias)
- *   - `deepseek-reasoner`               → "enabled"  (thinking alias)
- *   - `deepseek-v4-flash` / `-v4-pro`   → "enabled"  (V4 docs default)
- *   - anything else                     → undefined (let server decide)
- *
- * Returning `undefined` makes the client skip the field entirely so
- * third-party models routed through a DeepSeek-compatible endpoint
- * don't get a parameter they don't recognize.
- */
+/** Pins extra_body.thinking.type; `undefined` lets third-party endpoints skip the field. */
 export function thinkingModeForModel(model: string): "enabled" | "disabled" | undefined {
   if (model === "deepseek-chat") return "disabled";
   if (model.includes("reasoner")) return "enabled";
@@ -1941,16 +1457,7 @@ export function thinkingModeForModel(model: string): "enabled" | "disabled" | un
   return undefined;
 }
 
-/**
- * R1 occasionally hallucinates tool-call markup as plain text when the
- * real tool channel has been closed — typically our forced-summary
- * path, where `tools: undefined` is supposed to force prose but isn't
- * always respected. The markup isn't parsed by our tool-call path
- * (the API response's structured `tool_calls` field is empty), so
- * it's just noise in the user's view. Strip known envelope shapes.
- *
- * Exported so tests can exercise it against concrete R1 outputs.
- */
+/** Strip hallucinated tool-call envelopes — `tools: undefined` doesn't always force prose. */
 export function stripHallucinatedToolMarkup(s: string): string {
   let out = s;
   // DeepSeek's DSML envelope (both the full-width "｜" character and
@@ -1966,12 +1473,6 @@ export function stripHallucinatedToolMarkup(s: string): string {
   return out.trim();
 }
 
-/**
- * Try to JSON-decode the model's tool-call arguments so PreToolUse /
- * PostToolUse hooks get a structured object instead of a string.
- * Falls back to the raw string when the model emits malformed JSON
- * (the loop's own dispatch already tolerates that — keep parity).
- */
 function safeParseToolArgs(raw: string): unknown {
   try {
     return JSON.parse(raw);
@@ -1980,15 +1481,7 @@ function safeParseToolArgs(raw: string): unknown {
   }
 }
 
-/**
- * Cheap "is this accumulated tool-call arguments blob now a complete
- * JSON value?" check. Used during streaming to mark a tool call as
- * ready for UI progress feedback — not for dispatch gating. Empty /
- * whitespace-only is not complete; anything that parses is.
- *
- * Exported so tests can lock down the precise shapes we consider
- * "ready" vs "still streaming."
- */
+/** UI progress feedback only — NOT a dispatch gate. */
 export function looksLikeCompleteJson(s: string): boolean {
   if (!s || !s.trim()) return false;
   try {
@@ -2040,18 +1533,7 @@ function summarizeBranch(chosen: BranchSample, samples: BranchSample[]): BranchS
   };
 }
 
-/**
- * Truncate any tool-role message whose content exceeds the cap. User
- * and assistant messages are left alone because (a) they're almost
- * always small, (b) truncating user prompts would corrupt conversational
- * intent in a way the user didn't author. Exported for tests.
- */
-/**
- * Shrink oversized tool results only — the original compact concern.
- * Separated from `healLoadedMessages` so `/compact` (live, mid-session)
- * doesn't accidentally strip structural tail that belongs in the
- * current turn's state.
- */
+/** Tool-role only — truncating user prompts would corrupt authored intent. */
 export function shrinkOversizedToolResults(
   messages: ChatMessage[],
   maxChars: number,
@@ -2069,19 +1551,7 @@ export function shrinkOversizedToolResults(
   return { messages: out, healedCount, healedFrom };
 }
 
-/**
- * Token-aware variant of `shrinkOversizedToolResults`. Used by live
- * `/compact` and auto-compact so the shrink cap bounds the REAL
- * context footprint (CJK at 1 char/token would otherwise survive a
- * char cap at 2× the intended token cost). Session-load heal still
- * uses the char version for backward-compat on stored session files.
- *
- * Per-message token accounting: we tokenize each shrink candidate
- * twice (before + after) so `tokensSaved` is exact. At typical log
- * sizes (≤20 tool results) this is bounded; at pathological sizes
- * the `truncateForModelByTokens` call internally never tokenizes the
- * full input, so worst-case stays bounded too.
- */
+/** Token-cap variant — char cap would let CJK slip past at 2× the intended token cost. */
 export function shrinkOversizedToolResultsByTokens(
   messages: ChatMessage[],
   maxTokens: number,
@@ -2097,8 +1567,7 @@ export function shrinkOversizedToolResultsByTokens(
   const out = messages.map((msg) => {
     if (msg.role !== "tool") return msg;
     const content = typeof msg.content === "string" ? msg.content : "";
-    // Fast path: length ≤ maxTokens ⇒ tokens ≤ maxTokens (every token
-    // is ≥1 char). Skip the per-message tokenize for small results.
+    // length ≤ maxTokens ⇒ tokens ≤ maxTokens — skip the per-message tokenize.
     if (content.length <= maxTokens) return msg;
     const beforeTokens = countTokens(content);
     if (beforeTokens <= maxTokens) return msg;
@@ -2112,28 +1581,7 @@ export function shrinkOversizedToolResultsByTokens(
   return { messages: out, healedCount, tokensSaved, charsSaved };
 }
 
-/**
- * Shrink fat `assistant.tool_calls[*].function.arguments` payloads.
- *
- * Why: tools like `edit_file` / `write_file` ship the full SEARCH /
- * REPLACE text in the arguments JSON. After the edit is applied the
- * tool result already tells the model what happened — the giant
- * arguments string just sits in the log burning prompt tokens every
- * future turn. On a long coding session, args can eat 2-3x as many
- * tokens as the tool results they spawned (observed: 45K vs 27K in a
- * single session). That's the biggest stale-context leak we have.
- *
- * Strategy: for each oversized call, parse the JSON, replace long
- * string fields with `"[…shrunk: N chars, M lines, tool already
- * responded — see tool result]"`. Keeps valid JSON + the key structure
- * (so the model still sees which path was edited), drops the body.
- *
- * Only mutates assistant messages whose tool_calls are already paired
- * with tool responses (i.e. historical, not in-flight) — the caller
- * is responsible for that gate; `fixToolCallPairing` handles structural
- * safety at session load, and the in-flight tail isn't in the log yet
- * (lives in the loop's scratch buffer until the turn commits).
- */
+/** Caller must gate on paired tool_calls — in-flight calls would crash mid-turn. */
 export function shrinkOversizedToolCallArgsByTokens(
   messages: ChatMessage[],
   maxTokens: number,
@@ -2156,9 +1604,7 @@ export function shrinkOversizedToolCallArgsByTokens(
       if (beforeTokens <= maxTokens) return call;
       const shrunk = shrinkJsonLongStrings(args);
       const afterTokens = countTokens(shrunk);
-      // Guard: only swap if we actually saved anything. shrinkJsonLongStrings
-      // might produce output that is only marginally shorter when a call's
-      // payload is dominated by many short strings.
+      // Many-short-strings payloads can come back marginally larger — only swap on real saving.
       if (afterTokens >= beforeTokens) return call;
       changed = true;
       healedCount += 1;
@@ -2172,25 +1618,12 @@ export function shrinkOversizedToolCallArgsByTokens(
   return { messages: out, healedCount, tokensSaved, charsSaved };
 }
 
-/**
- * Replace long string VALUES inside a tool-call arguments JSON with a
- * compact marker. Keeps top-level keys + short values intact so the
- * model can still read "path":"src/foo.ts" and the like. Falls back to
- * whole-string truncation when the input doesn't parse or isn't an
- * object.
- *
- * Threshold: 300 chars — below that it's probably a path / short
- * identifier we want to keep verbatim. Above, it's body text (SEARCH
- * / REPLACE / content) that the tool result already reflects.
- */
+/** Keeps short keys/values (paths, ids) verbatim; only long string values get a marker. */
 function shrinkJsonLongStrings(jsonStr: string): string {
   let parsed: unknown;
   try {
     parsed = JSON.parse(jsonStr);
   } catch {
-    // Unparseable — truncate the whole string to something small with
-    // a marker. 200 chars keeps the call recognizable in the log without
-    // hauling the full payload forward.
     const head = jsonStr.slice(0, 200);
     return `${head}…[shrunk: ${jsonStr.length} chars, unparsed]`;
   }
@@ -2212,22 +1645,7 @@ function shrinkJsonLongStrings(jsonStr: string): string {
   return JSON.stringify(output);
 }
 
-/**
- * Enforce tool_calls ↔ tool pairing across a message log. DeepSeek
- * rejects two shapes at the API boundary:
- *   (a) assistant with tool_calls not followed by matching tool
- *       responses ("insufficient tool messages following tool_calls")
- *   (b) tool message without a preceding assistant.tool_calls with
- *       the matching tool_call_id ("must be a response to a preceding
- *       message with 'tool_calls'")
- *
- * Corrupted session files from earlier builds have hit both. This pass
- * rebuilds the message stream so only well-formed (assistant.tool_calls
- * + all matching responses) groups survive. Plain user/assistant/system
- * messages (no tool_calls) always pass through.
- *
- * Exported so both char-based and token-based heal can compose it.
- */
+/** Drops both unpaired assistant.tool_calls and stray tool messages — DeepSeek 400s on either. */
 export function fixToolCallPairing(messages: ChatMessage[]): {
   messages: ChatMessage[];
   droppedAssistantCalls: number;
@@ -2284,21 +1702,7 @@ export function healLoadedMessages(
   return { messages: paired.messages, healedCount, healedFrom: shrunk.healedFrom };
 }
 
-/**
- * Back-fill empty `reasoning_content` on assistant messages that lack it
- * when the current session model is thinking-mode. Covers session files
- * written by older builds (0.5.14 → 0.6.0) whose bug was exactly the
- * thing we're fixing now: reasoning was gated on `length > 0`, so turns
- * that returned empty reasoning were persisted without the field, and
- * the NEXT API call 400s with the "thinking mode must be passed back"
- * error the moment the user resumes.
- *
- * Non-thinking-mode sessions are left untouched — deepseek-chat round
- * trips don't include the field at all, and stamping empty strings
- * would just churn the prefix cache.
- *
- * Exported for tests.
- */
+/** Back-fills "" on bare assistant turns; skipped on non-thinking to avoid prefix-cache churn. */
 export function stampMissingReasoningForThinkingMode(
   messages: ChatMessage[],
   model: string,
@@ -2316,15 +1720,7 @@ export function stampMissingReasoningForThinkingMode(
   return { messages: out, stampedCount };
 }
 
-/**
- * Token-aware counterpart of {@link healLoadedMessages}. Used at
- * session-load time so resumed sessions come back capped at the same
- * token budget (not char budget) as live tool results — CJK text no
- * longer slips past at 2× the intended token cost when re-hydrated.
- *
- * Still does the same structural pass for tool_calls ↔ tool pairing;
- * that logic is orthogonal to the truncation cap.
- */
+/** Token-cap variant — char cap would let CJK slip past at 2× the intended token cost. */
 export function healLoadedMessagesByTokens(
   messages: ChatMessage[],
   maxTokens: number,
@@ -2345,23 +1741,7 @@ export function healLoadedMessagesByTokens(
   };
 }
 
-/**
- * Turn raw `DeepSeek NNN: {json}` errors into short actionable hints.
- * Client code throws these verbatim from the HTTP layer (see client.ts);
- * this is the one place the UI text layer reads to decide what the user
- * actually needs to do about it.
- *
- * Covered codes (per DeepSeek's error-code doc):
- *   - 400 + "maximum context length" → context-overflow, point at /forget
- *   - 400 generic → strip the JSON, show inner message
- *   - 401 → API key rejected, point at `reasonix setup`
- *   - 402 → balance depleted, link to top-up page
- *   - 422 → param error, show inner message (usually explains which field)
- *
- * 429/500/502/503/504 are swallowed by retry.ts before they reach here;
- * if they DO reach here (all retries exhausted), the raw string already
- * says "DeepSeek 503: server busy" etc. which is informative enough.
- */
+/** Single text-layer DeepSeek-error formatter — 429/5xx never reach here (retry.ts swallows). */
 export function formatLoopError(err: Error): string {
   const msg = err.message ?? "";
   if (msg.includes("maximum context length")) {
@@ -2393,11 +1773,6 @@ export function formatLoopError(err: Error): string {
   return msg;
 }
 
-/**
- * Pull the human-readable message out of a DeepSeek error response body
- * (`{"error":{"message":"..."}}`). Falls back to the raw body when
- * parsing fails — anything is better than eating the clue entirely.
- */
 function extractDeepSeekErrorMessage(body: string): string {
   const trimmed = body.trim();
   if (!trimmed) return "(no message)";

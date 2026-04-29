@@ -1,63 +1,16 @@
-/**
- * `run_skill` — invoke a user-authored playbook from the Skills index.
- *
- * Two execution modes, picked at registration time per skill via
- * frontmatter `runAs`:
- *
- *   - `inline` (default) — the skill body becomes the tool result and
- *     enters the parent's append-only log. The model reads the
- *     instructions and continues the normal loop, calling whatever
- *     tools the skill prescribes. Cheap, no isolation. Best for
- *     "load a checklist" / "load a coding style" / "load review
- *     criteria" patterns.
- *
- *   - `subagent` — the skill body becomes the *system prompt* of an
- *     isolated child loop; the user-supplied `arguments` becomes the
- *     `task`. Only the child's final answer comes back as the tool
- *     result. Best for big-context exploration or research playbooks
- *     where the parent doesn't need to see the trail.
- *
- * Subagent dispatch is opt-in: callers must supply a `subagentRunner`
- * at registration. When omitted (chat mode without a configured
- * client), invoking a subagent skill returns a structured error
- * instead of silently downgrading to inline — that would surprise the
- * skill author.
- *
- * v1 deliberately ignores each skill's `allowed-tools` frontmatter:
- * Reasonix's tool namespace doesn't align with Claude Code's so a
- * literal pass would give wrong answers.
- */
+/** runAs: inline appends the body to the parent log; subagent spawns an isolated child loop and only returns the final answer. */
 
 import { type Skill, SkillStore } from "../skills.js";
 import type { ToolRegistry } from "../tools.js";
 
-/**
- * Caller-supplied closure that knows how to spawn a subagent for the
- * given resolved skill + task. Decoupled from `registerSkillTools` so
- * the skills tool doesn't need to know about DeepSeekClient or the
- * parent ToolRegistry — the App / library wiring assembles those once
- * and hands in this function.
- *
- * Returns the JSON tool-result string verbatim (already serialized via
- * `formatSubagentResult`), so the dispatch path is pure pass-through.
- */
+/** Returns serialized tool-result string — dispatch path is pure pass-through. */
 export type SubagentRunner = (skill: Skill, task: string) => Promise<string>;
 
 export interface SkillToolsOptions {
   /** Override `$HOME` — tests set this to a tmpdir. */
   homeDir?: string;
-  /**
-   * Absolute project root — enables discovery of project-scope skills
-   * under `<projectRoot>/.reasonix/skills/`. Omit for chat mode (global
-   * scope only).
-   */
   projectRoot?: string;
-  /**
-   * Closure that spawns a subagent for `runAs: subagent` skills. When
-   * omitted, invoking a subagent skill returns an error directing the
-   * user to wire up the runner — silent fallback to inline would be
-   * worse, since the skill author wrote the body assuming isolation.
-   */
+  /** When omitted, subagent skills error rather than silently falling back to inline (loses isolation). */
   subagentRunner?: SubagentRunner;
   /** Hide built-in skills (test-only knob; production callers leave off). */
   disableBuiltins?: boolean;

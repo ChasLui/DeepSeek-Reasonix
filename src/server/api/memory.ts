@@ -1,19 +1,4 @@
-/**
- * `/api/memory` — list + read + write memory files.
- *
- *   GET  /api/memory                       → tree (REASONIX.md + global + project)
- *   GET  /api/memory/<scope>/<name>        → file contents
- *   POST /api/memory/<scope>/<name>        → write contents
- *   DELETE /api/memory/<scope>/<name>      → delete file
- *
- * Scopes:
- *   - `project`        → <projectRoot>/REASONIX.md
- *   - `global`         → ~/.reasonix/memory/global/<name>.md
- *   - `project-mem`    → ~/.reasonix/memory/<projectHash>/<name>.md
- *
- * Names are sanitized (`[a-zA-Z0-9._-]+`) on write to keep them safe
- * for the filesystem and to prevent path traversal.
- */
+/** Names sanitized via SAFE_NAME on every write — guards against path traversal. */
 
 import { createHash } from "node:crypto";
 import {

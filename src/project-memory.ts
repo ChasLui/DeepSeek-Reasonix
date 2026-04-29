@@ -1,23 +1,4 @@
-/**
- * Project memory — a user-authored `REASONIX.md` in the project root
- * that gets pinned into the immutable-prefix system prompt.
- *
- * Design notes:
- *
- *   - The file lands in `ImmutablePrefix.system`, so the whole memory
- *     block is hashed into the cache prefix fingerprint. Editing the
- *     file invalidates the prefix; unchanged memory across sessions
- *     keeps the DeepSeek prefix cache warm. That matches Pillar 1 —
- *     memory is a deliberate, stable prefix, not per-turn drift.
- *   - Only one source: the working-root `REASONIX.md`. No parent walk,
- *     no `~/.reasonix/REASONIX.md`, no CLAUDE.md fallback. User-global
- *     memory can come later; for v1 one file == one mental model.
- *   - Truncated at 8 000 chars (≈ 2k tokens). `.gitignore` gets 2 000
- *     because it's a constraint dump; memory gets more headroom because
- *     it's deliberate instructions.
- *   - Opt-out via `REASONIX_MEMORY=off|false|0`. No CLI flag — memory
- *     is a file, `rm REASONIX.md` is the other opt-out.
- */
+/** REASONIX.md pinned into ImmutablePrefix.system; edits invalidate the prefix-cache fingerprint. */
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -36,11 +17,7 @@ export interface ProjectMemory {
   truncated: boolean;
 }
 
-/**
- * Read `REASONIX.md` from `rootDir`. Returns `null` when the file is
- * missing, unreadable, or empty (whitespace-only counts as empty — an
- * empty memory file shouldn't perturb the cache prefix).
- */
+/** Empty / whitespace-only files return null so they don't perturb the cache prefix. */
 export function readProjectMemory(rootDir: string): ProjectMemory | null {
   const path = join(rootDir, PROJECT_MEMORY_FILE);
   if (!existsSync(path)) return null;
@@ -62,26 +39,13 @@ export function readProjectMemory(rootDir: string): ProjectMemory | null {
   return { path, content, originalChars, truncated };
 }
 
-/**
- * Resolve whether project memory should be read. Default: on.
- * `REASONIX_MEMORY=off|false|0` turns it off (CI, reproducing issues,
- * intentional offline runs).
- */
 export function memoryEnabled(): boolean {
   const env = process.env.REASONIX_MEMORY;
   if (env === "off" || env === "false" || env === "0") return false;
   return true;
 }
 
-/**
- * Return `basePrompt` with the project's `REASONIX.md` appended as a
- * "Project memory" section. No-op when the file is absent, empty, or
- * memory is disabled via env.
- *
- * The appended block is deterministic — identical input ⇒ identical
- * output — so every session that opens against the same memory file
- * gets the same prefix hash.
- */
+/** Deterministic — same memory file always yields the same prefix hash. */
 export function applyProjectMemory(basePrompt: string, rootDir: string): string {
   if (!memoryEnabled()) return basePrompt;
   const mem = readProjectMemory(rootDir);

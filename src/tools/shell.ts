@@ -1,30 +1,4 @@
-/**
- * Native shell tool — lets the model run commands inside the sandbox
- * root so it can actually verify its own work (run tests, check git
- * status, inspect a lockfile, etc.). Without this the coding-mode
- * loop is "write code, hope it works, ask the user to run it" —
- * defeats the purpose.
- *
- * Safety model:
- *   - Commands run with `cwd` pinned to the registered root. No
- *     path traversal via the command itself is enforced (users can
- *     `cat ../outside.txt`); the trust boundary is the directory
- *     you opened Reasonix from.
- *   - Commands are matched against a read-only / testing allowlist.
- *     Allowlisted commands execute immediately and return stdout +
- *     stderr merged. Everything else throws with a clear message —
- *     the UI translates that into an `/apply`-style confirm gate so
- *     the user sees the exact command before it runs.
- *   - Default timeout: 60s. Output cap: matches tool-result budget.
- *   - Every command that DOES run is spawned with `shell: false` and
- *     a tokenized argv — no string-to-shell interpolation, so the
- *     model can't accidentally construct a chained `rm` via quoting.
- *
- * This is intentionally narrower than what Claude Code / Aider ship:
- * we gate more commands behind confirmation by default. Users who
- * trust the model can widen the allowlist by instantiating their
- * own tool registry.
- */
+/** cwd pinned to root; non-allowlisted commands throw to a UI confirm gate; spawn is `shell: false`, tokenized argv only. */
 
 import { type SpawnOptions, spawn } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
@@ -37,52 +11,18 @@ export interface ShellToolsOptions {
   rootDir: string;
   /** Seconds before an individual command is killed. Default: 60. */
   timeoutSec?: number;
-  /**
-   * Per-command stdout+stderr cap in characters. Default: 32_000 to
-   * match the tool-result budget.
-   */
   maxOutputChars?: number;
-  /**
-   * Extra command-name prefixes the user explicitly trusts. Added on
-   * top of the built-in allowlist. Examples: `["my-ci-script", "lint"]`.
-   *
-   * Accepts either a fixed array (captured once at registration) or a
-   * getter called on every dispatch. The getter form is load-bearing:
-   * when the TUI's `ShellConfirm` writes a new prefix to config mid-
-   * session, the running `run_command` must pick it up immediately —
-   * otherwise the same command gets re-prompted until the next launch.
-   */
+  /** Getter form is load-bearing — newly-persisted "always allow" prefixes MUST take effect mid-session. */
   extraAllowed?: readonly string[] | (() => readonly string[]);
-  /**
-   * When true, skip the allowlist entirely and auto-run every command.
-   * Off by default — this is an escape hatch for non-interactive use
-   * (CI, benchmarks) where a human can't be in the loop to confirm.
-   *
-   * Accepts either a static boolean (captured once) or a getter called
-   * on every dispatch. The getter form is what `reasonix code` uses to
-   * wire `editMode === "yolo"` into the registry: flipping the mode
-   * mid-session must take effect on the next tool call without forcing
-   * a re-registration. Static `true` is fine for CI / benchmark code.
-   */
+  /** Getter form lets `editMode === "yolo"` flip mid-session without re-registering tools. */
   allowAll?: boolean | (() => boolean);
-  /**
-   * Background-process registry shared between `run_background`,
-   * `job_output`, `stop_job`, `list_jobs`, and the /jobs /kill slashes.
-   * When omitted, the registrar builds its own — but the caller
-   * usually wants to provide one so the TUI can tail it too.
-   */
   jobs?: JobRegistry;
 }
 
 const DEFAULT_TIMEOUT_SEC = 60;
 const DEFAULT_MAX_OUTPUT_CHARS = 32_000;
 
-/**
- * Command prefixes we consider safe to run without asking the user.
- * Rule of thumb: read-only reports, or test runners whose failure mode
- * is "exit 1 with output." Nothing that can rewrite state, escalate,
- * or touch the network.
- */
+/** Read-only reports + test runners whose failure mode is "exit 1 with output". */
 export const BUILTIN_ALLOWLIST: ReadonlyArray<string> = [
   // Repo inspection
   "git status",
@@ -144,13 +84,7 @@ export const BUILTIN_ALLOWLIST: ReadonlyArray<string> = [
   "mypy",
 ];
 
-/**
- * Tokenize a shell-ish command string into argv. Handles single/double
- * quoting; rejects unclosed quotes. Does NOT expand env vars, globs,
- * backticks, or `$(…)` — the goal is to prevent the model from
- * accidentally (or not) sneaking arbitrary shells past the allowlist
- * via concatenation. Exported for testing.
- */
+/** No env / glob / backtick / `$(…)` expansion — prevents bypass of allowlist via concatenation. */
 export function tokenizeCommand(cmd: string): string[] {
   const out: string[] = [];
   let cur = "";
@@ -185,26 +119,7 @@ export function tokenizeCommand(cmd: string): string[] {
   return out;
 }
 
-/**
- * Scan `cmd` for a shell operator (`|`, `||`, `>`, `>>`, `<`, `<<`,
- * `&`, `&&`, `2>`, `2>>`, `2>&1`, `&>`) that appears unquoted at a
- * token boundary. Returns the operator string, or null if none.
- *
- * Why this exists: `run_command` documents "no shell expansion, no
- * pipes, no redirects" (the tool spawns argv directly, not through a
- * shell), but when the model writes `dir | findstr foo` the `|`
- * survives tokenization as a standalone token and gets quoted as the
- * literal string `"|"` by `quoteForCmdExe` — cmd.exe sees it as an
- * argument, not an operator, so the pipe silently fails. Detecting
- * operators up front lets us throw a clear error ("split into separate
- * calls") instead of letting the command run with surprising results.
- *
- * Quoted operators (`grep "a|b"`) and operator characters embedded in
- * larger tokens (`--flag=1&2`) are NOT flagged — those are literal
- * argv bytes and are safe to pass through.
- *
- * Exported for testing.
- */
+/** Up-front detection — without it, `dir | findstr foo` quotes `|` literal and pipe silently fails. */
 export function detectShellOperator(cmd: string): string | null {
   const opPrefix = /^(?:2>&1|&>|\|{1,2}|&{1,2}|2>{1,2}|>{1,2}|<{1,2})/;
   let cur = "";
@@ -250,11 +165,7 @@ export function detectShellOperator(cmd: string): string | null {
   return check();
 }
 
-/**
- * Return true when `cmd` matches an allowlisted prefix. Exported for
- * testing. Match is on the space-normalized leading tokens so
- * `git   status  -s ` and `git status` both match `git status`.
- */
+/** Match on space-normalized leading tokens — `git   status  -s` matches the `git status` prefix. */
 export function isAllowed(cmd: string, extra: readonly string[] = []): boolean {
   const normalized = cmd.trim().replace(/\s+/g, " ");
   const allowlist = [...BUILTIN_ALLOWLIST, ...extra];
@@ -379,32 +290,7 @@ export async function runCommand(
   });
 }
 
-/**
- * Decode a child-process output buffer with codepage fallback. The
- * default UTF-8 path handles 99% of Linux / Mac and any process we
- * already coerced to UTF-8 (Python via PYTHONIOENCODING, PowerShell
- * via the OutputEncoding prelude, cmd.exe builtins via chcp 65001).
- *
- * On Windows, two cases still leak non-UTF-8 bytes through that
- * pipeline:
- *
- *   1. `cmd.exe`'s OWN error messages (e.g. "'sed' is not recognized
- *      as an internal or external command") come from a localized
- *      resource DLL and ignore the active code page, so chcp 65001
- *      doesn't help. On Chinese Windows the bytes are CP936/GBK.
- *
- *   2. Native Windows EXEs that hardcode the system locale for stderr
- *      (older sed/grep ports, MS toolchain prompts).
- *
- * We try UTF-8 strictly; if the bytes don't form valid UTF-8 we fall
- * back to GBK on Windows (covers Simplified Chinese and most CJK
- * Windows installs because GBK is a strict superset of ASCII and
- * decodes Latin text identically). Better than mojibake; not a full
- * locale-detector, but matches where the actual bug reports come
- * from.
- *
- * Exported for tests.
- */
+/** GBK fallback on Windows — cmd.exe's localized error DLL and native EXE stderr ignore chcp 65001. */
 export function smartDecodeOutput(buf: Buffer): string {
   if (buf.length === 0) return "";
   try {
@@ -429,38 +315,14 @@ export function smartDecodeOutput(buf: Buffer): string {
   return buf.toString("utf8");
 }
 
-/**
- * Test/override hooks for {@link resolveExecutable}. Omitting any field
- * falls through to the real process globals — the runtime call path
- * uses defaults; tests inject `platform` + `env` + `isFile` to exercise
- * Windows-specific lookup from a Linux CI runner without touching
- * actual fs.
- */
 export interface ResolveExecutableOptions {
   platform?: NodeJS.Platform;
   env?: { PATH?: string; PATHEXT?: string };
-  /** Predicate swapped in by tests to avoid creating real files. */
   isFile?: (path: string) => boolean;
-  /** Path.join used for the lookup. Defaults to Windows semantics on Windows. */
   pathDelimiter?: string;
 }
 
-/**
- * Resolve a bare command name (e.g. `npm`) to its on-disk path via
- * PATH × PATHEXT on Windows. Returns the input unchanged on non-Windows
- * platforms, when the input is already a path (contains `/`, `\`, or is
- * absolute), or when no match is found in PATH × PATHEXT (caller gets a
- * natural ENOENT from spawn, which surfaces cleanly).
- *
- * Why this exists: `child_process.spawn` with `shell: false` invokes
- * Windows `CreateProcess`, which does not honor `PATHEXT` and does not
- * search for `.cmd` / `.bat` wrappers. Node-ecosystem tools ship as
- * `npm.cmd`, `npx.cmd`, `yarn.cmd`, etc., so a bare `npm` fails with
- * ENOENT under `shell: false`. Flipping to `shell: true` would work
- * but reintroduces shell-expansion (pipes, redirects, chained cmds)
- * that the tool was explicitly designed to forbid. This resolver
- * threads the needle.
- */
+/** CreateProcess ignores PATHEXT — bare `npm` fails ENOENT under `shell:false` without this resolver. */
 export function resolveExecutable(cmd: string, opts: ResolveExecutableOptions = {}): string {
   const platform = opts.platform ?? process.platform;
   if (platform !== "win32") return cmd;
@@ -500,14 +362,7 @@ function defaultIsFile(full: string): boolean {
   }
 }
 
-/**
- * Prepare `(bin, args, spawnOpts)` for the runCommand spawn call,
- * applying Windows-specific workarounds for (a) PATHEXT lookup and
- * (b) the CVE-2024-27980 prohibition on direct `.cmd`/`.bat` spawns.
- *
- * Exported so tests can assert the transformation without booting an
- * actual child process.
- */
+/** Windows workarounds: PATHEXT lookup + CVE-2024-27980 prohibition on direct `.cmd`/`.bat` spawn. */
 export function prepareSpawn(
   argv: readonly string[],
   opts: ResolveExecutableOptions = {},
@@ -572,20 +427,7 @@ function isPowerShellExe(resolved: string): boolean {
   return /(?:^|[\\/])(?:powershell|pwsh)(?:\.exe)?$/i.test(resolved);
 }
 
-/**
- * Locate `-Command` / `-c` in `args` and prepend the UTF-8 setup prelude
- * to its value. Returns the patched args, or `null` when no `-Command`
- * arg is present (in which case we leave the invocation untouched —
- * inline-expression and script-file modes have their own conventions
- * we don't want to silently rewrite).
- *
- * Why not always wrap: PowerShell's quoting semantics are finicky enough
- * that adding a prelude to a script file invocation could break it.
- * `-Command` is the case the model actually uses, and where mojibake
- * matters; targeting just it keeps the blast radius small.
- *
- * Exported for tests.
- */
+/** Targets `-Command` only — PowerShell quoting is finicky enough that wrapping script-file mode could break it. */
 export function injectPowerShellUtf8(args: readonly string[]): string[] | null {
   const prelude =
     "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;$OutputEncoding=[System.Text.Encoding]::UTF8;";
@@ -600,31 +442,11 @@ export function injectPowerShellUtf8(args: readonly string[]): string[] | null {
   return null;
 }
 
-/**
- * Prefix a cmd.exe command line with `chcp 65001 >nul &` so output
- * (from cmd.exe and any child it spawns) is UTF-8-encoded. Without
- * this, on Chinese / Japanese / Korean Windows, `dir`, `findstr`,
- * `where`, etc. emit text in the system codepage (CP936, CP932,
- * CP949, …) and `chunk.toString()` — which decodes as UTF-8 — produces
- * garbled mojibake the model then sees as poisoned input on the next
- * turn.
- *
- * Scope: chcp affects ONLY this cmd.exe instance, which exits after
- * `/c`. No global console state changes. Single `&` (not `&&`) so the
- * command still runs even on the rare Windows builds where chcp
- * itself returns a non-zero exit (Win7 quirks; harmless on Win10+).
- *
- * Exported so tests can verify the wrapping shape.
- */
+/** Single `&` (not `&&`) so the command still runs on Win7 where chcp can return non-zero. */
 export function withUtf8Codepage(cmdline: string): string {
   return `chcp 65001 >nul & ${cmdline}`;
 }
 
-/**
- * True when `s` looks like a bare executable name — no path separator,
- * no drive letter, no extension. Such names on Windows, when absent
- * from PATH × PATHEXT, are almost always cmd.exe built-ins.
- */
 function isBareWindowsName(s: string): boolean {
   if (!s) return false;
   if (s.includes("/") || s.includes("\\")) return false;
@@ -633,15 +455,7 @@ function isBareWindowsName(s: string): boolean {
   return true;
 }
 
-/**
- * Quote an argument so cmd.exe parses it back as a single token. We
- * always wrap in double quotes when the arg contains whitespace or
- * any cmd.exe metacharacter, doubling embedded quotes per cmd.exe's
- * `""` escape rule. Bare alphanumeric args pass through unquoted for
- * readability in logs.
- *
- * Exported for test coverage of the quoting semantics.
- */
+/** Doubles embedded quotes per cmd.exe's `""` escape rule; bare alnum passes through unquoted. */
 export function quoteForCmdExe(arg: string): string {
   if (arg === "") return '""';
   if (!/[\s"&|<>^%(),;!]/.test(arg)) return arg;

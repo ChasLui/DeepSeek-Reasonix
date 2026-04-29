@@ -1,20 +1,4 @@
-/**
- * `/api/skills` — list / read / write / create / delete skill files.
- *
- *   GET    /api/skills                        → list (project + global + builtin)
- *   GET    /api/skills/<scope>/<name>         → file body + frontmatter
- *   POST   /api/skills/<scope>/<name>         → write body
- *   DELETE /api/skills/<scope>/<name>         → delete file
- *
- * Scopes:
- *   - `project` → <projectRoot>/.reasonix/skills/<name>/SKILL.md
- *   - `global`  → ~/.reasonix/skills/<name>/SKILL.md
- *   - `builtin` → read-only, lists shipped skills (explore / research)
- *
- * The skill registry is filesystem-rooted; this endpoint just edits
- * those files. Skills are reloaded by the loop on next /new or
- * launch — the SPA shows a banner reminding the user.
- */
+/** `/api/skills` — edits files only; loop reloads on /new or restart. `builtin` scope is read-only. */
 
 import {
   existsSync,

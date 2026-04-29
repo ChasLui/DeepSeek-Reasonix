@@ -1,20 +1,4 @@
-/**
- * Curated catalog of popular MCP servers.
- *
- * Hardcoded because (a) this list changes slowly — maybe monthly, (b)
- * fetching it over the network would make `reasonix mcp list` flaky
- * offline or behind a proxy. When it does change, update this file and
- * ship a patch release.
- *
- * Inclusion criteria:
- *   - actively maintained (official Anthropic repo OR widely used)
- *   - stdio-compatible (Reasonix doesn't do SSE yet)
- *   - installable with one `npx -y ...` command — zero manual setup
- *   - has a clear value proposition in one short line
- *
- * Not included: servers that need API keys / OAuth / complex config.
- * Those get their own docs once we have patterns for them.
- */
+/** Hardcoded — fetching this list at runtime would make `mcp list` flaky offline / behind proxies. */
 
 export interface CatalogEntry {
   /** Short name, used as the namespace prefix when suggested. */
@@ -68,10 +52,6 @@ export const MCP_CATALOG: CatalogEntry[] = [
   },
 ];
 
-/**
- * Build the `reasonix chat --mcp "..."` command line for a catalog entry.
- * Returns a copy-pasteable fragment starting at `--mcp`.
- */
 export function mcpCommandFor(entry: CatalogEntry): string {
   const pkg = entry.package;
   const tail = entry.userArgs ? ` ${entry.userArgs}` : "";

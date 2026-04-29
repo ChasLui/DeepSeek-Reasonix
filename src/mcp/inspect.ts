@@ -1,13 +1,4 @@
-/**
- * Gather a full inspection report from an initialized MCP client:
- * server info, capabilities, tools, resources, prompts. Methods the
- * server doesn't support come back as `{ supported: false }` instead
- * of throwing, so a CLI or UI can render a consistent "what this
- * server exposes" summary even against minimal implementations.
- *
- * Pure with respect to I/O beyond the passed-in client — the CLI
- * layer owns argument parsing, connection setup, and printing.
- */
+/** Unsupported list methods surface as `{supported:false}` instead of throwing — minimal servers still get a clean report. */
 
 import type { McpClient } from "./client.js";
 import type { McpPrompt, McpResource, McpTool } from "./types.js";
@@ -26,12 +17,7 @@ export type SectionResult<T> =
   | { supported: true; items: T[] }
   | { supported: false; reason: string };
 
-/**
- * Run an inspection against a **already-initialized** client. Caller
- * is responsible for `initialize()` before this and `close()` after.
- * We keep this pure so unit tests can feed in a FakeMcpTransport and
- * verify the aggregate shape without spinning up a real process.
- */
+/** Caller owns initialize() / close() — keeps this pure so tests can feed a FakeMcpTransport. */
 export async function inspectMcpServer(client: McpClient): Promise<InspectionReport> {
   // We always *try* the three listings so the client learns whether a
   // server without explicit capability flags still serves them —

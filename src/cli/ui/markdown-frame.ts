@@ -1,29 +1,4 @@
-/**
- * Markdown → Frame compiler. Reuses the existing block parser from
- * `markdown.tsx` (`parseBlocks`) but produces `Frame`s instead of
- * Ink JSX, so markdown-rich event bodies (assistant turns, plan
- * proposals) can flow through the row-pipeline slicer like every
- * other migrated role.
- *
- * Coverage in this first pass — most common 90% of model output:
- *   · paragraphs with inline markup (bold, italic, code, link, strike)
- *   · headings (#-#####)
- *   · bullet lists (`- ` / `* ` / `1. `) including GFM task items
- *   · fenced code blocks with bg tint per line
- *   · blockquotes (left-border + dim text)
- *   · horizontal rule
- *
- * Deferred — fall back to plain text:
- *   · tables           (multi-column layout, edge cases)
- *   · edit blocks      (Aider-style SEARCH/REPLACE — render as code)
- *   · citations        (link validation hints)
- *
- * Visual fidelity is "close" rather than "pixel-perfect" with the
- * existing Ink renderer. The trade-off (lost: nested-list spacing
- * polish, code-block syntax highlighting; gained: row-precise scroll
- * across long markdown bodies) was deemed worthwhile for the
- * row-pipeline migration.
- */
+/** Markdown→Frame compiler reusing `parseBlocks` from markdown.tsx; tables / edit blocks / citations fall back to plain text. */
 
 import {
   type Cell,
@@ -38,27 +13,15 @@ import {
 import { type Block, parseBlocks } from "./markdown.js";
 import { COLOR } from "./theme.js";
 
-/**
- * Inline markup regex — same as `markdown.tsx`'s INLINE_RE. Matches
- * link / bold-italic / bold / triple-backtick code / single-backtick
- * code / strikethrough / italic / backslash escape.
- */
+/** Mirrors `markdown.tsx` INLINE_RE — link/bold/italic/code/strike/escape. */
 const INLINE_RE =
   /(\[([^\]\n]+)\]\(([^)\n]+)\)|\*\*\*([^*\n]+?)\*\*\*|\*\*([^*\n]+?)\*\*|```([^\n]+?)```|`([^`\n]+?)`|~~([^~\n]+?)~~|(?<![*\w])\*([^*\n]+?)\*(?!\w)|\\([*_~`[\](){}#+\-.!\\]))/g;
 
-/** One styled segment of an inline-parsed paragraph: a string + the
- *  text-style options to apply to it as a single cell run. */
 interface InlineSegment {
   text: string;
   opts: Omit<TextOpts, "width">;
 }
 
-/**
- * Parse a single paragraph's inline markup into a list of styled
- * segments. The base style flows through unchanged-text segments;
- * each markup match overrides with its own style (bold, italic,
- * code = bg + cyan fg, link = underline + accent, strike = dim).
- */
 function parseInline(input: string, baseOpts: Omit<TextOpts, "width">): InlineSegment[] {
   const out: InlineSegment[] = [];
   let lastEnd = 0;
@@ -107,16 +70,7 @@ function parseInline(input: string, baseOpts: Omit<TextOpts, "width">): InlineSe
   return out;
 }
 
-/**
- * Render a list of styled segments as a Frame, wrapping at `width`.
- * Word-friendly wrap: prefers to break at whitespace; falls back to
- * mid-segment break when a single segment exceeds the line budget.
- *
- * Implementation: convert each segment to a list of (cell, style)
- * pairs accumulated linearly, then emit rows as the running column
- * total reaches `width`. This keeps the wrap logic in ONE place
- * rather than duplicating it per segment style.
- */
+/** Single wrap loop over flattened (cell, style) atoms — keeps wrap logic in one place across styles. */
 function segmentsToFrame(segs: readonly InlineSegment[], width: number): Frame {
   if (width <= 0) return empty(0);
   // Build a flat list of "atoms" — each atom is one grapheme + its
@@ -222,21 +176,11 @@ function segmentsToFrame(segs: readonly InlineSegment[], width: number): Frame {
   return { width, rows };
 }
 
-/**
- * Render one paragraph as a Frame. Inline markup is parsed and the
- * resulting styled segments are wrapped to `width`.
- */
 function paragraphFrame(p: { text: string }, width: number): Frame {
   const segs = parseInline(p.text, {});
   return segmentsToFrame(segs, width);
 }
 
-/**
- * Render a heading as a Frame. Levels 1-3 render in bold + brand
- * color; levels 4-6 render in bold + dim accent. Followed by a
- * trailing blank row for spacing — mirrors the legacy renderer's
- * `marginBottom={1}`.
- */
 function headingFrame(h: { level: number; text: string }, width: number): Frame {
   const isMajor = h.level <= 3;
   const fg = isMajor ? COLOR.brand : COLOR.accent;
@@ -244,11 +188,7 @@ function headingFrame(h: { level: number; text: string }, width: number): Frame 
   return vstack(segmentsToFrame(segs, width), text("", { width }));
 }
 
-/**
- * Render a bullet list as a Frame. Each item: bullet glyph (for
- * tasks: `[ ]` / `[x]`) + space + item text (with inline markup).
- * Continuation lines align under the body, not under the bullet.
- */
+/** Continuation lines align under the body, not under the bullet. */
 function bulletListFrame(
   b: { items: { text: string; task?: "done" | "todo" }[]; ordered?: boolean },
   width: number,
@@ -291,11 +231,6 @@ function bulletListFrame(
   return vstack(...rows);
 }
 
-/**
- * Render a fenced code block as a Frame. Each line gets a uniform
- * dark bg + cyan fg styling; the optional language tag becomes a
- * dim caption on the first row above the code.
- */
 function codeBlockFrame(c: { lang: string; text: string }, width: number): Frame {
   const lines = c.text.split("\n");
   const rows: Frame[] = [];
@@ -308,30 +243,16 @@ function codeBlockFrame(c: { lang: string; text: string }, width: number): Frame
   return vstack(...rows);
 }
 
-/**
- * Render a blockquote: left-border + dim text, mirroring the
- * conversation column visual idiom. Children are rendered
- * recursively so nested quotes / lists / code render correctly.
- */
 function blockquoteFrame(bq: { children: Block[] }, width: number): Frame {
   const inner = bq.children.map((child) => blockToFrame(child, Math.max(8, width - 2)));
   const stacked = inner.length === 0 ? empty(Math.max(8, width - 2)) : vstack(...inner);
   return borderLeft(pad(stacked, 0, 0, 0, 1), COLOR.info);
 }
 
-/**
- * Render a horizontal rule: a single dim row of `─`.
- */
 function hrFrame(width: number): Frame {
   return text("─".repeat(width), { width, fg: COLOR.info, dim: true });
 }
 
-/**
- * Convert a parsed Block to a Frame. Falls back to plain-text for
- * the block kinds we haven't migrated yet (table, edit-block); the
- * trade-off is consistent — those are rare-but-rich shapes whose
- * existing Ink renderers we keep until the next migration phase.
- */
 function blockToFrame(b: Block, width: number): Frame {
   switch (b.kind) {
     case "paragraph":
@@ -369,12 +290,6 @@ function blockToFrame(b: Block, width: number): Frame {
   }
 }
 
-/**
- * Public entry point: parse `markdown` and return a Frame at the
- * given `width`. Each block becomes a Frame, separated by a blank
- * row except where the block already includes its own trailing
- * spacer (headings, bullet lists).
- */
 export function markdownToFrame(markdown: string, width: number): Frame {
   if (!markdown) return empty(width);
   const blocks = parseBlocks(markdown);

@@ -45,13 +45,6 @@ export interface StreamChunk {
   raw: any;
 }
 
-/**
- * Response shape for DeepSeek's `/user/balance` endpoint. One entry
- * per currency the account is funded in (typically CNY, sometimes
- * USD). `total_balance` is the spendable figure; `granted_balance`
- * counts promotional credits that expire, `topped_up_balance` is
- * what the user paid for and keeps.
- */
 export interface BalanceInfo {
   currency: string;
   total_balance: string;
@@ -64,12 +57,6 @@ export interface UserBalance {
   balance_infos: BalanceInfo[];
 }
 
-/**
- * Response shape for DeepSeek's `/models` endpoint. Mirrors the OpenAI
- * models list shape DeepSeek copied — `id` is the model name to pass to
- * `/chat/completions`, `owned_by` is the provider string (always
- * `"deepseek"` today).
- */
 export interface ModelInfo {
   id: string;
   object: "model";
@@ -150,12 +137,7 @@ export class DeepSeekClient {
     return payload;
   }
 
-  /**
-   * Fetch the current DeepSeek account balance. Separate endpoint
-   * from chat completions, no billing impact. Returns null on any
-   * network/auth failure so callers can gate the balance display
-   * without a hard error — the rest of the session works regardless.
-   */
+  /** Returns null on failure so callers can degrade — session must keep working without balance UI. */
   async getBalance(opts: { signal?: AbortSignal } = {}): Promise<UserBalance | null> {
     try {
       const resp = await this._fetch(`${this.baseUrl}/user/balance`, {
@@ -172,13 +154,7 @@ export class DeepSeekClient {
     }
   }
 
-  /**
-   * Fetch the model catalog DeepSeek currently exposes. Today this is
-   * `deepseek-chat` (V3) and `deepseek-reasoner` (R1), but querying is
-   * the only way to learn about new ones without a Reasonix release.
-   * Returns null on any network/auth failure so callers can degrade
-   * gracefully — e.g. `/models` falls back to the hardcoded hint.
-   */
+  /** Returns null on failure — callers fall back to a hardcoded model hint. */
   async listModels(opts: { signal?: AbortSignal } = {}): Promise<ModelList | null> {
     try {
       const resp = await this._fetch(`${this.baseUrl}/models`, {

@@ -18,14 +18,7 @@ export interface UseSessionInfoResult {
   refreshLatestVersion: () => void;
 }
 
-/**
- * Ambient session-level data fetched from DeepSeek + the npm registry
- * at mount, refreshed either implicitly (balance after each turn) or
- * on demand (`/update`, `/models`).
- *
- * All three are best-effort — a `null` value means "not loaded yet or
- * the endpoint failed." The StatsPanel hides the cell in that case.
- */
+/** All values best-effort — `null` means "not loaded or endpoint failed"; StatsPanel hides those cells. */
 export function useSessionInfo(loop: CacheFirstLoop): UseSessionInfoResult {
   const [balance, setBalance] = useState<Balance | null>(null);
   const [models, setModels] = useState<string[] | null>(null);

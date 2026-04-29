@@ -2,11 +2,7 @@ import { spawnSync } from "node:child_process";
 import type { MemoryScope, MemoryStore } from "../../../user-memory.js";
 import type { SlashResult } from "./types.js";
 
-/**
- * Parse a `/memory show|forget` argument. Accepts bare `<name>` or
- * `<scope>/<name>`. For bare names, tries project scope first (more
- * specific, usually what the user means) then falls back to global.
- */
+/** Bare names try project scope first (more specific) before falling back to global. */
 export function resolveMemoryTarget(
   store: MemoryStore,
   raw: string,
@@ -32,12 +28,6 @@ export function resolveMemoryTarget(
   return null;
 }
 
-/**
- * Render a section (resources / prompts) of an MCP inspection into a
- * compact "name  count  items" form, collapsing when unsupported.
- * Names-only — descriptions and full metadata live in
- * `reasonix mcp inspect`, which is purpose-built for the deep view.
- */
 export function appendSection(
   lines: string[],
   label: string,
@@ -89,12 +79,7 @@ export function formatToolList(history: Array<{ toolName: string; text: string }
   return lines.join("\n");
 }
 
-/**
- * Binary-K token formatter: 1234 → "1.2K", 131072 → "128K". Matches
- * DeepSeek's doc ("128K context"). Every call site here is rendering
- * token counts — if a future caller wants decimal-K for dollars or
- * similar, add a separate formatter rather than reusing this one.
- */
+/** Binary-K to match DeepSeek docs; do NOT reuse for non-token counts. */
 export function compactNum(n: number): string {
   if (n < 1024) return String(n);
   const k = n / 1024;
@@ -108,12 +93,6 @@ export function stripOuterQuotes(s: string): string {
   return s;
 }
 
-/**
- * Run `git add -A` then `git commit -m <message>` in `rootDir`. Returns
- * a SlashResult with a human-scannable info line. We surface stderr on
- * failure so the user sees exactly what git complained about (bad
- * config, pre-commit hook rejection, nothing staged, etc.).
- */
 export function runGitCommit(rootDir: string, message: string): SlashResult {
   const add = spawnSync("git", ["add", "-A"], { cwd: rootDir, encoding: "utf8" });
   if (add.error || add.status !== 0) {
@@ -130,11 +109,7 @@ export function runGitCommit(rootDir: string, message: string): SlashResult {
   return { info: `▸ committed: ${message}${firstLine ? `\n  ${firstLine}` : ""}` };
 }
 
-/**
- * Safely extract whatever diagnostic text is available from a spawnSync
- * result — on Windows or when cwd doesn't exist, `stderr`/`stdout` can
- * be `undefined` and the caller has only `error.message` to go on.
- */
+/** On Windows or missing cwd, stderr/stdout can be undefined — fall back to error.message. */
 export function gitTail(res: ReturnType<typeof spawnSync>): string {
   const stderr = (res.stderr as string | undefined) ?? "";
   const stdout = (res.stdout as string | undefined) ?? "";

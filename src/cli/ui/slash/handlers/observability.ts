@@ -145,12 +145,6 @@ const status: SlashHandler = (_args, loop, ctx) => {
   return { info: lines.join("\n") };
 };
 
-/**
- * Tiny `[██████░░░░] 60%`-style bar for use inside slash text output.
- * Char-only, no color (info text strings render dimColor in EventLog).
- * The visual is intentionally subtle — these slashes are scanned for
- * numbers, not stared at.
- */
 function renderTinyBar(pct: number, width: number): string {
   const w = Math.max(4, width);
   const clamped = Math.max(0, Math.min(100, pct));

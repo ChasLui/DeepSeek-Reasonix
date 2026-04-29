@@ -1,10 +1,3 @@
-/**
- * `/api/abort` — POST that fires `loop.abort()`, web equivalent of
- * pressing Esc in the TUI during a busy turn. No-op on idle. Returns
- * 202 always (the actual abort is fire-and-forget; SSE will broadcast
- * the resulting events).
- */
-
 import type { DashboardContext } from "../context.js";
 import type { ApiResult } from "../router.js";
 

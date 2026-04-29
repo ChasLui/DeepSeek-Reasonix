@@ -1,18 +1,4 @@
-/**
- * User memory — `~/.reasonix/memory/` markdown notes pinned into the
- * immutable-prefix system prompt across sessions.
- *
- * Two scopes:
- *   - `global`  → `~/.reasonix/memory/global/`         (cross-project)
- *   - `project` → `~/.reasonix/memory/<hash>/`          (per sandbox root)
- *
- * Each scope has an always-loaded `MEMORY.md` index plus zero-or-more
- * `<name>.md` detail files loaded on demand via `recall_memory`.
- *
- * Distinct from `src/project-memory.ts` (REASONIX.md) in purpose:
- *   REASONIX.md        is committable, team-shared project memory.
- *   ~/.reasonix/memory is user-private memory, never committed.
- */
+/** User-private memory pinned into the immutable prefix; distinct from committable REASONIX.md. */
 
 import { createHash } from "node:crypto";
 import {
@@ -63,10 +49,7 @@ export interface WriteInput {
 
 const VALID_NAME = /^[a-zA-Z0-9_-][a-zA-Z0-9_.-]{1,38}[a-zA-Z0-9]$/;
 
-/**
- * Throws on filename injection attempts (`../foo`, `foo/bar`, leading
- * dots, etc.). Allowed: 3-40 chars, alnum + `_` + `-` + interior `.`.
- */
+/** Throws on path-injection (../, /, leading dot). Allowed: 3-40 chars, alnum/_/-, interior `.`. */
 export function sanitizeMemoryName(raw: string): string {
   const trimmed = String(raw ?? "").trim();
   if (!VALID_NAME.test(trimmed)) {
@@ -97,12 +80,6 @@ function ensureDir(p: string): void {
   if (!existsSync(p)) mkdirSync(p, { recursive: true });
 }
 
-/**
- * Parse a `---` frontmatter block off the top of a markdown string.
- * Tolerates missing frontmatter, returning `{}` for data and the full
- * string as body. Only recognizes the simple `key: value` shape — no
- * quoting, no multi-line, no YAML features. Matches what we emit.
- */
 function parseFrontmatter(raw: string): { data: Record<string, string>; body: string } {
   const lines = raw.split(/\r?\n/);
   if (lines[0] !== "---") return { data: {}, body: raw };
@@ -142,10 +119,6 @@ function todayIso(): string {
   return d.toISOString().slice(0, 10);
 }
 
-/**
- * A `MEMORY.md` index line for one entry. One-liner, under ~150 chars.
- * `description` is truncated if it would push past the soft limit.
- */
 function indexLine(e: Pick<MemoryEntry, "name" | "description">): string {
   const safeDesc = e.description.replace(/\n/g, " ").trim();
   const max = 130 - e.name.length;
@@ -179,10 +152,6 @@ export class MemoryStore {
     return this.projectRoot !== undefined;
   }
 
-  /**
-   * Read the `MEMORY.md` index for a scope. Returns post-cap content
-   * (with a truncation marker if clipped), or `null` when absent / empty.
-   */
   loadIndex(
     scope: MemoryScope,
   ): { content: string; originalChars: number; truncated: boolean } | null {
@@ -226,11 +195,7 @@ export class MemoryStore {
     };
   }
 
-  /**
-   * List every memory in this store. Scans both scopes (skips project
-   * scope if unconfigured). Silently skips malformed files; the index
-   * must stay queryable even if one file is hand-edited into nonsense.
-   */
+  /** Skips malformed files — index stays queryable even if one file is hand-edited into nonsense. */
   list(): MemoryEntry[] {
     const out: MemoryEntry[] = [];
     const scopes: MemoryScope[] = this.projectRoot ? ["global", "project"] : ["global"];
@@ -257,11 +222,6 @@ export class MemoryStore {
     return out;
   }
 
-  /**
-   * Write a new memory (or overwrite existing). Creates the scope dir,
-   * writes the `.md` file, and regenerates `MEMORY.md`. Returns the
-   * absolute path written to.
-   */
   write(input: WriteInput): string {
     if (input.scope === "project" && !this.projectRoot) {
       throw new Error("cannot write project-scoped memory: no projectRoot configured");
@@ -298,12 +258,7 @@ export class MemoryStore {
     return true;
   }
 
-  /**
-   * Rebuild `MEMORY.md` from the `.md` files currently in the scope dir.
-   * Called after every write/delete. Sorted by name for stable prefix
-   * hashing — two stores with the same set of files produce byte-identical
-   * MEMORY.md content, keeping the cache prefix reproducible.
-   */
+  /** Sorted by name — same file set must produce byte-identical MEMORY.md for stable prefix hashing. */
   private regenerateIndex(scope: MemoryScope): void {
     const dir = scopeDir({ homeDir: this.homeDir, scope, projectRoot: this.projectRoot });
     if (!existsSync(dir)) return;
@@ -336,16 +291,7 @@ export class MemoryStore {
   }
 }
 
-/**
- * Read the freeform global REASONIX.md (~/.reasonix/REASONIX.md). This
- * is the destination for the `#g <note>` quick-write prefix — symmetric
- * to project REASONIX.md but pinned across every session regardless of
- * working directory. Returns post-cap content or `null` when the file
- * is absent / empty / unreadable.
- *
- * Distinct from MEMORY.md (the curated index of named .md files) — this
- * is one freeform bullet list the user appends to with `#g`.
- */
+/** Freeform `#g` destination, distinct from MEMORY.md's curated index of named files. */
 export function readGlobalReasonixMemory(
   homeDir: string = join(homedir(), ".reasonix"),
 ): { path: string; content: string; originalChars: number; truncated: boolean } | null {
@@ -370,12 +316,6 @@ export function readGlobalReasonixMemory(
   return { path, content, originalChars, truncated };
 }
 
-/**
- * Append the global freeform REASONIX.md to `basePrompt` as its own
- * pinned section. No-op when the file is absent / empty / disabled.
- * Stable byte output for stable prefix hashing — same file content
- * always produces the same prompt suffix.
- */
 export function applyGlobalReasonixMemory(basePrompt: string, homeDir?: string): string {
   if (!memoryEnabled()) return basePrompt;
   const dir = homeDir ?? join(homedir(), ".reasonix");
@@ -394,13 +334,7 @@ export function applyGlobalReasonixMemory(basePrompt: string, homeDir?: string):
   ].join("\n");
 }
 
-/**
- * Append `MEMORY_GLOBAL` and (optionally) `MEMORY_PROJECT` blocks to
- * `basePrompt`. Omits a block entirely when its index is absent — an
- * empty tag would add bytes to the prefix hash without content.
- * Respects `REASONIX_MEMORY=off` via `memoryEnabled()` from
- * `project-memory.ts`.
- */
+/** Empty index → omit the whole block (otherwise we'd add bytes to the prefix hash for nothing). */
 export function applyUserMemory(
   basePrompt: string,
   opts: { homeDir?: string; projectRoot?: string } = {},
@@ -438,14 +372,6 @@ export function applyUserMemory(
   return parts.join("\n");
 }
 
-/**
- * Compose every lazy-loaded prefix block in one call: project REASONIX.md,
- * global REASONIX.md (`#g` destination), user memory indexes (global +
- * per-project), and the skills index. Drop-in replacement for
- * `applyProjectMemory` at CLI entry points. Stacking order is stable —
- * the prefix hash only changes when block *content* changes, not when
- * this helper is called a second time with the same filesystem state.
- */
 export function applyMemoryStack(basePrompt: string, rootDir: string): string {
   const withProject = applyProjectMemory(basePrompt, rootDir);
   const withGlobal = applyGlobalReasonixMemory(withProject);

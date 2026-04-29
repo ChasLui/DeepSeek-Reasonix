@@ -1,31 +1,4 @@
-/**
- * Pure keystroke → action reducer for PromptInput.
- *
- * Kept separate from the React component so the keyboard semantics
- * are easy to unit-test. The component threads `useInput` through
- * this function and applies the returned action.
- *
- * Edit model:
- *   - Full cursor support. ←/→ move one column. ↑/↓ move across
- *     lines in a multi-line buffer (column preserved when possible).
- *     Ctrl+A / Ctrl+E jump to start / end of the current line.
- *   - Backspace deletes the char before the cursor; Delete deletes
- *     the char under the cursor.
- *   - Printable chars (including multi-char paste bursts) insert
- *     at the cursor.
- *   - Enter submits unless Shift is held (newline), the line ends
- *     with '\' and cursor is at end (bash-style continuation), or
- *     the input is Ctrl+J (LF, terminal-universal newline).
- *   - Parent owns Tab, Esc, PageUp/Down (slash-complete, abort,
- *     unused). Arrow keys are split: empty buffer → parent (history
- *     recall); non-empty → child (cursor movement).
- *
- * CSI recovery is delegated to `key-normalize.ts` — see there for
- * the rationale. Every event flows through `recoverCsiTail` first,
- * which is the single source of truth for the Windows ConPTY case
- * (parse-keypress eats the leading `\x1b` and routes the bare
- * `[A`/`[C`/`[201~`/etc. through useInput as plain text).
- */
+/** Pure keystroke→action reducer; arrow keys at buffer boundary defer to the parent for history recall. */
 
 export interface MultilineKey {
   input: string;
@@ -53,23 +26,9 @@ export interface MultilineAction {
   /** When `true`, fire `onSubmit(submitValue ?? value)`. */
   submit: boolean;
   submitValue?: string;
-  /**
-   * When set, the key was ↑/↓ at a buffer boundary (empty buffer, or
-   * cursor already at first/last line) and the component should hand
-   * off to the parent's history-recall handler. The child's cursor
-   * didn't move; the parent decides whether to swap in a prior
-   * prompt. Lets users escape out of a multi-line buffer into
-   * history without first emptying it — previously NOOP felt stuck.
-   */
+  /** Set when ↑/↓ hits a buffer boundary — parent handles history recall. */
   historyHandoff?: "prev" | "next";
-  /**
-   * Multi-char paste detected. The reducer is pure so it can't
-   * allocate a sentinel id or write to the registry — it hands the
-   * raw normalized payload up to PromptInput, which registers the
-   * paste, picks a sentinel codepoint, and inserts THAT (one char)
-   * into the buffer. Result: the user sees a `[paste #N · M lines]`
-   * placeholder instead of the full content drowning the typed text.
-   */
+  /** Reducer is pure — hands raw paste to PromptInput which allocates a sentinel and inserts that. */
   pasteRequest?: { content: string };
 }
 
@@ -251,11 +210,6 @@ function insertAt(value: string, cursor: number, insert: string): MultilineActio
   };
 }
 
-/**
- * Line + column of a cursor inside a buffer. Exported because the
- * renderer needs the same mapping for drawing the cursor block on the
- * right line.
- */
 export function lineAndColumn(value: string, cursor: number): { line: number; col: number } {
   let line = 0;
   let col = 0;
@@ -275,15 +229,7 @@ function startOfLine(value: string, cursor: number): number {
   return value.lastIndexOf("\n", cursor - 1) + 1;
 }
 
-/**
- * Find the start of the word immediately to the left of the cursor.
- * Skips trailing whitespace first (so Ctrl+W after typing space
- * still removes the previous word, not just the space), then walks
- * back over the word characters until a whitespace boundary or
- * start-of-buffer. Newlines count as whitespace, so Ctrl+W at the
- * start of a line deletes the preceding line's last word — same
- * behavior as bash/readline.
- */
+/** Skips trailing whitespace first so Ctrl+W after a space still removes the previous word. */
 function previousWordStart(value: string, cursor: number): number {
   let i = cursor;
   while (i > 0 && /\s/.test(value[i - 1] ?? "")) i--;

@@ -1,121 +1,29 @@
-/**
- * User-level config storage for the Reasonix CLI.
- *
- * Lookup order for the API key:
- *   1. `DEEPSEEK_API_KEY` env var (highest priority — for CI / power users)
- *   2. `~/.reasonix/config.json` (set by the first-run setup flow)
- *
- * The library itself never touches the config file — it only reads
- * `DEEPSEEK_API_KEY` from the environment. The CLI is responsible for
- * pulling from the config file and exposing it via env var to the loop.
- *
- * Beyond the API key, the config also remembers the user's *defaults*
- * from `reasonix setup`: preset, MCP servers, session. This is what
- * makes `reasonix chat` with no flags "just work" after first-run.
- */
+/** Library reads only DEEPSEEK_API_KEY from env; the CLI bridges config.json → env var. */
 
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-/**
- * Preset names — three model-commitment levels.
- *   - `auto`  — flash baseline + auto-escalate to pro on hard turns
- *               (NEEDS_PRO marker / failure-count threshold both fire).
- *               Default. Closest match to the legacy `smart` preset.
- *   - `flash` — flash always. No auto-escalation. `/pro` still works
- *               for one-shot manual escalation. Cheapest predictable.
- *   - `pro`   — pro always. No downgrade. ~3× cost vs flash at the
- *               2026-04 discount rate; more outside the window.
- *
- * Legacy `fast | smart | max` names stay in the union for back-compat
- * with existing `~/.reasonix/config.json` files; resolvePreset() maps
- * them to the new semantics.
- */
+/** Legacy `fast|smart|max` kept for back-compat with existing config.json files. */
 export type PresetName = "auto" | "flash" | "pro" | "fast" | "smart" | "max";
 
-/**
- * How `reasonix code` handles model-issued tool calls. Two axes folded
- * into one enum because users think about "how trusting am I right now?"
- * as a single dial, not as "writes vs shell" pairs.
- *
- *   - "review" — queue edits into pendingEdits (user /apply or `y` to
- *                commit); shell commands NOT on the read-only allowlist
- *                hit ShellConfirm. Default.
- *   - "auto"   — apply edits immediately, snapshot for /undo, show a
- *                short undo banner. Shell still goes through ShellConfirm
- *                for non-allowlisted commands.
- *   - "yolo"   — apply edits immediately AND auto-approve every shell
- *                command. No prompts at all. Use when you trust the
- *                current direction and just want to iterate fast; /undo
- *                still rolls back individual edit batches.
- *
- * Persisted so `/mode <x>` survives a relaunch. Missing → "review".
- *
- * Codex-equivalence note: review ≈ untrusted, auto ≈ on-request,
- * yolo ≈ never.
- */
+/** Single trust dial: review queues edits + gates shell; auto applies + gates shell; yolo skips both gates. */
 export type EditMode = "review" | "auto" | "yolo";
 
-/**
- * reasoning_effort cap for the model. "max" is the agent-class default;
- * "high" is cheaper / faster. Persisted so `/effort high` survives a
- * relaunch — earlier versions silently reverted to "max" on every new
- * session, which burned budget unexpectedly.
- */
 export type ReasoningEffort = "high" | "max";
 
 export interface ReasonixConfig {
   apiKey?: string;
   baseUrl?: string;
-  /**
-   * Default preset for `reasonix chat` / `reasonix run` when no flags override.
-   * Maps to model + autoEscalate (see presets.ts). Missing → "auto".
-   */
   preset?: PresetName;
-  /**
-   * Edit-gate mode for `reasonix code`. See EditMode doc. Absent → "review".
-   */
   editMode?: EditMode;
-  /**
-   * Set to `true` the first time we've shown the "Shift+Tab cycles
-   * review/AUTO" onboarding tip in `reasonix code`. Once seen, we stop
-   * posting the tip — the bottom status bar carries the knowledge
-   * forward without further nagging.
-   */
   editModeHintShown?: boolean;
-  /**
-   * Last reasoning_effort chosen via `/effort`. Loaded on launch so
-   * "high" stays "high" — default is "max" when unset.
-   */
   reasoningEffort?: ReasoningEffort;
-  /**
-   * Default MCP server specs to bridge on every `reasonix chat`, in the
-   * same `"name=cmd args..."` format that `--mcp` takes. Stored as strings
-   * so `reasonix setup` stays symmetrical with the flag — one parser, one
-   * format in the config file, grep-friendly.
-   */
+  /** Stored as `--mcp`-format strings so one parser handles both flag and config. */
   mcp?: string[];
-  /**
-   * Default session name (null/missing → "default", which is what the
-   * CLI has been doing anyway). `reasonix setup` lets users pick a name
-   * or opt into ephemeral.
-   */
   session?: string | null;
-  /** Marks that `reasonix setup` has completed at least once. */
   setupCompleted?: boolean;
-  /**
-   * Whether `web_search` + `web_fetch` tools are registered. Default:
-   * enabled (no key required — backed by DuckDuckGo's public HTML
-   * endpoint). Set to `false` to keep the session offline.
-   */
   search?: boolean;
-  /**
-   * Per-project state keyed by absolute directory path. Written by the
-   * "always allow" choice on a shell confirmation prompt; merged into
-   * `registerShellTools({ extraAllowed })` when `reasonix code` runs
-   * against that directory again.
-   */
   projects?: {
     [absoluteRootDir: string]: {
       shellAllowed?: string[];
@@ -155,11 +63,6 @@ export function loadApiKey(path: string = defaultConfigPath()): string | undefin
   return readConfig(path).apiKey;
 }
 
-/**
- * Resolve whether web-search tools should be registered. Default: on.
- * Env `REASONIX_SEARCH=off` or config `search: false` turns it off.
- * Any other value falls through to enabled.
- */
 export function searchEnabled(path: string = defaultConfigPath()): boolean {
   const env = process.env.REASONIX_SEARCH;
   if (env === "off" || env === "false" || env === "0") return false;
@@ -174,10 +77,6 @@ export function saveApiKey(key: string, path: string = defaultConfigPath()): voi
   writeConfig(cfg, path);
 }
 
-/**
- * Read the persisted "always allow" shell-command prefixes for a
- * given project root. Returns an empty array when nothing's stored.
- */
 export function loadProjectShellAllowed(
   rootDir: string,
   path: string = defaultConfigPath(),
@@ -186,10 +85,6 @@ export function loadProjectShellAllowed(
   return cfg.projects?.[rootDir]?.shellAllowed ?? [];
 }
 
-/**
- * Append a prefix to the project's shell-allowed list, dedup and
- * persist. No-op if the prefix is empty/whitespace or already stored.
- */
 export function addProjectShellAllowed(
   rootDir: string,
   prefix: string,
@@ -206,14 +101,7 @@ export function addProjectShellAllowed(
   writeConfig(cfg, path);
 }
 
-/**
- * Drop one prefix from the project's shell-allowed list. Returns true
- * when the prefix was present (and removed), false when it wasn't —
- * lets `/permissions remove` distinguish "removed" from "no such entry"
- * without a separate read. Match is exact after trim; we deliberately
- * do NOT prefix-match here (e.g. removing `git` shouldn't also drop
- * `git push origin main` if the user added both).
- */
+/** Match is exact after trim — NOT prefix-match: removing `git` MUST NOT drop `git push origin main`. */
 export function removeProjectShellAllowed(
   rootDir: string,
   prefix: string,
@@ -232,10 +120,6 @@ export function removeProjectShellAllowed(
   return true;
 }
 
-/**
- * Wipe every persisted shell-allow entry for a project. Returns the
- * number of prefixes that were dropped — zero if nothing was stored.
- */
 export function clearProjectShellAllowed(
   rootDir: string,
   path: string = defaultConfigPath(),
@@ -250,12 +134,7 @@ export function clearProjectShellAllowed(
   return existing.length;
 }
 
-/**
- * Read the persisted edit-mode. Unknown values fall back to "review" so
- * a user who hand-edits the file into an invalid state still gets the
- * safe default. `reasonix code` calls this at launch and the App lets
- * `/mode` / Shift+Tab flip it.
- */
+/** Unknown values fall back to "review" so hand-edited bad config gets the safe default. */
 export function loadEditMode(path: string = defaultConfigPath()): EditMode {
   const v = readConfig(path).editMode;
   return v === "auto" ? "auto" : "review";
@@ -273,11 +152,7 @@ export function editModeHintShown(path: string = defaultConfigPath()): boolean {
   return readConfig(path).editModeHintShown === true;
 }
 
-/**
- * Read the persisted reasoning_effort. Unknown / missing values fall
- * back to "max" so the agent-class default is never silently overridden
- * by a hand-edited bad value in config.json.
- */
+/** Unknown / missing fall back to "max" so hand-edited bad config can't silently override the default. */
 export function loadReasoningEffort(path: string = defaultConfigPath()): ReasoningEffort {
   const v = readConfig(path).reasoningEffort;
   return v === "high" ? "high" : "max";

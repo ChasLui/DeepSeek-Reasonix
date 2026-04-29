@@ -1,24 +1,4 @@
-/**
- * `/resource` and `/prompt` slash handlers for the chat/code TUI.
- *
- * The slash-command registry (slash.ts) advertises both commands so the
- * argument-level picker and /help surface them, but the actual read/fetch
- * work is async — McpClient.readResource and getPrompt both round-trip to
- * the server — so it doesn't fit the synchronous `handleSlash` shape used
- * by every other slash command. App.tsx intercepts the commands directly
- * and calls into the helpers below.
- *
- * Split by effect boundary:
- *   - formatters (resource list, contents, prompt list, messages) are
- *     pure over already-fetched data and unit-tested
- *   - find-server helpers are pure lookups against inspection reports
- *   - `handleMcpBrowseSlash` is the async orchestrator App.tsx calls
- *
- * v1 intentionally does NOT inject the fetched resource/prompt into the
- * next model turn. It's a display-only browser so users can see what
- * their MCP servers expose. A future version may add a Tab-to-inject
- * hotkey once the UX is settled.
- */
+/** `/resource` + `/prompt` handlers — async (round-trip to MCP server), so App.tsx calls directly instead of `handleSlash`. */
 
 import type { McpClient } from "../../mcp/client.js";
 import type {
@@ -30,11 +10,6 @@ import type {
 import type { DisplayEvent } from "./EventLog.js";
 import type { McpServerSummary } from "./slash.js";
 
-/**
- * React setState for Historical — typed loose because the App state
- * shape is App-internal. We only ever append, so `(prev) => prev.concat(row)`
- * works against any array-of-DisplayEvent state.
- */
 export type HistoricalSetter = (updater: (prev: DisplayEvent[]) => DisplayEvent[]) => void;
 
 export function formatResourceList(servers: readonly McpServerSummary[]): string {
@@ -167,12 +142,6 @@ function formatOnePromptMessage(m: McpPromptMessage): string {
   return `[non-text content: ${block.type ?? "unknown"}]`;
 }
 
-/**
- * Orchestrator. Looks up the right server, calls readResource/getPrompt
- * via its `client`, and pushes one info row into `Historical`. Errors
- * (server missing, -32601, network) surface as a warning row; the user
- * can always fall back to `reasonix mcp inspect <spec>` for diagnostics.
- */
 export async function handleMcpBrowseSlash(
   kind: "resource" | "prompt",
   arg: string,

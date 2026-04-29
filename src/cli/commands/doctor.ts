@@ -1,21 +1,4 @@
-/**
- * `reasonix doctor` — one-command health check.
- *
- * Output is plain text, not Ink. The whole point of this command is
- * "everything else is broken, what's wrong?" — if Ink couldn't mount
- * the user has no diagnostic surface left. ANSI color codes only,
- * gracefully degrading to bare text on dumb terminals (TERM=dumb /
- * no-tty).
- *
- * Each check returns a `level` (ok / warn / fail) so the summary
- * line at the bottom counts them. `fail` is reserved for things
- * that block usage entirely (no API key, broken config); `warn`
- * is "this works but a feature is degraded" (Ollama down, no
- * project memory, large session backlog).
- *
- * No exit code on warn — exit 0. fail → exit 1, so CI / scripts can
- * fast-fail on misconfiguration.
- */
+/** Plain-text (not Ink) — must work when everything else is broken. fail → exit 1; warn → exit 0. */
 
 import { existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";

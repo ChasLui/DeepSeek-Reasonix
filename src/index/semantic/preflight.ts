@@ -1,13 +1,3 @@
-/**
- * Shared Ollama preflight + readline confirm. Used by both the
- * standalone `reasonix index` command and the code-mode bootstrap
- * (`bootstrapSemanticSearchInCodeMode` in tool.ts) so users see one
- * consistent setup story however they reach it.
- *
- * All user-facing text routes through the i18n table — Chinese
- * locales get Chinese, everyone else gets English. See ./i18n.ts.
- */
-
 import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { t } from "./i18n.js";
@@ -27,12 +17,6 @@ export interface PreflightOptions {
   log?: (line: string) => void;
 }
 
-/**
- * Walk through the Ollama setup story before any chunking happens.
- * Returns true when ready to embed, false when something is missing
- * we can't or shouldn't fix automatically. Prints actionable hints
- * for every failure path so the user always knows what to do next.
- */
 export async function ollamaPreflight(opts: PreflightOptions): Promise<boolean> {
   const log = opts.log ?? ((line: string) => process.stderr.write(line));
   const status = await checkOllamaStatus(opts.model, opts.baseUrl);
@@ -98,11 +82,6 @@ export async function ollamaPreflight(opts: PreflightOptions): Promise<boolean> 
   return true;
 }
 
-/**
- * Yes/no readline prompt. `[Y/n]` or `[y/N]` rendered based on
- * `defaultYes`; empty input takes the default. Closes its readline
- * interface so the parent process exits cleanly.
- */
 export async function confirm(question: string, defaultYes: boolean): Promise<boolean> {
   const suffix = defaultYes ? "[Y/n]" : "[y/N]";
   const rl = createInterface({ input: stdin, output: stdout });

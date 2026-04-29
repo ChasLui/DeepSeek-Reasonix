@@ -1,23 +1,8 @@
-/**
- * Stdio transport for MCP.
- *
- * MCP's stdio wire format is **newline-delimited JSON** (one JSON-RPC
- * message per line). We spawn the server as a child process, write
- * frames to its stdin, parse its stdout line-by-line as they arrive.
- *
- * Transport is abstracted behind an interface so unit tests can fake it
- * with an in-process duplex pair — spawning real servers in unit tests
- * is flaky and slow.
- */
+/** MCP stdio = newline-delimited JSON-RPC; transport iface lets tests fake it without spawning. */
 
 import { type ChildProcess, spawn } from "node:child_process";
 import type { JsonRpcMessage } from "./types.js";
 
-/**
- * A transport sends JSON-RPC messages upstream and surfaces messages
- * arriving downstream via an async iterator. One instance per server
- * connection.
- */
 export interface McpTransport {
   /** Send one JSON-RPC message. Resolves when the bytes are accepted. */
   send(message: JsonRpcMessage): Promise<void>;
@@ -37,20 +22,10 @@ export interface StdioTransportOptions {
   replaceEnv?: boolean;
   /** CWD for the child. Default: process.cwd(). */
   cwd?: string;
-  /**
-   * Spawn through a shell. Default: true on win32 (needed to resolve
-   * `.cmd` wrappers like `npx.cmd`, `pnpm.cmd`), false elsewhere.
-   * Explicitly pass `false` to opt out on Windows; pass `true` to force
-   * it on POSIX (rarely needed).
-   */
+  /** Default true on win32 to resolve `.cmd`/`.bat` wrappers (npx.cmd etc.). */
   shell?: boolean;
 }
 
-/**
- * Spawn `command args...` as a child process and use its stdin/stdout as
- * an MCP transport. Stderr is forwarded to the parent's stderr so server
- * diagnostics are still visible.
- */
 export class StdioTransport implements McpTransport {
   private readonly child: ChildProcess;
   private readonly queue: JsonRpcMessage[] = [];
@@ -176,13 +151,6 @@ export class StdioTransport implements McpTransport {
   }
 }
 
-/**
- * Quote a single argument for inclusion in a shell command line.
- * On Windows (cmd.exe): wrap in double quotes, escape internal `"` as `""`,
- * leave everything else alone. On POSIX: wrap in single quotes, escape
- * internal `'` as `'\''`. Both handle spaces, wildcards, pipes, and all
- * other metacharacters correctly.
- */
 function quoteArg(s: string, windows: boolean): string {
   if (!windows) {
     // POSIX: single-quote, escape single quotes.

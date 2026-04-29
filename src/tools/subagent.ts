@@ -1,45 +1,4 @@
-/**
- * Subagent runtime — isolated child loops for offloading exploration or
- * self-contained subtasks.
- *
- * Two surfaces sit on top of the same `spawnSubagent` core:
- *
- *   1. `registerSubagentTool` — exposes a low-level `spawn_subagent`
- *      function-call tool. Library API. NOT registered into the model
- *      tool list by `reasonix code` since 0.4.26 — Skills (with
- *      `runAs: subagent` frontmatter) became the user-facing surface.
- *      Kept exported because library callers and tests still want
- *      direct access to the primitive.
- *
- *   2. `run_skill` (in src/tools/skills.ts) — when the resolved skill
- *      has `runAs: subagent`, it calls `spawnSubagent` with the skill
- *      body as the system prompt and the user's `arguments` as the
- *      task. Subagent skills are listed in the pinned Skills index
- *      with a 🧬 marker, which gives the model a clear pattern-match
- *      trigger without forcing it to reason about "is this task big
- *      enough to delegate."
- *
- * Why R1 specifically benefits:
- *   - R1 reasoning tokens are expensive AND inflate the parent context.
- *     A subagent runs its own private loop, then surfaces only the
- *     distilled final answer back to the parent — the main session
- *     never sees the reasoning trail.
- *
- * Invariants common to both surfaces:
- *   - Serial only — no parallel spawn (MVP).
- *   - Inherits parent's tool registry MINUS `spawn_subagent` itself
- *     (no recursion via the tool API) and MINUS `submit_plan`
- *     (subagents don't propose plans to the user).
- *   - No hooks, no session — runs are ephemeral.
- *   - Lower default `maxToolIters` than the parent (16 vs 64).
- *   - Independent prefix cache (subagent's prefix has its own
- *     fingerprint).
- *   - Parent registry's plan-mode state propagates: subagents can't
- *     escape `/plan`.
- *   - Non-streaming child loop — the parent isn't watching deltas, so
- *     streaming would only add an SSE parser to the critical path.
- *     Cancellation still works via the AbortSignal.
- */
+/** Isolated child loop. Inherits parent registry minus spawn_subagent + submit_plan; no hooks; non-streaming. */
 
 import { type DeepSeekClient, Usage } from "../client.js";
 import { CacheFirstLoop } from "../loop.js";
@@ -52,139 +11,60 @@ import {
 } from "../prompt-fragments.js";
 import { ToolRegistry } from "../tools.js";
 
-/**
- * Live event emitted by a running subagent. Surfaced via the optional
- * `sink` ref the TUI attaches its handler to. Side-channel only — these
- * events do NOT pass through the parent loop's `LoopEvent` stream
- * because subagents run inside a tool-dispatch frame, after the parent's
- * `step()` has already yielded `tool_start` and is awaiting the result.
- */
+/** Side-channel — subagents run inside a tool-dispatch frame, can't go through parent's `LoopEvent` stream. */
 export interface SubagentEvent {
   kind: "start" | "progress" | "end";
-  /** First ~30 chars of the task prompt — used for the TUI status row. */
   task: string;
-  /** Skill that spawned this subagent, when applicable. Stamped on every event so the TUI/logger can attribute without extra plumbing. */
   skillName?: string;
-  /** Model id the child loop ran on. Stamped alongside skillName. */
   model?: string;
-  /** Iteration count inside the child loop (number of tool results so far). */
   iter?: number;
-  /** Wall-clock ms since the subagent started. */
   elapsedMs?: number;
-  /** First ~120 chars of the final assistant message. Set on `end`. */
   summary?: string;
-  /** Error message if the subagent failed. Set on `end`. */
   error?: string;
-  /** Total turns the subagent took. Set on `end`. */
   turns?: number;
-  /** Total USD spent inside the child loop. Set on `end`. */
   costUsd?: number;
-  /** Aggregated child-loop Usage (sum across turns). Set on `end`. */
   usage?: Usage;
 }
 
-/**
- * Mutable ref the registration writes through. The TUI sets `.current`
- * to its own handler on mount; nothing receives events before that
- * happens (and headless callers leave `.current = null`, which is the
- * library-mode default — they read the final result from the helper's
- * return value instead).
- */
 export interface SubagentSink {
   current: ((ev: SubagentEvent) => void) | null;
 }
 
-/**
- * Per-spawn options for {@link spawnSubagent}. All but `parentRegistry`
- * + `client` + `system` + `task` are tunables with sensible defaults.
- */
 export interface SpawnSubagentOptions {
-  /** Shared DeepSeek client. The subagent reuses it (same auth, same retries). */
   client: DeepSeekClient;
-  /**
-   * Parent registry — the subagent inherits a copy of its tools (minus
-   * the never-inherited set: `spawn_subagent`, `submit_plan`).
-   */
   parentRegistry: ToolRegistry;
-  /**
-   * System prompt for the child loop. Skills' subagent path passes
-   * the skill body here; the spawn_subagent tool passes its default
-   * (or the model's `system` argument override).
-   */
   system: string;
-  /** The task / question / instruction the subagent must address. */
   task: string;
-  /** Model id for the child loop. Defaults to `deepseek-v4-pro`. */
   model?: string;
-  /** Iteration ceiling for the child loop. Defaults to 16. */
   maxToolIters?: number;
-  /**
-   * Maximum chars of the final assistant message returned. Long answers
-   * are truncated with a notice — the parent's prompt budget shouldn't
-   * be blown out by an over-eager subagent.
-   */
   maxResultChars?: number;
-  /** Optional sink for TUI live updates. */
   sink?: SubagentSink;
-  /**
-   * Parent's per-tool-dispatch AbortSignal. When the parent aborts (Esc),
-   * we forward the cancel into the child loop. Omit for headless callers
-   * that don't care about cancellation.
-   */
+  /** Forwarded into the child loop so parent Esc cancels nested work. */
   parentSignal?: AbortSignal;
-  /**
-   * Skill name when this spawn is driven by a `runAs: subagent` skill.
-   * Used purely for downstream attribution (TUI summary line, usage log).
-   * Omit for raw `spawn_subagent` tool calls.
-   */
   skillName?: string;
 }
 
-/**
- * Structured result of a subagent run. The two convenience JSON wrappers
- * (`spawn_subagent` tool, `run_skill` subagent path) serialize this for
- * the model; library callers can read the typed object directly.
- */
 export interface SubagentResult {
   success: boolean;
-  /** Final assistant message (possibly truncated). Empty on error. */
   output: string;
-  /** Set when the run failed (network, child-loop error, etc.). */
   error?: string;
-  /** Turns the child loop took. */
   turns: number;
-  /** Tool calls dispatched inside the child loop. */
   toolIters: number;
-  /** Wall-clock ms. */
   elapsedMs: number;
-  /** USD spent in the child loop, summed across its turns. */
   costUsd: number;
-  /** Model id the child loop ran on. */
   model: string;
-  /** Skill name if the spawn was driven by a `runAs: subagent` skill. */
   skillName?: string;
-  /** Aggregated Usage across the child loop's turns. Zero-filled when no API calls landed. */
+  /** Zero-filled when no API calls landed so consumers always see a valid shape. */
   usage: Usage;
 }
 
 export interface SubagentToolOptions {
-  /** Shared DeepSeek client. */
   client: DeepSeekClient;
-  /**
-   * Default system prompt used when the model doesn't pass one. Project
-   * memory (REASONIX.md) is appended automatically when `projectRoot` is
-   * set.
-   */
   defaultSystem?: string;
-  /** Project root for `applyProjectMemory` lookup. Omit in chat mode. */
   projectRoot?: string;
-  /** Default model. `deepseek-v4-flash` by default (see DEFAULT_SUBAGENT_MODEL). */
   defaultModel?: string;
-  /** Iteration ceiling. Lower than the parent (16 by default). */
   maxToolIters?: number;
-  /** Maximum chars returned in the tool result. */
   maxResultChars?: number;
-  /** Optional sink the TUI attaches its handler to for live updates. */
   sink?: SubagentSink;
 }
 
@@ -216,25 +96,10 @@ const DEFAULT_SUBAGENT_MODEL = "deepseek-v4-flash";
 const DEFAULT_SUBAGENT_EFFORT: "high" | "max" = "high";
 
 const SUBAGENT_TOOL_NAME = "spawn_subagent";
-/**
- * Tools the subagent never inherits from the parent registry:
- *   - spawn_subagent itself: would allow unbounded recursion via the
- *     tool API. Depth=1 hard cap by construction.
- *   - submit_plan: only the parent talks to the user about plan
- *     approval; a subagent submitting a plan would surface a picker
- *     midway through the parent's turn, which the user did not ask for.
- */
+/** spawn_subagent excluded → depth=1 hard cap; submit_plan excluded → no picker mid-parent-turn. */
 const NEVER_INHERITED_TOOLS = new Set<string>([SUBAGENT_TOOL_NAME, "submit_plan"]);
 
-/**
- * Run one subagent to completion. The unified primitive both
- * `spawn_subagent` (function-call tool) and `run_skill` (subagent
- * skills) call into.
- *
- * Headless: returns a `SubagentResult` regardless of success/failure.
- * Errors are captured in the structured shape, never thrown — the
- * caller decides how to surface them (tool result JSON, log line, etc.).
- */
+/** Errors captured in the result shape, never thrown — caller decides how to surface. */
 export async function spawnSubagent(opts: SpawnSubagentOptions): Promise<SubagentResult> {
   const model = opts.model ?? DEFAULT_SUBAGENT_MODEL;
   const maxToolIters = opts.maxToolIters ?? DEFAULT_MAX_ITERS;
@@ -382,11 +247,7 @@ export async function spawnSubagent(opts: SpawnSubagentOptions): Promise<Subagen
   };
 }
 
-/**
- * Sum the child loop's per-turn `Usage` into one aggregate record.
- * Zero-filled when the loop made no API calls (e.g. failed before the
- * first request) so downstream consumers always see a valid shape.
- */
+/** Zero-filled when no API calls landed so downstream consumers always see a valid shape. */
 function aggregateChildUsage(loop: CacheFirstLoop): Usage {
   const agg = new Usage();
   for (const t of loop.stats.turns) {
@@ -399,12 +260,6 @@ function aggregateChildUsage(loop: CacheFirstLoop): Usage {
   return agg;
 }
 
-/**
- * Serialize a {@link SubagentResult} into the JSON tool-result shape
- * the model consumes. Both the spawn_subagent tool and the run_skill
- * subagent path return this string verbatim, so the schema stays
- * stable across both surfaces.
- */
 export function formatSubagentResult(r: SubagentResult): string {
   if (!r.success) {
     return JSON.stringify({
@@ -425,12 +280,7 @@ export function formatSubagentResult(r: SubagentResult): string {
   });
 }
 
-/**
- * Register the spawn_subagent tool into the parent registry. Library
- * surface — `reasonix code` does NOT call this since 0.4.26 (Skills
- * with `runAs: subagent` are the user-facing surface), but library
- * consumers who want the low-level tool can opt in.
- */
+/** Library surface only — `reasonix code` uses Skills `runAs: subagent` as the user-facing path. */
 export function registerSubagentTool(
   parentRegistry: ToolRegistry,
   opts: SubagentToolOptions,
@@ -509,14 +359,7 @@ export function registerSubagentTool(
   return parentRegistry;
 }
 
-/**
- * Build a child ToolRegistry that copies every tool from `parent` except
- * those whose names are in `exclude`. Plan-mode state propagates so a
- * subagent spawned while the parent is under `/plan` cannot escape it.
- *
- * Exported for tests + library callers who want the same fork behavior
- * for their own nested-loop patterns.
- */
+/** Plan-mode state propagates — a subagent spawned under `/plan` MUST NOT escape it. */
 export function forkRegistryExcluding(
   parent: ToolRegistry,
   exclude: ReadonlySet<string>,

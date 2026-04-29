@@ -1,39 +1,21 @@
 import { formatAllBlockDiffs } from "../../code/diff-preview.js";
 import type { ApplyResult, EditBlock, EditSnapshot } from "../../code/edit-blocks.js";
 
-/**
- * One batch of edits that actually landed on disk — durable enough for
- * `/undo`, `/history`, and `/show` within a session. Not persisted
- * across restarts: restoring pre-apply content from a process that
- * crashed last week is git's job, not ours.
- */
+/** Session-only — restoring pre-apply content across restarts is git's job, not ours. */
 export interface EditHistoryEntry {
   /** Sequence number within the session, stable for `/show <id>`. */
   id: number;
   /** Epoch ms when the entry was opened (first edit landed). */
   at: number;
-  /**
-   * Short tag for what produced the batch — "auto" (auto-mode tool
-   * call), "auto-text" (auto-mode text SEARCH/REPLACE at turn end),
-   * "review-apply" (user-approved modal edit or /apply flush).
-   */
+  /** Tag for what produced the batch — "auto" / "auto-text" / "review-apply". */
   source: string;
   /** Edit blocks included in this batch, in arrival order. */
   blocks: EditBlock[];
   /** Per-block outcome — some may be "not-found" if SEARCH drifted. */
   results: ApplyResult[];
-  /**
-   * First-snapshot-per-path wins: this is what `/undo` restores to.
-   * Deduped so multi-edit turns still roll back to pre-turn state.
-   */
+  /** First-snapshot-per-path wins — multi-edit turns roll back to pre-turn state. */
   snapshots: EditSnapshot[];
-  /**
-   * Paths within this entry that have already been reverted (via
-   * `/undo <id>`, `/undo <id> <path>`, or the newest-non-undone /undo
-   * shortcut). Per-path instead of entry-level so a batch can be
-   * partially undone — user reverts src/foo.ts out of a 3-file batch
-   * without rolling back the other two.
-   */
+  /** Per-path so a multi-file batch can be partially undone. */
   undoneFiles: Set<string>;
 }
 
@@ -49,15 +31,7 @@ export function entryStatus(e: EditHistoryEntry): "applied" | "UNDONE" | "PARTIA
   return "PARTIAL";
 }
 
-/**
- * Render a batch of SEARCH/REPLACE application results as one
- * human-scannable info line per edit. Prefixes denote status so the
- * line reads well even without color (e.g. when piped to a log file
- * or stripped for screenshots):
- *   ✓ applied  src/foo.ts
- *   ✓ created  src/new.ts
- *   ✗ not-found  src/bar.ts (SEARCH text does not match…)
- */
+/** Status prefix is `✓`/`✗` so the line reads without color (piped, screenshots). */
 export function formatEditResults(results: ApplyResult[]): string {
   const lines = results.map((r) => {
     const mark = r.status === "applied" || r.status === "created" ? "✓" : "✗";
@@ -70,18 +44,7 @@ export function formatEditResults(results: ApplyResult[]): string {
   return [header, ...lines].join("\n");
 }
 
-/**
- * Pending-edits preview shown after each assistant turn that proposed
- * changes. Per-block path header + ±line-count, then a unified-diff-
- * style preview (context trimmed to 2 lines each side, total capped
- * at 20 lines per block). Users can eyeball what's about to land
- * BEFORE pressing `y` — the old summary-only view was a common
- * mistake surface.
- *
- * Each block gets a `[N]` label so users can target a subset via
- * `/apply 1` / `/apply 1,3-4` / `/discard 2` instead of being forced
- * into all-or-nothing.
- */
+/** `[N]` labels so users can `/apply 1,3-4` instead of all-or-nothing. */
 export function formatPendingPreview(blocks: EditBlock[]): string {
   const partial = blocks.length > 1 ? "  ·  /apply N or 1,3-4 for partial" : "";
   const header = `▸ ${blocks.length} pending edit block(s) — /apply (or y) to commit · /discard (or n) to drop${partial}`;
@@ -89,21 +52,7 @@ export function formatPendingPreview(blocks: EditBlock[]): string {
   return [header, ...diffLines].join("\n");
 }
 
-/**
- * Parse a `/apply <N>` / `/discard <N>` argument into a deduplicated,
- * sorted list of 1-based indices. Accepts:
- *   - single value: `"3"`         → [3]
- *   - comma list:   `"1,3,5"`     → [1, 3, 5]
- *   - range:        `"2-4"`        → [2, 3, 4]
- *   - mixed:        `"1,3-5,7"`    → [1, 3, 4, 5, 7]
- *   - whitespace + trailing commas tolerated.
- *
- * Bounds-checked against `max` (the count of pending blocks); any
- * out-of-range or malformed token returns `{ error }` so the caller
- * can surface a usage hint instead of silently applying the wrong
- * subset. Empty input returns `{ ok: [] }` so callers can detect
- * "user passed no indices" and treat that as the all-blocks default.
- */
+/** Empty input → `{ ok: [] }` so callers detect "no indices" → default to all-blocks. */
 export function parseEditIndices(raw: string, max: number): { ok: number[] } | { error: string } {
   const trimmed = raw.trim();
   if (!trimmed) return { ok: [] };
@@ -137,12 +86,6 @@ export function parseEditIndices(raw: string, max: number): { ok: number[] } | {
   return { ok: [...seen].sort((a, b) => a - b) };
 }
 
-/**
- * Partition `edits` into the subset addressed by `indices1Based` and
- * everything else (preserves original order). Pure helper so the
- * pending-edits queue can be sliced from the slash handler in App.tsx
- * without any React-state plumbing in the test path.
- */
 export function partitionEdits<T>(
   edits: readonly T[],
   indices1Based: readonly number[],
@@ -157,10 +100,6 @@ export function partitionEdits<T>(
   return { selected, remaining };
 }
 
-/**
- * Per-file rows for the multi-level `/undo` output, without the
- * single-batch header (the caller prepends its own).
- */
 export function formatUndoRows(results: ApplyResult[]): string[] {
   return results.map((r) => {
     const mark = r.status === "applied" ? "✓" : "✗";

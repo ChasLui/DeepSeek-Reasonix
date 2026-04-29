@@ -1,13 +1,3 @@
-/**
- * `/api/sessions` — list saved chat sessions and read individual ones.
- *
- *   GET /api/sessions          → list of { name, size, mtime, messageCount }
- *   GET /api/sessions/<name>   → parsed transcript (read-only replay)
- *
- * Read-only by design. Mutations (delete, rename) belong in v0.14
- * alongside the rest of the file-CRUD surface; v0.13 is observability.
- */
-
 import { existsSync, readFileSync } from "node:fs";
 import { listSessions, sessionPath } from "../../session.js";
 import type { DashboardContext } from "../context.js";

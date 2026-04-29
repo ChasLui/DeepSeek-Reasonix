@@ -1,13 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-/**
- * Minimal `.env` loader; no dependency on dotenv.
- *
- * Reads KEY=VALUE lines and populates `process.env` for keys not already set.
- * Silently no-ops if the file is missing. Safe to call from library entry
- * points, CLI commands, examples, and benchmark runners.
- */
 export function loadDotenv(path = ".env"): void {
   let raw: string;
   try {

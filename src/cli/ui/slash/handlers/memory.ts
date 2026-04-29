@@ -7,15 +7,6 @@ import { type MemoryScope, MemoryStore } from "../../../../user-memory.js";
 import type { SlashHandler } from "../dispatch.js";
 import { resolveMemoryTarget } from "../helpers.js";
 
-/**
- * `/memory` family. Bare `/memory` shows what's pinned (REASONIX.md +
- * both MEMORY.md blocks). Subcommands manage the user-memory store:
- *   list                 — every memory file, both scopes
- *   show <name>          — dump one file's body
- *   show <scope>/<name>  — disambiguate when name exists in both scopes
- *   forget <name>        — delete (same scope resolution as show)
- *   clear <scope> confirm — wipe a scope (typed literal "confirm" required)
- */
 const memory: SlashHandler = (args, _loop, ctx) => {
   if (!memoryEnabled()) {
     return {

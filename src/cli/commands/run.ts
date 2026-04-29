@@ -22,11 +22,6 @@ export interface RunOptions {
   harvest?: boolean;
   /** Self-consistency budget. > 1 runs N parallel samples and picks the best. */
   branch?: number;
-  /**
-   * Soft USD spend cap. Off by default; the run aborts with a clear
-   * error once cumulative cost ≥ cap so non-interactive callers
-   * (CI, batched evals) have a circuit breaker.
-   */
   budgetUsd?: number;
   /** JSONL transcript path — lets `reasonix replay` / `diff` audit this run. */
   transcript?: string;

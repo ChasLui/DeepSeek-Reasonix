@@ -1,12 +1,3 @@
-/**
- * `/api/usage` — wraps `aggregateUsage` from `src/usage.ts` for the
- * SPA's Usage tab. v0.12 just relays the same dashboard shape the
- * `reasonix stats` CLI prints; v0.13 adds time-series for charts.
- *
- * Reads `~/.reasonix/usage.jsonl` from `ctx.usageLogPath` so tests
- * can redirect cleanly.
- */
-
 import { cacheSavingsUsd } from "../../telemetry.js";
 import { aggregateUsage, formatLogSize, readUsageLog } from "../../usage.js";
 import type { DashboardContext } from "../context.js";

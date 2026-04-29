@@ -1,37 +1,4 @@
-/**
- * Streamable HTTP transport for MCP (spec version 2025-03-26).
- *
- * Wire shape (single endpoint, no separate POST URL handshake):
- *
- *   1. Client POSTs each outgoing JSON-RPC frame to the endpoint with
- *      `Accept: application/json, text/event-stream`. The server picks
- *      ONE of three responses:
- *        a. `202 Accepted`, no body → notification or response
- *           was accepted; nothing more to deliver.
- *        b. `200 OK`, `Content-Type: application/json` → body is a
- *           single JSON-RPC response (or batch). Connection closes.
- *        c. `200 OK`, `Content-Type: text/event-stream` → an SSE
- *           stream of `event: message` frames carrying responses,
- *           server-initiated requests, and notifications. Stream may
- *           close after the matching response or stay open longer.
- *   2. The server may include `Mcp-Session-Id: <opaque>` on the response
- *      to `initialize`. Client echoes that header on every subsequent
- *      request. A 404 on a request with a session id means the session
- *      expired — caller must reinitialize.
- *
- * Compared to 2024-11-05 HTTP+SSE:
- *   - No two-endpoint dance (no `event: endpoint` handshake).
- *   - Replies arrive on the POST response, not on a separate GET stream.
- *   - Session continuity is explicit (`Mcp-Session-Id`), not implicit.
- *
- * Not yet implemented in this transport (acceptable for v1):
- *   - Long-lived GET stream for unsolicited server-initiated frames
- *     (sampling requests, etc.). Most MCP servers we care about today
- *     don't issue server-initiated requests, and POST-only handles
- *     full request/response/notification traffic. Add when a real
- *     server we're integrating against needs it.
- *   - Resumability via `Last-Event-ID` on reconnect.
- */
+/** MCP Streamable HTTP transport (2025-03-26) — POST-only; no long-lived GET stream, no Last-Event-ID resume. */
 
 import { createParser } from "eventsource-parser";
 import type { McpTransport } from "./stdio.js";
@@ -186,8 +153,6 @@ export class StreamableHttpTransport implements McpTransport {
   getSessionId(): string | null {
     return this.sessionId;
   }
-
-  // ---------- internals ----------
 
   private async consumeStream(body: AsyncIterable<Uint8Array>): Promise<void> {
     const parser = createParser({

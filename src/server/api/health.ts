@@ -1,12 +1,3 @@
-/**
- * `/api/health` — disk usage + session count + version + job count.
- *
- * Pure read endpoint, regenerates fully on every poll. The disk walk
- * is shallow — sums file sizes one level deep under each tracked dir.
- * If a user has tens of thousands of session files this is fast
- * enough; if they ever do, we'll cache.
- */
-
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";

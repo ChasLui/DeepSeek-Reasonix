@@ -36,13 +36,7 @@ export interface ChatMessage {
   name?: string;
   tool_call_id?: string;
   tool_calls?: ToolCall[];
-  /**
-   * R1 `reasoning_content` captured from the assistant's thinking turn.
-   * DeepSeek's thinking mode 400s with "reasoning_content in the
-   * thinking mode must be passed back" when a tool-loop continuation
-   * omits it from the preceding assistant message. Round-tripped for
-   * deepseek-reasoner turns with tool_calls; absent for deepseek-chat.
-   */
+  /** Must round-trip in tool-loop continuations — thinking mode 400s without it. */
   reasoning_content?: string | null;
 }
 
@@ -64,19 +58,6 @@ export interface ChatRequestOptions {
   signal?: AbortSignal;
   /** DeepSeek response_format — use { type: "json_object" } to force valid JSON. */
   responseFormat?: { type: "json_object" | "text" };
-  /**
-   * Explicitly toggle V4 thinking mode. Serialized as
-   * `extra_body.thinking.type = enabled|disabled`. Omit to let the
-   * server default apply (thinking enabled). Mainly used so the loop
-   * can pin the mode per model: `deepseek-chat` → disabled (legacy
-   * non-thinking compat), everything else → enabled.
-   */
   thinking?: "enabled" | "disabled";
-  /**
-   * Per-request reasoning-effort cap. Serialized as the top-level
-   * `reasoning_effort` field. DeepSeek accepts `high` (standard) or
-   * `max` (Agent-class, auto-applied to Claude-Code-style flows per
-   * the V4 docs). Reasonix pins `max` because every turn is agent-like.
-   */
   reasoningEffort?: "high" | "max";
 }

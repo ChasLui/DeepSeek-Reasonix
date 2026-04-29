@@ -1,10 +1,3 @@
-/**
- * `/plans` — show this session's plan history. Both the live in-flight
- * plan (if any) and the archive of completed `.done.json` files. Local
- * to the current session by design — a plan lives with its project,
- * and resuming one just means cd'ing back to that project directory.
- */
-
 import { basename } from "node:path";
 import { listPlanArchives, loadPlanState, relativeTime } from "../../../../code/plan-store.js";
 import type { SlashHandler } from "../dispatch.js";
@@ -59,16 +52,6 @@ const plans: SlashHandler = (_args, loop) => {
   return { info: lines.join("\n") };
 };
 
-/**
- * `/replay [N]` — Time Travel. Loads archive #N (1-based, newest
- * first; defaults to 1) and asks the TUI to render it as a read-only
- * snapshot. Pure display — no execution, no plan state changes.
- *
- * The structured payload (steps + completedStepIds + body + summary)
- * goes back through SlashResult.replayPlan so EventLog can apply the
- * same step-list rendering used elsewhere, complete with risk gutter
- * and ✓ status.
- */
 const replay: SlashHandler = (args, loop) => {
   const sessionName = loop.sessionName;
   if (!sessionName) {

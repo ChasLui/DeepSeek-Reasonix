@@ -1,19 +1,3 @@
-/**
- * Register `semantic_search` on a ToolRegistry. The tool is gated on
- * an existing on-disk index — calling `registerSemanticSearchTool`
- * with no index is a no-op so the model never sees a tool it can't
- * actually use.
- *
- * The tool description teaches the model when this beats grep:
- *   - grep: known token / exact identifier / structural pattern
- *   - semantic_search: paraphrased intent ("where do we handle auth
- *     failures") / cross-language concept lookup / discovery in
- *     unfamiliar code
- * Without this nudge the model defaults to grep for everything and
- * misses retrieval-tool wins on the questions semantic_search is
- * actually built for.
- */
-
 import type { ToolRegistry } from "../../tools.js";
 import { indexExists, querySemantic } from "./builder.js";
 import type { EmbedOptions } from "./embedding.js";
@@ -28,11 +12,6 @@ export interface SemanticToolOptions extends EmbedOptions {
   defaultMinScore?: number;
 }
 
-/**
- * Register the tool when an index is present. Returns `true` if
- * registered. Callers can warn the user when this returns `false`
- * so they know to run `reasonix index`.
- */
 export async function registerSemanticSearchTool(
   registry: ToolRegistry,
   opts: SemanticToolOptions,
@@ -85,12 +64,6 @@ export async function registerSemanticSearchTool(
   return true;
 }
 
-/**
- * Render hits the same way `web_search` formats its results — header
- * with the query, numbered entries with file:line citation + score
- * + a snippet preview. Keeps tool-output style consistent so users
- * who learn to read one read both.
- */
 export function formatHits(query: string, hits: readonly SearchHit[]): string {
   const lines: string[] = [`query: ${query}`, `\nresults (${hits.length}):`];
   hits.forEach((h, i) => {
@@ -119,21 +92,7 @@ function indentBlock(text: string, prefix: string): string {
     .join("\n");
 }
 
-/**
- * `reasonix code` startup bootstrap. Deliberately silent and
- * non-prompting:
- *
- *   - Index exists → register the tool. The model can use it this
- *     session.
- *   - No index → skip. NO probe of Ollama, NO setup question.
- *
- * Why no startup prompt: even a one-time Y/n at launch is intrusive
- * for users who just want to start coding. Discovery happens via
- * `/semantic` slash inside the TUI when the user is curious, plus a
- * single dim line in the welcome banner. Users explicitly opt in by
- * running `reasonix index` in their shell — the established Reasonix
- * pattern (see `/setup`, `/update`).
- */
+/** Silent: register if index exists, else skip — no Ollama probe, no setup prompt. */
 export async function bootstrapSemanticSearchInCodeMode(
   registry: ToolRegistry,
   rootDir: string,

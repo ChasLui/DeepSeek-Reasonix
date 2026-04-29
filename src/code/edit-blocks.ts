@@ -1,28 +1,4 @@
-/**
- * Aider-style SEARCH/REPLACE edit blocks.
- *
- * The model emits blocks in this exact shape, one or more per response:
- *
- *   path/to/file.ts
- *   <<<<<<< SEARCH
- *   exact existing lines (whitespace-sensitive)
- *   =======
- *   replacement lines
- *   >>>>>>> REPLACE
- *
- * We chose this over unified diffs because:
- *   - Models produce it reliably — no line-number drift.
- *   - It tolerates multi-edit responses without ambiguity over which
- *     hunk belongs to which file.
- *   - Aider has years of evidence that this format works even against
- *     weaker models than DeepSeek R1, so it's a conservative pick.
- *
- * The SEARCH text must match the file byte-for-byte. Empty SEARCH is a
- * sentinel for "create new file" — the REPLACE becomes the whole file.
- * If SEARCH doesn't match we refuse the edit and surface the failure;
- * we do NOT guess or fuzzy-match. A wrong silent edit is worse than a
- * missing one — the user can re-ask with the exact current content.
- */
+/** SEARCH must match byte-for-byte; empty SEARCH = create new file. No fuzzy match — silent wrong edit beats a missing one. */
 
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -59,19 +35,8 @@ export interface ApplyResult {
   message?: string;
 }
 
-/**
- * One edit block per match. The regex is anchored to the 7-char marker
- * lines because those are visually distinct and unlikely to appear in
- * normal code.
- *
- * Anchored with `^` + `m` flag so the filename has to live on its own
- * line. Keeps us from matching e.g. a JS-import string that happens to
- * contain `<<<<<<< SEARCH` in inner text.
- */
-// `\n?` before the =======/REPLACE separators makes the body optional:
-// empty SEARCH (new-file sentinel) works without requiring a gratuitous
-// empty line, and the same holds for empty REPLACE (file-deletion
-// semantics, not yet supported but cheaply representable).
+// `^` + `m` keeps a JS string containing `<<<<<<< SEARCH` from matching as a real block.
+// `\n?` makes empty SEARCH/REPLACE bodies legal (new-file / future delete sentinels).
 const BLOCK_RE = /^(\S[^\n]*)\n<{7} SEARCH\n([\s\S]*?)\n?={7}\n([\s\S]*?)\n?>{7} REPLACE/gm;
 
 export function parseEditBlocks(text: string): EditBlock[] {
@@ -153,14 +118,6 @@ export function applyEditBlocks(blocks: EditBlock[], rootDir: string): ApplyResu
   return blocks.map((b) => applyEditBlock(b, rootDir));
 }
 
-/**
- * Build an EditBlock that represents a whole-file overwrite. If the
- * target exists, SEARCH = current content so applyEditBlock replaces
- * the whole thing when committed; if it doesn't, SEARCH is empty (the
- * create-new sentinel). Used by the edit-mode gate when routing a
- * `write_file` tool call through the review queue without executing
- * the write inline.
- */
 export function toWholeFileEditBlock(path: string, content: string, rootDir: string): EditBlock {
   const abs = resolve(rootDir, path);
   let search = "";
@@ -174,25 +131,14 @@ export function toWholeFileEditBlock(path: string, content: string, rootDir: str
   return { path, search, replace: content, offset: 0 };
 }
 
-// ---------- snapshot / restore (for /undo) ----------
-
 export interface EditSnapshot {
   /** Path relative to rootDir, as the block named it. */
   path: string;
-  /**
-   * File content before the edit batch was applied. `null` means the
-   * file didn't exist yet — restoring that means deleting whatever the
-   * edit created.
-   */
+  /** `null` = file didn't exist; restore means delete. */
   prevContent: string | null;
 }
 
-/**
- * Capture the current state of every file an edit batch is about to
- * touch, so `/undo` can roll back if the user doesn't like the result.
- * De-duplicates by path because one batch can contain multiple blocks
- * for the same file, and we only want one "before" snapshot per file.
- */
+/** De-duped by path — one "before" snapshot per file even with multiple blocks. */
 export function snapshotBeforeEdits(blocks: EditBlock[], rootDir: string): EditSnapshot[] {
   const absRoot = resolve(rootDir);
   const seen = new Set<string>();
@@ -218,12 +164,6 @@ export function snapshotBeforeEdits(blocks: EditBlock[], rootDir: string): EditS
   return snapshots;
 }
 
-/**
- * Restore files to their snapshotted state. Snapshots with
- * `prevContent === null` were created by the edit, so undo = delete.
- * Otherwise the prior content is written back, replacing whatever the
- * edit left behind.
- */
 export function restoreSnapshots(snapshots: EditSnapshot[], rootDir: string): ApplyResult[] {
   const absRoot = resolve(rootDir);
   return snapshots.map((snap) => {

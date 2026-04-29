@@ -1,23 +1,4 @@
-/**
- * Expand `@path/to/file` mentions in a user prompt to inline file
- * content.
- *
- * Why: most interactive coding sessions start with "look at X, then
- * change Y". Typing `@src/loop.ts` reads faster and cheaper than
- * "look at src/loop.ts (and the model fires read_file, and we pay for
- * the round trip)" — the model sees the file content from turn 1
- * instead of round-tripping a tool call for it.
- *
- * Shape: the user's text is kept verbatim. Expanded file contents are
- * appended in a "Referenced files" block at the end, each wrapped in
- * `<file path="...">...</file>` so the model can cite them back
- * unambiguously.
- *
- * Safety: paths must resolve inside `rootDir` (no `..` escape, no
- * absolute paths), must exist as a regular file, and must be under
- * `maxBytes`. Missing / too-large / escaping paths get a short note
- * appended instead of content so the user sees why it was skipped.
- */
+/** Expand `@path` mentions inline. Paths must resolve inside rootDir; escapes / oversize get a skip note, not content. */
 
 import { type Dirent, existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
@@ -26,11 +7,6 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 /** Caps match tool-result dispatch truncation (0.5.2). */
 export const DEFAULT_AT_MENTION_MAX_BYTES = 64 * 1024;
 
-/**
- * Default directory names skipped when listing files for the picker.
- * Matches what most repos gitignore AND keeps the picker off the
- * hottest bloat — `node_modules` alone can be 100k+ entries.
- */
 export const DEFAULT_PICKER_IGNORE_DIRS: readonly string[] = [
   "node_modules",
   ".git",
@@ -55,23 +31,7 @@ export interface ListFilesOptions {
   ignoreDirs?: readonly string[];
 }
 
-/**
- * Walk `root` recursively and return relative file paths (forward-slash
- * separator, regardless of platform) for the `@` picker.
- *
- * Synchronous on purpose: this runs once at App mount (and on each turn
- * so newly-created files show up) and blocks the render thread for a
- * predictable ~10-50ms on a moderate repo. An async variant would need
- * to coordinate with the Ink render loop; sync fits the rest of the
- * TUI's single-turn-per-tick model cleanly.
- *
- * Skips:
- *   - directories in `ignoreDirs` (default: DEFAULT_PICKER_IGNORE_DIRS)
- *   - any directory whose name starts with `.` (covers `.git`,
- *     `.vscode`, dotfile vendors). Dotfile REGULAR FILES (`.env`,
- *     `.gitignore`, `.prettierrc`) are kept — users reference them.
- *   - entries the walker can't read (permission errors, broken links).
- */
+/** Sync on purpose — fits the TUI's single-turn-per-tick model. Skips dot-DIRS but keeps dotfiles. */
 export function listFilesSync(root: string, opts: ListFilesOptions = {}): string[] {
   return listFilesWithStatsSync(root, opts).map((e) => e.path);
 }
@@ -83,15 +43,7 @@ export interface FileWithStats {
   mtimeMs: number;
 }
 
-/**
- * Same walk as {@link listFilesSync} but also statS each file for
- * modification time. Used by the `@` picker to surface recently-
- * edited files first — matches VS Code Quick Open / similar UX.
- *
- * Stat failures don't throw: the entry is kept with `mtimeMs: 0` so
- * it still appears in the picker (just sinks to the bottom of the
- * recency sort).
- */
+/** Stat failures kept as `mtimeMs: 0` — entry still appears, sinks to bottom of recency sort. */
 export function listFilesWithStatsSync(root: string, opts: ListFilesOptions = {}): FileWithStats[] {
   const maxResults = Math.max(1, opts.maxResults ?? 500);
   const ignore = new Set(opts.ignoreDirs ?? DEFAULT_PICKER_IGNORE_DIRS);
@@ -129,18 +81,7 @@ export function listFilesWithStatsSync(root: string, opts: ListFilesOptions = {}
   return out;
 }
 
-/**
- * Async variant of {@link listFilesWithStatsSync}. Same walk semantics
- * (DFS, alphabetical, respects ignore + maxResults), but each
- * directory's entries are stat'd in parallel via `Promise.all`,
- * which slashes wall-clock time on Windows where individual stat
- * syscalls are 3-5x slower than Linux.
- *
- * Use this from the TUI mount path so a 500-file repo doesn't add
- * 200-300ms of synchronous block to first paint. Sync variant is
- * kept for paths where the caller can't `await` (server APIs,
- * test scaffolding).
- */
+/** Parallel stat per directory — Windows stat syscalls are 3-5× slower than Linux. */
 export async function listFilesWithStatsAsync(
   root: string,
   opts: ListFilesOptions = {},
@@ -215,24 +156,9 @@ async function statBatch(
   }
 }
 
-/**
- * Prefix pattern used by the `@` picker to detect an IN-PROGRESS
- * mention at the END of the input buffer. Captures the partial path
- * (which may be empty — just `@`) so the picker can use it as a
- * substring filter.
- *
- * Distinct from {@link AT_MENTION_PATTERN} (which finds completed
- * mentions anywhere in the text for expansion-at-submit). This one
- * fires on the trailing token only, anchored at end-of-input.
- */
+/** Trailing-token only, anchored at end-of-input — distinct from `AT_MENTION_PATTERN` which scans all. */
 export const AT_PICKER_PREFIX = /(?:^|\s)@([a-zA-Z0-9_./\\-]*)$/;
 
-/**
- * Return the picker state for a given input buffer: the partial query
- * (may be empty string — just `@`) and the buffer offset of the `@`
- * character. `null` when the buffer doesn't end in a mention-in-
- * progress.
- */
 export function detectAtPicker(input: string): { query: string; atOffset: number } | null {
   const m = AT_PICKER_PREFIX.exec(input);
   if (!m) return null;
@@ -250,31 +176,9 @@ export type PickerCandidate = string | FileWithStats;
 export interface RankPickerOptions {
   /** Upper bound on returned entries. Default 40. */
   limit?: number;
-  /**
-   * Paths the user or model has touched recently (via tool calls like
-   * `read_file` / `edit_file`). Matching paths get a recency boost so
-   * the picker surfaces "stuff I just looked at" near the top.
-   */
   recentlyUsed?: readonly string[];
 }
 
-/**
- * Filter and rank candidate files against the picker's partial query.
- *
- * Empty query:
- *   - Sort by "recently used" bucket first (if provided), then mtime
- *     descending (newer first), then path alpha.
- *   - Pure-string input (no mtime data) falls back to alpha since
- *     recency info isn't available.
- *
- * Non-empty query:
- *   - Case-insensitive substring match, with a basename-prefix boost
- *     so `lo` floats `loop.ts`-shaped paths to the top.
- *   - Ties broken first by recently-used membership, then mtime.
- *
- * Back-compat: passes `string[]` through the same logic (mtime = 0,
- * recently-used still honored).
- */
 export function rankPickerCandidates(
   files: readonly PickerCandidate[],
   query: string,
@@ -336,17 +240,7 @@ export function rankPickerCandidates(
   return scored.slice(0, limit).map((s) => s.path);
 }
 
-/**
- * Matches `@` at a word boundary (start-of-string or preceded by
- * whitespace) followed by a path-like token. Deliberately rejects `@`
- * embedded in longer words (email addresses, mentions on social sites)
- * by requiring the word boundary.
- *
- * Path charset keeps it to the characters that appear in real repo
- * paths — letters, digits, `_` `-` `.` `/` `\`. Trailing `.` (e.g.
- * `@foo.ts.`) is stripped before lookup so a sentence-terminating
- * period doesn't break the mention.
- */
+/** Word-boundary anchor rejects `@` embedded in emails / social handles; trailing `.` stripped before lookup. */
 export const AT_MENTION_PATTERN = /(?<=^|\s)@([a-zA-Z0-9_./\\-]+)/g;
 
 export interface AtMentionExpansion {
@@ -365,10 +259,6 @@ export interface AtMentionExpansion {
 export interface AtMentionOptions {
   /** Max file size in bytes before a mention is skipped. */
   maxBytes?: number;
-  /**
-   * Optional file-system overrides for tests. Real callers omit these;
-   * the helper falls through to `node:fs`.
-   */
   fs?: {
     exists: (path: string) => boolean;
     isFile: (path: string) => boolean;
@@ -377,11 +267,6 @@ export interface AtMentionOptions {
   };
 }
 
-/**
- * Expand `@path` mentions in `text`. Returns the (possibly augmented)
- * text plus a per-mention report so the caller can surface expansions
- * in the UI.
- */
 export function expandAtMentions(
   text: string,
   rootDir: string,
@@ -483,19 +368,13 @@ const defaultFs: NonNullable<AtMentionOptions["fs"]> = {
   read: (p) => readFileSync(p, "utf8"),
 };
 
-// =============================================================================
 // @url mentions — async sibling of @path. Matches `@http(s)://...` after a
 // word boundary, fetches each URL once per session (in-memory cache), and
 // appends a "Referenced URLs" block under the prompt the model sees. Uses
 // the same web-fetch + HTML-strip pipeline as the model's `web_fetch` tool
 // so a `@url` reference and a model-issued fetch produce identical content.
 
-/**
- * Matches `@http://...` or `@https://...` at a word boundary. Captures the
- * URL minus the leading `@`. Trailing sentence punctuation is stripped
- * separately because URLs can legitimately contain `,` `.` `)` etc., and a
- * blanket trim would butcher real query strings.
- */
+/** Trailing punctuation stripped separately — URLs legitimately contain `,` `.` `)` in query strings. */
 export const AT_URL_PATTERN = /(?<=^|\s)@(https?:\/\/\S+)/g;
 
 /** Default cap on inlined URL body (chars). Matches DEFAULT_AT_MENTION_MAX_BYTES order-of-magnitude. */
@@ -525,40 +404,15 @@ export interface AtUrlOptions {
   maxChars?: number;
   /** Per-URL fetch timeout in ms. */
   timeoutMs?: number;
-  /**
-   * Override the fetcher — production wires `webFetch` from src/tools/web.ts.
-   * Tests inject a stub so the suite stays offline.
-   */
   fetcher?: (
     url: string,
     opts: { maxChars?: number; timeoutMs?: number; signal?: AbortSignal },
   ) => Promise<{ url: string; title?: string; text: string; truncated: boolean }>;
-  /**
-   * Optional cache the caller persists across calls (e.g. one map per
-   * session). Hit-on-URL skips the fetch entirely. Omit for one-shot
-   * tests that don't care about reuse.
-   */
   cache?: Map<string, AtUrlExpansion & { body?: string }>;
   /** Forward Esc/abort to the fetcher. */
   signal?: AbortSignal;
 }
 
-/**
- * Expand `@http(s)://…` mentions in `text`. Returns the (possibly augmented)
- * text plus a per-URL report so the caller can surface fetched URLs in the
- * UI. Async because each URL hits the network; the file-mention sibling
- * (`expandAtMentions`) stays sync.
- *
- * Caching: when `opts.cache` is provided, a hit skips the network and
- * reuses the prior expansion (including its body). One Map per session is
- * the intended use — a long conversation that references the same URL
- * twice doesn't pay twice.
- *
- * Trailing-punctuation handling: a sentence like "see @https://x.com." has
- * the period stripped so the actual fetched URL is `https://x.com`. We
- * conservatively strip only `.,;:!?` and `)]}>` from the tail; anything
- * else is preserved so query strings survive intact.
- */
 export async function expandAtUrls(
   text: string,
   opts: AtUrlOptions = {},
@@ -644,15 +498,7 @@ export async function expandAtUrls(
   return { text: augmented, expansions };
 }
 
-/**
- * Strip trailing sentence punctuation from a URL captured at a word
- * boundary. `https://x.com.` → `https://x.com`; `https://x.com/?q=a)` →
- * `https://x.com/?q=a`. Conservative: only strips `.,;:!?` and unmatched
- * close-brackets `)]}>` from the very end. Internal punctuation in path /
- * query is preserved.
- *
- * Returns empty string if everything stripped — caller treats as "no URL."
- */
+/** Only strips `.,;:!?` and unmatched close-brackets — internal path / query punctuation preserved. */
 export function stripUrlTail(raw: string): string {
   let s = raw;
   while (s.length > 0) {

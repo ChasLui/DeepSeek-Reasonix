@@ -1,44 +1,13 @@
-/**
- * Pure helpers for rendering one logical line of the prompt input as
- * exactly one visual row, regardless of how wide the line's content
- * is. Splitting this out from PromptInput so the math is testable
- * without React/Ink.
- *
- * Why we can't trust Ink/Yoga's text wrap: Ink uses `string-width` to
- * measure cells, but on CJK Windows terminals some glyphs render at
- * a different cell count than `string-width` reports. The terminal
- * wraps to a 2nd visual row, Ink's eraseLines miscounts, and the
- * scrollback fills with ghost rows from the previous frame's leak.
- *
- * Our fix is to never let the line wrap. We slice the text down to
- * the visible-cell budget ourselves and feed Ink a single Text whose
- * width is known to fit.
- *
- * Cursor visibility: when the user types past the visible width the
- * window slides so the cursor stays in view. `‹` and `›` markers
- * appear at the trimmed edges so the user can see content is hidden
- * to one side.
- */
+/** Slice each prompt line to a single visual row — Ink/Yoga wrap miscounts on CJK Windows terminals and leaks ghost rows. */
 
 import { type PasteEntry, decodePasteSentinel, formatBytesShort } from "./paste-sentinels.js";
 
-/**
- * One renderable atom of a viewport. The line's content is broken
- * into a sequence of these so a paste sentinel becomes a magenta
- * `[paste #N · Ml · KKB]` block while the surrounding text stays
- * normal.
- */
 export type Segment = { kind: "text"; text: string } | { kind: "paste"; id: number; label: string };
 
 export interface Viewport {
   /** Segments to render left-to-right. Sum of cells <= visibleCells. */
   segments: Segment[];
-  /**
-   * Visual cell column at which to draw the cursor block, measured
-   * from the start of the viewport (0 = leftmost cell after the
-   * prompt prefix). `null` means cursor is not on this line — the
-   * caller renders a static line.
-   */
+  /** `null` when cursor is not on this line. */
   cursorCell: number | null;
   /** True when content was clipped on the left side. */
   hiddenLeft: boolean;
@@ -46,23 +15,7 @@ export interface Viewport {
   hiddenRight: boolean;
 }
 
-/**
- * Cell width of a single character in a typical terminal grid.
- *
- * Approximation of Unicode East Asian Width=Wide / W treatment.
- * Range table is intentionally compact — covers the codepoints we
- * see in practice (CJK ideographs, fullwidth forms, Hangul syllables,
- * Hiragana / Katakana). Anything outside the wide ranges counts as
- * one cell. Control characters count as zero so we don't over-budget
- * for them.
- *
- * Not a full `string-width` clone. We deliberately don't honour the
- * "Ambiguous=2 in CJK locale" rule because it produces inconsistent
- * results across terminals and is the very source of Ink's wrap
- * miscount. Treating ambiguous chars as 1 cell here matches what
- * Ink/Yoga also does, so our slice math agrees with what Ink would
- * have rendered (had it not wrapped).
- */
+/** Treats Ambiguous=1 to match Ink/Yoga's own miscount — agreement matters more than correctness here. */
 export function charCells(ch: string): number {
   if (ch.length === 0) return 0;
   const code = ch.charCodeAt(0);
@@ -119,17 +72,6 @@ function pasteSentinelCells(id: number, pastes?: ReadonlyMap<number, PasteEntry>
   return pasteSentinelLabel(id, entry).length;
 }
 
-/**
- * Compute the viewport for a line, keeping the cursor visible. When
- * the line's total cells fit in `visibleCells`, return the whole
- * line. Otherwise slice a window centred on the cursor with `‹` /
- * `›` markers indicating clipped sides.
- *
- * `cursorCol` is the cursor's char index within `line` (0 = before
- * first char; `line.length` = past last char). Pass `null` for
- * lines that don't host the cursor — the function returns a left-
- * aligned static viewport with truncation on the right.
- */
 export function buildViewport(
   line: string,
   cursorCol: number | null,
@@ -187,18 +129,6 @@ function clipFromLeft(
   return { segments, cursorCell: null, hiddenLeft: false, hiddenRight: end < line.length };
 }
 
-/**
- * Sliding window around the cursor. Algorithm:
- *
- *  1. Start with `start` and `end` both at the cursor index.
- *  2. Expand `end` rightward while there's budget, until cursor cell
- *     visible or we hit end-of-line.
- *  3. Expand `start` leftward to fill remaining budget.
- *  4. Reserve 1 cell on each clipped side for the `‹`/`›` marker.
- *
- * The cursor cell is computed AFTER the slice is fixed, by counting
- * cells from `start` up to `cursorCol`.
- */
 function clipAroundCursor(
   line: string,
   cursorCol: number,
@@ -288,11 +218,6 @@ function charCellsAt(line: string, idx: number, pastes?: ReadonlyMap<number, Pas
   return charCells(ch);
 }
 
-/**
- * Walk the string and split it into text/paste segments. Pure —
- * doesn't allocate per-character objects (text runs accumulate in a
- * single segment). Used by both the fast and clipped paths.
- */
 export function textToSegments(line: string, pastes?: ReadonlyMap<number, PasteEntry>): Segment[] {
   const out: Segment[] = [];
   let buf = "";

@@ -1,16 +1,4 @@
-/**
- * Frame → ANSI conversion. Used by:
- *   · snapshot tests — serialise a Frame to a plaintext-or-ANSI
- *     string for inspection / vitest snapshots
- *   · the eventual Phase-4 paint layer — write output directly to
- *     stdout, bypassing Ink's render tree
- *
- * The serializer batches consecutive cells with identical style
- * into one ANSI run so we don't emit a SGR escape per cell — that
- * would balloon a 200×50 frame to 50KB+ of escapes for a few KB of
- * actual text. For the snapshot use case we also support a
- * `plain: true` mode that drops all styling.
- */
+/** Batches same-style runs into one SGR — per-cell escapes balloon 200x50 frames to 50KB+. */
 
 import type { Cell, Frame, FrameRow } from "./types.js";
 
@@ -41,12 +29,6 @@ function sameStyle(a: Style, b: Style): boolean {
   );
 }
 
-/**
- * Convert hex `#rrggbb` → ANSI 38;2;r;g;b. Accepts named ANSI colors
- * ("red", "cyan", etc.) by mapping to the standard 4-bit codes.
- * Returns null for unknown color names; caller skips emitting a
- * color escape for those.
- */
 function fgEscape(color: string | undefined): string | null {
   if (!color) return null;
   const rgb = parseColor(color);
@@ -126,14 +108,7 @@ function styleToAnsi(s: Style): string {
 
 const EMPTY_STYLE: Style = {};
 
-/**
- * Serialize a Frame to an ANSI-encoded string. Rows are joined with
- * `\n`. Each row is a sequence of style runs followed by RESET at
- * end-of-row so styling never bleeds onto the next line.
- *
- * In `plain: true` mode, only the visible characters are emitted —
- * useful for snapshot tests that want a stable, diffable string.
- */
+/** RESET at row end so styling never bleeds onto the next line. */
 export function frameToAnsi(f: Frame, opts: { plain?: boolean } = {}): string {
   const out: string[] = [];
   for (let i = 0; i < f.rows.length; i++) {
@@ -196,11 +171,6 @@ function rowToAnsi(row: FrameRow, opts: { plain?: boolean }): string {
   return result;
 }
 
-/**
- * Compute the visible (no-style) string for a row. Same as
- * `frameToAnsi(f, { plain: true })` for one row; convenient for
- * targeted assertions in tests without slicing the whole frame.
- */
 export function rowText(row: FrameRow): string {
   let s = "";
   for (const c of row) {

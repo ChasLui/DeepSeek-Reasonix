@@ -1,19 +1,4 @@
-/**
- * Semantic-search user-facing string table, EN + ZH.
- *
- * Why locale-aware here when the rest of Reasonix is English-only:
- *   - These strings show up at high-friction moments (preflight prompts,
- *     `/semantic` status). Misunderstanding them costs the user real
- *     setup time. Other Reasonix surfaces (CLI --help, tool descriptions
- *     the model sees) stay English on purpose — translating tool
- *     descriptions would weaken the model's prompt-cache stability and
- *     break alignment with training-data-typical wording.
- *
- * Locale detection precedence: REASONIX_LANG env override → LANG /
- * LC_ALL / LC_MESSAGES (Unix) → Intl.DateTimeFormat (Windows fallback)
- * → "en". The override exists so users on systems with mis-configured
- * LANG can force the language they actually read.
- */
+/** EN+ZH for semantic-search prompts only; tool descriptions stay English to preserve prompt-cache. */
 
 export type Locale = "en" | "zh";
 
@@ -49,12 +34,7 @@ export function resetLocaleCache(): void {
   cachedLocale = null;
 }
 
-/**
- * Lookup a string by key; substitutes `{name}` placeholders from `vars`.
- * Falls back to the English string when a translation is missing so a
- * partial dictionary update never produces a literal "[missing]" in
- * front of the user.
- */
+/** Falls back to English so partial dictionary updates never show "[missing]". */
 export function t(key: keyof typeof EN, vars: Record<string, string | number> = {}): string {
   const loc = detectLocale();
   const dict = loc === "zh" ? ZH : EN;

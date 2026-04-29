@@ -1,10 +1,4 @@
-/**
- * Event-log kernel — types only.
- *
- * Single source of truth for session state: every transition appends
- * a typed Event; every view is a pure reducer projection.
- * Reducers MUST NOT perform I/O. The bodies live in core/projections/*.
- */
+/** Event-log kernel types. Every transition is an appended Event; every view is a pure reducer projection (no I/O). */
 
 import type { PlanStep, PlanStepRisk, StepCompletion } from "../tools/plan-types.js";
 import type { ChatMessage, RawUsage, ToolCall } from "../types.js";

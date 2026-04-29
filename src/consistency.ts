@@ -1,16 +1,4 @@
-/**
- * Self-consistency branching.
- *
- * When enabled, the loop fans out into N parallel samples per turn (varied
- * temperatures), runs Pillar 2 harvest on each, and selects the sample with
- * the fewest flagged uncertainties (ties broken by answer length — a crude
- * Occam prior).
- *
- * The unique opportunity here: because DeepSeek is ~20× cheaper than Claude,
- * running N=3–5 samples per turn is still cheaper than a single Claude call,
- * while the majority-confidence selection tends to dominate single-sample
- * answers on fuzzy multi-step reasoning tasks.
- */
+/** N parallel samples; selector picks fewest uncertainties with shorter-answer tie-break (Occam prior). */
 
 import type { ChatResponse, DeepSeekClient } from "./client.js";
 import { type HarvestOptions, type TypedPlanState, harvest } from "./harvest.js";
@@ -34,10 +22,7 @@ export interface BranchOptions {
   harvestOptions?: HarvestOptions;
   /** Custom selector. Default: min uncertainties, tie-break shortest answer. */
   selector?: BranchSelector;
-  /**
-   * Fires as each sample finishes (main call + harvest both complete).
-   * Useful for progress UI. Not awaited; exceptions are swallowed.
-   */
+  /** Not awaited; exceptions swallowed. Fires when sample's main + harvest both complete. */
   onSampleDone?: (sample: BranchSample) => void;
 }
 

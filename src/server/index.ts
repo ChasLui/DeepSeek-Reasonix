@@ -1,43 +1,4 @@
-/**
- * Reasonix dashboard HTTP server.
- *
- * Native `node:http`, zero new dependencies — staying consistent with
- * the rest of the codebase ("Reasonix value: minimize transitive deps").
- *
- * Security model:
- *   - Bind 127.0.0.1 only. Never 0.0.0.0; `--host` flag and remote auth
- *     are explicitly out of scope until v0.15+ (see design doc).
- *   - Ephemeral 32-byte URL token, regenerated every server boot. Every
- *     request must carry it via either `?token=…` query or the
- *     `X-Reasonix-Token` header.
- *   - Mutations (POST / DELETE) additionally require the token to come
- *     in via the header (NOT the query string), preventing CSRF via a
- *     malicious page that auto-loads a `<img src="?token=…">` URL it
- *     scraped from the user's terminal screenshot. Reading via query is
- *     fine — it's required so the user can paste the dashboard URL into
- *     a browser without separate auth steps.
- *   - All mutations call `ctx.audit(...)` so a forgotten endpoint can't
- *     silently rewrite state without leaving a trail.
- *
- * Lifecycle:
- *   - `startDashboardServer(ctx, opts)` → returns `{ url, token, port,
- *     close }`. `close()` is idempotent + drains in-flight requests
- *     within 1s before force-killing the listener.
- *   - The caller (CLI command or `/dashboard` slash) is responsible for
- *     opening the browser, persisting the URL into the TUI scrollback,
- *     and tearing the server down on session exit.
- *
- * Routing:
- *   - `GET /`            → embedded `index.html` (token injected as
- *                          `<meta name="reasonix-token" content="…">`)
- *   - `GET /assets/*`    → embedded SPA assets (app.js, app.css)
- *   - `GET|POST|DELETE /api/*` → JSON endpoints, dispatched in `api/`
- *
- * Testing surface:
- *   - `dispatch(req, ctx)` is exported for unit tests so we can drive
- *     it without spinning a real listener. The listener wrapper is just
- *     a thin glue layer over it.
- */
+/** Dashboard HTTP server — pinned to 127.0.0.1, ephemeral per-boot token; mutations require the token in the header (CSRF). */
 
 import { randomBytes } from "node:crypto";
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
@@ -50,13 +11,8 @@ import { handleApi } from "./router.js";
 export interface StartDashboardOptions {
   /** Force a specific port. 0 = ephemeral. Default: 0. */
   port?: number;
-  /** Host to bind. Hard-pinned to 127.0.0.1 in v0.12 — argument exists for tests / future remote support. */
+  /** Host to bind. Argument exists for tests; production must keep 127.0.0.1 (no remote auth). */
   host?: string;
-  /**
-   * Pre-generated token, mostly for tests. Production callers omit
-   * this and let the server mint a fresh 32-byte random token on
-   * every boot.
-   */
   token?: string;
 }
 
@@ -68,21 +24,11 @@ export interface DashboardServerHandle {
   close: () => Promise<void>;
 }
 
-/**
- * Mint a 32-byte random token, hex-encoded. 64 chars of entropy is
- * overkill for a localhost-only server, but the bandwidth cost is nil
- * and it lines up with the audit-log header reader's assumptions.
- */
 function mintToken(): string {
   return randomBytes(32).toString("hex");
 }
 
-/**
- * Constant-time string compare. `===` would short-circuit on the
- * first mismatched byte, leaking length / position info via timing
- * to an attacker holding a stopwatch on a localhost connection. Belt
- * and braces — even on 127.0.0.1.
- */
+/** `===` short-circuits on first mismatch — leaks position via timing even on localhost. */
 export function constantTimeEquals(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let mismatch = 0;
@@ -92,13 +38,7 @@ export function constantTimeEquals(a: string, b: string): boolean {
   return mismatch === 0;
 }
 
-/**
- * Validate the bearer token on a request. Mutations require the
- * header form (CSRF defence); reads accept either header or query.
- *
- * Returns `null` on success, an error envelope on failure (caller
- * writes the response).
- */
+/** Mutations require header (CSRF); reads accept header or query. Returns null on success. */
 export function checkAuth(
   req: IncomingMessage,
   expectedToken: string,
@@ -141,12 +81,7 @@ export function checkAuth(
   };
 }
 
-/**
- * Read the request body as a UTF-8 string with a hard cap. Bigger
- * bodies abort with 413 — dashboard mutations are tiny JSON, no
- * legit reason to send 1 MB.
- */
-const MAX_BODY_BYTES = 256 * 1024; // 256 KB; lets large skill bodies through but stops abuse
+const MAX_BODY_BYTES = 256 * 1024;
 
 export async function readBody(req: IncomingMessage): Promise<string> {
   let total = 0;
@@ -166,10 +101,6 @@ export async function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-/**
- * Top-level request dispatch. Pure function over `(req, ctx, token)`,
- * exported so unit tests can drive without TCP.
- */
 export async function dispatch(
   req: IncomingMessage,
   res: ServerResponse,

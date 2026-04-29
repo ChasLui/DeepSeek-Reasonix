@@ -1,14 +1,3 @@
-/**
- * `/api/edit-mode` — read + flip the edit gate (review / auto / yolo).
- *
- *   GET  → { mode }
- *   POST { mode } → applies via ctx.setEditMode
- *
- * The set callback in App.tsx persists to ~/.reasonix/config.json
- * and updates `editModeRef` so the running tool registry's policy
- * checker sees the new value on the next dispatch.
- */
-
 import type { EditMode } from "../../config.js";
 import type { DashboardContext } from "../context.js";
 import type { ApiResult } from "../router.js";

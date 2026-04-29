@@ -1,20 +1,4 @@
-/**
- * Transcript format — the canonical "audit log" of a Reasonix session.
- *
- * Design split:
- *   - Session file (`~/.reasonix/sessions/<name>.jsonl`) stores only the
- *     `ChatMessage`s the model needs to resume. See session.ts.
- *   - Transcript file (this module) stores every LoopEvent with usage, cost,
- *     model, and prefix fingerprint attached where available — enough for
- *     replay and diff to reconstruct economics.
- *
- * The two are different contracts: sessions are the user's *memory*;
- * transcripts are the *receipts*. Don't conflate them.
- *
- * Backward compatibility: all fields beyond {ts, turn, role, content} are
- * optional on read. A v0.1 transcript (pre-usage) still parses and renders
- * — it just shows cost/cache as n/a.
- */
+/** Transcripts are receipts (cost/usage/prefix); sessions are memory (ChatMessages). Don't conflate. */
 
 import { type WriteStream, createWriteStream, readFileSync } from "node:fs";
 import type { TypedPlanState } from "./harvest.js";
@@ -40,29 +24,15 @@ export interface TranscriptRecord {
   cost?: number;
   /** Model id that produced this turn. */
   model?: string;
-  /**
-   * The ImmutablePrefix fingerprint at this turn. Lets diff prove two runs
-   * share a prefix — i.e. any cache-hit delta is attributable to log
-   * stability, not to a different system prompt.
-   */
+  /** Lets diff attribute cache-hit delta to log stability vs prompt change. */
   prefixHash?: string;
-  /**
-   * Structured plan state extracted by the Pillar 2 harvester. Present on
-   * assistant_final records when harvest was enabled and produced non-empty
-   * state. Omitted entirely when harvest is off or produced nothing —
-   * absence means "no data", not "empty plan".
-   */
+  /** Absent means "no data", not "empty plan". */
   planState?: TypedPlanState;
   /** Optional error message (role === "error"). */
   error?: string;
 }
 
 export interface TranscriptMeta {
-  /**
-   * Optional metadata written as the first line of a transcript. Lets
-   * downstream tooling know what it's reading without guessing.
-   * Recognized by a special role "_meta".
-   */
   version: 1;
   source: string; // e.g. "reasonix chat", "bench/baseline", "bench/reasonix"
   model?: string;
@@ -82,11 +52,6 @@ export interface ReadTranscriptResult {
   records: TranscriptRecord[];
 }
 
-/**
- * Build a TranscriptRecord from a LoopEvent. Extra fields (model,
- * prefixHash) that the LoopEvent doesn't carry are passed in separately
- * because they're session-level, not event-level.
- */
 export function recordFromLoopEvent(
   ev: LoopEvent,
   extra: { model: string; prefixHash: string },
@@ -154,17 +119,7 @@ export function openTranscriptFile(path: string, meta: TranscriptMeta): WriteStr
   return stream;
 }
 
-/**
- * Parse a transcript file. Returns meta (if the first line is a _meta record)
- * and the full record list.
- *
- * Robustness contract:
- *   - Empty lines are skipped.
- *   - Malformed JSON lines are skipped silently (do not crash on partial
- *     files — live chats may be mid-write).
- *   - Records missing optional fields still parse — they're just rendered
- *     with n/a where the optional value would go.
- */
+/** Tolerant: empty / malformed lines skipped, missing optionals OK — live chats may be mid-write. */
 export function readTranscript(path: string): ReadTranscriptResult {
   const raw = readFileSync(path, "utf8");
   return parseTranscript(raw);

@@ -1,13 +1,3 @@
-/**
- * `/api/submit` — POST a prompt from the web. Routes through the same
- * `handleSubmit` the TUI uses (so slash commands, `!cmd`, `@path` all
- * work identically). When the loop is mid-turn the web rejects with
- * `{ accepted: false }` rather than queueing — same UX as the TUI's
- * "wait for the current turn to finish" implicit gate. The eventual
- * stream of deltas / tool calls / final answer arrives via the SSE
- * channel at `/api/events`.
- */
-
 import type { DashboardContext } from "../context.js";
 import type { ApiResult } from "../router.js";
 

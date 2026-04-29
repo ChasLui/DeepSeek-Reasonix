@@ -1,11 +1,4 @@
-/**
- * Scavenge tool calls leaked into reasoning_content.
- *
- * R1 sometimes emits tool-call JSON inside <think>…</think> and then forgets
- * to surface it in `tool_calls`. This pass extracts plausible calls and
- * proposes them to the loop, which decides whether to merge them with the
- * declared calls.
- */
+/** R1 sometimes emits tool-call JSON inside reasoning_content and forgets `tool_calls`; recover those calls. */
 
 import type { ToolCall } from "../types.js";
 
@@ -67,29 +60,7 @@ interface DsmlInvoke {
   args: Record<string, unknown>;
 }
 
-/**
- * Yield DeepSeek DSML invoke blocks scavenged from text. R1's chat
- * template uses these when the server-side tool-call serializer
- * misfires — we see them verbatim in the content channel:
- *
- *   <｜DSML｜function_calls>
- *     <｜DSML｜invoke name="filesystem_edit_file">
- *       <｜DSML｜parameter name="path" string="true">F:/x.html</｜DSML｜parameter>
- *       <｜DSML｜parameter name="edits" string="false">[…]</｜DSML｜parameter>
- *     </｜DSML｜invoke>
- *   </｜DSML｜function_calls>
- *
- * The wrapper class (｜ U+FF5C vs ASCII |) varies by model build, so
- * we accept both. `string="true"` means the parameter value is a
- * literal string; `string="false"` means it's JSON.
- */
-/**
- * Remove DSML invoke/function_calls blocks from text so the raw-JSON
- * scanner below doesn't see parameter payloads as standalone calls.
- * Mirrors the strip pass in `stripHallucinatedToolMarkup` but scoped
- * to scavenge (we also want the `function_calls` wrapper gone —
- * nothing useful to scavenge there).
- */
+/** Strips DSML invoke blocks so the raw-JSON scanner doesn't re-scavenge their parameter payloads. */
 function stripDsmlBlocks(text: string): string {
   let out = text;
   out = out.replace(/<[｜|]DSML[｜|]function_calls>[\s\S]*?<\/?[｜|]DSML[｜|]function_calls>/g, "");
@@ -109,16 +80,7 @@ function* iterateDsmlInvokes(text: string): Generator<DsmlInvoke> {
   }
 }
 
-/**
- * Parse the parameter children of a DSML invoke body into a plain
- * object. We tolerate:
- *   - `string="true"` → literal text; whitespace trimmed at the edges.
- *   - `string="false"` → JSON-parsed; falls back to literal text if the
- *     payload turns out to be malformed (better to hand a string
- *     through than lose the parameter entirely).
- *   - no `string="…"` attribute → treat as literal text (older/shorter
- *     DSML shapes we haven't formally seen but want to handle).
- */
+/** Falls back to literal text when `string="false"` JSON parse fails — never lose the parameter. */
 function parseDsmlParameters(body: string): Record<string, unknown> {
   const PARAM_RE =
     /<[｜|]DSML[｜|]parameter\s+name="([^"]+)"(?:\s+string="(true|false)")?\s*>([\s\S]*?)<\/[｜|]DSML[｜|]parameter>/g;

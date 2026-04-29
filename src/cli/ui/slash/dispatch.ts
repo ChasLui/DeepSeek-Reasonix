@@ -16,22 +16,9 @@ import { handlers as sessionsHandlers } from "./handlers/sessions.js";
 import { handlers as skillHandlers } from "./handlers/skill.js";
 import type { SlashContext, SlashResult } from "./types.js";
 
-/**
- * A slash handler receives the command's args + the loop + shared
- * runtime context, and returns a synchronous SlashResult. Async work
- * (balance fetches, stop_job) fires-and-forgets via `ctx.postInfo`
- * instead — keeps the TUI input non-blocking.
- */
+/** Synchronous return — async work fires-and-forgets via `ctx.postInfo` to keep input non-blocking. */
 export type SlashHandler = (args: string[], loop: CacheFirstLoop, ctx: SlashContext) => SlashResult;
 
-/**
- * Flat map of cmd → handler. Composed from per-topic modules so each
- * feature's logic stays local; aliases (e.g. `exit` / `quit`) are just
- * extra keys in the per-module handlers bag pointing at the same fn.
- *
- * Ordering of the spread matters only for duplicate keys; there are
- * none. Keep alphabetical for diff sanity when adding modules.
- */
 const HANDLERS: Record<string, SlashHandler> = {
   ...adminHandlers,
   ...basicHandlers,

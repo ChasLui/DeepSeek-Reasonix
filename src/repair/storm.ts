@@ -1,15 +1,6 @@
 import type { ToolCall } from "../types.js";
 
-/**
- * Predicate the breaker consults to decide whether a call mutates state.
- * Mutating calls clear the recent-args buffer: re-reading a file after
- * `edit_file` shouldn't count as "saw the same args before" — the file
- * legitimately changed. Wire this from the caller using whatever source
- * of truth is appropriate (e.g. the ToolRegistry's `readOnly` /
- * `readOnlyCheck` flags). When undefined, every call is tracked the
- * old way — preserves the original behavior for callers that don't
- * thread a registry through.
- */
+/** Mutating calls clear prior read-only entries so a post-edit re-read isn't flagged as repeat. */
 export type IsMutating = (call: ToolCall) => boolean;
 
 interface RecentEntry {
@@ -18,22 +9,7 @@ interface RecentEntry {
   readOnly: boolean;
 }
 
-/**
- * Call-storm breaker.
- *
- * Detects (tool, args) tuples repeating within a sliding window and suppresses
- * the offending call. Surfaces a synthetic tool_result advising the model to
- * change strategy on its next turn.
- *
- * Buffer entries are tagged read-only vs mutating. When a mutating call
- * runs, the breaker drops prior read-only entries — a re-read of the
- * same path after `edit_file` is fresh, not a repeat. Mutating calls
- * still count among themselves, so a model looping on identical
- * `edit_file` invocations still trips on the threshold.
- *
- * Without an `isMutating` predicate everything is tracked the same way
- * (back-compat for callers that don't thread a registry through).
- */
+/** Tracks (name, args) repeats; mutating calls clear prior read-only entries while still counting amongst themselves. */
 export class StormBreaker {
   private readonly windowSize: number;
   private readonly threshold: number;

@@ -1,19 +1,4 @@
-/**
- * Session persistence.
- *
- * Every turn's log entries (user / assistant / tool messages) are appended to
- * a JSONL file under `~/.reasonix/sessions/<name>.jsonl`. Next time the user
- * starts the CLI with the same session name, the loop pre-loads the file
- * into its AppendOnlyLog so the new turn has full prior context.
- *
- * Design notes:
- *   - JSONL rather than JSON so concurrent writes don't corrupt.
- *   - 0600 permissions on Unix (chmod no-ops on Windows).
- *   - Name sanitization keeps paths safe: only [\w-] and CJK letters pass;
- *     anything else is replaced with underscore, max 64 chars.
- *   - The loop's stats/session aren't persisted — only the message log.
- *     Cost accounting resets each run (by design — old costs are sunk).
- */
+/** JSONL append-only message log under `~/.reasonix/sessions/`; concurrent-write safe. */
 
 import {
   appendFileSync,
@@ -103,16 +88,7 @@ export function listSessions(): SessionInfo[] {
   }
 }
 
-/**
- * Drop every session whose mtime is older than {@link daysOld} days.
- * Returns the names of removed sessions so the caller can show a
- * confirmation in the UI. Errors on individual deletions are
- * swallowed — partial pruning is fine, the user can re-run.
- *
- * Defaults to 90 days because that's well past "still useful for
- * resume" — if you haven't touched a session in 3 months you're
- * not picking it back up. Heavy users can pass a tighter cutoff.
- */
+/** Best-effort: per-file delete errors are swallowed so partial pruning still finishes. */
 export function pruneStaleSessions(daysOld = 90): string[] {
   const cutoff = Date.now() - daysOld * 24 * 60 * 60 * 1000;
   const deleted: string[] = [];
@@ -143,14 +119,7 @@ export function deleteSession(name: string): boolean {
   }
 }
 
-/**
- * Overwrite the session file with a fresh message list. Used by
- * `/compact` so the compacted in-memory log persists across restarts
- * instead of being re-healed from a huge on-disk file every launch.
- * We accept the brief non-atomic window between truncate and write —
- * worst case: a concurrent crash loses the session, which is what
- * `/forget` would have done anyway.
- */
+/** Non-atomic truncate+write window is acceptable — concurrent crash here = `/forget`. */
 export function rewriteSession(name: string, messages: ChatMessage[]): void {
   const path = sessionPath(name);
   mkdirSync(dirname(path), { recursive: true });

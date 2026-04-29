@@ -1,11 +1,6 @@
 import type { JobRecord } from "../../../../tools/jobs.js";
 import type { SlashHandler } from "../dispatch.js";
 
-/**
- * Status icon per job state. ● for live (terminal renders bare colored
- * dot — combine with chalk fg color in the output for the cyan/green/red
- * cue), ✓ / ✗ for clean / failed exits, ○ for stopped-without-exit.
- */
 function statusIcon(r: JobRecord): string {
   if (r.running) return "●";
   if (r.spawnError) return "✗";
@@ -14,10 +9,6 @@ function statusIcon(r: JobRecord): string {
   return "○";
 }
 
-/**
- * Compact human age: "12s" / "4m" / "2h" / "3d". Tabular widths so a
- * column of ages still aligns under a fixed-width header.
- */
 function fmtAge(ms: number): string {
   const s = Math.floor(ms / 1000);
   if (s < 60) return `${s}s`;
@@ -28,18 +19,7 @@ function fmtAge(ms: number): string {
   return `${Math.floor(h / 24)}d`;
 }
 
-/**
- * Best-effort port detection from a running job's output. Most dev
- * servers print "Local: http://localhost:3000" or "Listening on :8080"
- * in their startup banner; surfacing those next to the row turns
- * `/jobs` into a "what's running on what port" dashboard. Returns up
- * to three unique ports because docker-compose-style multi-service
- * boots can legitimately bind several at once (postgres+redis).
- *
- * Fall through to no-ports if nothing matches; we don't want to invent
- * a port number from the command name (`npm run dev` → :3000) since
- * that's just a guess and being wrong is worse than being silent.
- */
+/** Caps at 3 unique ports for compose-style multi-service boots; never guesses from command name. */
 function detectPorts(output: string): number[] {
   if (!output) return [];
   const found = new Set<number>();
@@ -60,12 +40,6 @@ function detectPorts(output: string): number[] {
   return [...found];
 }
 
-/**
- * Right-side metadata column. For running jobs show ports (brand-color
- * intent — caller can wrap in chalk); for terminated jobs show the
- * exit code with a "✓"/"✗" already in the status icon column, so the
- * meta is just a number.
- */
 function fmtMeta(r: JobRecord): string {
   if (r.running) {
     const ports = detectPorts(r.output);

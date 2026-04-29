@@ -1,9 +1,3 @@
-/**
- * MCP client — request/response correlation, initialize handshake,
- * tools/list, tools/call. Built on top of a McpTransport so the same
- * logic works against a real stdio server or an in-process fake.
- */
-
 import { VERSION } from "../version.js";
 import type { McpTransport } from "./stdio.js";
 import {
@@ -90,10 +84,7 @@ export class McpClient {
     return this._instructions;
   }
 
-  /**
-   * Complete the initialize → initialized handshake. Must be called
-   * before any other method (otherwise compliant servers reject).
-   */
+  /** Compliant servers reject other methods until this completes. */
   async initialize(): Promise<InitializeResult> {
     if (this.initialized) throw new Error("MCP client already initialized");
     this.startReaderIfNeeded();
@@ -128,22 +119,7 @@ export class McpClient {
     return this.request<ListToolsResult>("tools/list", {});
   }
 
-  /**
-   * Invoke a tool by name. When `onProgress` is supplied, attaches a
-   * fresh progress token so the server can send incremental updates
-   * via `notifications/progress`; they're routed to the callback until
-   * the final response arrives (or the request times out, in which
-   * case the handler is simply dropped — no extra notification).
-   *
-   * When `signal` is supplied, aborting it:
-   *   1) fires `notifications/cancelled` to the server (MCP 2024-11-05
-   *      way of saying "forget this request, I no longer care"), and
-   *   2) rejects the pending promise immediately with an AbortError,
-   *      so the caller doesn't have to wait for the subprocess to
-   *      finish its in-flight file write or network request.
-   * The server MAY still emit a late response; we drop it in dispatch
-   * since the request id is gone from `pending`.
-   */
+  /** Abort sends `notifications/cancelled` and rejects immediately; late server responses are dropped. */
   async callTool(
     name: string,
     args?: Record<string, unknown>,
@@ -164,13 +140,7 @@ export class McpClient {
     }
   }
 
-  /**
-   * List resources the server exposes. Supports a pagination cursor;
-   * callers interested in the full set should loop on `nextCursor`.
-   * Servers that don't support resources respond with method-not-found
-   * (−32601) — we surface that as a thrown Error so callers can gate
-   * on the `serverCapabilities.resources` field first.
-   */
+  /** Throws on method-not-found; callers should gate on `serverCapabilities.resources` first. */
   async listResources(cursor?: string): Promise<ListResourcesResult> {
     this.assertInitialized();
     return this.request<ListResourcesResult>("resources/list", {
@@ -194,11 +164,6 @@ export class McpClient {
     } satisfies ListPromptsParams);
   }
 
-  /**
-   * Fetch a rendered prompt by name. `args` supplies values for any
-   * required template arguments; the server validates. Returns messages
-   * ready to prepend to the model's input.
-   */
   async getPrompt(name: string, args?: Record<string, string>): Promise<GetPromptResult> {
     this.assertInitialized();
     return this.request<GetPromptResult>("prompts/get", {
@@ -216,8 +181,6 @@ export class McpClient {
     this.pending.clear();
     await this.transport.close();
   }
-
-  // ---------- internals ----------
 
   private assertInitialized(): void {
     if (!this.initialized) throw new Error("MCP client not initialized — call initialize() first");

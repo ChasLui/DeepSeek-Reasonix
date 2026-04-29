@@ -1,17 +1,3 @@
-/**
- * Build + query orchestrator for the semantic index.
- *
- * `buildIndex(root, opts)` walks the project, embeds new/changed
- * files, and persists. It is incremental by default — files whose
- * mtime hasn't moved since the last build are skipped, which is the
- * main reason the index can be kept fresh as a `Stop` hook or a
- * pre-`reasonix code` warm-up.
- *
- * `querySemantic(root, query, opts)` opens the on-disk index, embeds
- * the query, and returns top-K hits formatted for tool output. No
- * mutation; safe to call from any tool fn.
- */
-
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { walkChunks } from "./chunker.js";
@@ -57,10 +43,7 @@ export interface BuildResult {
   durationMs: number;
 }
 
-/**
- * Build (or incrementally update) the semantic index for `root`.
- * Probes Ollama first so a missing daemon fails before any chunking.
- */
+/** Probes Ollama first so a missing daemon fails before any chunking work. */
 export async function buildIndex(root: string, opts: BuildOptions = {}): Promise<BuildResult> {
   const t0 = Date.now();
   const indexDir = path.join(root, INDEX_DIR_NAME);
@@ -82,9 +65,7 @@ export async function buildIndex(root: string, opts: BuildOptions = {}): Promise
   const lastMtimes = store.fileMtimes();
   const seenPaths = new Set<string>();
 
-  // Phase 1 — scan + chunk + collect mtime per file. Buffer chunks
-  // by file because we need to drop+re-add per file when its mtime
-  // changes (a partial update would leave stale chunks).
+  // Buffer chunks per file — partial updates must drop+re-add atomically per file.
   const fileChunks = new Map<string, { chunks: CodeChunk[]; mtimeMs: number }>();
   let filesScanned = 0;
   let filesSkipped = 0;
@@ -117,23 +98,15 @@ export async function buildIndex(root: string, opts: BuildOptions = {}): Promise
     opts.onProgress?.({ phase: "scan", filesScanned });
   }
 
-  // Phase 2 — drop entries for files that disappeared (rename/delete).
   const deletedPaths: string[] = [];
   for (const oldPath of lastMtimes.keys()) {
     if (!seenPaths.has(oldPath)) deletedPaths.push(oldPath);
   }
-  // Files whose chunks we re-built also need their old entries
-  // evicted before the new ones are inserted, otherwise the index
-  // grows duplicate snippets for the same range.
+  // Evict old chunks before re-insert — otherwise the same range duplicates.
   const replacePaths = [...fileChunks.keys()].filter((p) => lastMtimes.has(p));
   const removed = await store.remove([...deletedPaths, ...replacePaths]);
 
-  // Phase 3 — embed buffered chunks file by file. Sequential per
-  // file so the progress counter advances visibly; embedAll is
-  // sequential internally (Ollama serializes anyway). Per-chunk
-  // failures (Ollama 500, transient errors) are logged + skipped
-  // via embedAll's null-slot convention so a single bad chunk
-  // doesn't kill a long-running build.
+  // Per-chunk embed errors are logged + null-slotted so one bad chunk doesn't kill a long build.
   let chunksAdded = 0;
   let chunksSkipped = 0;
   const filesChanged = fileChunks.size;
@@ -210,11 +183,7 @@ export interface QueryOptions extends EmbedOptions {
   minScore?: number;
 }
 
-/**
- * Embed `query` and return ranked hits from the index. Returns
- * `null` when no index exists for `root` so the caller can decide
- * whether to fall back to grep + a "run reasonix index" hint.
- */
+/** Returns null when no index exists, so caller can fall back to grep with a hint. */
 export async function querySemantic(
   root: string,
   query: string,
@@ -229,12 +198,7 @@ export async function querySemantic(
   return store.search(qvec, opts.topK ?? 8, opts.minScore ?? 0.3);
 }
 
-/**
- * Cheap synchronous-ish probe — returns true if the index dir
- * contains an index.meta.json. Used to gate `semantic_search` tool
- * registration: no index → no tool (model can't call something it
- * can't use).
- */
+/** Gates `semantic_search` registration — no index → no tool exposed. */
 export async function indexExists(root: string): Promise<boolean> {
   const meta = path.join(root, INDEX_DIR_NAME, "index.meta.json");
   try {

@@ -1,14 +1,4 @@
-/**
- * Pillar 3 — Tool-Call Repair pipeline.
- *
- * Order of passes per turn:
- *   1. scavenge       — recover tool calls leaked into <think>
- *   2. truncation     — close any half-emitted argument JSON
- *   3. storm breaker  — drop call-storm repeats
- *
- * Schema flattening is applied during loop construction (it changes what we
- * advertise to the model), not per-turn.
- */
+/** Pass order: scavenge → truncation → storm. Schema flatten runs at loop construction, not per-turn. */
 
 import type { ToolCall } from "../types.js";
 import { scavengeToolCalls } from "./scavenge.js";
@@ -35,13 +25,7 @@ export interface ToolCallRepairOptions {
   stormWindow?: number;
   stormThreshold?: number;
   maxScavenge?: number;
-  /**
-   * Optional predicate the storm breaker consults to identify state-
-   * changing calls — those clear the sliding window so a post-edit
-   * verify-read isn't mistaken for a repeat. Production callers wire
-   * this off the ToolRegistry's `readOnly` / `readOnlyCheck` flags;
-   * tests that don't supply it keep the original behavior.
-   */
+  /** Mutating calls clear the storm window so a post-edit verify-read isn't seen as a repeat. */
   isMutating?: IsMutating;
 }
 
@@ -54,13 +38,7 @@ export class ToolCallRepair {
     this.storm = new StormBreaker(opts.stormWindow ?? 6, opts.stormThreshold ?? 3, opts.isMutating);
   }
 
-  /**
-   * Drop the StormBreaker's sliding window of recent (name, args)
-   * signatures. Called at the start of every user turn — a fresh user
-   * message is a new intent, so carrying old repetition state into it
-   * would turn a valid "try again with different input" flow into a
-   * false-positive block.
-   */
+  /** Called at start of every user turn — fresh intent shouldn't inherit old repetition state. */
   resetStorm(): void {
     this.storm.reset();
   }

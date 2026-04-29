@@ -1,30 +1,4 @@
-/**
- * Per-workspace edit checkpoints — Cursor-style "snapshot the files,
- * restore later" mechanism. Replaces the auto-commit feature that was
- * proposed and rejected on git-pollution grounds: instead of writing
- * every edit batch to git, we write opt-in named snapshots to a
- * dot-folder that lives outside the user's repo entirely.
- *
- * Storage layout:
- *   ~/.reasonix/sessions/<sanitized-root>/checkpoints/index.json
- *   ~/.reasonix/sessions/<sanitized-root>/checkpoints/<id>.json
- *
- * Each `<id>.json` is a complete file-content snapshot:
- *   { id, name, createdAt, files: [{ path, content }] }
- *
- * `index.json` is a small lookup so `/checkpoint list` doesn't have
- * to load every snapshot off disk to enumerate them.
- *
- * Why one file per checkpoint instead of jsonl: deletion + selective
- * restore are common operations; rewriting a 50MB jsonl every time the
- * user runs `/checkpoint forget bad-attempt` is wasteful. Per-file
- * also means a corrupt snapshot only loses ONE checkpoint, not the
- * whole history.
- *
- * Why NOT git: see `feedback_internal_checkpoints_over_git.md` in
- * memory. Three reasons in one line: pollutes user's history, fights
- * with hooks, fails in non-git dirs.
- */
+/** One file per checkpoint (not jsonl) so delete/restore is cheap and a corrupt snapshot only loses itself. */
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -130,24 +104,10 @@ export interface CreateCheckpointOptions {
   rootDir: string;
   name: string;
   source?: Checkpoint["source"];
-  /**
-   * Repo-relative paths to snapshot. Caller decides what's "interesting"
-   * — typically the union of (touched-this-session ∪ pending-edits ∪
-   * a user-supplied path list). Empty list → empty snapshot, which is
-   * legal for "session-start baseline" use cases.
-   */
   paths: readonly string[];
 }
 
-/**
- * Create a checkpoint by capturing each path's current on-disk content.
- * Files that don't exist are recorded with `content: null` so a
- * subsequent restore knows to delete them. Returns the saved metadata.
- *
- * IDs are timestamp-based + a 4-char suffix to keep them collision-free
- * even when the user fires `/checkpoint name1` and `/checkpoint name2`
- * within the same millisecond (rare in practice but cheap to handle).
- */
+/** Missing files recorded as `content: null` so restore knows to delete; ID has random suffix to avoid same-ms collision. */
 export function createCheckpoint(opts: CreateCheckpointOptions): CheckpointMeta {
   const absRoot = resolve(opts.rootDir);
   const id = `cp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -205,10 +165,7 @@ export function createCheckpoint(opts: CreateCheckpointOptions): CheckpointMeta 
   return meta;
 }
 
-/**
- * Look up a checkpoint by id, or by name (most-recent wins on
- * collision). Returns null when nothing matches.
- */
+/** Most-recent name wins on collision. */
 export function findCheckpoint(rootDir: string, idOrName: string): CheckpointMeta | null {
   const items = listCheckpoints(rootDir);
   // Prefer exact id match, then most-recent name match.
@@ -227,12 +184,7 @@ export interface RestoreResult {
   skipped: Array<{ path: string; reason: string }>;
 }
 
-/**
- * Restore a checkpoint. Returns a per-file report so the caller can
- * surface what landed and what didn't. Path-escape is double-checked
- * against the live `rootDir`, which may differ from the snapshot's
- * (e.g. user moved the project).
- */
+/** Path-escape rechecked against live `rootDir` since snapshot's may differ (project moved). */
 export function restoreCheckpoint(rootDir: string, id: string): RestoreResult {
   const cp = loadCheckpoint(rootDir, id);
   const absRoot = resolve(rootDir);
@@ -265,11 +217,6 @@ export function restoreCheckpoint(rootDir: string, id: string): RestoreResult {
   return result;
 }
 
-/**
- * Delete a checkpoint by id. Returns true iff the snapshot file +
- * index entry were both removed (or already absent in the case of a
- * partial-write left behind from a crash).
- */
 export function deleteCheckpoint(rootDir: string, id: string): boolean {
   const cpPath = snapshotPath(rootDir, id);
   let removed = false;

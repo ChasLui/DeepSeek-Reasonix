@@ -1,16 +1,4 @@
-/**
- * Render a SEARCH/REPLACE edit block as a compact unified-diff-style
- * preview for the code-mode confirm gate. Shows the user what's about
- * to land on disk BEFORE they press `y` — catches "wrong file" and
- * "wrong replacement" mistakes that the old path + line-count summary
- * couldn't.
- *
- * Not a full Myers diff: we trim shared leading/trailing lines as
- * context and render the middle divergence as `-old` / `+new`. That's
- * enough for the common SEARCH/REPLACE shape (small change inside a
- * function body, wrapped with a few lines of surrounding code for
- * uniqueness) and avoids pulling in a diff library.
- */
+/** Trim shared head/tail; render middle as -/+. NOT Myers — sufficient for SEARCH/REPLACE shape. */
 
 import type { EditBlock } from "./edit-blocks.js";
 
@@ -24,12 +12,6 @@ export interface DiffPreviewOptions {
 }
 
 export interface AllBlockDiffOptions extends DiffPreviewOptions {
-  /**
-   * Prefix each block's path-header with a 1-based `[N]` label. Used by
-   * the pending-edits preview so the user can address individual blocks
-   * via `/apply <N>` / `/discard <N>`. Off by default — single-block
-   * surfaces (modal confirm, /show) don't need numbering.
-   */
   numbered?: boolean;
 }
 
@@ -93,11 +75,6 @@ export function formatEditBlockDiff(block: EditBlock, opts: DiffPreviewOptions =
   return capLines(out, maxLines, indent);
 }
 
-/**
- * Render the full set of blocks back-to-back, each preceded by a
- * path-and-size header so the user can tell which file owns each
- * diff chunk. Blocks are separated by a blank line for breathing room.
- */
 export function formatAllBlockDiffs(
   blocks: readonly EditBlock[],
   opts: AllBlockDiffOptions = {},
@@ -121,11 +98,6 @@ function countLines(s: string): number {
   return (s.match(/\n/g)?.length ?? 0) + 1;
 }
 
-/**
- * One row of a side-by-side diff. `left` is the old/before column,
- * `right` is the new/after column. `kind` drives color + glyph in
- * the renderer.
- */
 export interface SplitDiffRow {
   left: { num: number | null; text: string; kind: "ctx" | "del" | "pad" };
   right: { num: number | null; text: string; kind: "ctx" | "add" | "pad" };
@@ -136,19 +108,7 @@ export interface SplitDiffOptions extends DiffPreviewOptions {
   startLine?: number;
 }
 
-/**
- * Side-by-side diff rows for an EditBlock — git-difftool / delta-style
- * "old | new" layout. Each removed line pairs with the corresponding
- * added line at the same offset; unpaired remainders pad with blanks
- * on the missing side. Common leading/trailing context shows the same
- * line on both sides.
- *
- * Why pair rather than fully Myers-aligned: Myers needs an O(N²) edit
- * graph to compute LCS for arbitrary text. The SEARCH/REPLACE shape
- * here is small (typically <30 lines per block) and the fix usually
- * REPLACES a contiguous span — pairing by index gets the visually-
- * correct result for the 95% case without the algorithm cost.
- */
+/** Pairs removed/added by index — visually correct for SEARCH/REPLACE shape, skips Myers' O(N²) LCS. */
 export function formatEditBlockSplit(
   block: EditBlock,
   opts: SplitDiffOptions = {},

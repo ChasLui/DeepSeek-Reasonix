@@ -1,34 +1,10 @@
-/**
- * `/init` — auto-generate a baseline REASONIX.md by asking the model
- * to scan the project and synthesize a concise summary.
- *
- * Mechanism: the slash handler injects a structured user-turn prompt
- * (via `resubmit`) that hard-constrains the model to write a short,
- * fact-only document and stop. It uses the same filesystem tools the
- * model already has — no new tool, no new pipeline. The model's output
- * lands as an `edit_file` (empty SEARCH = create new) or `write_file`
- * SEARCH/REPLACE block, which goes through the normal /apply review
- * gate so the user can audit before the file hits disk.
- *
- * Why this shape rather than a CLI command: REASONIX.md goes into
- * the system prompt every session, so its content has to fit. A
- * model-driven generator that runs inside the same loop the user
- * will use later gives the most consistent output, and reusing the
- * existing edit-review flow means we don't have to invent a
- * separate "review the generated doc" UI.
- */
+/** `/init` — resubmits a constrained brief; output flows through the normal edit-review gate. */
 
 import { existsSync } from "node:fs";
 import * as pathMod from "node:path";
 import type { SlashHandler } from "../dispatch.js";
 
-/**
- * The init brief. Sent verbatim as a user turn (via resubmit). Hard
- * constraints up top because flash will skim and the structure of
- * the document matters for system-prompt budget. The "STOP after
- * writing" line is load-bearing — without it the model will follow
- * up with "want me to also …" and burn turns on noise.
- */
+/** "STOP after writing" is load-bearing — without it the model burns extra turns on follow-up offers. */
 const INIT_PROMPT = [
   "# Task: Initialize REASONIX.md",
   "",

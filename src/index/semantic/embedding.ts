@@ -1,22 +1,4 @@
-/**
- * Embedding adapter — wraps Ollama's `/api/embeddings` endpoint.
- *
- * Ollama is the MVP backend choice for three reasons that match
- * Reasonix's pillars:
- *   1. **Local + zero telemetry** — runs on the user's machine, no
- *      data ever leaves it. Same property as the rest of Reasonix.
- *   2. **Zero native deps for us** — we talk plain HTTP+JSON; no
- *      ONNX runtime / WASM blob / platform-specific binary to ship.
- *      `npm install reasonix` stays trivial.
- *   3. **Reuse across projects** — if the user already has Ollama
- *      installed (likely for other LLM work), we cost them nothing
- *      to add. If they don't, one `ollama pull <model>` is the
- *      whole onboarding.
- *
- * Default model is `nomic-embed-text` — small (137M params), 768-dim
- * output, free, fast. Configurable via `embedModel` option for users
- * who want bigger / multilingual / domain-specific embedders.
- */
+/** Ollama `/api/embeddings` adapter — returns L2-normalizable Float32Array, throws actionable error when daemon unreachable. */
 
 const DEFAULT_OLLAMA_URL = "http://localhost:11434";
 const DEFAULT_EMBED_MODEL = "nomic-embed-text";
@@ -43,13 +25,6 @@ export class EmbeddingError extends Error {
   }
 }
 
-/**
- * Embed a single text. Returns a Float32Array (compact, fits the
- * cosine-scan inner loop), not a number[]. Throws `EmbeddingError`
- * with an actionable message when Ollama is unreachable so the
- * caller can surface install instructions instead of a generic
- * `fetch failed`.
- */
 export async function embed(text: string, opts: EmbedOptions = {}): Promise<Float32Array> {
   const baseUrl = opts.baseUrl ?? process.env.OLLAMA_URL ?? DEFAULT_OLLAMA_URL;
   const model = opts.model ?? process.env.REASONIX_EMBED_MODEL ?? DEFAULT_EMBED_MODEL;
@@ -121,23 +96,7 @@ export async function embed(text: string, opts: EmbedOptions = {}): Promise<Floa
   return out;
 }
 
-/**
- * Embed many texts sequentially (Ollama's HTTP server is single-
- * threaded per model anyway — parallel requests just queue inside
- * the daemon). Surfaces progress via `onProgress` and per-text
- * failures via `onError`.
- *
- * Returns one slot per input text. A null slot means that text
- * failed to embed (Ollama 500, transient model error, …). Callers
- * MUST handle nulls — typically by filtering them out alongside the
- * parallel chunk-metadata array. This is the load-bearing fault-
- * tolerance that lets one bad chunk (e.g. a malformed file that
- * sneaks past size checks, or a transient daemon hiccup) skip the
- * chunk instead of aborting a 30-minute index build.
- *
- * Aborts (signal-driven) still throw — those are global, not
- * per-chunk.
- */
+/** Per-chunk failures emit null + onError; aborts (global) still throw. */
 export async function embedAll(
   texts: readonly string[],
   opts: EmbedOptions & {
@@ -167,12 +126,6 @@ export async function embedAll(
   return out;
 }
 
-/**
- * Probe the Ollama daemon. Returns `{ ok: true, models: string[] }`
- * if reachable, `{ ok: false, error }` otherwise. Used by
- * `reasonix index` to fail fast with a friendly message before doing
- * any chunking work.
- */
 export async function probeOllama(
   opts: { baseUrl?: string; signal?: AbortSignal } = {},
 ): Promise<{ ok: true; models: string[] } | { ok: false; error: string }> {

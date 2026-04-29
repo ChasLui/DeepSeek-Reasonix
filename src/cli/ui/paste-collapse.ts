@@ -1,18 +1,5 @@
-/**
- * Collapse long user-typed input for display purposes.
- *
- * Problem: pasting a stack trace, log dump, or sample file into the
- * prompt box floods the Historical scrollback with a huge block — the
- * user can't see their previous turns, the assistant's replies, or
- * where the cursor is. Terminal UIs have shipped this shape for
- * years (iTerm's "pasted text" notation, Claude Code's preview).
- *
- * Split of concerns: the MODEL still gets the full text. This helper
- * only rewrites what we render in the Historical row. `@` expansions
- * and `!` bang outputs have their own display paths (unaffected).
- */
+/** Display-only — the MODEL always receives full paste text. */
 
-/** Defaults tuned to typical prose vs. typical code-paste shapes. */
 export const DEFAULT_PASTE_LINE_THRESHOLD = 40;
 export const DEFAULT_PASTE_CHAR_THRESHOLD = 2000;
 /** Lines kept visible at the head of a collapsed paste. */
@@ -35,19 +22,6 @@ export interface PasteCollapseResult {
   originalLines: number;
 }
 
-/**
- * Collapse `input` when it exceeds either the line OR char threshold.
- * Display shape:
- *
- *     ▸ pasted 2.3 KB (84 lines) — first 10 shown, full text sent to model
- *     line 1
- *     line 2
- *     …
- *     line 10
- *     … (74 more lines)
- *
- * Short input passes through unchanged — collapsed = false.
- */
 export function formatLongPaste(
   input: string,
   opts: PasteCollapseOptions = {},

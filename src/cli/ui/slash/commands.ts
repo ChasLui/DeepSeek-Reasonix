@@ -105,13 +105,6 @@ export const SLASH_COMMANDS: readonly SlashCommandSpec[] = [
       "cross-session cost dashboard (today / week / month / all-time · cache hit · vs Claude)",
   },
   {
-    cmd: "mouse",
-    argsHint: "[on|off]",
-    summary:
-      "toggle terminal mouse tracking · off by default (lets shift-drag copy work) · on enables wheel-scroll for log",
-    argCompleter: ["on", "off"],
-  },
-  {
     cmd: "copy",
     summary:
       "freeze + dump the rendered log to main screen so terminal scrollback + drag-select can copy across viewports · any key returns",
@@ -253,11 +246,6 @@ export const SLASH_COMMANDS: readonly SlashCommandSpec[] = [
   },
 ];
 
-/**
- * Filter the registry by a prefix string (without the leading `/`).
- * Empty prefix returns the full non-contextual list (plus code-mode
- * entries when `codeMode` is true). Case-insensitive.
- */
 export function suggestSlashCommands(prefix: string, codeMode = false): SlashCommandSpec[] {
   const p = prefix.toLowerCase();
   return SLASH_COMMANDS.filter((c) => {
@@ -266,17 +254,7 @@ export function suggestSlashCommands(prefix: string, codeMode = false): SlashCom
   });
 }
 
-/**
- * Classify the prompt buffer for argument completion. Returns `null`
- * when the buffer isn't in a slash-with-args state.
- *
- * Firing shape: input must start with `/<cmd> ` (space after a known
- * command). The character right after the space through end-of-buffer
- * is the "arg tail"; if the tail has NO internal whitespace the
- * picker is live (tail is the partial). If the tail has whitespace,
- * the user has moved past the first argument position and we surface
- * the usage hint only.
- */
+/** Picker fires only when arg tail has no internal whitespace; past that it's a usage hint. */
 export function detectSlashArgContext(input: string, codeMode = false): SlashArgContext | null {
   // `/cmd <rest>` — one space, rest captured up to end-of-buffer.
   const m = /^\/(\S+) ([\s\S]*)$/.exec(input);

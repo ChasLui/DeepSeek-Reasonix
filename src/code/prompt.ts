@@ -1,18 +1,3 @@
-/**
- * System prompt used by `reasonix code`. Teaches the model:
- *
- *   1. It has a filesystem MCP bridge rooted at the user's CWD.
- *   2. To modify files it emits SEARCH/REPLACE blocks (not
- *      `write_file` — that would whole-file rewrite and kill diff
- *      reviewability).
- *   3. Read first, edit second — SEARCH must match byte-for-byte.
- *   4. Be concise. The user can read a diff faster than prose.
- *
- * Kept short on purpose. Long system prompts eat context budget that
- * the Cache-First Loop is trying to conserve. The SEARCH/REPLACE spec
- * is the one unavoidable bloat; we trim everything else.
- */
-
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ESCALATION_CONTRACT, TUI_FORMATTING_RULES } from "../prompt-fragments.js";
@@ -211,26 +196,7 @@ ${ESCALATION_CONTRACT}
 ${TUI_FORMATTING_RULES}
 `;
 
-/**
- * Inject the project's `.gitignore` content into the system prompt as a
- * "respect this on top of the built-in denylist" hint. We don't parse
- * the file — we hand it to the model as-is. Truncate long ones so we
- * don't eat context budget on huge generated ignore lists.
- *
- * Stacking order (stable for cache prefix):
- *   base prompt → REASONIX.md → global MEMORY.md → project MEMORY.md → .gitignore
- */
-/**
- * Routing fragment appended to the code-mode system prompt when the
- * project has a semantic index built. Without this nudge the model
- * defaults to grep (`search_content`) for every query — semantic
- * search loses the "first attempt" battle on token-rich phrasings
- * even when the question is descriptive.
- *
- * Kept short and explicit: rules over rationale. The model that needs
- * this hint isn't reading three paragraphs of "why semantic search
- * is good"; it needs a clear if/else.
- */
+/** Stack order (stable for cache prefix): base → REASONIX.md → global → project → .gitignore. */
 const SEMANTIC_SEARCH_ROUTING = `
 
 # Search routing

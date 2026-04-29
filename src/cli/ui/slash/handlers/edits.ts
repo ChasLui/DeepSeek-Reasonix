@@ -56,15 +56,7 @@ const discard: SlashHandler = (args, _loop, ctx) => {
   return { info: ctx.codeDiscard(parsed.indices) };
 };
 
-/**
- * Bridge between the `args: string[]` shape commander gives us and the
- * comma-separated index syntax users actually type ("/apply 1,3-4").
- * The TUI's slash parser splits on whitespace, so `1,3-4` arrives as
- * `["1,3-4"]` and `1, 3, 4` arrives as `["1,", "3,", "4"]`. Re-joining
- * with commas + delegating to `parseEditIndices` handles both shapes.
- *
- * Empty `args` → `{ indices: [] }` (caller treats as "all").
- */
+/** Re-joins on `,` to handle both `1,3-4` and `1, 3, 4` shapes from the whitespace-split parser. */
 function parseIndicesArg(
   args: readonly string[],
   max: number,
@@ -175,22 +167,6 @@ const walk: SlashHandler = (_args, _loop, ctx) => {
   return { info: ctx.startWalkthrough() };
 };
 
-/**
- * `/checkpoint [name]` — snapshot every file the session has touched
- * (or recently queued an edit against) to a Reasonix-internal store.
- * Survives `reasonix code` exiting; restore later with `/restore`.
- *
- * Sub-commands:
- *   /checkpoint                     → list (same as /checkpoint list)
- *   /checkpoint <name>              → save a new checkpoint named <name>
- *   /checkpoint list                → enumerate stored snapshots
- *   /checkpoint forget <id|name>    → delete one
- *
- * Why this and not git auto-commit: doesn't pollute the user's git
- * history, works in non-git directories, doesn't fight with hooks /
- * branch state. See `feedback_internal_checkpoints_over_git.md` for
- * the full rationale.
- */
 const checkpoint: SlashHandler = (args, _loop, ctx) => {
   if (!ctx.codeRoot || !ctx.touchedFiles) {
     return {
@@ -256,15 +232,6 @@ const checkpoint: SlashHandler = (args, _loop, ctx) => {
   };
 };
 
-/**
- * `/restore <id|name>` — write a checkpoint's files back to disk.
- * Files that didn't exist at snapshot time get deleted. Files that
- * weren't in the snapshot are left untouched (the snapshot is
- * declarative for what it captured, not for the whole project).
- *
- * Doesn't touch the model's edit history or pending-edit queue —
- * `/undo` is for in-session reverts, `/restore` for cross-session.
- */
 const restore: SlashHandler = (args, _loop, ctx) => {
   if (!ctx.codeRoot) {
     return {

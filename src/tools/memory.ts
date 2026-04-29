@@ -1,18 +1,4 @@
-/**
- * `remember` / `forget` / `recall_memory` — tools that let the model
- * read and write the user-memory store across sessions.
- *
- * Scope rules:
- *   - `global`  — always available (no sandbox needed).
- *   - `project` — requires a `projectRoot` on MemoryStore. In chat mode
- *     (no sandbox), the tools still register but a `scope=project` call
- *     returns a structured refusal so the model can try `global` instead.
- *
- * Memory changes are written eagerly but NOT re-loaded into the prefix
- * mid-session (cache invariant). The user notices at `/new` or the next
- * launch — or they can read fresh content via `recall_memory` which
- * always hits disk.
- */
+/** Writes are eager but the prefix is NOT re-loaded mid-session — keeps prompt-cache stable. */
 
 import type { ToolRegistry } from "../tools.js";
 import {

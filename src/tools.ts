@@ -2,14 +2,6 @@ import { truncateForModel, truncateForModelByTokens } from "./mcp/registry.js";
 import { analyzeSchema, flattenSchema, nestArguments } from "./repair/flatten.js";
 import type { JSONSchema, ToolSpec } from "./types.js";
 
-/**
- * Per-call context a tool `fn` can optionally consume. Today the only
- * field is `signal`, plumbed through so long-running tools (MCP calls,
- * HTTP requests) can abort when the user presses Esc. Omitted fields
- * stay optional — tools written against the pre-0.4.9 signature keep
- * working; they just ignore cancellation, which is fine for fast
- * local work where "await finishes" happens before the next tick anyway.
- */
 export interface ToolCallContext {
   signal?: AbortSignal;
 }
@@ -18,58 +10,24 @@ export interface ToolDefinition<A = any, R = any> {
   name: string;
   description?: string;
   parameters?: JSONSchema;
-  /**
-   * Marks a tool as read-only: safe to invoke during plan mode. `true`
-   * for tools that only observe (read_file, list_directory, search, web
-   * fetch/search). Leave undefined / `false` for anything that can write,
-   * execute, or mutate state.
-   *
-   * The registry enforces this at dispatch: non-readonly tools called
-   * while `planMode` is on return a refusal string the model can
-   * learn from, instead of actually running.
-   */
+  /** Safe in plan mode — registry refuses non-readonly calls when `planMode` is on. */
   readOnly?: boolean;
-  /**
-   * Dynamic read-only check for tools whose safety depends on arguments
-   * — `run_command` with an allowlisted argv is safe, `run_command
-   * rm -rf` isn't. Called with the parsed arguments; `true` means "treat
-   * as read-only for plan mode". Takes precedence over `readOnly` when
-   * both are set.
-   */
+  /** Per-args check; takes precedence over `readOnly`. e.g. `run_command` + allowlisted argv. */
   readOnlyCheck?: (args: A) => boolean;
   fn: (args: A, ctx?: ToolCallContext) => R | Promise<R>;
 }
 
 interface InternalTool extends ToolDefinition {
-  /**
-   * Pillar 3 — flatten metadata. Set when the registered schema is deep
-   * (>2 levels) or wide (>10 leaf params), conditions on which DeepSeek
-   * V3/R1 are known to drop arguments. We advertise the flattened schema
-   * to the model, then re-nest the model's args before calling fn.
-   */
+  /** Set when schema is deep (>2 levels) or wide (>10 leaves) — DeepSeek V3/R1 drop args otherwise. */
   flatSchema?: JSONSchema;
 }
 
 export interface ToolRegistryOptions {
-  /**
-   * Auto-flatten schemas that exceed depth/width thresholds before sending
-   * them to the model. Re-nests arguments transparently on dispatch.
-   * Default: true. Pass false to opt out.
-   */
+  /** Auto-flatten + re-nest at dispatch; default true. */
   autoFlatten?: boolean;
 }
 
-/**
- * Callback form for `setToolInterceptor` — receives the tool name and
- * already-parsed arguments; returns a string to short-circuit dispatch
- * (the returned value becomes the tool result the model sees), or
- * `null` / `undefined` to fall through to the registered tool fn.
- *
- * Used by `reasonix code`'s edit-mode gate: `edit_file` / `write_file`
- * are intercepted in "review" mode (queued into pendingEdits, returning
- * "queued for /apply") or handled inline in "auto" mode (snapshot +
- * apply, then surface an undo banner). Other tools pass through.
- */
+/** String return short-circuits dispatch; null/undefined falls through to the tool fn. */
 export type ToolInterceptor = (
   name: string,
   args: Record<string, unknown>,
@@ -78,19 +36,7 @@ export type ToolInterceptor = (
 export class ToolRegistry {
   private readonly _tools = new Map<string, InternalTool>();
   private readonly _autoFlatten: boolean;
-  /**
-   * When true, `dispatch` refuses any tool whose `readOnly` flag isn't
-   * set (and whose `readOnlyCheck` doesn't pass on the specific args).
-   * Drives `reasonix code`'s Plan Mode — the model can still explore
-   * via read tools but its writes and non-allowlisted shell calls are
-   * bounced until the user approves a submitted plan.
-   */
   private _planMode = false;
-  /**
-   * Optional hook run after arg parsing but before tool.fn. Lets the TUI
-   * reroute specific tool calls (e.g. edit_file in review mode) without
-   * modifying the tool definitions themselves.
-   */
   private _interceptor: ToolInterceptor | null = null;
 
   constructor(opts: ToolRegistryOptions = {}) {
@@ -107,11 +53,7 @@ export class ToolRegistry {
     return this._planMode;
   }
 
-  /**
-   * Install or clear the dispatch interceptor. At most one interceptor
-   * is active at a time — calling twice replaces the previous. Pass
-   * `null` to remove.
-   */
+  /** At most one interceptor active; calling twice replaces. */
   setToolInterceptor(fn: ToolInterceptor | null): void {
     this._interceptor = fn;
   }

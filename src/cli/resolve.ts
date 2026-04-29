@@ -1,17 +1,4 @@
-/**
- * Merge config defaults with CLI flags into the concrete options that
- * `chatCommand` / `runCommand` need.
- *
- * Precedence (highest wins):
- *   1. Explicit per-setting CLI flag (`--model`, `--harvest`, `--branch`, `--mcp`)
- *   2. Explicit `--preset <name>` CLI flag
- *   3. `config.preset` from `~/.reasonix/config.json` (set by `reasonix setup`)
- *   4. Hardcoded "auto" preset defaults (flash → pro on hard turns)
- *
- * Keeping this logic in one place — rather than duplicating across
- * `chat` and `run` — means the precedence rule only lives in one unit
- * test and the shape of the merge is identical for both commands.
- */
+/** Precedence: per-setting flag > --preset > config.preset > "auto" defaults. */
 
 import { type PresetName, type ReasonixConfig, readConfig } from "../config.js";
 import { resolvePreset } from "./ui/presets.js";
@@ -99,16 +86,6 @@ function resolveSession(
   return "default";
 }
 
-/**
- * Resolve the `-c/--continue` flag into a concrete `(session, forceResume)`
- * pair. When the flag is set we ask `getLatestSession` for the most-recently-
- * touched saved session and skip the picker; if nothing is on disk we
- * fall back silently to `fallbackSession` after emitting a single warning
- * line via `warn`.
- *
- * Pure & testable: callers inject the fs lookup. `cli/index.ts` plugs in
- * `() => listSessions()[0]`; tests pass a deterministic stub.
- */
 export function resolveContinueFlag(
   flag: boolean | undefined,
   fallbackSession: string | undefined,

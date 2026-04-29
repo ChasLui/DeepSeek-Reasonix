@@ -1,19 +1,4 @@
-/**
- * Pure-TS port of DeepSeek's V3 tokenizer. Reads the slimmed+gzipped
- * HuggingFace-format tokenizer data shipped at
- * `data/deepseek-tokenizer.json.gz` and implements enough of the HF
- * pipeline (Split pre-tokenizers → ByteLevel → BPE) to count tokens
- * offline without pulling the `@lenml/tokenizers` or native Rust deps.
- *
- * Accuracy target: within ~3% of the API-returned `usage.prompt_tokens`
- * for mixed CJK+English+code input. Exact-to-API match would also
- * require replaying the Jinja chat template (role markers / tool call
- * framing); we intentionally skip that — for a gauge/UI estimate the
- * raw-text count is the useful number.
- *
- * Scope: ENCODE-SIDE ONLY. We don't need decode for counting; adding
- * it later is trivial via the inverse byte-level table.
- */
+/** Encode-only DeepSeek V3 tokenizer port; ~3% drift vs API (chat-template framing not replayed). */
 
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -62,25 +47,12 @@ interface LoadedTokenizer {
   mergeRank: Map<string, number>;
   splitRegexes: RegExp[];
   byteToChar: string[];
-  /**
-   * Non-special added tokens (e.g. `<think>`, `<｜fim▁hole｜>`) that the
-   * HF tokenizer recognizes as atomic units when they appear inline in
-   * the text. Special tokens like `<｜begin▁of▁sentence｜>` are NOT in
-   * this list — the model ignores them when they appear in user text
-   * (the default HF `split_special_tokens=False` behavior), so we do
-   * the same: they get tokenized byte-by-byte, not as the special ID.
-   */
+  /** Non-special added tokens only — special tokens in user text tokenize byte-by-byte (HF default). */
   addedPattern: RegExp | null;
   addedMap: Map<string, number>;
 }
 
-/**
- * GPT-2 byte-to-unicode mapping. Covers every byte 0..255 with a
- * deterministic visible-printable unicode char — this is what lets the
- * byte-level BPE show up in JSON vocabs as readable strings (`Ġ` for
- * space, `Ċ` for `\n`, etc). Identical across every byte-level BPE
- * tokenizer DeepSeek ships.
- */
+/** GPT-2 byte→unicode map; lets byte-level BPE vocab serialize as readable JSON strings. */
 function buildByteToChar(): string[] {
   const result: string[] = new Array(256);
   const bs: number[] = [];
@@ -104,20 +76,7 @@ function buildByteToChar(): string[] {
 
 let cached: LoadedTokenizer | null = null;
 
-/**
- * Find the bundled tokenizer data file. Resolution order (first hit wins):
- * 1. `REASONIX_TOKENIZER_PATH` env var (tests / custom builds).
- * 2. `../data/deepseek-tokenizer.json.gz` relative to this module —
- *    covers dev (src/tokenizer.ts → data/) AND production bundled at
- *    dist/index.js → dist/../data = data/.
- * 3. `../../data/deepseek-tokenizer.json.gz` — covers the CLI bundle
- *    at dist/cli/index.js → dist/cli/../../data = data/. Without this
- *    step 2 resolves to dist/data/ which doesn't exist (the data file
- *    is shipped at package root per package.json `files` entry), and
- *    every step() preflight crashes the loop with ENOENT.
- * 4. `require.resolve("reasonix/package.json")` — last-resort package
- *    root lookup for unusual bundlers.
- */
+/** Two ../data candidates needed: dist/index.js AND dist/cli/index.js resolve to different roots. */
 function resolveDataPath(): string {
   if (process.env.REASONIX_TOKENIZER_PATH) return process.env.REASONIX_TOKENIZER_PATH;
   const candidates: string[] = [];
@@ -196,11 +155,6 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/**
- * Apply one "Isolated" Split: the matches become their own pre-tokens,
- * stretches between matches pass through unchanged. Empty pre-tokens
- * are dropped so downstream stages don't see them.
- */
 function applySplit(chunks: string[], re: RegExp): string[] {
   const out: string[] = [];
   for (const chunk of chunks) {
@@ -229,12 +183,6 @@ function byteLevelEncode(s: string, byteToChar: string[]): string {
   return out;
 }
 
-/**
- * Standard BPE merge loop. Starts from single byte-level chars and
- * repeatedly applies the lowest-rank merge until none remain. O(n²)
- * in chunk length, which is fine because chunks are ≤ a few hundred
- * byte-level chars after pre-tokenization (and most are <50).
- */
 function bpeEncode(piece: string, mergeRank: Map<string, number>): string[] {
   if (piece.length <= 1) return piece ? [piece] : [];
   let word: string[] = Array.from(piece);
@@ -261,15 +209,6 @@ function bpeEncode(piece: string, mergeRank: Map<string, number>): string[] {
   return word;
 }
 
-/**
- * Tokenize a UTF-8 string into DeepSeek token IDs. Mirrors the HF
- * pipeline: (1) isolate non-special added tokens so they stay atomic,
- * (2) for each in-between segment run the three Split regexes, (3)
- * byte-level encode, (4) BPE merge, (5) look up vocab IDs.
- *
- * Not reentrancy-hazardous: loads a module-level singleton on first
- * call and reuses it. Subsequent calls are pure compute.
- */
 export function encode(text: string): number[] {
   if (!text) return [];
   const t = loadTokenizer();
@@ -311,23 +250,11 @@ export function encode(text: string): number[] {
   return ids;
 }
 
-/**
- * Fast path for UI: we only need the count, not the IDs. Saves a
- * per-call array allocation and lets callers batch large logs
- * without holding the full ID stream.
- */
 export function countTokens(text: string): number {
   return encode(text).length;
 }
 
-/**
- * Estimate the tokens a full conversation would cost. Sums raw-text
- * counts for every message's content; we do NOT add overhead for the
- * chat template's role markers (`<｜User｜>`, `<｜Assistant｜>`) because
- * the exact framing varies between the chat/reasoner templates and
- * DeepSeek applies them server-side anyway. Empirically adds ~3-6%
- * to the real `prompt_tokens` — callers who care can post-multiply.
- */
+/** Doesn't add chat-template framing overhead; under-counts ~3-6% vs real `prompt_tokens`. */
 export function estimateConversationTokens(
   messages: Array<{ content?: string | null; tool_calls?: unknown }>,
 ): number {
@@ -346,18 +273,7 @@ export function estimateConversationTokens(
   return total;
 }
 
-/**
- * Estimate the tokens a full DeepSeek request would cost: the
- * conversation-side tokens (what `estimateConversationTokens` already
- * counts) PLUS the serialized tool-spec payload. Tool specs ride in
- * their own JSON blob in the request body, not folded into any
- * message's `content`, so they need a separate count to land an
- * accurate preflight estimate.
- *
- * Returned number matches what `/context` displays for "next request"
- * — reuse this helper anywhere (preflight guard, diagnostics, UI) to
- * keep the two values from drifting.
- */
+/** Tool specs ride in a separate request blob; must be counted separately for an accurate preflight. */
 export function estimateRequestTokens(
   messages: Array<{ content?: string | null; tool_calls?: unknown }>,
   toolSpecs?: ReadonlyArray<unknown> | null,

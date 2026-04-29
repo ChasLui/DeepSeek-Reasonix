@@ -1,27 +1,4 @@
-/**
- * `/api/modal` — read + resolve currently-active modals.
- *
- *   GET  /api/modal           → snapshot of the active modal (or null)
- *   POST /api/modal/resolve   → submit a resolution choice
- *
- * The web Chat tab listens on `modal-up` / `modal-down` SSE events for
- * realtime; this endpoint exists so a freshly-connected client can
- * paint the modal that's already up.
- *
- * Resolution body is `{ kind, choice, text? }` shaped per kind:
- *   - `shell`        — choice: "run_once" | "always_allow" | "deny"
- *   - `choice`       — choice: { kind: "pick"|"custom"|"cancel", ... }
- *   - `plan`         — choice: "approve" | "refine" | "cancel" (+ text)
- *   - `edit-review`  — choice: "apply" | "reject" | "apply-rest-of-turn" | "flip-to-auto"
- *   - `workspace`    — choice: "switch" | "deny"
- *   - `checkpoint`   — choice: "continue" | "revise" | "stop" (+ text on revise)
- *   - `revision`     — choice: "accept" | "reject"
- *
- * Each kind dispatches to a separate resolve callback on
- * `DashboardContext`; the App.tsx wiring routes those into the same
- * handlers the TUI uses, so a click on the web modal is
- * indistinguishable from a click in the terminal.
- */
+/** GET snapshots the active modal so a fresh client paints what's already up; POST routes resolution into the same handlers the TUI uses. */
 
 import type { DashboardContext } from "../context.js";
 import type { ApiResult } from "../router.js";

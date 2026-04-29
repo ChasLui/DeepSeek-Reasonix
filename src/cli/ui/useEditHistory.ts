@@ -21,77 +21,27 @@ export interface UndoBannerState {
 export interface UseEditHistoryResult {
   /** Post-auto-apply banner state — rendered at the bottom for 5s. */
   undoBanner: UndoBannerState | null;
-  /**
-   * Append a batch of successfully-applied edits into the session's
-   * edit history. If the current turn already has an open entry,
-   * append into it (first-wins-per-path so `/undo` restores the
-   * pre-turn state, not an intermediate half-edit). Otherwise open a
-   * new entry.
-   */
+  /** First-wins-per-path within an open turn — `/undo` restores pre-turn state, not a half-edit. */
   recordEdit: (
     source: string,
     blocks: readonly EditBlock[],
     results: readonly ApplyResult[],
     snaps: readonly EditSnapshot[],
   ) => void;
-  /**
-   * Show the post-auto-apply undo banner for 5 seconds. Overwrites any
-   * prior banner and replaces the auto-dismiss timer so multiple
-   * edits inside a single turn don't prematurely expire the window.
-   */
+  /** Replaces the dismiss timer so multiple edits in one turn don't prematurely expire the window. */
   armUndoBanner: (results: ApplyResult[]) => void;
-  /**
-   * `/undo` — revert applied edits.
-   *   `/undo`                → newest non-fully-undone entry, all its
-   *                            remaining (non-undone) files.
-   *   `/undo <id>`           → that specific entry's remaining files.
-   *   `/undo <id> <path>`    → just that one file in that entry.
-   * Works as long as the session is alive; no 5-second banner limit.
-   */
   codeUndo: (args?: readonly string[]) => string;
-  /**
-   * `/history` — list every edit batch this session. Each entry's id
-   * is the token for `/show <id>` and the target of per-batch undo.
-   */
   codeHistory: () => string;
-  /**
-   * `/show` — inspect a stored edit batch.
-   *   `/show`                → newest non-fully-undone entry, per-file summary.
-   *   `/show <id>`           → that entry's per-file summary.
-   *   `/show <id> <path>`    → full diff of one file in that entry.
-   */
   codeShowEdit: (args?: readonly string[]) => string;
-  /**
-   * Seal the in-progress entry so the next edit opens a fresh one.
-   * Called at handleSubmit start — prior turns stay intact for
-   * `/history` and `/undo` to walk through independently.
-   */
+  /** Sealed at handleSubmit start so prior turns stay intact for independent /history walks. */
   sealCurrentEntry: () => void;
-  /**
-   * True when there's at least one history entry that isn't fully
-   * undone yet. Used by the `u` keybind and the bottom ModeStatusBar.
-   * Reads the ref fresh — callers must re-read each time.
-   */
+  /** Reads the ref fresh — callers must re-read each time. */
   hasUndoable: () => boolean;
-  /**
-   * Repo-relative paths the session has edited so far, deduped. Used by
-   * `/checkpoint` to capture "what's been touched in this run". Includes
-   * paths from undone batches too — the snapshot value is "what files
-   * could the user want to roll back later?", and an undone batch still
-   * represents a file the user was thinking about.
-   */
+  /** Includes paths from undone batches — they're still files the user was thinking about. */
   touchedPaths: () => string[];
 }
 
-/**
- * Session-scoped edit history and undo machinery for `reasonix code`.
- * Keeps the history ref + snapshot bookkeeping out of App.tsx so the
- * parent only sees a small API: append, banner, three slash handlers,
- * a turn sealer, and an undoable probe.
- *
- * `codeMode` is optional because the hook is always mounted but its
- * handlers turn into no-ops when code mode isn't active.
- */
+/** `codeMode` undefined → all handlers no-op (hook is always mounted). */
 export function useEditHistory(codeMode: { rootDir: string } | undefined): UseEditHistoryResult {
   const editHistory = useRef<EditHistoryEntry[]>([]);
   const nextHistoryId = useRef(1);

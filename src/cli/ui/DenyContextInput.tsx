@@ -18,7 +18,10 @@ export function DenyContextInput({
   const [value, setValue] = useState("");
 
   useKeystroke((ev) => {
-    if (ev.paste) return;
+    if (ev.paste) {
+      setValue((v) => v + ev.input);
+      return;
+    }
     if (ev.escape) {
       onCancel();
       return;

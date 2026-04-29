@@ -44,13 +44,7 @@ The signal isn't a topic list — it's: "if I'm wrong about this, is it because 
 
 ${ESCALATION_CONTRACT}`;
 
-/**
- * Validate a `--budget` flag value. Returns `undefined` (no cap) when
- * unset, NaN, or non-positive — the loop interprets `undefined` as
- * "no budget", so a malformed flag falls back to the default rather
- * than aborting the launch. The slash command uses the same lenient
- * parse so behavior matches at runtime.
- */
+/** Lenient: malformed → undefined (no cap) so a bad flag doesn't abort launch. */
 function parseBudgetFlag(raw: number | undefined): number | undefined {
   if (raw === undefined) return undefined;
   if (!Number.isFinite(raw) || raw <= 0) {

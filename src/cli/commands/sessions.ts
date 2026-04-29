@@ -1,14 +1,3 @@
-/**
- * `reasonix sessions` — CLI equivalent of the `/sessions` slash command.
- *
- * Two modes:
- *   - `reasonix sessions`           list every session under ~/.reasonix/sessions/
- *   - `reasonix sessions <name>`    dump one session's messages in readable form
- *
- * Neither needs an API key — pure filesystem reads of JSONL files written
- * by previous chat runs.
- */
-
 import { listSessions, loadSessionMessages, sessionPath } from "../../index.js";
 import type { ChatMessage } from "../../index.js";
 

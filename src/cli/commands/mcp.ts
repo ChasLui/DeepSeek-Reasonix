@@ -1,11 +1,3 @@
-/**
- * `reasonix mcp <subcmd>` — the MCP discovery / helper surface.
- *
- * Currently one subcommand: `list`. Prints a curated catalog of popular
- * MCP servers with their `--mcp` commands ready to copy-paste. More
- * subcommands (`init`, `try`, etc.) may land in later alphas.
- */
-
 import { MCP_CATALOG, mcpCommandFor } from "../../mcp/catalog.js";
 
 export interface McpListOptions {

@@ -1,11 +1,4 @@
-/**
- * `/api/overview` — single GET that returns everything the live
- * cockpit panel needs. Bundling avoids 6 small round-trips on every
- * 2-second poll.
- *
- * Standalone mode populates only the disk-readable fields and leaves
- * the runtime ones as `null`; the SPA renders dashes for those.
- */
+/** Bundled GET — avoids 6 round-trips per 2s poll; runtime fields null in standalone mode. */
 
 import { readConfig } from "../../config.js";
 import { indexExists } from "../../index/semantic/builder.js";
@@ -20,7 +13,6 @@ export interface OverviewResponse {
   mode: "standalone" | "attached";
   /** Latest published version, or null when the background fetch hasn't resolved. */
   latestVersion: string | null;
-  // ---------- Live-only fields (null in standalone mode) ----------
   session: string | null;
   cwd: string | null;
   model: string | null;
@@ -31,22 +23,11 @@ export interface OverviewResponse {
   mcpServerCount: number | null;
   /** Total registered tools (builtin + MCP-bridged + skill tools). */
   toolCount: number | null;
-  /**
-   * Persisted preset (auto / flash / pro). Surfaced here so the chat
-   * header's preset picker can poll one endpoint instead of two.
-   */
   preset: string;
   /** Persisted reasoning_effort (high / max). Same rationale as preset. */
   reasoningEffort: string;
   /** Live session stats — null in standalone mode. */
   stats: DashboardStats | null;
-  /**
-   * Whether `<cwd>/.reasonix/semantic/` carries a built index. Drives
-   * the Chat banner that nudges users toward the Semantic panel when
-   * the tool would be unavailable. `null` in standalone mode (no
-   * project root to check). Cheap probe — `indexExists` just stats
-   * a file.
-   */
   semanticIndexExists: boolean | null;
 }
 

@@ -1,17 +1,3 @@
-/**
- * `reasonix update` — self-upgrade command.
- *
- * Talks to the npm registry, compares against the running version,
- * and either runs `npm install -g reasonix@latest` (global install)
- * or advises how to refresh the npx cache (ephemeral install).
- *
- * The decision logic is factored into `planUpdate()` so it can be
- * unit-tested without spawning child processes or hitting the
- * network. `updateCommand()` is the thin CLI wrapper that calls
- * `getLatestVersion`, passes the result into `planUpdate`, and
- * executes any suggested command.
- */
-
 import { spawn } from "node:child_process";
 import { VERSION, compareVersions, getLatestVersion, isNpxInstall } from "../../version.js";
 
@@ -21,11 +7,6 @@ export interface UpdatePlan {
   action: UpdateAction;
   /** Human-readable summary; the CLI prints this verbatim. */
   message: string;
-  /**
-   * Argv for the install command when `action === "run-npm-install"`.
-   * Absent otherwise. Kept as array so the CLI can pass it straight
-   * to `spawn` without re-parsing shell syntax.
-   */
   command?: string[];
 }
 
@@ -36,15 +17,7 @@ export interface PlanUpdateInput {
   npx?: boolean;
 }
 
-/**
- * Pure decision function: given current + latest + install kind,
- * decide what the CLI should do. No I/O.
- *
- *   newer-local     — current > latest (dev build, local publish)
- *   up-to-date      — current === latest
- *   npx-hint        — current < latest AND running under npx
- *   run-npm-install — current < latest AND running as a real install
- */
+/** Pure decision — split out so tests don't need to spawn child processes or hit the network. */
 export function planUpdate(input: PlanUpdateInput): UpdatePlan {
   const diff = compareVersions(input.current, input.latest);
   if (diff > 0) {
@@ -105,11 +78,6 @@ function defaultSpawn(argv: string[]): Promise<number> {
   });
 }
 
-/**
- * Run the update command. Prints a banner, resolves the latest
- * version, prints the plan, and (unless `--dry-run`) executes the
- * install when applicable.
- */
 export async function updateCommand(opts: UpdateCommandOptions = {}): Promise<void> {
   const write = opts.write ?? ((m: string) => process.stdout.write(m));
   const exit = opts.exit ?? ((c: number) => process.exit(c));

@@ -1,16 +1,4 @@
-/**
- * `/semantic` slash — show whether semantic_search is set up for
- * this project, and what to run if not.
- *
- * Behavior is purely informational. The actual setup happens via
- * `reasonix index` in the user's shell — same pattern `/setup` and
- * `/update` use. Doing the install / build inline would mean
- * suspending Ink and bringing it back, which is fragile (especially
- * the ANSI-cursor-up paths Windows shells already mishandle).
- *
- * All user-facing strings come from the i18n table so Chinese-locale
- * users see Chinese; everyone else gets English.
- */
+/** Informational only — actual install/build runs via `reasonix index` to avoid suspending Ink. */
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -38,16 +26,6 @@ const semantic: SlashHandler = (_args, _loop, ctx) => {
   return { info: "▸ checking semantic_search status…" };
 };
 
-/**
- * Async status renderer. The slash returns a synchronous
- * "fetching…" placeholder, then this function — invoked via
- * ctx.postInfo from the slash dispatcher wrapper — posts the real
- * status when probes finish. Keeps the slash handler signature sync
- * (the established pattern across the codebase).
- *
- * Exposed separately so tests can call it without faking the slash
- * machinery.
- */
 export async function renderSemanticStatus(rootDir: string): Promise<string> {
   const lines: string[] = [t("slashHeader"), ""];
   const indexExists = await indexFileExists(rootDir);
@@ -93,12 +71,7 @@ interface IndexSummary {
   files: number;
 }
 
-/**
- * Cheap summary of the index for the `/semantic` status panel.
- * Counts JSONL lines (each = one chunk) and unique paths via a Set.
- * For typical projects (<10k chunks) this is well under 50ms; for
- * very large repos we cap reads at 10MB to keep `/semantic` snappy.
- */
+/** 10MB read cap so `/semantic` stays snappy on very large repos. */
 async function readIndexMeta(rootDir: string): Promise<IndexSummary | null> {
   const dataPath = path.join(rootDir, ".reasonix", "semantic", "index.jsonl");
   try {

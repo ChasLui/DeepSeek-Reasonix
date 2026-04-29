@@ -1,28 +1,4 @@
-/**
- * `change_workspace` — model-callable workspace switching, gated on
- * an explicit user confirmation in the TUI.
- *
- * The tool function itself never performs the switch. It validates
- * the requested path and throws {@link WorkspaceConfirmationError},
- * which the loop serializes into the tool result. App.tsx detects the
- * marker, mounts a confirmation modal, and on approval drives the
- * actual `setCwd` callback (the same one the `/cwd` slash uses).
- *
- * Why this shape (mirrors `run_command`):
- *   - The tool fn is pure / synchronous — no React or App-state
- *     coupling lives in tools/.
- *   - The model gets a clear "stop and wait" message in the tool
- *     result, which prevents a chain of switches before the user
- *     has had a chance to confirm even one.
- *   - Approval / denial flow back through a synthetic user message,
- *     so the model sees outcome on its next turn.
- *
- * Why no `always_allow`: workspace switches are per-target by nature
- * (each target is a different project root with different secrets,
- * different .gitignore, different memory); there's no useful "I trust
- * the model to switch to ANY directory it picks" allowlist semantics.
- * The modal offers Switch / Deny only.
- */
+/** Tool fn validates + throws WorkspaceConfirmationError; App owns the actual setCwd. No always_allow — each root is its own trust scope. */
 
 import { existsSync, statSync } from "node:fs";
 import * as pathMod from "node:path";
@@ -43,15 +19,7 @@ export interface ChangeWorkspaceArgs {
   path: string;
 }
 
-/**
- * Register `change_workspace` on `registry`. The tool always throws
- * `WorkspaceConfirmationError(absolutePath)` after path validation —
- * the actual swap happens in App.tsx when the user approves the
- * modal. Path validation matches `/cwd`'s: must exist, must be a
- * directory, supports `~` expansion and relative paths (resolved
- * against `process.cwd()` at call time, NOT the session root, so
- * a model emitting `~/projects/foo` lands where the user expects).
- */
+/** Throws WorkspaceConfirmationError; App.tsx does the actual swap on user approval. */
 export function registerWorkspaceTool(registry: ToolRegistry): ToolRegistry {
   registry.register({
     name: "change_workspace",

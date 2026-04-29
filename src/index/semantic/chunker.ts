@@ -1,21 +1,4 @@
-/**
- * Code chunker — walks a directory and splits source files into
- * embedding-sized windows with `{path, startLine, endLine, text}`
- * metadata so semantic-search results carry a precise file:line
- * citation back into the conversation.
- *
- * Why line-window (not AST) for MVP:
- *   - Language-agnostic: works on TS, Py, Rust, Go, Markdown,
- *     config files — no per-language parser to ship and maintain.
- *   - Predictable cost: a 500-line file produces ~10 chunks at
- *     `windowLines=60, overlap=12`. Embedding cost scales linearly
- *     with file size, no surprises.
- *   - Cite-friendly: every chunk has exact line range. Click-through
- *     in the UI is `path:startLine`.
- *
- * AST-aware chunking (split per function/class) is a real upgrade
- * for retrieval quality and is on the post-MVP list.
- */
+/** Line-window chunker (not AST) — language-agnostic, every chunk carries exact startLine/endLine for cite-back. */
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -36,26 +19,14 @@ export interface ChunkOptions {
   overlap?: number;
   /** Skip files larger than this (bytes). Default 256 KB. */
   maxFileBytes?: number;
-  /**
-   * Hard ceiling on chunk text length, in characters. A 60-line slice
-   * through a JSON blob or minified bundle can blow past nomic-embed-
-   * text's context window (8K tokens, ~32K chars worst-case but as
-   * little as 8K chars for non-English / dense token streams).
-   * Default 4000 — comfortably under 1024 tokens for most code, with
-   * room to spare for tokenizers that fragment unicode aggressively.
-   */
+  /** Default 4000 — keeps unicode-heavy slices under nomic-embed-text's 8K-token window. */
   maxChunkChars?: number;
 }
 
 /** Default character cap per chunk — sized for nomic-embed-text. */
 export const DEFAULT_MAX_CHUNK_CHARS = 4000;
 
-/**
- * Default skip-list. Mirrors what `directory_tree` already prunes
- * plus binary extensions that have zero retrieval value (and waste
- * embedding tokens). Keep this in sync with src/tools/filesystem.ts
- * if either drifts.
- */
+/** Keep in sync with src/tools/filesystem.ts directory_tree. */
 const SKIP_DIRS: ReadonlySet<string> = new Set([
   "node_modules",
   ".git",
@@ -132,16 +103,6 @@ const BINARY_EXTS: ReadonlySet<string> = new Set([
   ".db",
 ]);
 
-/**
- * Split file content into overlapping line windows. `overlap`
- * preserves context across chunk boundaries — a function whose
- * signature is on the boundary still appears in two adjacent chunks
- * so a query about it ranks both.
- *
- * Any window whose text exceeds `maxChunkChars` is post-split into
- * multiple sub-chunks at line boundaries (or hard-truncated for a
- * single overlong line) so every yielded chunk is safe to embed.
- */
 export function chunkText(
   text: string,
   filePath: string,
@@ -172,22 +133,6 @@ export function chunkText(
   return chunks;
 }
 
-/**
- * Post-process a window so no chunk exceeds `maxChars`. We try to
- * preserve full-line granularity for retrieval quality:
- *
- *   - Walk the window line by line, accumulating into a buffer until
- *     adding the next line would exceed `maxChars`. Flush the buffer
- *     as a sub-chunk, restart at that line.
- *   - A single line longer than `maxChars` (long minified statement
- *     / base64 blob / unicode-heavy line) gets emitted as its own
- *     chunk, hard-truncated to `maxChars`. Coverage loss is acceptable
- *     — minified content has near-zero retrieval value.
- *
- * Idempotent: chunks already under `maxChars` pass through unchanged
- * (well — the buffer logic still emits them as a single sub-chunk,
- * but the result is byte-equivalent).
- */
 function safeSplit(chunk: CodeChunk, maxChars: number): CodeChunk[] {
   if (chunk.text.length <= maxChars) return [chunk];
   const lines = chunk.text.split("\n");
@@ -233,17 +178,6 @@ function safeSplit(chunk: CodeChunk, maxChars: number): CodeChunk[] {
   return out;
 }
 
-/**
- * Walk `root` recursively and yield code chunks for every indexable
- * file. Pure async generator so callers can pipe through embedding +
- * progress reporting without buffering the whole repo in memory.
- *
- * The generator silently skips files larger than `maxFileBytes` —
- * generated bundles, vendored data, etc. — to avoid one huge file
- * dominating the budget. The threshold is intentionally low; the
- * real signal in oversized files is rare and the embedding cost
- * scales with chunk count.
- */
 export async function* walkChunks(
   root: string,
   opts: ChunkOptions = {},
@@ -308,10 +242,6 @@ export async function* walkChunks(
   }
 }
 
-/**
- * Convenience: collect all chunks from a directory into an array.
- * For very large repos prefer streaming via `walkChunks`.
- */
 export async function chunkDirectory(root: string, opts: ChunkOptions = {}): Promise<CodeChunk[]> {
   const out: CodeChunk[] = [];
   for await (const c of walkChunks(root, opts)) out.push(c);

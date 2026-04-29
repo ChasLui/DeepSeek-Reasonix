@@ -18,13 +18,6 @@ export interface DiffOptions {
   tui?: boolean;
 }
 
-/**
- * Compare two transcripts. Three output paths, picked in order:
- *   - If --md is passed: write the markdown report. Also prints the stdout
- *     summary so the user sees what was exported.
- *   - If --print, no TTY, or --md (see above): stdout summary table.
- *   - Otherwise: interactive Ink TUI with split-pane + n/N divergence jump.
- */
 export async function diffCommand(opts: DiffOptions): Promise<void> {
   const aParsed = readTranscript(opts.a);
   const bParsed = readTranscript(opts.b);

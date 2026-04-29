@@ -17,12 +17,7 @@ export interface UseCompletionPickersParams {
   input: string;
   setInput: (v: string) => void;
   codeMode: { rootDir: string } | undefined;
-  /**
-   * Live working directory for the @-mention file picker. May differ
-   * from `codeMode.rootDir` after a `/cwd` switch — `codeMode` keeps
-   * the launch root for "is this a code-mode session?" checks while
-   * this drives the actual file listing.
-   */
+  /** May differ from `codeMode.rootDir` after `/cwd` — drives file listing, not the mode check. */
   rootDir: string;
   models: string[] | null;
   mcpServers: McpServerSummary[] | undefined;
@@ -50,16 +45,7 @@ export interface UseCompletionPickersResult {
   pickSlashArg: (chosen: string) => void;
 }
 
-/**
- * The three mutually-exclusive input-prefix pickers share enough
- * structure (matches list + highlighted index + reset-on-shrink effect
- * + commit-back-into-buffer callback) that they live together here.
- * Priority in the parent useInput handler:
- *   atMatches > slashArgMatches > slashMatches > prompt history
- * detection already disambiguates by construction — the slash-name
- * picker fires only when the buffer has no space; the slash-arg picker
- * only after a space; the @-picker only outside slash mode.
- */
+/** Picker priority: @ > slash-arg > slash-name. Detection already disambiguates by buffer shape. */
 export function useCompletionPickers({
   input,
   setInput,

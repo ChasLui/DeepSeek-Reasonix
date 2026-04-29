@@ -1,13 +1,4 @@
-/**
- * Schema flattening for DeepSeek tool calls.
- *
- * DeepSeek loses arguments on schemas that are deep (>2 levels of nesting) or
- * wide (>10 leaf parameters). This module transforms such schemas into a
- * dot-notation flat schema and re-nests the model's arguments before dispatch.
- *
- * Example:
- *   { user: { profile: { name, age } } }   ⇄   "user.profile.name", "user.profile.age"
- */
+/** DeepSeek drops args on schemas >2 levels deep or >10 leaves; flatten to dot-paths and re-nest after dispatch. */
 
 import type { JSONSchema } from "../types.js";
 

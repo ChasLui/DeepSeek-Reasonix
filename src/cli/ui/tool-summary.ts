@@ -1,20 +1,4 @@
-/**
- * One-line tool-result summarizer for the compact scrollback row.
- *
- * Old rendering: glyph + arrow + blank line + 400-char body block.
- * Cost ~6–8 vertical lines per tool call. Long sessions drown in
- * noise; the actually-interesting tool result (an edit diff, a
- * checkpoint signal) gets buried.
- *
- * New rendering: glyph + tool name + arrow + a SINGLE-LINE summary
- * tailored to the tool family. Full content stays in the tool history
- * and can be expanded via `/tool N`. edit_file keeps its multi-line
- * diff renderer (the diff IS the value).
- *
- * Pure function — lives outside EventLog.tsx so it's testable without
- * Ink and can be reused if other surfaces (replay, transcript export)
- * want the same one-liner.
- */
+/** Pure tool-result summarizer — lives outside EventLog so replay / transcript-export can reuse it. */
 
 const MAX_SUMMARY_CHARS = 80;
 const TRAILING_ELLIPSIS = "…";
@@ -39,16 +23,6 @@ function firstNonEmptyLine(text: string): string {
   return "";
 }
 
-/**
- * Render a duration in milliseconds as a tight human label for the
- * compact tool row. Picks a representation that fits in ~5 chars so
- * the surrounding row stays readable on narrow terminals.
- *
- *   <  100ms → "47ms"
- *   < 1000ms → "0.4s"
- *   <   60s  → "12s"  (or "1.2s" for sub-10-second times)
- *   >=  60s  → "1m30s"
- */
 export function formatDuration(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return "";
   if (ms < 100) return `${Math.round(ms)}ms`;
@@ -73,13 +47,6 @@ function formatLineCount(text: string): string {
   return `${lines} line${lines === 1 ? "" : "s"}`;
 }
 
-/**
- * Try to recognize a structured error envelope. Reasonix tools emit
- * `{ "error": "..." }` JSON for failures and structured payloads
- * (PlanProposedError carries `{error, plan, ...}`) for special
- * signals. We surface the error name as the summary so the user
- * sees what kind of failure happened at a glance.
- */
 function summarizeStructured(content: string): ToolSummary | null {
   const trimmed = content.trim();
   if (!trimmed.startsWith("{")) return null;
@@ -119,15 +86,7 @@ function summarizeStructured(content: string): ToolSummary | null {
   }
 }
 
-/**
- * Per-tool-name overrides for cases where a smarter summary is cheap
- * to compute. Returning null means "fall through to the generic
- * summary path."
- *
- * Suffix-match is on purpose: MCP-bridged tools come in prefixed
- * (`filesystem_read_file`, `git_search_files`) and we want them to
- * pick up the same specialized summary as the bare local name.
- */
+/** Suffix-match so MCP-prefixed tools (`filesystem_read_file`) pick up the same specialized summary. */
 function summarizeKnownTool(toolName: string, content: string): ToolSummary | null {
   const hasSuffix = (s: string) => toolName === s || toolName.endsWith(`_${s}`);
   if (hasSuffix("read_file")) {

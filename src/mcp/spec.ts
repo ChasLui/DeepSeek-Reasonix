@@ -1,32 +1,4 @@
-/**
- * Parse the `--mcp` CLI argument into a transport-tagged spec.
- *
- * Accepted forms:
- *   "name=command args..."             → stdio, namespaced (tools prefixed with `name_`)
- *   "command args..."                  → stdio, anonymous
- *   "name=https://host/sse"            → HTTP+SSE (2024-11-05), namespaced
- *   "https://host/sse"                 → HTTP+SSE (2024-11-05), anonymous
- *   "name=streamable+https://host/mcp" → Streamable HTTP (2025-03-26), namespaced
- *   "streamable+https://host/mcp"      → Streamable HTTP (2025-03-26), anonymous
- *   ("http://" / "streamable+http://" also honored — useful for local dev.)
- *
- * The identifier regex before `=` is deliberately narrow
- * (`[a-zA-Z_][a-zA-Z0-9_]*`) so Windows drive letters ("C:\\...") and
- * other strings containing `=` or `:` don't accidentally trigger the
- * namespace branch. If a user ever wants their command to literally start
- * with `foo=...` as a bare command, they can wrap it in quotes inside the
- * shell command string.
- *
- * Transport selection:
- *   - body starts with `streamable+http(s)://` → Streamable HTTP. The
- *     `streamable+` prefix is stripped from the URL we hand the transport.
- *   - body starts with `http(s)://`            → HTTP+SSE (2024-11-05).
- *     Default for plain http URLs to preserve back-compat with users who
- *     already have `--mcp https://...` config entries pointed at SSE
- *     servers; opt into Streamable HTTP explicitly.
- *   - anything else                            → stdio (including ws://,
- *     which will surface later as a spawn error).
- */
+/** Plain http:// stays HTTP+SSE for back-compat; Streamable HTTP is opt-in via the `streamable+` URL prefix. */
 
 import { shellSplit } from "./shell-split.js";
 

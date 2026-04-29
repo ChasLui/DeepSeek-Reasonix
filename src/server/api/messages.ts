@@ -1,9 +1,3 @@
-/**
- * `/api/messages` — snapshot of the conversation in render order, used
- * by the web Chat tab for first-paint. Subsequent updates arrive via
- * the SSE stream at `/api/events`. Returns `[]` in standalone mode.
- */
-
 import type { DashboardContext } from "../context.js";
 import type { ApiResult } from "../router.js";
 

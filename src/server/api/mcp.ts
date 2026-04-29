@@ -1,20 +1,4 @@
-/**
- * `/api/mcp` — read MCP server fleet, mutate config.mcp[], live-test
- * a tool invocation.
- *
- *   GET    /api/mcp                   → bridged servers + tool/resource/prompt counts
- *   GET    /api/mcp/specs             → raw config.mcp[] (the persisted list)
- *   POST   /api/mcp/specs   {spec}    → append spec; "restart to apply"
- *   DELETE /api/mcp/specs   {spec}    → remove spec
- *   POST   /api/mcp/invoke  {server, tool, args} → live tool call
- *
- * Live add/remove (without session restart) is genuinely destructive
- * to cache prefix stability — adding an MCP server's tools shifts the
- * tool-spec block in the system prefix, so the next turn's cache hit
- * goes to zero. We deliberately don't auto-reload; the SPA shows a
- * banner pointing at `reloadMcp` if the user wants the new spec live
- * (callback optional; absent → "restart session to apply").
- */
+/** Spec mutations don't auto-reload — adding a server shifts the system prefix and zeroes the next cache hit. */
 
 import { readConfig, writeConfig } from "../../config.js";
 import type { DashboardContext } from "../context.js";

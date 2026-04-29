@@ -1,29 +1,4 @@
-/**
- * Persistent per-turn usage log at `~/.reasonix/usage.jsonl`.
- *
- * Each line is a single `UsageRecord` — one turn's tokens + cost
- * snapshot — appended after every `assistant_final` event. This is
- * what drives `reasonix stats` (the dashboard, no-arg form), so the
- * user can see how much they've spent vs what the equivalent Claude
- * spend would have been. The Pillar 1 pitch (94–97% cost reduction
- * vs Claude, from the v0.3 hard-number table) becomes a fact users
- * can verify on their own machine.
- *
- * Format choices:
- *   - **append-only JSONL** — one line per turn, durable, survives
- *     abrupt exits. A corrupted tail line loses at most one record.
- *   - **flat keys, no nesting** — readable with `jq` / `cut` / `awk`;
- *     the model doesn't need to parse this, humans do.
- *   - **best-effort writes** — disk errors never propagate into the
- *     turn. We log nothing (no `console.error`) because the TUI is
- *     rendering Ink; a silent skip is the least-worst failure mode.
- *   - **no PII, no prompts, no completions** — the log contains
- *     tokens and costs, that's it. Sessions are identified by the
- *     user-chosen name (never a prompt).
- *
- * This file is deliberately NOT wired through project memory or
- * skills — those are content pins. Usage is pure telemetry.
- */
+/** Append-only JSONL of per-turn tokens + cost; best-effort writes, never blocks the turn. No prompts/completions logged. */
 
 import {
   appendFileSync,
@@ -60,10 +35,7 @@ export interface UsageRecord {
   costUsd: number;
   /** What the same turn would have cost at Claude Sonnet 4.6 rates. */
   claudeEquivUsd: number;
-  /**
-   * Distinguishes ordinary parent-loop turns from subagent summary rows.
-   * Absent on pre-0.5.14 records — treat as "turn" when missing.
-   */
+  /** Absent on legacy records — treat as "turn" when missing. */
   kind?: "turn" | "subagent";
   /** Present when `kind === "subagent"`. Attribution metadata for the /stats roll-up. */
   subagent?: {
@@ -96,21 +68,7 @@ export interface AppendUsageInput {
   subagent?: UsageRecord["subagent"];
 }
 
-/**
- * Threshold above which the usage log gets compacted on append.
- * Compaction keeps records newer than {@link USAGE_RETENTION_DAYS}
- * and rewrites the file in place. Pitched at 5MB because at typical
- * record sizes (~250 bytes) that's ~20K turns of history — enough
- * for a year of heavy use, beyond which the marginal value of an
- * old record is dwarfed by `reasonix stats` parse time and the
- * `~/.reasonix` disk footprint.
- */
 const USAGE_COMPACTION_THRESHOLD_BYTES = 5 * 1024 * 1024;
-/**
- * Records older than this many days get dropped during compaction.
- * 365 days keeps year-over-year comparisons working in `reasonix
- * stats` while bounding pathological growth.
- */
 const USAGE_RETENTION_DAYS = 365;
 
 function compactUsageLogIfLarge(path: string, now: number): void {
@@ -139,9 +97,7 @@ function compactUsageLogIfLarge(path: string, now: number): void {
       /* skip malformed */
     }
   }
-  // Only rewrite if compaction actually shrunk the file — avoids
-  // re-write storms on a log full of fresh records that all pass
-  // the cutoff check.
+  // No-op when nothing aged out — avoids rewrite storms on fresh logs.
   if (kept.length === lines.filter((l) => l.trim()).length) return;
   try {
     writeFileSync(path, kept.length > 0 ? `${kept.join("\n")}\n` : "", "utf8");
@@ -150,20 +106,7 @@ function compactUsageLogIfLarge(path: string, now: number): void {
   }
 }
 
-/**
- * Append one record and return it. Swallows disk errors — the TUI
- * should keep working even if `~/.reasonix/` is read-only.
- *
- * Returns the record that was written (or would have been written
- * if the disk had cooperated) so tests / callers can assert on the
- * computed cost fields without a round trip through the log file.
- *
- * On every Nth append the log is checked for size; if it crosses
- * {@link USAGE_COMPACTION_THRESHOLD_BYTES} we drop records older
- * than {@link USAGE_RETENTION_DAYS}. Cheaper than a startup-time
- * scan because most processes don't reach the threshold; the size
- * check is one statSync regardless.
- */
+/** Returns the record so tests can assert cost fields without re-reading the log. */
 export function appendUsage(input: AppendUsageInput): UsageRecord {
   const record: UsageRecord = {
     ts: input.now ?? Date.now(),
@@ -190,11 +133,6 @@ export function appendUsage(input: AppendUsageInput): UsageRecord {
   return record;
 }
 
-/**
- * Read + parse the log. Malformed lines are silently skipped so a
- * single corrupted write (half-flushed on power loss, user hand-edit)
- * doesn't throw away the rest of the history.
- */
 export function readUsageLog(path: string = defaultUsageLogPath()): UsageRecord[] {
   if (!existsSync(path)) return [];
   let raw: string;
@@ -243,15 +181,7 @@ export interface UsageBucket {
   cacheMissTokens: number;
   costUsd: number;
   claudeEquivUsd: number;
-  /**
-   * USD that DeepSeek's prompt cache shaved off the bill — sum of
-   * `cacheHitTokens × (missPrice − hitPrice)` per record. Recomputed
-   * from the current pricing table on every aggregate, not frozen at
-   * write time, so a price-cut announcement updates retroactively. The
-   * trade-off is mild inconsistency with `costUsd` (which IS frozen);
-   * acceptable because cache savings is a "what does this mechanism
-   * give me" narrative, not a billing record.
-   */
+  /** Recomputed from current pricing each aggregate — intentionally NOT frozen with `costUsd`. */
   cacheSavingsUsd: number;
 }
 
@@ -308,11 +238,7 @@ export interface UsageAggregate {
   firstSeen: number | null;
   /** Latest record's ts, or `null` when the log is empty. */
   lastSeen: number | null;
-  /**
-   * Subagent-specific rollup. Undefined when no subagent records exist
-   * in the log so consumers can cheaply skip the section. Counts reflect
-   * subagent SPAWNS (not internal child-loop turns) — one row per run.
-   */
+  /** Undefined when no subagent records exist; counts spawns, not internal child-loop turns. */
   subagents?: SubagentAggregate;
 }
 
@@ -325,15 +251,7 @@ export interface SubagentAggregate {
   bySkill: Array<{ skillName: string; count: number; costUsd: number; durationMs: number }>;
 }
 
-/**
- * Fold a flat record list into the dashboard shape — rolling windows
- * plus model / session histograms. Windows are INCLUSIVE of boundary:
- *   - today = last 24h (rolling, not calendar-day)
- *   - week  = last 7d
- *   - month = last 30d
- *   - all   = every record
- * Rolling windows avoid "it's 00:03, 'today' is empty" surprises.
- */
+/** Rolling 24h/7d/30d windows — avoids "it's 00:03, 'today' is empty" surprises. */
 export function aggregateUsage(
   records: UsageRecord[],
   opts: AggregateOptions = {},

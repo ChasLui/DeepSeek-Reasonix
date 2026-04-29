@@ -1,7 +1,4 @@
-/**
- * Pure projection reducers over the Event log. No I/O. No mutation.
- * Each reducer must be deterministic: same (view, ev) → same view.
- */
+/** Pure projection reducers over the Event log — deterministic, no I/O, no mutation. */
 
 import type { ChatMessage } from "../types.js";
 import type {

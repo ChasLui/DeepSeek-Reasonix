@@ -1,20 +1,4 @@
-/**
- * `/api/hooks` — read + write `<scope>/.reasonix/settings.json` hook
- * blocks. Mirrors the `/hooks` slash but allows mutation.
- *
- *   GET  /api/hooks                → { project, global, resolved }
- *   POST /api/hooks/save           → { scope, hooks } persists
- *   POST /api/hooks/reload         → re-reads + updates loop.hooks
- *
- * Hooks live in two files:
- *   - `~/.reasonix/settings.json`         (global)
- *   - `<project>/.reasonix/settings.json` (project-scope; only when
- *     code mode is attached)
- *
- * Reload is a separate POST so the user can save without immediately
- * applying — the SPA also calls reload after every save so the live
- * loop's allowlist sees the change.
- */
+/** Reload is a separate POST so save and apply stay decoupled; the SPA chains them by convention. */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";

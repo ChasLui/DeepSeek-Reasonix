@@ -1,19 +1,6 @@
 import { SkillStore } from "../../../../skills.js";
 import type { SlashHandler } from "../dispatch.js";
 
-/**
- * `/skill` family. Bare `/skill` (or `/skill list`) prints the
- * discovered skills from `<projectRoot>/.reasonix/skills` (code mode
- * only) + `~/.reasonix/skills`. `/skill show <name>` dumps one body
- * inline for reading. `/skill <name> [args...]` injects the skill body
- * as a user turn via `resubmit` — the same mechanism `/apply-plan`
- * uses — so the next model turn runs with the skill's instructions
- * fresh in the log.
- *
- * Project scope is only populated when the session has a `codeRoot`
- * (set by `reasonix code`). In plain chat mode the store reads the
- * global scope only, matching how user-memory behaves.
- */
 const skill: SlashHandler = (args, _loop, ctx) => {
   const store = new SkillStore({ projectRoot: ctx.codeRoot });
   const sub = (args[0] ?? "").toLowerCase();

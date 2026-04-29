@@ -1,20 +1,4 @@
-/**
- * Reasonix visual theme.
- *
- * One source of truth for colors, glyphs, and decorative blocks so
- * the TUI reads as one designed surface instead of fifteen
- * components inventing their own palette. All colors are truecolor
- * hex; Ink degrades to the nearest 256-color / 8-color slot on
- * older terminals, so the worst case is still legible.
- *
- * Why a module rather than a context: tests import these strings,
- * Ink components consume them as `color={...}` props, and there's
- * no theming switch (light/dark) — one project, one palette.
- */
-
-/** Brand gradient — the same teal → cyan → blue → purple → fuchsia
- * sweep used by the REASONIX wordmark. Reused for accent bars,
- * progress fills, and decorative dividers. */
+/** Brand gradient — REASONIX wordmark sweep, reused for accents / progress / dividers. */
 export const GRADIENT: ReadonlyArray<string> = [
   "#5eead4", // teal
   "#67e8f9", // cyan
@@ -26,9 +10,7 @@ export const GRADIENT: ReadonlyArray<string> = [
   "#f0abfc", // fuchsia
 ];
 
-/** Solid palette — semantic colors used for status, role, and
- * accent surfaces. Sourced from the Tailwind 400/500 row so the
- * tone is consistent with the gradient. */
+/** Tailwind 400/500 row — keeps tone consistent with GRADIENT. */
 export const COLOR = {
   primary: "#67e8f9", // cyan-300
   accent: "#c4b5fd", // violet-300
@@ -44,13 +26,6 @@ export const COLOR = {
   ok: "#4ade80", // green-400
 } as const;
 
-/**
- * Glyphs — one consistent alphabet for the whole TUI. Geometric
- * shapes (◇ ◆ ▣ ▥) make the role of a row readable at a glance
- * after one or two turns; arrows (› ▸ ▶) consistently mean
- * "selection / focus / next." Brand mark is reserved for the app
- * header.
- */
 export const GLYPH = {
   brand: "◈",
   user: "◇",
@@ -91,18 +66,7 @@ export const GLYPH = {
   spinFrames: ["◐", "◓", "◑", "◒"] as readonly string[],
 } as const;
 
-/**
- * Surface color ramp — 6 steps from canvas (deepest) to selected
- * (lightest). Use these for stacked layers like top chrome over log
- * over modal-backdrop. Lifted from the dashboard's app.css so the web
- * surface and TUI share an identical depth perception (within Ink's
- * ANSI limits).
- *
- * Note: terminals quantize to 256-color or 16-color when truecolor
- * isn't available, so steps that look distinct in a modern terminal
- * may collapse to two visible shades on basic xterm. The ordering
- * stays correct in both — bg-canvas is always darker than bg-sel.
- */
+/** Ordering survives 256-/16-color quantization — canvas always darker than sel. */
 export const SURFACE = {
   canvas: "#070a10",
   shell: "#0b1019",
@@ -113,12 +77,6 @@ export const SURFACE = {
   lineSoft: "#141b27",
 } as const;
 
-/**
- * Foreground intensity ramp — 5 steps from boldest text to faintest
- * decoration. Match these against semantic content: `strong` for
- * headings + active selection labels; `default` for body; `dim` for
- * meta; `faint` for hints + foot bars; `ghost` for separators.
- */
 export const FG = {
   strong: "#e6edf6",
   default: "#cbd5e1",
@@ -127,13 +85,6 @@ export const FG = {
   ghost: "#475569",
 } as const;
 
-/**
- * Render a horizontal gradient rule of the given width. Each cell
- * picks a color from the brand gradient interpolated across the
- * width, so at cols=80 the rule spans the full sweep. Used for
- * StatsPanel header/footer decoration and other "this section is
- * important" anchors.
- */
 export function gradientCells(
   width: number,
   glyph: string = GLYPH.block,

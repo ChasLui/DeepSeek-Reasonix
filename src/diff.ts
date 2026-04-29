@@ -1,22 +1,4 @@
-/**
- * Diff — compare two transcripts and produce a summary + divergence report.
- *
- * Two transcripts are "comparable" when they stem from the same task (or
- * the same user prompt). Alignment is by turn number: assistant_final #N
- * in A pairs with assistant_final #N in B. If one side ran more turns, the
- * extras are labeled "only in A" / "only in B".
- *
- * What we compute:
- *   - Aggregate deltas: turns, tool calls, cache hit, cost, token counts
- *   - First divergence: the lowest turn where A and B's tool calls or
- *     assistant text differ meaningfully
- *   - Prefix-stability story: how many unique prefix hashes each side used
- *
- * Non-goals (deliberately):
- *   - LLM-judge quality comparison
- *   - Per-token delta rendering — not useful at the fidelity we're at
- *   - Embedding similarity — Levenshtein ratio is cheap and good enough
- */
+/** Transcript diff — pairs assistant_final by turn number; unmatched extras become only_in_a / only_in_b. */
 
 import { type ReplayStats, computeReplayStats } from "./replay.js";
 import type { ReadTranscriptResult, TranscriptRecord } from "./transcript.js";
@@ -34,13 +16,6 @@ export interface TurnPair {
   bAssistant?: TranscriptRecord;
   aTools: TranscriptRecord[];
   bTools: TranscriptRecord[];
-  /**
-   * Classification of the pair:
-   *   "match"      — both sides present, text & tool calls within threshold
-   *   "diverge"    — both sides present, but text or tool calls differ
-   *   "only_in_a"  — assistant_final in A but not B
-   *   "only_in_b"  — assistant_final in B but not A
-   */
   kind: "match" | "diverge" | "only_in_a" | "only_in_b";
   /** When kind === "diverge", a short one-liner pointing at what differs. */
   divergenceNote?: string;
@@ -53,12 +28,6 @@ export interface DiffReport {
   firstDivergenceTurn: number | null;
 }
 
-// ---------- navigation helpers (used by the Ink diff TUI) ----------
-
-/**
- * Find the next pair (strictly after `fromIdx`) whose kind is not "match".
- * Returns -1 when no later divergence exists. Used by DiffApp's `n` key.
- */
 export function findNextDivergence(pairs: TurnPair[], fromIdx: number): number {
   for (let i = fromIdx + 1; i < pairs.length; i++) {
     if (pairs[i]!.kind !== "match") return i;
@@ -66,11 +35,6 @@ export function findNextDivergence(pairs: TurnPair[], fromIdx: number): number {
   return -1;
 }
 
-/**
- * Find the previous pair (strictly before `fromIdx`) whose kind is not
- * "match". Returns -1 when no earlier divergence exists. Used by
- * DiffApp's `N` / `p` key.
- */
 export function findPrevDivergence(pairs: TurnPair[], fromIdx: number): number {
   const start = Math.min(fromIdx - 1, pairs.length - 1);
   for (let i = start; i >= 0; i--) {
@@ -128,17 +92,6 @@ export function diffTranscripts(
   return { a: aSide, b: bSide, pairs, firstDivergenceTurn };
 }
 
-// ---------- divergence classification ----------
-
-/**
- * Return a short reason string if two sides meaningfully disagree, or
- * undefined if they're close enough to call a match.
- *
- * Ranking of divergence signals (cheapest first):
- *   1. Different set of tool names → clearest diff
- *   2. Different tool args for the same tool → second-clearest
- *   3. Text similarity below threshold → fuzziest
- */
 function classifyDivergence(
   a: TranscriptRecord,
   b: TranscriptRecord,
@@ -164,11 +117,7 @@ function classifyDivergence(
   return undefined;
 }
 
-/**
- * Normalized Levenshtein similarity ratio in [0, 1]. 1 = identical.
- * Early-exits for long strings (> 2000 chars) with a cheap token-overlap
- * estimate to keep diff fast on chatty transcripts.
- */
+/** Falls back to token-overlap above 2000 chars to keep diff fast on chatty transcripts. */
 export function similarity(a: string, b: string): number {
   if (a === b) return 1;
   if (!a && !b) return 1;
@@ -207,8 +156,6 @@ function levenshtein(a: string, b: string): number {
   return prev[n];
 }
 
-// ---------- grouping ----------
-
 interface TurnGroup {
   assistant?: TranscriptRecord;
   tools: TranscriptRecord[];
@@ -225,8 +172,6 @@ function groupByTurn(records: TranscriptRecord[]): Map<number, TurnGroup> {
   }
   return out;
 }
-
-// ---------- rendering ----------
 
 export interface RenderOptions {
   /** Monochrome output (for file redirection or piping). Defaults to true. */
@@ -271,8 +216,7 @@ export function renderSummaryTable(report: DiffReport, _opts: RenderOptions = {}
     ),
   );
   lines.push(statRow("prefix hashes", a.stats.prefixHashes.length, b.stats.prefixHashes.length));
-  // Harvest signal row — only surface when at least one side carries plan
-  // state. Keeps no-harvest diffs visually identical to pre-v0.3 output.
+  // Harvest row only when at least one side has plan state.
   if (a.stats.harvestedTurns > 0 || b.stats.harvestedTurns > 0) {
     lines.push(
       row(
@@ -442,8 +386,6 @@ export function renderMarkdown(report: DiffReport): string {
   }
   return out.join("\n");
 }
-
-// ---------- formatting helpers ----------
 
 function row(cols: string[], widths: number[]): string {
   return cols.map((c, i) => padRight(c, widths[i] ?? c.length)).join(" ");

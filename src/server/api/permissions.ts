@@ -1,20 +1,4 @@
-/**
- * `/api/permissions` — read + mutate the project shell allowlist,
- * mirroring the `/permissions` slash from 0.11.3. Builtin entries
- * are surfaced read-only so the SPA can render them grouped without
- * needing its own copy of the table.
- *
- * Endpoints:
- *   GET    /api/permissions                  list builtin + project
- *   POST   /api/permissions  { prefix }      add to project list
- *   DELETE /api/permissions  { prefix }      remove from project list
- *   POST   /api/permissions/clear { confirm } wipe the project list
- *
- * All mutations require an attached session (we need `ctx.getCurrentCwd`
- * to know which project root to scope under). Standalone calls into
- * mutations return 503; the SPA's Permissions tab grays them out
- * accordingly via `mode: "standalone"` from /api/overview.
- */
+/** Mutations require an attached session — standalone mode returns 503 because we have no project root to scope under. */
 
 import {
   addProjectShellAllowed,

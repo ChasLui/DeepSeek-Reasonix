@@ -9,33 +9,10 @@ export interface ImmutablePrefixOptions {
 
 export class ImmutablePrefix {
   readonly system: string;
-  /**
-   * Backing array for `toolSpecs`. Originally `Object.freeze`d at
-   * construction (hence the class name) — but `addTool` now lets the
-   * dashboard register `semantic_search` after a mid-session
-   * `reasonix index` build without forcing the user to restart. Each
-   * add is documented to cost one cache-miss turn (the cached prefix
-   * on DeepSeek's side is keyed by the full tool list); subsequent
-   * turns re-cache against the new shape.
-   */
+  /** Each `addTool` costs one cache-miss turn — DeepSeek's prefix cache is keyed by full tool list. */
   private _toolSpecs: ToolSpec[];
   readonly fewShots: readonly ChatMessage[];
-  /**
-   * Cached SHA-256 of the prefix payload. Computed lazily on first
-   * `fingerprint` access, invalidated only by mutations that go
-   * through `addTool` (the one legitimate post-construction mutation
-   * path). The TUI reads `fingerprint` on every render — without the
-   * cache, that means a fresh `JSON.stringify` + sha256 over the
-   * full prefix (system prompt + tools list + few-shots, typically
-   * 5-10KB) on every keystroke.
-   *
-   * The lazy-init also acts as a cheap drift guard: if some future
-   * code path mutates `_toolSpecs` directly without going through
-   * `addTool`, `fingerprint` will return the stale cached value
-   * while the actual prefix sent to DeepSeek diverges — the cache
-   * miss would be the first symptom. {@link verifyFingerprint}
-   * lets dev / test code assert the cache matches reality.
-   */
+  /** Invalidated only via `addTool`; bypassing it leaves cache stale → fingerprint diverges from sent prefix. */
   private _fingerprintCache: string | null = null;
 
   constructor(opts: ImmutablePrefixOptions) {
@@ -56,12 +33,6 @@ export class ImmutablePrefix {
     return this._toolSpecs.map((t) => structuredClone(t) as ToolSpec);
   }
 
-  /**
-   * Add a tool spec to the prefix. Returns `true` if added, `false`
-   * if a tool with the same name was already present (callers can
-   * decide whether to ignore or surface the no-op). The model picks
-   * up the new tool on the next turn after the cache busts once.
-   */
   addTool(spec: ToolSpec): boolean {
     const name = spec.function?.name;
     if (!name) return false;
@@ -77,14 +48,7 @@ export class ImmutablePrefix {
     return this._fingerprintCache;
   }
 
-  /**
-   * Recompute the fingerprint from scratch and assert it matches the
-   * cached value. Returns the freshly-computed hash on success; throws
-   * with a diff if the cache drifted, which always indicates a bug —
-   * either a non-`addTool` mutation path was added, or `addTool`
-   * forgot to invalidate the cache. Dev / test only; the live loop
-   * doesn't call this on the hot path.
-   */
+  /** Dev/test only — throws on cache drift, which always means a non-`addTool` mutation slipped in. */
   verifyFingerprint(): string {
     const fresh = this.computeFingerprint();
     if (this._fingerprintCache !== null && this._fingerprintCache !== fresh) {
@@ -120,13 +84,7 @@ export class AppendOnlyLog {
     for (const m of messages) this.append(m);
   }
 
-  /**
-   * Bulk-replace entries. Intentionally named to be hard to reach for —
-   * this is the one mutation path that breaks the log's append-only
-   * spirit, reserved for compaction flows (`/compact`) and recovery
-   * where the caller has consciously decided to drop old history. Any
-   * other use is almost certainly wrong; append() is what you want.
-   */
+  /** The one append-only-breaking path — reserved for `/compact` + recovery. Use `append()` otherwise. */
   compactInPlace(replacement: ChatMessage[]): void {
     this._entries = [...replacement];
   }

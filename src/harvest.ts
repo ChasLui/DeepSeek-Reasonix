@@ -1,16 +1,4 @@
-/**
- * Pillar 2 — R1 Thought Harvesting.
- *
- * Takes the `reasoning_content` emitted by a thinking model (deepseek-reasoner
- * / R1) and extracts a structured plan state by making a cheap secondary call
- * to V3 in JSON mode. The typed state is intended for the orchestrator to
- * branch on — e.g. trigger self-consistency sampling when `uncertainties.length
- * > 2`, or surface the subgoals to the user.
- *
- * Opt-in: loops disable harvesting by default. Failures (bad JSON, API error,
- * empty reasoning) return an empty TypedPlanState — the main turn is never
- * aborted because of a harvest hiccup.
- */
+/** Harvest failures return an empty state — main turn must never abort on a hiccup here. */
 
 import type { DeepSeekClient } from "./client.js";
 

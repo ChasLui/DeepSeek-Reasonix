@@ -1,33 +1,4 @@
-/**
- * Skills — user-defined prompt packs pinned (by name) into the
- * immutable prefix and loaded (by body) on demand.
- *
- * Two scopes mirror the user-memory layout:
- *   - `project` → `<projectRoot>/.reasonix/skills/` (this repo only)
- *   - `global`  → `~/.reasonix/skills/`            (every session)
- *
- * Project scope wins on a name collision. Deliberately NOT tied to
- * any specific client's directory convention (`.claude/`, `.glm/`,
- * etc.) — Reasonix is model-agnostic at the conversation layer, so
- * coupling the skill filesystem to one vendor would break any user
- * running a different backend.
- *
- * Accepted file layouts (both emit the same `Skill`):
- *   - `{dir}/<name>/SKILL.md`   (preferred — lets a skill bundle
- *                                additional assets alongside)
- *   - `{dir}/<name>.md`         (flat, one-file shorthand)
- *
- * Frontmatter keys we read:
- *   - `name`          — optional, defaults to the file / dir name
- *   - `description`   — one-line index description (REQUIRED for listing)
- *   - `allowed-tools` — parsed but UNUSED in v1 (see tools/skills.ts)
- *
- * Cache-First contract (Pillar 1):
- *   - The PREFIX sees only names + descriptions (one line each).
- *   - Bodies enter the APPEND-ONLY LOG lazily, via `run_skill` or
- *     `/skill <name>` — never the prefix. That keeps the prefix hash
- *     stable across skill additions to the body store.
- */
+/** Project scope wins over global. Only names+descriptions enter the prefix; bodies load lazily into the append-only log. */
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
@@ -43,15 +14,7 @@ const VALID_SKILL_NAME = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/;
 
 export type SkillScope = "project" | "global" | "builtin";
 
-/**
- * Execution mode for a skill. `inline` (default) returns the body as a
- * tool result so the body enters the parent's append-only log — the
- * model continues the loop using the loaded instructions. `subagent`
- * spawns an isolated child loop with the body as the system prompt and
- * the user-supplied `arguments` as the task; only the child's final
- * answer comes back. Use `subagent` for big-context exploration / research
- * playbooks where the parent doesn't need to see the trail.
- */
+/** inline = body enters parent log; subagent = isolated child loop, only final answer returns. */
 export type SkillRunAs = "inline" | "subagent";
 
 export interface Skill {
@@ -67,45 +30,20 @@ export interface Skill {
   path: string;
   /** Raw `allowed-tools` field from frontmatter, if any. Unused in v1. */
   allowedTools?: string;
-  /**
-   * Execution mode (frontmatter `runAs`). Defaults to `inline` for
-   * backwards compatibility with skills written before this field
-   * existed.
-   */
   runAs: SkillRunAs;
-  /**
-   * Frontmatter `model` — when set, overrides the default model the
-   * subagent runs on. Only meaningful when `runAs === "subagent"`.
-   * Accept any DeepSeek model id; the subagent layer falls back to its
-   * own default if this is missing or invalid.
-   */
+  /** Subagent model override; only meaningful when `runAs === "subagent"`. */
   model?: string;
 }
 
 export interface SkillStoreOptions {
   /** Override `$HOME` — tests point this at a tmpdir. */
   homeDir?: string;
-  /**
-   * Absolute project root. Required to surface project-scope skills;
-   * omit (e.g. in `reasonix chat` without `code`) and the store only
-   * reads the global scope.
-   */
+  /** Required for project-scope skills; omit to read only the global scope. */
   projectRoot?: string;
-  /**
-   * Suppress the bundled built-in skills (`explore`, `research`).
-   * Used by unit tests that want to assert exact list contents
-   * without the +2 builtins distorting counts. Production callers
-   * leave this off so users always get the bundled defaults.
-   */
+  /** Suppress bundled built-ins — for tests asserting exact list contents. */
   disableBuiltins?: boolean;
 }
 
-/**
- * Parse a `---` frontmatter block. Same minimal shape as user-memory:
- * `key: value` lines, no quoting, no nesting. Returns `{}` data and the
- * full input as body when no frontmatter fence is present — so hand-
- * written files without frontmatter still surface (with empty desc).
- */
 function parseFrontmatter(raw: string): { data: Record<string, string>; body: string } {
   const lines = raw.split(/\r?\n/);
   if (lines[0] !== "---") return { data: {}, body: raw };
@@ -147,11 +85,7 @@ export class SkillStore {
     return this.projectRoot !== undefined;
   }
 
-  /**
-   * Root directories scanned, in priority order. Project scope first
-   * so a per-repo skill overrides a global one with the same name —
-   * users expect the local copy to win when both exist.
-   */
+  /** Project scope first so per-repo skill overrides a global with the same name. */
   roots(): Array<{ dir: string; scope: SkillScope }> {
     const out: Array<{ dir: string; scope: SkillScope }> = [];
     if (this.projectRoot) {
@@ -164,11 +98,7 @@ export class SkillStore {
     return out;
   }
 
-  /**
-   * List every skill visible to this store. On name collisions the
-   * higher-priority root (project over global over builtin) wins.
-   * Sorted by name for stable prefix hashing.
-   */
+  /** Higher-priority root wins on collision (project > global > builtin); sorted for stable prefix hash. */
   list(): Skill[] {
     const byName = new Map<string, Skill>();
     for (const { dir, scope } of this.roots()) {
@@ -185,10 +115,7 @@ export class SkillStore {
         if (!byName.has(skill.name)) byName.set(skill.name, skill);
       }
     }
-    // Builtins are appended last so user/project files take precedence
-    // when names collide. The same priority you'd expect: my-project's
-    // "explore" overrides the shipped one without forcing a different
-    // name.
+    // Builtins last so user/project files override on name collision.
     if (!this.disableBuiltins) {
       for (const skill of BUILTIN_SKILLS) {
         if (!byName.has(skill.name)) byName.set(skill.name, skill);
@@ -211,8 +138,6 @@ export class SkillStore {
         return this.parse(flatCandidate, name, scope);
       }
     }
-    // Fall back to builtins. Same precedence as `list()` — user-authored
-    // wins, builtins are the floor.
     if (!this.disableBuiltins) {
       for (const skill of BUILTIN_SKILLS) {
         if (skill.name === name) return skill;
@@ -258,30 +183,12 @@ export class SkillStore {
   }
 }
 
-/**
- * Coerce a frontmatter `runAs` string to the discriminated union. Any
- * value other than the literal "subagent" is treated as inline — typos
- * and unknown values default to the safe (non-spawning) mode rather
- * than failing the load.
- */
+/** Unknown values default to the safe (non-spawning) `inline` mode. */
 function parseRunAs(raw: string | undefined): SkillRunAs {
   return raw?.trim() === "subagent" ? "subagent" : "inline";
 }
 
-/**
- * Build a single index line for one skill. Shape mirrors memory's
- * `indexLine` — a bullet suitable for a markdown fenced block in the
- * system prompt. Description is truncated to keep the full line under
- * ~150 chars.
- *
- * Subagent-runAs skills carry a `[🧬 subagent]` tag AFTER the name
- * so the model can't confuse the marker for part of the skill name.
- * (Historical bug: when the marker led the name — `- 🧬 explore` —
- * models would call `run_skill({ name: "🧬 explore" })` verbatim
- * and fail lookup. Wrapping the marker in brackets AFTER the name
- * eliminates that confusion; `run_skill`'s name arg also strips any
- * leading non-word chars as a belt-and-suspenders measure.)
- */
+/** Subagent tag goes AFTER the name in brackets — leading-marker tags get copied into `name` arg verbatim. */
 function skillIndexLine(s: Pick<Skill, "name" | "description" | "runAs">): string {
   const safeDesc = s.description.replace(/\n/g, " ").trim();
   const tag = s.runAs === "subagent" ? " [🧬 subagent]" : "";
@@ -290,15 +197,7 @@ function skillIndexLine(s: Pick<Skill, "name" | "description" | "runAs">): strin
   return clipped ? `- ${s.name}${tag} — ${clipped}` : `- ${s.name}${tag}`;
 }
 
-/**
- * Append a `# Skills` block to `basePrompt` listing every discovered
- * skill (name + description only). Bodies are NOT inlined — that's the
- * whole point: the prefix stays short and cacheable; full content loads
- * on demand via `run_skill` or `/skill <name>`.
- *
- * Emits nothing when no skills are discovered — keeps the prefix hash
- * stable for users who don't use skills at all.
- */
+/** Bodies stay out — prefix must stay short + cacheable; bodies load on demand. */
 export function applySkillsIndex(basePrompt: string, opts: SkillStoreOptions = {}): string {
   const store = new SkillStore(opts);
   const skills = store.list().filter((s) => s.description);
@@ -324,18 +223,6 @@ export function applySkillsIndex(basePrompt: string, opts: SkillStoreOptions = {
   ].join("\n");
 }
 
-/**
- * Built-in skills shipped with Reasonix. These are always available
- * (no install step) and live as constants rather than files because:
- *   - Zero filesystem coupling — no copy-on-first-run dance, nothing
- *     to migrate when we update them.
- *   - They participate in the same `byName` priority as user/project
- *     skills: write `~/.reasonix/skills/explore.md` to override.
- *
- * Keep this list small and high-leverage. The bar for adding one: it
- * demonstrates a pattern users would otherwise have to invent
- * themselves, and the body fits in a screen.
- */
 const BUILTIN_EXPLORE_BODY = `You are running as an exploration subagent. Your job is to investigate the codebase the parent agent pointed you at, then return one focused, distilled answer.
 
 How to operate:

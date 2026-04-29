@@ -1,25 +1,4 @@
-/**
- * MCP (Model Context Protocol) type definitions.
- *
- * Hand-rolled rather than importing @modelcontextprotocol/sdk because:
- *   - Reasonix's value-add isn't reimplementing the protocol, but *caching*
- *     it. Owning the types lets us tune them for our integration (strip
- *     fields we don't use, add the ones we do like Reasonix's prefixHash).
- *   - Zero dependencies — consistent with how we wrote the DeepSeek client.
- *   - If Anthropic bumps the SDK and introduces a breaking change, we're
- *     insulated as long as we keep up with the spec itself.
- *
- * Spec reference: https://spec.modelcontextprotocol.io/ (2024-11-05 draft
- * at time of writing). Reasonix models the subset it consumes: tools
- * list/call, resources list/read, prompts list/get, plus the init
- * handshake. Sampling and progress notifications remain deferred.
- *
- * Transport note: the wire format for stdio MCP is **newline-delimited
- * JSON** (NDJSON), not the LSP-style Content-Length header framing that
- * some readers might expect. One JSON-RPC message per line.
- */
-
-// ---------- JSON-RPC 2.0 base ----------
+/** MCP types (spec 2024-11-05). Stdio wire format is NDJSON — one JSON-RPC message per line, no Content-Length framing. */
 
 export type JsonRpcId = string | number;
 
@@ -57,8 +36,6 @@ export type JsonRpcResponse<R = unknown> = JsonRpcSuccess<R> | JsonRpcError;
 
 export type JsonRpcMessage = JsonRpcRequest | JsonRpcNotification | JsonRpcSuccess | JsonRpcError;
 
-// ---------- MCP initialize ----------
-
 export interface McpClientInfo {
   name: string;
   version: string;
@@ -91,8 +68,6 @@ export interface InitializeResult {
   instructions?: string;
 }
 
-// ---------- MCP tools ----------
-
 export interface McpToolSchema {
   /** JSON Schema — compatible with Reasonix's tools.ts JSONSchema shape. */
   type?: string;
@@ -116,22 +91,9 @@ export interface ListToolsResult {
 export interface CallToolParams {
   name: string;
   arguments?: Record<string, unknown>;
-  /**
-   * MCP's `_meta` envelope carries out-of-band protocol metadata.
-   * Setting `progressToken` here tells the server "send me progress
-   * notifications back using this token"; the server must then emit
-   * `notifications/progress` frames until the response arrives.
-   */
   _meta?: { progressToken?: string | number };
 }
 
-/**
- * Server → client notification emitted during a long-running request
- * that the client subscribed to via `_meta.progressToken`. `progress`
- * and `total` are typically matched units (files scanned, bytes
- * processed, etc.); `total` may be missing when the server can't
- * estimate the upper bound up front.
- */
 export interface ProgressNotificationParams {
   progressToken: string | number;
   progress: number;
@@ -168,13 +130,6 @@ export interface CallToolResult {
   isError?: boolean;
 }
 
-// ---------- MCP resources ----------
-
-/**
- * A resource the server can expose — think "file the model can read."
- * The URI is opaque to the client: servers may use `file://`, custom
- * schemes, or bare strings. Reasonix doesn't interpret them.
- */
 export interface McpResource {
   uri: string;
   name: string;
@@ -197,12 +152,7 @@ export interface ReadResourceParams {
   uri: string;
 }
 
-/**
- * One resource can return multiple content blobs (e.g. the file + a
- * side-car). `text` is the common case for UTF-8 content; `blob` is
- * base64-encoded bytes for binary content. Servers populate exactly
- * one of the two for each entry.
- */
+/** Server populates exactly one of `text` (UTF-8) or `blob` (base64) per entry. */
 export interface McpResourceContentsText {
   uri: string;
   mimeType?: string;
@@ -221,12 +171,6 @@ export interface ReadResourceResult {
   contents: McpResourceContents[];
 }
 
-// ---------- MCP prompts ----------
-
-/**
- * A parameterizable prompt template the server exposes. Clients fetch
- * it with `prompts/get` and pass the result to the model as-is.
- */
 export interface McpPromptArgument {
   name: string;
   description?: string;
@@ -253,12 +197,6 @@ export interface GetPromptParams {
   arguments?: Record<string, string>;
 }
 
-/**
- * MCP prompt messages are modeled after chat completions: role + content.
- * Content can be a text block OR (per the spec) a resource/image block;
- * Reasonix cares about text in v1, but surfaces the raw array so callers
- * can render other kinds if they need to.
- */
 export interface McpPromptMessage {
   role: "user" | "assistant";
   content: McpContentBlock | McpPromptResourceBlock;
@@ -273,8 +211,6 @@ export interface GetPromptResult {
   description?: string;
   messages: McpPromptMessage[];
 }
-
-// ---------- convenience ----------
 
 /** Current MCP protocol version Reasonix is coded against. */
 export const MCP_PROTOCOL_VERSION = "2024-11-05";

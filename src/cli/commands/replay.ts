@@ -12,13 +12,6 @@ export interface ReplayOptions {
   print?: boolean;
 }
 
-/**
- * Replay a transcript. Two modes:
- *   - Interactive TUI (default when stdout is a TTY): Ink-based j/k navigation.
- *   - Stdout pretty-print (--print, or when stdout is piped): one-shot text
- *     dump + summary. Kept working so shell pipes, CI logs, and `less`
- *     workflows still behave sensibly.
- */
 export async function replayCommand(opts: ReplayOptions): Promise<void> {
   const wantPrint =
     opts.print || !process.stdout.isTTY || opts.head !== undefined || opts.tail !== undefined;
@@ -36,7 +29,6 @@ export async function replayCommand(opts: ReplayOptions): Promise<void> {
   await waitUntilExit();
 }
 
-// ----------------------------------------------------------------------------
 // stdout pretty-print path (original behavior, preserved for piping / CI)
 
 function printReplay(opts: ReplayOptions): void {

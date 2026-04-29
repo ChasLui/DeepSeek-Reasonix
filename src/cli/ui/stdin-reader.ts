@@ -1,51 +1,9 @@
-/**
- * Raw stdin reader with our own CSI parser.
- *
- * Replaces Ink's `useInput` chain (which uses `parse-keypress` with a
- * 100 ms intra-sequence timeout that's too short for Windows ConPTY).
- * That timeout was the root cause of every keyboard regression we
- * shipped a patch for in 0.7.x — paste markers leaking into the
- * buffer, arrow keys not crossing newlines, Shift+Tab silently failing.
- *
- * Design:
- *   - One reader owns `process.stdin`. We call `setRawMode(true)`,
- *     register a single `data` listener, and emit parsed `KeyEvent`s
- *     to subscribers. As long as no `useInput` is called inside the
- *     Ink tree, Ink itself never attaches its own listener — we're
- *     the sole consumer of stdin.
- *
- *   - The state machine is tiny: idle → esc → csi/ss3 → idle, plus a
- *     `paste` accumulator that swallows everything between `\x1b[200~`
- *     and `\x1b[201~`. ESC ambiguity (standalone Esc vs. start of a
- *     CSI) is resolved by a 250 ms timer — much longer than parse-
- *     keypress's 100 ms, so ConPTY-split sequences land in the
- *     correct branch.
- *
- *   - We also recognise the ESC-stripped variants (`[A`, `[200~`) at
- *     idle-state lookahead, in case ConPTY consumed the leading ESC
- *     before we even saw it. That used to be a recovery layer in
- *     `key-normalize.ts`; with this reader as the sole input source
- *     it folds into the parser proper.
- *
- *   - `paste` events carry the full content so the consumer can route
- *     it through paste-sentinel registration without re-parsing.
- */
+/** Sole stdin owner; 250 ms ESC-ambiguity timer (ConPTY splits sequences past parse-keypress's 100 ms). */
 
 import { stdin } from "node:process";
 
-/**
- * Single keystroke event. Shape mirrors Ink's `(input, key)` callback
- * pair for migration ergonomics — consumers reading `key.upArrow`
- * etc. can keep doing so. `paste` is the one new field; consumers
- * that care about pastes (PromptInput) check it explicitly.
- */
 export interface KeyEvent {
-  /**
-   * Printable character(s). Non-empty for normal typing, Ctrl+letter
-   * (the letter goes here with `ctrl:true`), Alt+letter (with
-   * `meta:true`), and bracketed paste content (with `paste:true`).
-   * Always empty for control keystrokes like arrows / Enter / Esc.
-   */
+  /** Empty for control keys (arrows / Enter / Esc); holds the letter for Ctrl+/Alt+. */
   input: string;
   upArrow?: boolean;
   downArrow?: boolean;
@@ -63,27 +21,13 @@ export interface KeyEvent {
   shift?: boolean;
   ctrl?: boolean;
   meta?: boolean;
-  /**
-   * True iff this event delivers bracketed-paste content. `input`
-   * holds the entire paste; consumers MUST NOT re-interpret it as
-   * keystrokes (e.g. a `\n` in a paste shouldn't fire submit).
-   */
+  /** Bracketed-paste content; consumers MUST NOT re-interpret as keystrokes (e.g. `\n` ≠ submit). */
   paste?: boolean;
-  /**
-   * Mouse wheel up — fired when the user scrolls up on a terminal
-   * with mouse tracking enabled (xterm SGR mode 1006). Consumers use
-   * this to scroll the log region up by N events.
-   */
+  /** xterm SGR mode 1006 wheel-up. */
   mouseScrollUp?: boolean;
   /** Mouse wheel down — symmetric to `mouseScrollUp`. */
   mouseScrollDown?: boolean;
-  /**
-   * Mouse click (left button press). `mouseRow` / `mouseCol` give
-   * the cell-grid position in 1-based coordinates the terminal
-   * emitted. Consumers use this to detect clicks on inline UI like a
-   * "↓ jump to latest" indicator row. Released-click events are
-   * suppressed — only the press fires.
-   */
+  /** Left-button press; row/col are 1-based. Release events suppressed. */
   mouseClick?: boolean;
   mouseRow?: number;
   mouseCol?: number;
@@ -101,11 +45,6 @@ const PASTE_END = "\x1b[201~";
 const PASTE_START_BARE = "[200~";
 const PASTE_END_BARE = "[201~";
 
-/**
- * CSI tails (the bytes that follow `\x1b[`) we recognise and the
- * structured event each produces. Order doesn't matter — lookups
- * are exact-match.
- */
 const CSI_TAIL_MAP: ReadonlyArray<{ tail: string; ev: KeyEvent }> = [
   { tail: "A", ev: { input: "", upArrow: true } },
   { tail: "B", ev: { input: "", downArrow: true } },
@@ -145,13 +84,7 @@ const SS3_MAP: Record<string, KeyEvent> = {
   F: { input: "", end: true },
 };
 
-/**
- * Lookahead matcher for ESC-stripped sequences. When `chunk[i]` is
- * `[`, we check the bytes immediately after to see if they form a
- * recognised CSI tail. If so we emit the structured event and tell
- * the caller how many bytes to consume. Returns `null` when no
- * recognised tail starts here.
- */
+/** ESC-stripped CSI lookahead — ConPTY occasionally drops the leading ESC. */
 function tryEscapelessCsi(chunk: string, i: number): { advance: number; ev: KeyEvent } | null {
   if (chunk[i] !== "[") return null;
   // Paste start as a special case (handled by caller).
@@ -165,21 +98,12 @@ function tryEscapelessCsi(chunk: string, i: number): { advance: number; ev: KeyE
   return null;
 }
 
-/**
- * Final byte of a CSI sequence is in the range `0x40` (`@`) –
- * `0x7E` (`~`). Anything else is a parameter / intermediate byte.
- */
 function isCsiFinal(ch: string): boolean {
   const code = ch.charCodeAt(0);
   return code >= 0x40 && code <= 0x7e;
 }
 
-/**
- * Look up the CSI event for a fully-assembled sequence (without the
- * leading `\x1b[`). Returns `null` if we don't recognise it — which
- * is fine, we just drop the bytes silently rather than insert them
- * into the buffer as garbage text.
- */
+/** Unknown sequence → null → caller drops bytes silently (don't insert as text). */
 function lookupCsi(tail: string): KeyEvent | null {
   for (const entry of CSI_TAIL_MAP) {
     if (entry.tail === tail) return entry.ev;
@@ -245,12 +169,6 @@ export class StdinReader {
     this.started = false;
   }
 
-  /**
-   * Subscribe to parsed key events. Returns an unsubscribe function.
-   * Multiple subscribers are supported — every event fans out to all
-   * of them; the React Context layer above uses one subscriber and
-   * dispatches further to its own consumer list.
-   */
   subscribe(fn: Subscriber): () => void {
     this.subscribers.add(fn);
     return () => {
@@ -258,10 +176,7 @@ export class StdinReader {
     };
   }
 
-  /**
-   * Inject a chunk of bytes as if it came from stdin. Used by tests
-   * to drive the parser without a real TTY.
-   */
+  /** Test seam — drives the parser without a real TTY. */
   feed(chunk: string): void {
     this.handleChunk(chunk);
   }

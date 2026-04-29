@@ -1,16 +1,3 @@
-/**
- * `/api/*` dispatcher.
- *
- * Each handler is a plain async function of `(method, body, ctx)`
- * returning `{ status, body }`. The router parses the path tail and
- * dispatches; sub-paths are passed through (e.g. `/api/permissions`
- * vs `/api/permissions/clear`).
- *
- * Convention: handlers return data directly under `body`; errors go
- * via `{ status: 4xx, body: { error: "..." } }`. No HATEOAS, no
- * envelope wrapper — keeps the SPA client trivial.
- */
-
 import { handleAbort } from "./api/abort.js";
 import { handleEditMode } from "./api/edit-mode.js";
 import { handleFile, handleFiles } from "./api/file.js";

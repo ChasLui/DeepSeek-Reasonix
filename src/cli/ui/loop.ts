@@ -1,50 +1,11 @@
-/**
- * `/loop <interval> <prompt>` parsing + status formatting.
- *
- * Claude-Code-style recurring prompt: at every `<interval>` tick, the
- * App auto-submits `<prompt>` as if the user typed it. Useful for "keep
- * checking the deploy" / "rerun tests" / "watch the build status until
- * green" — anything the user wants probed periodically without holding
- * the keyboard.
- *
- * Cancellation contract (enforced in App.tsx, not here — this file is
- * pure):
- *   - `/loop stop`               → explicit stop slash
- *   - user types anything else   → loop dies, user takes over
- *   - Esc / /new / /clear / exit → loop dies
- *   - one loop per session       → re-issuing /loop replaces the prior
- *
- * Interval bounds:
- *   - Minimum: 5 seconds (anything tighter and the model couldn't even
- *     finish a turn before the next firing — we'd queue submits and
- *     drift forever).
- *   - Maximum: 6 hours (the upper end of "let it run while I sleep";
- *     beyond that you should be writing a cron, not a TUI loop).
- */
+/** Pure parsing for `/loop <interval> <prompt>`; cancellation contract is enforced in App.tsx. */
 
 /** Lower bound on loop interval (ms). Faster than this would queue submits faster than turns finish. */
 export const MIN_LOOP_INTERVAL_MS = 5_000;
 /** Upper bound on loop interval (ms). Beyond a few hours, use cron. */
 export const MAX_LOOP_INTERVAL_MS = 6 * 60 * 60_000;
 
-/**
- * Parse a duration string into milliseconds.
- *
- * Accepted forms (case-insensitive on the unit):
- *   - `45`      → 45_000   (bare number = seconds)
- *   - `30s`     → 30_000
- *   - `5m`      → 300_000
- *   - `2h`      → 7_200_000
- *   - `1.5m`    → 90_000   (fractional supported)
- *
- * Returns `null` on:
- *   - empty input
- *   - non-numeric / unknown unit
- *   - negative or zero values
- *   - values outside [MIN_LOOP_INTERVAL_MS, MAX_LOOP_INTERVAL_MS]
- *
- * Caller surfaces `null` as a usage hint to the user. Pure.
- */
+/** Returns null on bad shape OR out-of-range; caller surfaces as usage hint. */
 export function parseLoopInterval(raw: string): { ms: number } | null {
   const s = raw.trim().toLowerCase();
   if (!s) return null;
@@ -68,22 +29,6 @@ export interface ParsedLoopArgs {
   prompt: string;
 }
 
-/**
- * Parse the full `/loop <interval> <prompt>` invocation. Args is the
- * commander-style tail (already split on whitespace, slash command
- * stripped). Returns `null` when the shape is wrong; caller emits a
- * usage hint.
- *
- * Special tokens:
- *   - `stop` (case-insensitive) as the only arg → caller should stop
- *     the active loop. Returns a sentinel: `{ stop: true }`.
- *   - empty args → returns `{ status: true }` so the caller can print
- *     the active-loop status (or "no loop active").
- *
- * Otherwise the first token is the interval, the rest is the prompt.
- * The prompt may itself be a slash command (`/loop 30s /status` is a
- * valid way to keep refreshing the status panel).
- */
 export type LoopCommand =
   | { kind: "start"; intervalMs: number; prompt: string }
   | { kind: "stop" }
@@ -116,25 +61,12 @@ export function parseLoopCommand(args: readonly string[]): LoopCommand {
   return { kind: "start", intervalMs: interval.ms, prompt };
 }
 
-/**
- * Format the active loop into a single-line status pill for the
- * modeline. `nextFireMs` is wall-clock ms until next firing; the
- * caller computes it from the stored `nextFireAt - Date.now()`.
- *
- * Examples:
- *   "loop: `npm test` · next in 28s · iter 3"
- *   "loop: `check deploy status` · firing now · iter 1"
- */
 export function formatLoopStatus(prompt: string, nextFireMs: number, iter: number): string {
   const preview = prompt.length > 36 ? `${prompt.slice(0, 33)}…` : prompt;
   const when = nextFireMs <= 0 ? "firing now" : `next in ${formatDuration(nextFireMs)}`;
   return `loop: \`${preview}\` · ${when} · iter ${iter}`;
 }
 
-/**
- * Human-friendly duration. Used by the loop status pill so a 4-minute
- * 23-second wait reads as "4m23s" instead of "263000".
- */
 export function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   const totalSec = Math.round(ms / 1000);

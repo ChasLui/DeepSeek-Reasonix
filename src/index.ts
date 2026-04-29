@@ -194,7 +194,6 @@ export {
 } from "./diff.js";
 export type { DiffReport, DiffSide, TurnPair, RenderOptions as DiffRenderOptions } from "./diff.js";
 
-// ---------- MCP (v0.3 foundation) ----------
 export { McpClient } from "./mcp/client.js";
 export type { McpClientOptions } from "./mcp/client.js";
 export { StdioTransport } from "./mcp/stdio.js";
@@ -222,7 +221,6 @@ export type {
 export { inspectMcpServer } from "./mcp/inspect.js";
 export type { InspectionReport, SectionResult } from "./mcp/inspect.js";
 
-// ---------- code mode (v0.3 — `reasonix code`) ----------
 export {
   parseEditBlocks,
   applyEditBlock,

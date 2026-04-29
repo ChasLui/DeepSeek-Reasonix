@@ -1,48 +1,10 @@
-/**
- * Long-running process registry — the "background run" counterpart to
- * `run_command`. `run_command` spawns a child, waits for it to exit,
- * then returns combined output; perfect for tests / builds / one-shots
- * but useless for `npm run dev` / `python -m http.server` / watchers,
- * which never exit and just time the tool out.
- *
- * JobRegistry lets the model fire-and-almost-forget: we spawn the
- * child, wait at most `waitSec` (default 3s) OR until output matches
- * a readiness regex, then return the startup preview plus a job id.
- * The child keeps running in the background; later tool calls tail
- * its output, stop it, or list what's still alive.
- *
- * Shape-wise this is modeled on Claude Code's `BashOutput` / `KillBash`
- * pair. We diverge on one point: ready-signal detection is on by default
- * because dev servers almost universally print "Local:", "listening on",
- * "ready in N ms", "compiled successfully" when they come up — short-
- * circuiting the wait on those keeps the model's first tool-result
- * useful ("server is up at http://localhost:5173") instead of spending
- * the full 3s on a stabilization timer.
- */
+/** Background process registry for never-exiting commands; ready-signal detection short-circuits the startup wait. */
 
 import { type ChildProcess, type SpawnOptions, spawn } from "node:child_process";
 import * as pathMod from "node:path";
 import { detectShellOperator, prepareSpawn, tokenizeCommand } from "./shell.js";
 
-/**
- * Kill an entire process tree rooted at `pid`.
- *
- * Why plain `child.kill(signal)` isn't enough:
- *   - Windows: Node maps signals to `TerminateProcess(handle)`, which
- *     only targets the direct child. `npm.cmd` spawned via cmd.exe
- *     launches `node`, which spawns Vite / Webpack / etc. Killing the
- *     npm wrapper leaves the whole JS server orphaned and still bound
- *     to the port. `taskkill /T /F /PID` walks the tree and terminates
- *     every descendant.
- *   - POSIX: a normal signal goes to the child process only. If we
- *     spawn with `detached:true` the child becomes a process-group
- *     leader; `process.kill(-pid, signal)` then reaches every process
- *     in that group, including grandchildren spawned after startup.
- *
- * Graceful vs forceful: SIGTERM gives the app a chance to cleanup; if
- * it ignores the signal we follow up with SIGKILL after a grace window
- * (handled by the caller, not here).
- */
+/** Kills the whole tree — `child.kill` only hits the direct child, leaving npm-spawned dev servers orphaned. */
 function killProcessTree(pid: number, signal: "SIGTERM" | "SIGKILL"): void {
   if (process.platform === "win32") {
     // taskkill: /T = tree, /F = force (TerminateProcess, no cleanup).
@@ -86,13 +48,7 @@ function killProcessTree(pid: number, signal: "SIGTERM" | "SIGKILL"): void {
 /** Per-job output ring. Capped so a chatty dev server doesn't OOM. */
 const DEFAULT_OUTPUT_CAP_BYTES = 64 * 1024; // 64 KB
 
-/**
- * Regexes that signal "the server is up / the watcher has stabilized."
- * Case-insensitive. Matched against the accumulated stdout+stderr; first
- * hit cuts the startup wait short. Patterns are conservative — false
- * positives waste nothing (we'd have returned at waitSec anyway), but
- * a false negative costs the model a real stall.
- */
+/** First match cuts startup wait short; conservative patterns — a false negative costs a real stall. */
 const READY_SIGNALS: ReadonlyArray<RegExp> = [
   // HTTP server banners
   /\blistening on\b/i,
@@ -111,10 +67,7 @@ const READY_SIGNALS: ReadonlyArray<RegExp> = [
 export interface JobStartOptions {
   /** Absolute path to cwd for the spawned child. */
   cwd: string;
-  /**
-   * Max seconds to wait for the initial burst before returning. Capped
-   * at 30. A ready-signal match short-circuits this. Default 3.
-   */
+  /** Capped at 30; ready-signal match short-circuits. Default 3. */
   waitSec?: number;
   /** Signal plumbed through from the calling tool's AbortSignal. */
   signal?: AbortSignal;
@@ -144,10 +97,7 @@ export interface JobRecord {
   exitCode: number | null;
   /** Combined stdout+stderr, ring-trimmed. */
   output: string;
-  /**
-   * Total bytes ever written by the child (not just what's in `output`).
-   * Useful for "how much got dropped" diagnostics.
-   */
+  /** Counts all bytes the child wrote, not just what's still buffered in `output`. */
   totalBytesWritten: number;
   /** True iff the child is still alive. */
   running: boolean;
@@ -159,11 +109,7 @@ export class JobRegistry {
   private readonly jobs = new Map<number, InternalJob>();
   private nextId = 1;
 
-  /**
-   * Spawn a background child. Resolves after `waitSec` OR on ready
-   * signal OR on early exit, whichever comes first. The child continues
-   * to run (and buffer output) regardless of which path fires.
-   */
+  /** Resolves on (a) ready signal, (b) early exit, or (c) waitSec deadline — child keeps running regardless. */
   async start(command: string, opts: JobStartOptions): Promise<JobStartResult> {
     const trimmed = command.trim();
     if (!trimmed) throw new Error("run_background: empty command");
@@ -316,12 +262,6 @@ export class JobRegistry {
     };
   }
 
-  /**
-   * Read a job's accumulated output. `since` lets a caller poll
-   * incrementally: pass the byte count returned from the last call to
-   * get only newly-written content. Returns both full output and a
-   * running snapshot so the caller can use whichever.
-   */
   read(id: number, opts: { since?: number; tailLines?: number } = {}): JobReadResult | null {
     const job = this.jobs.get(id);
     if (!job) return null;
@@ -346,11 +286,7 @@ export class JobRegistry {
     };
   }
 
-  /**
-   * Send SIGTERM, wait `graceMs`, then SIGKILL if still alive. Returns
-   * the final job record (or null when the job id is unknown). Safe to
-   * call on an already-exited job — returns the record unchanged.
-   */
+  /** SIGTERM, wait graceMs, then SIGKILL. Idempotent on already-exited jobs. */
   async stop(id: number, opts: { graceMs?: number } = {}): Promise<JobRecord | null> {
     const job = this.jobs.get(id);
     if (!job) return null;
@@ -392,11 +328,6 @@ export class JobRegistry {
     return [...this.jobs.values()].map(snapshot);
   }
 
-  /**
-   * Best-effort kill of every still-running job. Called on TUI shutdown
-   * so dev servers don't outlive the Reasonix process. Resolves after
-   * every child has closed or a hard deadline passes (3s total).
-   */
   async shutdown(deadlineMs = 5000): Promise<void> {
     const start = Date.now();
     const runningJobs = [...this.jobs.values()].filter((j) => j.running && j.child);

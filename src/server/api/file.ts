@@ -1,21 +1,4 @@
-/**
- * `/api/file` and `/api/files` — read / list / write project files.
- *
- *   GET    /api/files                       → flat tree (gitignore-aware)
- *   GET    /api/file/<path>                 → file body
- *   POST   /api/file/<path>  { content }    → write body
- *
- * Sandbox: every path resolves against `getCurrentCwd()`. Anything that
- * resolves outside the project root is rejected with 403, including
- * `..` traversal and absolute paths that don't sit under the root. The
- * model's filesystem tools enforce the same rule via a different code
- * path; this is a parallel guard for the web surface.
- *
- * Binary detection: we sniff the first 8 KB for null bytes. Files that
- * look binary refuse to load with a friendly 415 (the SPA shows
- * "binary file — open externally"). Text files up to a 4 MB cap stream
- * through.
- */
+/** `/api/file[s]` — every path is sandboxed against getCurrentCwd(); escapes return 403, binaries return 415. */
 
 import {
   closeSync,
@@ -49,12 +32,7 @@ function parseBody(raw: string): WriteBody {
   }
 }
 
-/**
- * Resolve `requested` against `root` and return the absolute path,
- * or null when the resolution escapes the root. Catches `..`, absolute
- * paths outside, and various Windows-specific edge cases (drive letter
- * differences are caught by the prefix check).
- */
+/** Returns null when resolution escapes `root` — catches `..`, drive-letter differences, etc. */
 function safeResolve(root: string, requested: string): string | null {
   const rootAbs = resolve(root);
   const target = isAbsolute(requested) ? resolve(requested) : resolve(rootAbs, requested);

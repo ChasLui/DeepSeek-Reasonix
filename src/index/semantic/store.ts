@@ -1,20 +1,4 @@
-/**
- * JSONL persistence + in-memory cosine search for the semantic index.
- *
- * Layout choice — JSONL not SQLite, not a packed binary file:
- *   - Zero native deps (matches Reasonix's npm-only install story).
- *   - `cat .reasonix/index.jsonl | wc -l` answers "how big is my
- *     index" without code; `head` peeks at content; `git diff`
- *     reads if you ever commit it.
- *   - Append-only writes survive Ctrl+C without corruption — the
- *     same atomic-append discipline `~/.reasonix/sessions/` uses.
- *
- * Search is a linear cosine scan. For ≤10k chunks (typical mid-size
- * project) one query is <5ms on a modern CPU because the inner loop
- * runs over Float32Array which V8 keeps unboxed. Switching to HNSW
- * is on the post-MVP list; doing it before linear scan hurts
- * (faster than necessary, opaque debugging, native deps).
- */
+/** JSONL append-only (Ctrl+C-safe) + linear cosine scan over unboxed Float32Array — fast enough for ≤10k chunks. */
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -49,12 +33,6 @@ export const STORE_VERSION = 1;
 const META_FILE = "index.meta.json";
 const DATA_FILE = "index.jsonl";
 
-/**
- * In-memory index. Owns the loaded entries + the directory paths,
- * provides cosine search, and writes through to disk on every
- * `add`. Each store instance is scoped to one project (one sandbox
- * root in `reasonix code`).
- */
 export class SemanticStore {
   private entries: IndexEntry[] = [];
   private byPath = new Map<string, IndexEntry[]>();
@@ -118,13 +96,7 @@ export class SemanticStore {
     await this.writeMeta();
   }
 
-  /**
-   * Drop every entry whose `path` is in `paths`. Used by incremental
-   * rebuild: when a file's mtime changes, the existing entries for
-   * it are evicted before re-chunking + re-embedding. Implementation
-   * rewrites the JSONL — append-only is fine for adds, but deletes
-   * need a compaction pass.
-   */
+  /** Rewrites the JSONL — append-only handles adds, deletes need compaction. */
   async remove(paths: readonly string[]): Promise<number> {
     if (paths.length === 0) return 0;
     const drop = new Set(paths);
@@ -136,12 +108,7 @@ export class SemanticStore {
     return removed;
   }
 
-  /**
-   * Top-K cosine search. `query` MUST already be L2-normalized — the
-   * caller embeds + normalizes once per query. Filtering hits by
-   * minimum score (`minScore`) is optional; tune via UI to suppress
-   * weakly relevant snippets that distract the model.
-   */
+  /** `query` MUST be L2-normalized — search assumes unit vectors so cosine = dot. */
   search(query: Float32Array, topK = 8, minScore = 0): SearchHit[] {
     if (this.entries.length === 0) return [];
     if (query.length !== this.dim && this.dim !== 0) {
@@ -172,11 +139,7 @@ export class SemanticStore {
     return heap.sort((a, b) => b.score - a.score);
   }
 
-  /**
-   * Rewrite the JSONL on disk with the current in-memory state. Used
-   * after `remove` and from `flush`. We write to a temp file and
-   * rename so a Ctrl+C mid-write never leaves the index half-empty.
-   */
+  /** Temp-file + rename so Ctrl+C mid-write can't leave the index half-empty. */
   private async flush(): Promise<void> {
     await fs.mkdir(this.indexDir, { recursive: true });
     const tmp = path.join(this.indexDir, `${DATA_FILE}.tmp`);
@@ -211,12 +174,7 @@ export class SemanticStore {
   }
 }
 
-/**
- * Open an existing index from disk, or return an empty store if none
- * exists. Throws when the on-disk model name disagrees with the
- * caller's — the embeddings would be incomparable, so the caller
- * needs to wipe + rebuild deliberately.
- */
+/** Throws on model mismatch — embeddings would be incomparable; caller must wipe + rebuild. */
 export async function openStore(indexDir: string, model: string): Promise<SemanticStore> {
   const store = new SemanticStore(indexDir, model);
   const dataPath = path.join(indexDir, DATA_FILE);
@@ -268,11 +226,6 @@ export async function openStore(indexDir: string, model: string): Promise<Semant
   return store;
 }
 
-/**
- * L2-normalize a vector in place + return it for chaining. Cosine
- * similarity reduces to a dot product when both operands are unit
- * vectors, which is what the search hot path assumes.
- */
 export function normalize(v: Float32Array): Float32Array {
   let sum = 0;
   for (let i = 0; i < v.length; i++) sum += v[i]! * v[i]!;
@@ -288,11 +241,7 @@ function dot(a: Float32Array, b: Float32Array): number {
   return s;
 }
 
-/**
- * Wire format — JSON object per line. Embedding is encoded as
- * base64 over the underlying bytes (Float32 → Uint8 → base64) which
- * is ~33% smaller than the JSON-array form and round-trips losslessly.
- */
+/** Embedding base64-encoded — ~33% smaller than the JSON-array form, round-trips losslessly. */
 function serializeEntry(e: IndexEntry): string {
   const buf = Buffer.from(e.embedding.buffer, e.embedding.byteOffset, e.embedding.byteLength);
   return JSON.stringify({

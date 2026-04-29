@@ -1,27 +1,8 @@
-/**
- * Embedded SPA assets. The dashboard ships as three text files —
- * index.html, app.js, app.css — bundled into the npm package via
- * `dist/dashboard/`. We import them as strings at build time so the
- * server can serve them with no filesystem lookup at runtime, even
- * when reasonix runs through `npx` from a cached tarball.
- *
- * The files themselves live at the repo root in `dashboard/` (not
- * `dist/dashboard/`) — `dist/` is generated. Actual bundling is
- * handled by tsup's loader hook in v0.13; for v0.12 the strings are
- * inlined here. Keeps the iteration loop tight while we figure out
- * what the SPA needs.
- */
-
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-/**
- * Resolve a sibling `dashboard/` directory regardless of whether we
- * run from src/ (tsx dev) or dist/cli/ (production tsup bundle).
- * Mirror of `tokenizer.ts`'s `resolveDataPath` — same problem, same
- * shape: dev resolves one level up, prod resolves two levels up.
- */
+/** Resolve dashboard/ across tsx-dev and tsup-bundled layouts. */
 function resolveAssetDir(): string {
   const here = dirname(fileURLToPath(import.meta.url));
   // Try a few candidates; the first existing one wins.
@@ -77,12 +58,7 @@ function loadCm(): string {
   return cachedCm;
 }
 
-/**
- * Inject the per-boot token + bound mode into the HTML shell so the
- * SPA can read them on first paint without a separate /api round
- * trip. Token is HTML-attribute-escaped to be safe even if a future
- * mint ever produces non-hex bytes.
- */
+/** Token HTML-attribute-escaped in case a future mint produces non-hex bytes. */
 export function renderIndexHtml(token: string, mode: "standalone" | "attached"): string {
   const tpl = loadIndexTemplate();
   const safeToken = token.replace(/[^a-zA-Z0-9]/g, "");

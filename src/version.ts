@@ -1,24 +1,4 @@
-/**
- * Version module.
- *
- * Two jobs:
- *
- *   1. Expose `VERSION` sourced from the real `package.json` so the
- *      constant never drifts from what npm publishes. Works in dev
- *      (`tsx src/...`) AND after `tsup` bundles to `dist/` — both
- *      layouts sit two levels below the manifest, so a short
- *      walk-up finds it.
- *
- *   2. Offer an opt-in `getLatestVersion()` that hits the npm
- *      registry with a bounded timeout and a 24-hour on-disk
- *      cache at `~/.reasonix/version-cache.json`. Returns `null`
- *      on any failure — offline / restricted-network launches
- *      should stay silent rather than nag the user.
- *
- * The CLI wires `getLatestVersion` asynchronously at App mount
- * (never in a hot path) and renders the outcome in the stats
- * panel when there's a newer published version.
- */
+/** VERSION sourced from package.json so it never drifts from npm; latest-check returns null on any failure. */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -36,17 +16,7 @@ export const LATEST_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 /** Network timeout. Short — we never block the UI waiting on this. */
 export const LATEST_FETCH_TIMEOUT_MS = 2_000;
 
-/**
- * Walk up from the current source file looking for the `reasonix`
- * package.json. Works for:
- *   - dev: `src/version.ts` → `F:/Reasonix/package.json` (2 levels up)
- *   - built: `dist/index.js` → `F:/Reasonix/package.json` (2 levels up)
- *   - global install: `.../node_modules/reasonix/dist/index.js` → `.../reasonix/package.json`
- *
- * The `name === "reasonix"` guard is a cheap safety net against
- * picking up the nearest *other* package.json if we're ever loaded
- * as a dependency and the layout is unusual.
- */
+/** `name === "reasonix"` guard avoids picking up an outer package.json when loaded as a dep. */
 function readPackageVersion(): string {
   try {
     let dir = dirname(fileURLToPath(import.meta.url));
@@ -119,14 +89,7 @@ export interface GetLatestVersionOptions {
   timeoutMs?: number;
 }
 
-/**
- * Resolve the latest published `reasonix` version from the npm registry.
- *
- * Returns `null` on any network / parse failure. Callers treat `null`
- * as "don't know, don't nag the user." The cache entry is only
- * written on a successful fetch — a bad registry response won't
- * poison the cache.
- */
+/** Returns null on failure; cache only writes on success so bad responses can't poison it. */
 export async function getLatestVersion(opts: GetLatestVersionOptions = {}): Promise<string | null> {
   const ttl = opts.ttlMs ?? LATEST_CACHE_TTL_MS;
   if (!opts.force) {
@@ -157,19 +120,7 @@ export async function getLatestVersion(opts: GetLatestVersionOptions = {}): Prom
   }
 }
 
-/**
- * Semver compare. Returns a negative number when `a < b`, positive
- * when `a > b`, zero when equal.
- *
- * Minimal pre-release handling: when the CORE (`x.y.z`) parts match,
- * any version WITH a suffix (`-rc.1`, `-alpha.4`) compares LOWER
- * than the bare version. That matches npm's dist-tag semantics —
- * `reasonix@latest` resolves to a real release, not a pre-release.
- *
- * We're deliberately not pulling in `semver` (~50KB). The three
- * cases we care about are: current > latest (future build, no
- * prompt), current < latest (prompt), current === latest (no prompt).
- */
+/** Pre-release with same core sorts BELOW the bare version — matches npm `latest` dist-tag semantics. */
 export function compareVersions(a: string, b: string): number {
   const [aCore = "0", aPre = ""] = a.split("-", 2);
   const [bCore = "0", bPre = ""] = b.split("-", 2);
@@ -185,20 +136,7 @@ export function compareVersions(a: string, b: string): number {
   return aPre < bPre ? -1 : aPre > bPre ? 1 : 0;
 }
 
-/**
- * Heuristic: did this process launch via `npx` / `pnpm dlx` instead
- * of a global install? The update command takes different advice in
- * each case — a global install can `npm i -g reasonix@latest`, while
- * npx just needs its cache to roll over on next launch.
- *
- * Signals checked, in order:
- *   - `process.argv[1]` contains `_npx` (npm's ephemeral dir name)
- *   - `process.argv[1]` contains `.pnpm` + `dlx`
- *   - `npm_config_user_agent` contains `npx/`
- *
- * Any one hit → npx. False negatives are safe (worst case we suggest
- * `npm i -g` to an npx user, which is a valid way to upgrade too).
- */
+/** False negatives are safe — `npm i -g` works for npx users too. */
 export function isNpxInstall(): boolean {
   const bin = process.argv[1] ?? "";
   if (/[/\\]_npx[/\\]/.test(bin)) return true;

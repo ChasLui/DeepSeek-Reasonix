@@ -1,20 +1,3 @@
-/**
- * Plan Mode tool registration. Owns `registerPlanTool` — which wires
- * `submit_plan`, `mark_step_complete`, and `revise_plan` into a
- * ToolRegistry — plus the arg sanitizers these tools share.
- *
- * Structure rationale: the three registrations are parallel in shape
- * (each throws a structured error the TUI renders as a picker), so
- * they're broken out into `registerSubmitPlan` / `registerMarkStep` /
- * `registerRevisePlan` — one per screen of logic rather than one
- * 230-line `registerPlanTool` body. Tool descriptions live at the top
- * as named constants so the function bodies stay readable; the strings
- * themselves are long because they teach the model when to call each
- * tool, which is load-bearing behavior.
- *
- * Dependency direction: plan-core → plan-errors → plan-types.
- */
-
 import type { ToolRegistry } from "../tools.js";
 import {
   PlanCheckpointError,
@@ -23,9 +6,7 @@ import {
 } from "./plan-errors.js";
 import type { PlanStep, PlanStepRisk, StepCompletion } from "./plan-types.js";
 
-// ---------------------------------------------------------------------------
 // Tool descriptions (teaching prompts for the model). Edit here, not inline.
-// ---------------------------------------------------------------------------
 
 const SUBMIT_PLAN_DESCRIPTION =
   "Submit ONE concrete plan you've already decided on. Use this for tasks that warrant a review gate — multi-file refactors, architecture changes, anything that would be expensive or confusing to undo. Skip it for small fixes (one-line typo, obvious bug with a clear fix) — just make the change. The user will either approve (you then implement it), ask for refinement, or cancel. If the user has already enabled /plan mode, writes are blocked at dispatch and you MUST use this. CRITICAL: do NOT use submit_plan to present alternative routes (A/B/C, option 1/2/3) for the user to pick from — the picker only exposes approve/refine/cancel, so a menu plan strands the user with no way to choose. For branching decisions, call `ask_choice` instead; only call submit_plan once the user has picked a direction and you have a single actionable plan. Write the plan as markdown with a one-line summary, a bulleted list of files to touch and what will change, and any risks or open questions. STRONGLY PREFERRED: pass `steps` — an array of {id, title, action, risk?} — so the UI renders a structured step list above the approval picker and tracks per-step progress. Use risk='high' for steps that touch prod data / break public APIs / are hard to undo; 'med' for non-trivial but reversible (multi-file edits, schema tweaks); 'low' for safe local work. After each step, call `mark_step_complete` so the user sees progress ticks.";
@@ -55,36 +36,15 @@ const STEP_ITEM_SCHEMA = {
   required: ["id", "title", "action"],
 };
 
-// ---------------------------------------------------------------------------
 // Registration options
-// ---------------------------------------------------------------------------
 
 export interface PlanToolOptions {
-  /**
-   * Optional side-channel callback fired when the model submits a plan.
-   * The TUI uses this to preview the plan in real time (the tool-result
-   * event is also emitted; this is just earlier and friendlier to
-   * test harnesses that don't want to parse JSON).
-   */
   onPlanSubmitted?: (plan: string, steps?: PlanStep[]) => void;
-  /**
-   * Optional callback fired when the model marks a step complete via
-   * `mark_step_complete`. Analogous to `onPlanSubmitted` — the tool
-   * event carries the same payload, but this firing point is earlier
-   * and avoids JSON parsing for consumers that don't need it.
-   */
   onStepCompleted?: (update: StepCompletion) => void;
-  /**
-   * Optional preview callback fired when the model proposes a plan
-   * revision via `revise_plan`. Same earlier-than-event timing as
-   * the other on* hooks.
-   */
   onPlanRevisionProposed?: (reason: string, remainingSteps: PlanStep[], summary?: string) => void;
 }
 
-// ---------------------------------------------------------------------------
 // Arg sanitizers — defensive cleanup shared between submit_plan and revise_plan
-// ---------------------------------------------------------------------------
 
 function sanitizeRisk(raw: unknown): PlanStepRisk | undefined {
   if (raw === "low" || raw === "med" || raw === "high") return raw;
@@ -109,9 +69,7 @@ function sanitizeSteps(raw: unknown): PlanStep[] | undefined {
   return steps.length > 0 ? steps : undefined;
 }
 
-// ---------------------------------------------------------------------------
 // Individual tool registrations — one per screen
-// ---------------------------------------------------------------------------
 
 function registerSubmitPlan(registry: ToolRegistry, opts: PlanToolOptions): void {
   registry.register({
@@ -254,9 +212,7 @@ function registerRevisePlan(registry: ToolRegistry, opts: PlanToolOptions): void
   });
 }
 
-// ---------------------------------------------------------------------------
 // Public entry point
-// ---------------------------------------------------------------------------
 
 export function registerPlanTool(registry: ToolRegistry, opts: PlanToolOptions = {}): ToolRegistry {
   registerSubmitPlan(registry, opts);

@@ -1,14 +1,3 @@
-/**
- * `/api/plans` — archived plans across every saved session.
- *
- *   GET /api/plans  → flat list with session name + completion stats
- *
- * `listPlanArchives` is per-session; we walk every session in
- * `~/.reasonix/sessions/` and concatenate. v0.13 keeps the listing
- * read-only; replay drill-down + revisit-from-step come in v0.14
- * alongside Plan-Mode mutations.
- */
-
 import { listPlanArchives } from "../../code/plan-store.js";
 import { listSessions } from "../../session.js";
 import type { PlanStep } from "../../tools/plan.js";

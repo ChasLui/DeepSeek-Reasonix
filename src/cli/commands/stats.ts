@@ -1,20 +1,4 @@
-/**
- * `reasonix stats` — two modes, decided by whether the user passed
- * a transcript path.
- *
- *   - `reasonix stats`          → cross-session usage dashboard
- *                                  (reads `~/.reasonix/usage.jsonl`)
- *   - `reasonix stats <path>`   → summary of a single JSONL transcript
- *                                  (original v0.1 behavior, kept so
- *                                   existing scripts don't break)
- *
- * The dashboard is the new story: for every turn `reasonix chat|code|run`
- * has ever executed on this machine, we aggregate tokens + cost + the
- * equivalent Claude spend, and print rolling-window totals (today /
- * week / month / all-time). The savings column is the Pillar 1 pitch
- * made concrete — "you paid $X; Claude would have charged $Y, a N%
- * reduction."
- */
+/** `reasonix stats [path]` — path arg switches to per-transcript mode; default is the cross-session dashboard. */
 
 import { existsSync, readFileSync } from "node:fs";
 import {
@@ -45,10 +29,6 @@ export function statsCommand(opts: StatsOptions): void {
   dashboard(opts);
 }
 
-// ---------------------------------------------------------------------
-// Transcript summary — legacy v0.1 behavior, preserved verbatim.
-// ---------------------------------------------------------------------
-
 function transcriptSummary(path: string): void {
   if (!existsSync(path)) {
     console.error(`no such transcript: ${path}`);
@@ -73,10 +53,6 @@ function transcriptSummary(path: string): void {
   console.log(`tool invocations: ${toolCalls}`);
   console.log(`last turn index:  ${lastTurn}`);
 }
-
-// ---------------------------------------------------------------------
-// Dashboard — aggregates ~/.reasonix/usage.jsonl.
-// ---------------------------------------------------------------------
 
 function dashboard(opts: StatsOptions): void {
   const path = opts.logPath ?? defaultUsageLogPath();

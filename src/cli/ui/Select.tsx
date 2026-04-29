@@ -53,9 +53,11 @@ export function SingleSelect<V extends string>({
   const isEditing = editingContext !== null;
 
   useKeystroke((ev) => {
-    if (ev.paste) return;
-
     if (isEditing) {
+      if (ev.paste) {
+        setEditingContext((v) => (v ?? "") + ev.input);
+        return;
+      }
       if (ev.escape) {
         setEditingContext(null);
       } else if (ev.upArrow || ev.downArrow) {
@@ -77,6 +79,8 @@ export function SingleSelect<V extends string>({
       }
       return;
     }
+
+    if (ev.paste) return;
 
     if (ev.upArrow) {
       setIndex((i) => findNextEnabled(items, i, -1));

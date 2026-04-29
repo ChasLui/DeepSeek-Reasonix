@@ -1,25 +1,4 @@
-/**
- * `reasonix index` — build (or incrementally refresh) the project's
- * semantic search index.
- *
- * Usage:
- *   reasonix index                  # incremental: only re-embeds changed files
- *   reasonix index --rebuild        # wipe + rebuild from scratch
- *   reasonix index --model MODEL    # override embedding model
- *   reasonix index --dir PATH       # index a different directory
- *
- * Output is rendered to stderr so piping the index to a script
- * (which we don't actually do today, but might) keeps stdout clean.
- *
- * On a TTY the progress writer paints `<spinner> <status>  <elapsed>s`
- * on a single line, ticking every 120ms via setInterval — so the
- * line keeps animating even between onProgress events. That's the
- * load-bearing UX guarantee: builds that take 30+ seconds never
- * leave the user wondering whether the process is hung.
- *
- * On non-TTY (CI, piped logs) we emit one line per phase + a
- * periodic heartbeat. No \r tricks because they make logs unreadable.
- */
+/** `reasonix index` — progress writes go to stderr so stdout stays pipeable. */
 
 import { resolve } from "node:path";
 import { buildIndex } from "../../index/semantic/builder.js";
@@ -95,12 +74,6 @@ interface ProgressWriter {
   clear(): void;
 }
 
-/**
- * Braille spinner — same alphabet most CLI spinners use. Ten frames,
- * cycled at ~120ms each. Visually clear that the process is alive
- * even when no progress events fire (e.g. during phase transitions
- * or while waiting on Ollama's first model-load latency).
- */
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_INTERVAL_MS = 120;
 
@@ -109,11 +82,6 @@ function makeProgressWriter(tty: boolean): ProgressWriter {
   return makeTtyWriter();
 }
 
-/**
- * Non-TTY writer — one line per phase transition + a heartbeat every
- * 50 embedded chunks. Keeps logs short and parseable while still
- * proving forward motion.
- */
 function makeNonTtyWriter(): ProgressWriter {
   let lastPhase: BuildProgress["phase"] | null = null;
   let lastChunks = 0;
@@ -148,13 +116,7 @@ function makeNonTtyWriter(): ProgressWriter {
   };
 }
 
-/**
- * TTY writer — paints `<spinner> <status>  <elapsed>s` on a single
- * line via \r. The spinner ticks on a setInterval, INDEPENDENT of
- * onProgress events: even if the embedder hangs for 5 seconds on
- * the first model-load, the spinner keeps spinning so the user sees
- * the process is alive.
- */
+/** Spinner ticks on its own setInterval so a hung embedder still shows liveness. */
 function makeTtyWriter(): ProgressWriter {
   let status = t("progressStarting");
   let lastLineLen = 0;

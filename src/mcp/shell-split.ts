@@ -1,16 +1,4 @@
-/**
- * Split a shell-style command string into argv, respecting single and
- * double quotes. Intended for parsing the user's `--mcp "cmd args..."`
- * flag — NOT a full shell parser (no variable expansion, no subshells,
- * no globs, no `&&` / pipes).
- *
- * The tradeoff: users with paths containing spaces need to quote them
- * (e.g. `--mcp 'npx -y pkg "/my path/here"'`), which is how they'd
- * already quote them at the shell level.
- *
- * Throws on unterminated quotes — better than silently dropping half
- * the command.
- */
+/** Quote-aware argv split for `--mcp`; throws on unterminated quotes. NOT a full shell parser. */
 export function shellSplit(input: string): string[] {
   const tokens: string[] = [];
   let cur = "";

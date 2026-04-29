@@ -1,25 +1,4 @@
-/**
- * `/api/semantic` — control the on-disk semantic index from the
- * dashboard.
- *
- *   GET  /api/semantic            → { ollama, index, job } snapshot
- *   POST /api/semantic/start      → kick off buildIndex({ rebuild })
- *   POST /api/semantic/stop       → abort the in-flight job
- *
- * The job state lives in a module-scoped Map keyed by project root so
- * two dashboards (same process, different roots) don't collide. Each
- * entry is a small in-memory record: phase, counters, last result or
- * error. Endpoints just read/write that record; the actual indexing
- * runs as a fire-and-forget Promise that updates the record via
- * `onProgress` as it goes.
- *
- * `reasonix index` from the CLI is independent of this — it spawns
- * its own buildIndex, doesn't touch this Map. Users mixing both will
- * see the dashboard report whatever the dashboard last started, even
- * if the CLI is also running. Acceptable: real concurrent runs of
- * buildIndex on the same root would race anyway, and we surface the
- * "running" state so the user can choose not to start another.
- */
+/** Job state in a module-scoped Map keyed by project root so multi-root dashboards don't collide; CLI `reasonix index` runs independently. */
 
 import { buildIndex, indexExists } from "../../index/semantic/builder.js";
 import type { BuildProgress, BuildResult } from "../../index/semantic/builder.js";
@@ -55,12 +34,6 @@ interface JobRecord {
 
 const JOBS = new Map<string, JobRecord>();
 
-/**
- * Per-process pull-job state. `ollama pull <model>` is long-running
- * (multi-minute download on first install), so the SPA needs a way
- * to poll progress without holding open a request. Keyed by model
- * name because two dashboards might pull different models concurrently.
- */
 interface PullRecord {
   startedAt: number;
   status: "pulling" | "done" | "error";

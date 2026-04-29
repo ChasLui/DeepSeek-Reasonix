@@ -1,24 +1,6 @@
 import type { Usage } from "./client.js";
 
-/**
- * USD per 1M tokens. Source: DeepSeek's CNY price sheet
- * (https://api-docs.deepseek.com/zh-cn/quick_start/pricing) converted
- * at a fixed 7.2 CNY/USD rate so billing stays stable across daily FX
- * drift; revisit if the rate moves more than ±5%.
- *
- * 2026-04 V4 launch:
- *   - deepseek-v4-flash  ¥0.2 / ¥1  / ¥2   (hit / miss / out per 1M)
- *   - deepseek-v4-pro    ¥1   / ¥12 / ¥24
- *
- * deepseek-chat and deepseek-reasoner are now thin compat aliases for
- * v4-flash's non-thinking and thinking modes respectively — same
- * underlying model, same bill. We keep them in the table so existing
- * sessions (and configs that hard-code these names) keep pricing.
- *
- * Historical note: sessions logged before this file was updated remain
- * as-is in `~/.reasonix/usage.jsonl` — USD is frozen at record time,
- * we never retroactively rewrite billing history.
- */
+/** USD per 1M tokens; CNY sheet converted at fixed 7.2 — revisit if FX moves >±5%. */
 export const DEEPSEEK_PRICING: Record<
   string,
   { inputCacheHit: number; inputCacheMiss: number; output: number }
@@ -33,18 +15,7 @@ export const DEEPSEEK_PRICING: Record<
 /** Reference Claude Sonnet 4.6 pricing (USD per 1M tokens). */
 export const CLAUDE_SONNET_PRICING = { input: 3.0, output: 15.0 };
 
-/**
- * Maximum prompt-side context window per DeepSeek model, in tokens.
- * V4 (flash + pro) jumps to 1,000,000 tokens. The compat aliases
- * (deepseek-chat / deepseek-reasoner) inherit that through the
- * v4-flash route — we bump them so the StatsPanel gauge reflects
- * what the API actually accepts.
- *
- * Completion caps (e.g. 384K for V4) are enforced by the server, not
- * tracked here — they don't affect the prompt-side budget the panel
- * shows. If a future feature surfaces output-cap warnings we'll add
- * a sibling table.
- */
+/** Prompt-side window only; completion caps live server-side and don't affect this gauge. */
 export const DEEPSEEK_CONTEXT_TOKENS: Record<string, number> = {
   "deepseek-v4-flash": 1_000_000,
   "deepseek-v4-pro": 1_000_000,
@@ -84,14 +55,6 @@ export function outputCostUsd(model: string, usage: Usage): number {
   return (usage.completionTokens * p.output) / 1_000_000;
 }
 
-/**
- * USD saved by DeepSeek's prompt-cache hits — the difference between
- * paying miss-rate vs hit-rate for tokens that landed in the cache.
- * Quantifies the value of the cache mechanic itself, separate from the
- * vs-Claude story (which conflates cache benefit with model price gap).
- *
- * Returns 0 for unknown models or when nothing hit the cache.
- */
 export function cacheSavingsUsd(model: string, hitTokens: number): number {
   if (hitTokens <= 0) return 0;
   const p = DEEPSEEK_PRICING[model];
@@ -118,11 +81,6 @@ export interface TurnStats {
 export interface SessionSummary {
   turns: number;
   totalCostUsd: number;
-  /**
-   * Input-side (prompt) cost aggregated across the session. Split
-   * from totalCostUsd so the panel can render "cost $X (in $Y · out
-   * $Z)" — users asked for visibility into where the spend lands.
-   */
   totalInputCostUsd: number;
   /** Output-side (completion) cost aggregated across the session. */
   totalOutputCostUsd: number;
@@ -131,19 +89,8 @@ export interface SessionSummary {
   /** @deprecated. Same as claudeEquivalentUsd — synthetic ratio, not a real measurement. */
   savingsVsClaudePct: number;
   cacheHitRatio: number;
-  /**
-   * Most recent turn's prompt-token count. Used by the TUI's context
-   * gauge: we can't know the next call's cost without making it, but
-   * the last turn's prompt tokens is the floor (next call is last
-   * prompt + user delta + any new tool outputs).
-   */
+  /** Floor estimate for next call — actual cost = this + user delta + new tool outputs. */
   lastPromptTokens: number;
-  /**
-   * Most recent turn's USD cost. Complements `totalCostUsd` so the TUI
-   * can render "this turn: $X · session: $Y" — users asked for a
-   * per-turn signal so a mid-session jump from flash to pro is
-   * immediately visible, not hidden inside the session aggregate.
-   */
   lastTurnCostUsd: number;
 }
 

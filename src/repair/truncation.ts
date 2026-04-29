@@ -1,11 +1,4 @@
-/**
- * Truncation recovery for tool-call argument JSON cut off mid-structure
- * (typically when the model hits max_tokens before finishing the JSON object).
- *
- * Strategy is purely local: balance braces, close strings, fill missing values
- * with `null`. We deliberately do NOT make a continuation API call here — that
- * decision belongs to the loop, which knows about budgets.
- */
+/** Local-only repair (balance braces, close strings, fill nulls); continuation calls belong to the loop, which owns budgets. */
 
 export interface TruncationRepairResult {
   repaired: string;

@@ -1,17 +1,4 @@
-/**
- * Retry layer for DeepSeek API calls.
- *
- * Wraps a `fetch` function so that transient failures (rate limiting, server
- * overload, network blips) don't kill an agent session. We explicitly DO NOT
- * retry:
- *   - 4xx client errors other than 408 / 429 (bad key, bad request, ...)
- *   - aborted requests (user cancelled)
- *   - mid-stream body read errors (retrying costs money AND would desync)
- *
- * Retrying is controlled by attempt count + exponential backoff with jitter.
- * If the server sends a `Retry-After` header we honor it (capped by
- * `maxBackoffMs` so a misconfigured upstream can't park us forever).
- */
+/** No retry on aborts or mid-stream body errors — re-billing the user for desynced output is worse than failing. */
 
 export interface RetryOptions {
   /** Maximum total attempts (including the first). Default 4. */

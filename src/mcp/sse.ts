@@ -1,24 +1,4 @@
-/**
- * HTTP+SSE transport for MCP (spec version 2024-11-05).
- *
- * Wire shape:
- *   1. Client opens GET to the SSE URL with `Accept: text/event-stream`.
- *   2. Server's first SSE event is `event: endpoint`, `data: <url>` — the
- *      URL (relative or absolute) the client must POST JSON-RPC requests
- *      to. All subsequent server → client messages arrive as `event: message`
- *      SSE frames carrying a JSON-RPC response or server-initiated frame.
- *   3. Client POSTs each outgoing JSON-RPC frame to the endpoint URL.
- *      The POST response body is ignored — replies land on the SSE stream.
- *
- * This transport exists so Reasonix can talk to hosted/remote MCP servers
- * (e.g. a company's internal knowledge server fronted by auth). Stdio
- * covers local subprocesses; SSE covers everything else.
- *
- * Note: the newer "Streamable HTTP" transport (2025 spec) folds the POST
- * and SSE streams onto a single endpoint. We stay on 2024-11-05 here —
- * that's what `MCP_PROTOCOL_VERSION` advertises in the initialize handshake
- * and what currently-published servers implement.
- */
+/** MCP HTTP+SSE transport (spec 2024-11-05) — POST endpoint URL arrives as the first `event: endpoint` SSE frame. */
 
 import { createParser } from "eventsource-parser";
 import type { McpTransport } from "./stdio.js";
@@ -31,10 +11,6 @@ export interface SseTransportOptions {
   headers?: Record<string, string>;
 }
 
-/**
- * Open an SSE stream to `url`, parse incoming events into JsonRpcMessages,
- * POST outgoing frames to the endpoint URL the server advertises.
- */
 export class SseTransport implements McpTransport {
   private readonly url: string;
   private readonly headers: Record<string, string>;
@@ -104,8 +80,6 @@ export class SseTransport implements McpTransport {
       /* already aborted */
     }
   }
-
-  // ---------- internals ----------
 
   private async runStream(): Promise<void> {
     let res: Response;

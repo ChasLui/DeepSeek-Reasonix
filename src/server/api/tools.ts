@@ -1,11 +1,3 @@
-/**
- * `/api/tools` — list all registered tools with their schemas, drawn
- * from the live `ToolRegistry`. Standalone mode has no live registry,
- * so we return a 503-style "live tools view requires an attached
- * dashboard session" message; v0.13 may add a "preview registry from
- * config" mode that builds a registry without bridging anything.
- */
-
 import type { DashboardContext } from "../context.js";
 import type { ApiResult } from "../router.js";
 

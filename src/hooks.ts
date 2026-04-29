@@ -1,40 +1,4 @@
-/**
- * Hooks — user-defined automation that fires at well-known points in
- * the agent loop. Mirrors the two-scope layout we use for memory and
- * skills:
- *
- *   - `<project>/.reasonix/settings.json` — committable per-project
- *   - `~/.reasonix/settings.json`         — every session
- *
- * A hook is a shell command. We invoke it with stdin = a JSON
- * payload describing the event, and interpret the exit code:
- *
- *   - `0` — pass; loop continues normally
- *   - `2` — block; for `PreToolUse` / `UserPromptSubmit` the
- *     loop refuses to continue with that step and surfaces the
- *     hook's stderr as the reason. For `PostToolUse` / `Stop` block
- *     is meaningless (the action already happened) — treat as warn.
- *   - anything else — warn; loop continues but stderr is rendered
- *     to the user as an inline notice.
- *
- * stdin JSON shape (one envelope per event):
- *
- *   {
- *     "event":    "PreToolUse" | "PostToolUse" | "UserPromptSubmit" | "Stop",
- *     "cwd":      "<absolute project root or process.cwd()>",
- *     "toolName": "<string>",   // tool events only
- *     "toolArgs": <unknown>,    // tool events only — already JSON-decoded
- *     "toolResult": "<string>", // PostToolUse only — same body the model sees
- *     "prompt":   "<string>",   // UserPromptSubmit only
- *     "lastAssistantText": "<string>", // Stop only
- *     "turn":     <number>,     // Stop only
- *   }
- *
- * Hooks are executed in order: project scope first, then global.
- * `Pre*` events stop dispatching at the first block; non-block
- * outcomes accumulate into a single report so the UI can render
- * each warning inline.
- */
+/** Shell-command hooks; project scope first, then global. Exit 0=pass, 2=block on Pre*, other=warn. */
 
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -65,11 +29,7 @@ const DEFAULT_TIMEOUTS_MS: Record<HookEvent, number> = {
 export type HookScope = "project" | "global";
 
 export interface HookConfig {
-  /**
-   * Tool-name pattern (PreToolUse / PostToolUse only). Anchored regex.
-   * Omitted or `"*"` matches every tool. Ignored for prompt / Stop
-   * events (they have no tool name to match against).
-   */
+  /** Anchored regex; `"*"` / omitted = every tool. Pre/PostToolUse only. */
   match?: string;
   /** Shell command to run. Spawned through the platform shell. */
   command: string;
@@ -77,11 +37,7 @@ export interface HookConfig {
   description?: string;
   /** Per-hook timeout override in ms. */
   timeout?: number;
-  /**
-   * Working directory for the spawned process. Defaults to:
-   *   - project scope → the project root
-   *   - global scope  → process.cwd()
-   */
+  /** Defaults: project scope → project root; global scope → process.cwd(). */
   cwd?: string;
 }
 
@@ -102,14 +58,7 @@ export interface ResolvedHook extends HookConfig {
 export interface HookOutcome {
   /** Which hook fired. */
   hook: ResolvedHook;
-  /**
-   * Decision:
-   *   - `pass`    — exit 0
-   *   - `block`   — exit 2 on a blocking event (otherwise downgraded to `warn`)
-   *   - `warn`    — non-zero exit that is not a successful block
-   *   - `timeout` — the spawn was killed past `timeout`
-   *   - `error`   — could not spawn at all (missing command, etc.)
-   */
+  /** pass=exit 0; block=exit 2 on blocking event; warn=other non-zero; timeout=killed; error=spawn failed. */
   decision: "pass" | "block" | "warn" | "timeout" | "error";
   exitCode: number | null;
   /** Captured stdout (trimmed). May be empty. */
@@ -117,12 +66,7 @@ export interface HookOutcome {
   /** Captured stderr (trimmed). The block / warn message comes from here. */
   stderr: string;
   durationMs: number;
-  /**
-   * True when stdout or stderr crossed the per-stream byte cap and was
-   * truncated. The hook still completed; the loop just sees a clipped
-   * view of its output. Surfaced via `formatHookOutcomeMessage` so the
-   * user knows their script wrote more than Reasonix kept.
-   */
+  /** Output crossed the per-stream byte cap; surfaced so user knows we kept less than the script wrote. */
   truncated?: boolean;
 }
 
@@ -160,16 +104,7 @@ function readSettingsFile(path: string): HookSettings | null {
   return null;
 }
 
-/**
- * Pull every configured hook out of the project + global settings
- * files, in the order they should fire (project first, global second,
- * within each scope: array order from the file).
- *
- * Returns a flat list — the dispatcher filters by event + match
- * pattern at run time. Loading is cheap (one or two JSON files), so
- * we don't memoize across processes; re-load is allowed via
- * `/hooks reload` and on every fresh App mount.
- */
+/** Project hooks fire before global; within a scope, array order. */
 export interface LoadHookSettingsOptions {
   /** Absolute project root, if any. Without it, only global hooks load. */
   projectRoot?: string;
@@ -207,12 +142,7 @@ function appendResolved(
   }
 }
 
-/**
- * True if `toolName` matches the hook's `match` field. `"*"` and
- * undefined match everything. Otherwise we anchor the field as a
- * regex — partial-name matches don't fire, so `"file"` would not
- * trigger on `read_file` (use `".*file"` for that).
- */
+/** Match field is an ANCHORED regex — `"file"` won't trigger on `read_file`; use `".*file"`. */
 export function matchesTool(hook: ResolvedHook, toolName: string): boolean {
   if (hook.event !== "PreToolUse" && hook.event !== "PostToolUse") return true;
   const m = hook.match;
@@ -253,39 +183,16 @@ export interface HookSpawnResult {
   timedOut: boolean;
   /** True iff spawn() itself failed (ENOENT, EACCES, …). */
   spawnError?: Error;
-  /**
-   * True iff stdout or stderr was capped at the byte limit. The hook
-   * still ran to completion / timeout, but downstream consumers see a
-   * truncated view of its output. Surface this in the UI so a hook
-   * author who relies on long output knows the loop didn't see all
-   * of it.
-   */
+  /** Output capped at byte limit — hook ran to completion but consumers see clipped view. */
   truncated?: boolean;
 }
 
-/**
- * Per-stream cap on hook output. 256KB matches the shape of what
- * hooks are actually for — short error messages, validator stderr,
- * a `git status --short` summary — not full build logs. A buggy or
- * runaway hook (`cat large.bin`, infinite `yes`) used to accumulate
- * unbounded into Reasonix's heap until the timeout fired; with the
- * cap the worst case is 256KB stdout + 256KB stderr per hook
- * regardless of how chatty the child gets.
- */
+/** Per-stream cap — bounds heap exposure to a runaway child between spawn and timeout. */
 const HOOK_OUTPUT_CAP_BYTES = 256 * 1024;
 
 export type HookSpawner = (input: HookSpawnInput) => Promise<HookSpawnResult>;
 
-/**
- * Default spawner — runs `command` through the platform shell so
- * `&&`, pipes, env-var expansion all work without a tokenizer.
- * Stdin is the JSON payload, stdout / stderr are buffered.
- *
- * Why `shell: true`? A hook is intentionally a shell command — that's
- * the contract. Treating it like an argv array would surprise users
- * who write `bun run check && eslint .` and expect it to behave the
- * way it does in their terminal.
- */
+/** `shell: true` — hook is a shell command by contract; pipes / `&&` / env expansion must work. */
 function defaultSpawner(input: HookSpawnInput): Promise<HookSpawnResult> {
   return new Promise<HookSpawnResult>((resolve) => {
     const child = spawn(input.command, {
@@ -369,12 +276,6 @@ function defaultSpawner(input: HookSpawnInput): Promise<HookSpawnResult> {
   });
 }
 
-/**
- * Format a hook outcome as a single-line UI string. Used by both the
- * loop (for `warning` events) and the App (for UserPromptSubmit /
- * Stop outcomes). Centralizing keeps the language consistent across
- * scopes.
- */
 export function formatHookOutcomeMessage(outcome: HookOutcome): string {
   if (outcome.decision === "pass") return "";
   const detail = (outcome.stderr || outcome.stdout || "").trim();
@@ -388,10 +289,6 @@ export function formatHookOutcomeMessage(outcome: HookOutcome): string {
   return detail ? `${head}: ${detail}` : head;
 }
 
-/**
- * Decide the hook's outcome decision from raw spawn results.
- * Pulled out as a pure function so tests can pin the matrix.
- */
 export function decideOutcome(
   event: HookEvent,
   raw: HookSpawnResult,
@@ -410,13 +307,7 @@ export interface RunHooksOptions {
   spawner?: HookSpawner;
 }
 
-/**
- * Filter hooks down to the ones that match `payload.event` (and
- * `payload.toolName`, for tool events), then run them in order.
- * Stops at the first `block` outcome on a blocking event so a
- * gating hook can prevent later hooks from incorrectly seeing a
- * success that wasn't going to happen.
- */
+/** Stops at first `block` so a gating hook can prevent later hooks running against a phantom success. */
 export async function runHooks(opts: RunHooksOptions): Promise<HookReport> {
   const spawner = opts.spawner ?? defaultSpawner;
   const event = opts.payload.event;

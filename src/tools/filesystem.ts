@@ -1,21 +1,4 @@
-/**
- * Built-in filesystem tools for `reasonix code`.
- *
- * Why native instead of the official `@modelcontextprotocol/server-filesystem`:
- *   - No subprocess overhead — every call is 50-200 ms cheaper.
- *   - Schema shapes tuned for R1: `edit_file` takes a single
- *     SEARCH/REPLACE string instead of `string="false"`-encoded
- *     JSON arrays, which was the biggest single source of DSML
- *     hallucinations in 0.4.x.
- *   - Sandbox enforcement lives here so Reasonix can reason about
- *     it (tests cover path-traversal, symlink-escape, and the
- *     cwd-outside-root case) rather than trusting an external server.
- *   - No `npx install` / network dependency in `reasonix code`.
- *
- * Tool names + argument shapes intentionally mirror the official
- * filesystem server so R1's muscle memory carries over. The only
- * intentional divergence is `edit_file`, noted above.
- */
+/** Native FS tools — sandbox enforced here, not delegated. `edit_file` takes a single SEARCH/REPLACE string. */
 
 import { promises as fs } from "node:fs";
 import * as pathMod from "node:path";
@@ -24,59 +7,23 @@ import type { ToolRegistry } from "../tools.js";
 export interface FilesystemToolsOptions {
   /** Absolute directory the tools may read/write. Paths outside this are refused. */
   rootDir: string;
-  /**
-   * When `false`, register only read-side tools (read_file, list_directory,
-   * search_files, get_file_info, directory_tree). Useful for read-only
-   * workflows where the model should never mutate the tree. Default: true.
-   */
+  /** false → register only read-side tools. Default true. */
   allowWriting?: boolean;
-  /**
-   * Cap for a single file read, in bytes. Prevents a stray `read_file`
-   * on a multi-GB blob from OOM'ing Node. 2 MB is enough for any realistic
-   * source file (the biggest single-file TypeScript project checked in to
-   * GitHub is ~500 KB); pass higher when working with data files.
-   */
+  /** Per-read byte cap; floor against OOM on a multi-GB blob. */
   maxReadBytes?: number;
-  /**
-   * Cap for total bytes returned from search_files / directory_tree /
-   * grep, so the model can't accidentally pull down the whole tree as
-   * one giant string. 256 KB by default.
-   */
+  /** Cap on total bytes from listing/grep tools — bounds tree-as-one-string accidents. */
   maxListBytes?: number;
 }
 
 const DEFAULT_MAX_READ_BYTES = 2 * 1024 * 1024;
 const DEFAULT_MAX_LIST_BYTES = 256 * 1024;
 
-/**
- * When `read_file` is called without `head` / `tail` / `range`, files
- * above this line count auto-trim to a head-plus-tail preview instead
- * of dumping everything into the turn's context. Observed: five
- * `read_file` calls in one session accounted for ~18K tokens (6.5K +
- * 3.9K + 3.2K + 2.4K + 1.6K), a sizable chunk of the 27K total in
- * tool results. Most of those reads wanted ~20 lines near one edit —
- * the other 480 lines were inventory the model never cites.
- *
- * 200 is a deliberate middle ground: typical CLI / config / test
- * files fit entirely; sprawling service files force the model to say
- * what it actually wants (`range:"120-180"` or `search_content`).
- */
+/** Auto-preview threshold — files above this force the model to scope (range/head/tail). */
 const DEFAULT_AUTO_PREVIEW_LINES = 200;
-/**
- * When auto-preview triggers, show this many lines at the top
- * (structure / imports / public API) plus `AUTO_PREVIEW_TAIL_LINES`
- * at the bottom (often the recently-edited tail).
- */
 const AUTO_PREVIEW_HEAD_LINES = 80;
 const AUTO_PREVIEW_TAIL_LINES = 40;
 
-/**
- * Directory names skipped by `search_content` unless `include_deps:true`
- * is passed. The intent is "user is asking about THEIR code, not the
- * libraries they depend on" — vendored / generated trees would otherwise
- * dominate every match list. Pass include_deps when you genuinely need
- * to grep a dependency.
- */
+/** Skipped unless `include_deps:true` — vendored/generated trees dominate match lists otherwise. */
 const SKIP_DIR_NAMES: ReadonlySet<string> = new Set([
   "node_modules",
   ".git",
@@ -97,11 +44,7 @@ const SKIP_DIR_NAMES: ReadonlySet<string> = new Set([
   "coverage",
 ]);
 
-/**
- * Cheap binary-by-extension check for `search_content`. We err on the
- * side of skipping so a NUL-byte content sniff is the second line of
- * defense (handles e.g. a `.txt` that's actually a binary dump).
- */
+/** First line of binary defense; NUL-byte sniff is the second (catches mislabeled `.txt`). */
 const BINARY_EXTENSIONS: ReadonlySet<string> = new Set([
   ".png",
   ".jpg",
@@ -712,18 +655,6 @@ Prefer \`list_directory\` for a single-level view, \`search_files\` to find spec
   return registry;
 }
 
-/**
- * Format an edit_file change as a proper line-level diff, styled
- * like `git diff`. Starts with a unified-diff hunk header —
- * `@@ -startLine,oldCount +startLine,newCount @@` — so the user
- * can tell where in the file the change lands. Body uses LCS
- * (longest common subsequence) to mark lines as removed (`-`),
- * added (`+`), or unchanged context (` `). Users were getting
- * hundreds of `-` followed by hundreds of `+` for tiny changes
- * because the naive "dump both sides" format can't tell what
- * actually moved vs. stayed — this fixes that and adds line-
- * number context on top.
- */
 function renderEditDiff(search: string, replace: string, startLine: number): string {
   const a = search.split(/\r?\n/);
   const b = replace.split(/\r?\n/);
@@ -733,17 +664,6 @@ function renderEditDiff(search: string, replace: string, startLine: number): str
   return `${hunk}\n${body}`;
 }
 
-/**
- * Compute a line-level diff via classic LCS dynamic programming.
- * Good enough for SEARCH/REPLACE blocks where both sides are
- * typically under a few hundred lines — O(n*m) space + time. For
- * huge blocks we'd want Myers' algorithm, but the caller already
- * caps the inline-display size and `/tool N` shows the full result,
- * so quadratic is fine in practice.
- *
- * Exported so tests can exercise the diff logic without spinning
- * up the full tool dispatch path.
- */
 export function lineDiff(
   a: readonly string[],
   b: readonly string[],

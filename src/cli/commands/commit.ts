@@ -1,30 +1,4 @@
-/**
- * `reasonix commit` — draft a commit message from staged changes.
- *
- * Workflow:
- *   1. Read `git diff --staged`. Empty staging area falls back to the
- *      working tree (with a warning), so a quick `reasonix commit`
- *      after editing-without-add still produces a draft instead of
- *      silently no-op'ing.
- *   2. Read `git log -10 --format=%s%n%b%n---END---` so the model can
- *      match the project's actual commit style instead of generic
- *      "feat: …" boilerplate. The diff IS the spec; the log is the
- *      voice.
- *   3. One non-streaming flash call drafts the message. Default model
- *      is v4-flash — drafting a commit message doesn't need pro.
- *   4. Print the draft. Read a key from stdin: a/A/Enter accept, r/R
- *      regenerate, e/E open in $EDITOR, c/C cancel.
- *   5. Accept → `git commit -F -` with the message on stdin so multi-
- *      line bodies survive intact (no shell quoting concerns).
- *
- * The whole flow is plain text — no Ink — because it's a one-shot
- * command. Keeping it dependency-free means it works even when the
- * TUI bundle has a runtime issue.
- *
- * Loaded `.env` via `loadDotenv()` first thing so users who keep
- * DEEPSEEK_API_KEY in `.env` (instead of shell env) don't see a
- * confusing "key not set" error here.
- */
+/** Drafts via diff + recent log (style mimicry); commit uses `-F -` so multi-line bodies survive shell quoting. */
 
 import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
