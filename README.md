@@ -80,7 +80,7 @@ command list.
 | Cost / typical task                | **~$0.001–0.005** | ~$0.05–0.50 | $20/mo + usage | varies         |
 | Where it runs                      | terminal       | terminal + IDE | IDE (Electron) | terminal       |
 | License                            | **MIT**        | closed         | closed         | Apache 2       |
-| DeepSeek prefix-cache hit rate     | **94.4%**      | n/a            | n/a            | ~46%           |
+| DeepSeek prefix-cache hit rate     | **90.2%**      | n/a            | n/a            | ~33%           |
 | Reviewable edits (no auto-write)   | **yes** (`/apply`) | yes        | partial        | yes            |
 | MCP servers                        | **first-class**| first-class    | —              | —              |
 
@@ -122,8 +122,8 @@ Three things you'd come to Reasonix for, that nothing else combines:
   win — *cheap tokens with a 90%+ prefix-cache hit* is. Reasonix's
   loop is engineered around append-only prompt growth so the
   cache-stable prefix survives every tool call. The benchmarks
-  section verifies this end-to-end: 94.4% live cache hit, versus
-  46.6% for a generic harness on the same workload. The `/stats`
+  section verifies this end-to-end: 90.2% live cache hit, versus
+  32.8% for a generic harness on the same workload. The `/stats`
   panel surfaces "vs Claude Sonnet 4.6" savings on every turn.
 
 - **It lives in your terminal.** Pure CLI — no Electron, no VS Code
@@ -215,8 +215,8 @@ to.
 
 Reasonix's loop was designed around byte-stable prefix from line one.
 No markers, no breakpoints — append-only is the invariant. That's why
-the same τ-bench workload lands at **94.4% cache hit** on Reasonix
-and **46.6%** on a cache-hostile baseline (committed transcripts;
+the same τ-bench workload lands at **90.2% cache hit** on Reasonix
+and **32.8%** on a cache-hostile baseline (committed transcripts;
 benchmarks section below). At DeepSeek's pricing — $0.07/Mtok
 uncached, ~$0.014/Mtok cached — the difference between 50% and 94%
 hit is **roughly 2.5× on input cost alone**.
@@ -904,9 +904,9 @@ variable prefix stability:
 
 | metric | baseline (cache-hostile) | Reasonix | delta |
 |---|---:|---:|---:|
-| cache hit | 46.6% | **94.4%** | +47.7 pp |
-| cost / task | $0.002599 | $0.001579 | **−39%** |
-| pass rate | 96% (23/24) | **100% (24/24)** | — |
+| cache hit | 32.8% | **90.2%** | +57.4 pp |
+| cost / task | $0.000992 | $0.000593 | **−40%** |
+| pass rate | 100% (24/24) | **100% (24/24)** | — |
 
 **Reproduce without spending an API credit:**
 

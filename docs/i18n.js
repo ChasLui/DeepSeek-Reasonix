@@ -120,7 +120,7 @@
       "cli.f.noconf": "ignore ~/.reasonix/config.json (CI)",
 
       "ctab.title": "Ready to try?",
-      "ctab.sub": "One <code>npx</code> away. Sandboxed. Reviewable. 96% cheaper.",
+      "ctab.sub": "One <code>npx</code> away. Sandboxed. Reviewable. 98% cheaper.",
       "ctab.gh": "GitHub repository →",
       "ctab.npm": "npm package",
 
@@ -247,7 +247,7 @@
       "cli.f.noconf": "忽略 ~/.reasonix/config.json（CI 友好）",
 
       "ctab.title": "准备好了吗？",
-      "ctab.sub": "一条 <code>npx</code> 即可开始。沙箱、可审阅、便宜 96%。",
+      "ctab.sub": "一条 <code>npx</code> 即可开始。沙箱、可审阅、便宜 98%。",
       "ctab.gh": "GitHub 仓库 →",
       "ctab.npm": "npm 包",
 
