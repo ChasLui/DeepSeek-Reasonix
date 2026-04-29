@@ -22,11 +22,6 @@ export type EditReviewChoice = "apply" | "reject" | "apply-rest-of-turn" | "flip
 
 export interface EditConfirmProps {
   block: EditBlock;
-  /**
-   * `onChoose` receives the choice and an optional context string when
-   * the user rejects with an explanation (pressing `n` opens a context
-   * input; Enter submits the context, Esc goes back to review).
-   */
   onChoose: (choice: EditReviewChoice, denyContext?: string) => void;
 }
 
@@ -82,18 +77,10 @@ export function EditConfirm({ block, onChoose }: EditConfirmProps) {
   // keypress drove the offset past the new ceiling.
   const effectiveScroll = Math.min(scroll, maxScroll);
 
-  // Phase: "review" shows the diff with hotkeys; "context" shows the
-  // DenyContextInput after the user pressed `n` (reject).
   const [phase, setPhase] = useState<"review" | "context">("review");
 
   useKeystroke((ev) => {
     if (ev.paste) return;
-
-    // Context-input phase: route everything to DenyContextInput's
-    // logic is handled inside that component via its own useKeystroke.
-    // We only reach this handler for non-context events — the context
-    // phase shows DenyContextInput which has its own keystroke hook,
-    // so this handler's actions are no-ops during context input.
     if (phase === "context") return;
 
     const input = ev.input;
@@ -106,8 +93,6 @@ export function EditConfirm({ block, onChoose }: EditConfirmProps) {
       return;
     }
     if (input === "n") {
-      // Instead of immediately rejecting, enter the context-input
-      // phase so the user can explain *why* they're rejecting.
       setPhase("context");
       return;
     }
@@ -166,7 +151,6 @@ export function EditConfirm({ block, onChoose }: EditConfirmProps) {
     );
   }
 
-  // Context-input phase: show DenyContextInput instead of the diff
   if (phase === "context") {
     return (
       <ModalCard

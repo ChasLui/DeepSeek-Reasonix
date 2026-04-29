@@ -32,11 +32,8 @@ export interface ShellConfirmProps {
  *      auto-runs.
  *   3. Deny — tell the model the user refused.
  * Arrow keys + Enter. No y/n hotkey — too easy to trigger by accident
- * when the user was mid-typing a response.
- *
- * The "Deny" item supports inline context: pressing Tab appends `,`
- * and lets the user type a reason directly on the selected item. The
- * context is returned as the second argument to `onChoose`.
+ * when the user was mid-typing a response. Tab on Deny opens inline
+ * context entry, returned as `onChoose`'s 2nd arg.
  */
 export function ShellConfirm({ command, allowPrefix, kind, onChoose }: ShellConfirmProps) {
   const isBackground = kind === "run_background";
@@ -44,7 +41,6 @@ export function ShellConfirm({ command, allowPrefix, kind, onChoose }: ShellConf
     ? "long-running process — keeps running after approval, /kill to stop"
     : "model wants to run a shell command";
 
-  // Deny item with inline context support (Tab → `, ` + inline typing)
   const denyItem = {
     value: "deny" as const,
     label: "Deny",

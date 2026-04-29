@@ -23,13 +23,7 @@ export interface SelectItem<V extends string = string> {
   hint?: string;
   /** If true, item is not selectable (rendered dimmed, skipped on nav). */
   disabled?: boolean;
-  /**
-   * When true, pressing Tab on this item starts inline editing — `, `
-   * is appended after the label and the user types context directly on
-   * the item row. The context is passed as the second argument to
-   * `onSubmit` on Enter. Used on "Deny"/"Reject" items so the user
-   * can explain *why* they're refusing.
-   */
+  /** Tab on this item starts inline-edit; typed text is forwarded as `onSubmit`'s 2nd arg. */
   denyWithContext?: boolean;
 }
 
@@ -38,17 +32,7 @@ export interface SingleSelectProps<V extends string> {
   initialValue?: V;
   onSubmit: (value: V, context?: string) => void;
   onCancel?: () => void;
-  /**
-   * Optional footer rendered dim beneath the list, e.g.
-   * `"[↑↓] navigate · [Enter] select · [Esc] cancel"`. Makes keyboard
-   * affordances discoverable — otherwise new users hit `y`/`n` and
-   * wonder why nothing happens.
-   *
-   * When a `denyWithContext` item is active and the user presses Tab,
-   * inline editing starts directly on the item — `, ` is appended and
-   * typed text becomes the context, passed as the second argument to
-   * `onSubmit` on Enter.
-   */
+  /** Optional dim footer beneath the list — e.g. "[↑↓] navigate · [Enter] select · [Esc] cancel". */
   footer?: string;
 }
 
@@ -72,7 +56,6 @@ export function SingleSelect<V extends string>({
     if (ev.paste) return;
 
     if (isEditing) {
-      // Inline editing mode: typing context on a denyWithContext item
       if (ev.escape) {
         setEditingContext(null);
       } else if (ev.upArrow || ev.downArrow) {
@@ -88,7 +71,6 @@ export function SingleSelect<V extends string>({
       } else if (ev.backspace) {
         setEditingContext((v) => (v ?? "").slice(0, -1));
       } else if (ev.tab) {
-        // Tab while editing appends ", " to the context text
         setEditingContext((v) => `${v ?? ""}, `);
       } else if (ev.input) {
         setEditingContext((v) => (v ?? "") + ev.input);
@@ -96,13 +78,11 @@ export function SingleSelect<V extends string>({
       return;
     }
 
-    // Normal navigation mode
     if (ev.upArrow) {
       setIndex((i) => findNextEnabled(items, i, -1));
     } else if (ev.downArrow) {
       setIndex((i) => findNextEnabled(items, i, +1));
     } else if (ev.tab && activeItem?.denyWithContext) {
-      // Tab on a deny-with-context item → start inline editing
       setEditingContext("");
     } else if (ev.return) {
       const chosen = items[index];
@@ -112,7 +92,6 @@ export function SingleSelect<V extends string>({
     }
   });
 
-  // Footer: show different affordances when in editing mode vs. normal
   const canDenyWithContext = activeItem?.denyWithContext;
   const resolvedFooter = (() => {
     if (isEditing) return "[Enter] confirm · [Esc] cancel · [↑↓] change option";

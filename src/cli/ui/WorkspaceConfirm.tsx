@@ -21,11 +21,8 @@ export interface WorkspaceConfirmProps {
 /**
  * Modal-style approval for a `change_workspace` tool call. Two
  * choices, Enter / Esc bindings. No "always allow" — workspace
- * switches are per-target by nature.
- *
- * The "Deny" item supports inline context: pressing Tab appends `,`
- * and lets the user type a reason directly on the selected item. The
- * context is returned as the second argument to `onChoose`.
+ * switches are per-target by nature. Tab on Deny opens inline
+ * context entry, returned as `onChoose`'s 2nd arg.
  */
 export function WorkspaceConfirm({
   path,
