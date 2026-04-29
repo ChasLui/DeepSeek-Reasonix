@@ -1430,7 +1430,10 @@ export class CacheFirstLoop {
   ): ChatMessage {
     const msg: ChatMessage = { role: "assistant", content };
     if (toolCalls.length > 0) msg.tool_calls = toolCalls;
-    if (isThinkingModeModel(producingModel)) {
+    // V4-era deepseek-chat returns reasoning_content even with thinking.type
+    // disabled, and the API rejects round-trips that drop it. Whitelist on
+    // model name is too brittle — preserve whenever the producer emitted any.
+    if (isThinkingModeModel(producingModel) || (reasoningContent && reasoningContent.length > 0)) {
       msg.reasoning_content = reasoningContent ?? "";
     }
     return msg;
