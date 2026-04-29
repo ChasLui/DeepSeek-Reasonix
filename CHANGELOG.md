@@ -3,6 +3,30 @@
 All notable changes to Reasonix. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.1] — 2026-04-29
+
+**Headline:** Fix a tool-loop regression on `deepseek-chat` introduced
+by DeepSeek's V4 rollout. The model now returns non-empty
+`reasoning_content` even with `extra_body.thinking.type = "disabled"`,
+and the API rejects round-trips that drop the field
+("reasoning_content in the thinking mode must be passed back to the
+API"). Reasonix's whitelist-by-model in `assistantMessage()` was too
+narrow — it stamped reasoning_content only for `deepseek-reasoner` /
+`deepseek-v4-flash` / `deepseek-v4-pro`. Caught by re-running τ-bench
+on v0.16.0: 24/24 reasonix runs were failing.
+
+- fix(loop): `assistantMessage()` now preserves `reasoning_content`
+  whenever the producer emitted non-empty content, regardless of the
+  model name. The whitelist still applies to synthetic messages
+  (empty stamp for thinking-mode endpoints) so non-thinking sessions
+  stay clean.
+- test(loop): regression case in `loop-r1-reasoning.test.ts` —
+  deepseek-chat returning non-empty `reasoning_content` round-trips
+  the field on the next request.
+- bench(tau): full re-run on the fix — 100% pass · 90.2% cache hit
+  (vs 32.8% baseline) · $0.000593 / task. Mean cost is ~62% lower
+  than the 0.2.1 snapshot, mostly from DeepSeek's price moves.
+
 ## [0.16.0] — 2026-04-29
 
 **Headline:** Mouse drag in the log now selects text directly, with the
