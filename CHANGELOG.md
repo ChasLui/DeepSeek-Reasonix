@@ -3,6 +3,58 @@
 All notable changes to Reasonix. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] — 2026-04-29
+
+**Headline:** Event-log sidecar lands as a real kernel artifact and
+gets its first consumer — `replay()` reads `events.jsonl` and runs
+the same pure reducers `apply()` does in-process. First external
+PR merged: deny-with-context, pressing Tab on a tool-confirm modal
+lets the user type *why* they're refusing, forwarded to the model
+verbatim. Comment policy now enforced by `tests/comment-policy.test.ts`
+under `npm run verify`; companion sweep dropped 6.3k LoC of
+module-essay docstrings, banner separators, and incident-history
+narrative across 148 source files.
+
+- feat(core): `events.jsonl` sidecar — every kernel `Event` is
+  appended to `<session>.events.jsonl` next to the legacy
+  `LoopEvent` log. Append-only, durable, no behavior change for
+  in-process consumers. Unblocks the v0.14 architecture migration:
+  any view (CLI, dashboard, replay) can now reconstruct state from
+  the sidecar without the loop running.
+- feat(core): `replay()` reads the sidecar and runs the same pure
+  reducers as in-process `apply()`. First proof that the projection
+  layer is genuinely deterministic — `replay(events)` matches
+  `apply(...)` for the conversation / budget / plan / workspace /
+  capabilities / status / session-meta views.
+- feat(cli): `reasonix events <name>` — inspect any session's event
+  stream from the command line. Filters by event variant
+  (`reasonix events ToolCallStarted`), tail mode, JSON output for
+  piping into `jq`. Plus a kernel sweep removing the dead-comment
+  layer that accumulated during the LoopEvent → Event transition.
+- feat(ui): deny-with-context (PR #1, by @wviana). On any tool-confirm
+  modal (`ShellConfirm`, `WorkspaceConfirm`, edit review), pressing
+  Tab on the Deny option opens inline editing — type a reason, Enter
+  submits. The reason is appended to the synthetic `I denied
+  running …` message so the model knows *why* and can adjust course
+  instead of plowing ahead. Edit-review path uses a dedicated
+  `DenyContextInput` modal (n hotkey opens the reason input, Esc
+  returns to the diff). Bracketed-paste support in the inline editor
+  so multi-line context can be pasted in one go.
+- chore(ui): removed obsolete `/mouse` slash command and the
+  misleading "drag to select & copy" prompt hint — both predated
+  `/copy` and gave wrong guidance now that the proper flow is
+  alt-screen-exit + scrollback dump.
+- chore(comments): `tests/comment-policy.test.ts` pins six rules
+  derived from `CLAUDE.md`: ≤2-line module headers, no Phase-N
+  narrative, no version refs in comments, no incident history
+  (`user reported`, `screenshot showed`, `fix for #N`), no banner
+  separators (`// ─── helpers ───`), ≤3-line block comments. Runs
+  under `npm run verify`, which is the pre-push gate. Companion
+  sweep: 116 module-essay headers compressed to one line, 577
+  over-long block comments distilled or deleted, 44 banner separators
+  stripped. Net −6,367 LoC of dead-weight comments across 148 files;
+  zero behavior change, full lint/typecheck/test green.
+
 ## [0.14.0] — 2026-04-29
 
 **Headline:** Two real bug fixes (post-shell-confirm session lockup,
