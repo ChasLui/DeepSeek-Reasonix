@@ -291,6 +291,34 @@ describe("R1 reasoning_content round-trip", () => {
     expect(Object.hasOwn(assistant!, "reasoning_content")).toBe(false);
   });
 
+  it("preserves reasoning_content on deepseek-chat when V4 returns non-empty content", async () => {
+    // V4-era deepseek-chat returns reasoning_content even with thinking
+    // disabled. Whitelist by model name was too narrow — must keep the
+    // field whenever the producer emitted any. Caught by tau-bench when
+    // 24/24 reasonix runs failed with "reasoning_content must be passed
+    // back to the API."
+    const { fetch: fakeFetch, bodies } = capturingFetch([
+      { content: "ok", reasoning_content: "v4-chat reasoning leaked" },
+      { content: "bye" },
+    ]);
+    const client = new DeepSeekClient({ apiKey: "sk-test", fetch: fakeFetch });
+    const loop = new CacheFirstLoop({
+      client,
+      prefix: new ImmutablePrefix({ system: "s" }),
+      model: "deepseek-chat",
+      stream: false,
+    });
+    for await (const _ev of loop.step("hello")) {
+      /* drain */
+    }
+    for await (const _ev of loop.step("next")) {
+      /* drain */
+    }
+    const turn2Messages = bodies[1]!.messages;
+    const assistant = turn2Messages.find((m) => m.role === "assistant");
+    expect(assistant?.reasoning_content).toBe("v4-chat reasoning leaked");
+  });
+
   it("pins thinking=enabled + reasoning_effort=max for v4-pro (agent-class default)", async () => {
     const { fetch: fakeFetch, bodies } = capturingFetch([{ content: "done" }]);
     const client = new DeepSeekClient({ apiKey: "sk-test", fetch: fakeFetch });
