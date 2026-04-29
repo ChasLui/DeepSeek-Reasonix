@@ -25,7 +25,11 @@ import {
   costUsd,
   loadDotenv,
 } from "../../src/index.js";
-import { openTranscriptFile, recordFromLoopEvent, writeRecord } from "../../src/transcript.js";
+import {
+  openTranscriptFile,
+  recordFromLoopEvent,
+  writeRecord,
+} from "../../src/transcript/log.js";
 import { BaselineAgent } from "./baseline.js";
 import { cloneDb } from "./db.js";
 import { TASKS } from "./tasks.js";

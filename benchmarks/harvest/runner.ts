@@ -21,7 +21,11 @@ import {
   claudeEquivalentCost,
   loadDotenv,
 } from "../../src/index.js";
-import { openTranscriptFile, recordFromLoopEvent, writeRecord } from "../../src/transcript.js";
+import {
+  openTranscriptFile,
+  recordFromLoopEvent,
+  writeRecord,
+} from "../../src/transcript/log.js";
 import { TASKS } from "./tasks.js";
 import type {
   HarvestBenchMeta,
