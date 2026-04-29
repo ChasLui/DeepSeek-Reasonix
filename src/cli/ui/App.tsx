@@ -256,19 +256,17 @@ export function App({
   const [ctxFooterVisible, setCtxFooterVisible] = useState(true);
   const [logSelection, setLogSelection] = useState<LogSelection | null>(null);
   const dragAnchorRef = useRef<{ row: number; col: number } | null>(null);
-  const logRectRef = useRef<{ topRow: number; bottomRow: number; cols: number }>({
-    topRow: 1,
-    bottomRow: 1,
-    cols: 80,
-  });
   const autoScrollTimerRef = useRef<NodeJS.Timeout | null>(null);
   const autoScrollDirRef = useRef<-1 | 0 | 1>(0);
   const lastDragColRef = useRef(0);
-  const logSnapshotRef = useRef<{
+  // Live geometry of the rendered log content area, in 1-based terminal rows.
+  const logGeomRef = useRef<{
+    contentTopRow: number;
+    contentBottomRow: number;
     firstRowAbs: number;
-    totalRows: number;
     visibleRows: number;
-  }>({ firstRowAbs: 0, totalRows: 0, visibleRows: 0 });
+    cols: number;
+  }>({ contentTopRow: 1, contentBottomRow: 1, firstRowAbs: 0, visibleRows: 0, cols: 80 });
 
   // Log scroll state — number of events skipped from the END.
   //   0   → at bottom (always show latest, auto-track new events)
@@ -1407,12 +1405,10 @@ export function App({
   }, []);
 
   const mouseToAbsRow = useCallback((mouseRow: number): number | null => {
-    const { topRow, bottomRow } = logRectRef.current;
-    const { firstRowAbs, visibleRows } = logSnapshotRef.current;
+    const { contentTopRow, contentBottomRow, firstRowAbs, visibleRows } = logGeomRef.current;
     if (visibleRows <= 0) return null;
-    const clampedY = Math.max(topRow, Math.min(bottomRow, mouseRow));
-    const rel = clampedY - topRow;
-    return firstRowAbs + Math.min(visibleRows - 1, rel);
+    const clamped = Math.max(contentTopRow, Math.min(contentBottomRow, mouseRow));
+    return firstRowAbs + (clamped - contentTopRow);
   }, []);
 
   const startAutoScroll = useCallback(
@@ -1430,7 +1426,7 @@ export function App({
         setLogScrollOffset(next);
         const anchor = dragAnchorRef.current;
         if (anchor) {
-          const { firstRowAbs, visibleRows } = logSnapshotRef.current;
+          const { firstRowAbs, visibleRows } = logGeomRef.current;
           const focusRow = dir > 0 ? firstRowAbs + visibleRows - 1 : firstRowAbs;
           setLogSelection({
             startRow: anchor.row,
@@ -1526,8 +1522,8 @@ export function App({
       return;
     }
     if (ev.mouseClick && ev.mouseRow !== undefined && ev.mouseCol !== undefined) {
-      const { topRow, bottomRow } = logRectRef.current;
-      if (ev.mouseRow < topRow || ev.mouseRow > bottomRow) {
+      const { contentTopRow, contentBottomRow } = logGeomRef.current;
+      if (ev.mouseRow < contentTopRow || ev.mouseRow > contentBottomRow) {
         if (logSelection) setLogSelection(null);
         dragAnchorRef.current = null;
         return;
@@ -1543,12 +1539,12 @@ export function App({
     if (ev.mouseDrag && ev.mouseRow !== undefined && ev.mouseCol !== undefined) {
       const anchor = dragAnchorRef.current;
       if (!anchor) return;
-      const { topRow, bottomRow } = logRectRef.current;
+      const { contentTopRow, contentBottomRow } = logGeomRef.current;
       const col = Math.max(0, ev.mouseCol - 1);
       lastDragColRef.current = col;
-      if (ev.mouseRow <= topRow) {
+      if (ev.mouseRow <= contentTopRow) {
         startAutoScroll(-1);
-      } else if (ev.mouseRow >= bottomRow) {
+      } else if (ev.mouseRow >= contentBottomRow) {
         startAutoScroll(1);
       } else {
         stopAutoScroll();
@@ -4467,18 +4463,27 @@ export function App({
                   const v = viewportLog(atoms, logScrollOffset, available);
                   scrollMaxRowsRef.current = v.maxScrollRows;
                   lastTotalRowsRef.current = v.totalRows;
-                  const totalRows = stdout?.rows ?? 30;
-                  const bottomChrome = 1 + (ctxFooterVisible ? 1 : 0) + 3;
-                  const bottomRow = Math.max(1, totalRows - bottomChrome);
-                  logRectRef.current = {
-                    topRow: Math.max(1, bottomRow - logHeight + 1),
-                    bottomRow,
-                    cols,
-                  };
-                  logSnapshotRef.current = {
+                  // ChromeBar = 2 rows (content + ChromeRule). Log box starts
+                  // at row 3, runs for `logHeight`. BottomHint takes the last
+                  // log row when scrolled. Content is bottom-anchored at
+                  // offset=0, top-anchored otherwise.
+                  const logTopRow = 3;
+                  const logBottomRow = logTopRow + logHeight - 1;
+                  const isScrolled = logScrollOffset > 0;
+                  const contentBoxBottom = logBottomRow - (isScrolled ? 1 : 0);
+                  const renderedRows = Math.min(available, v.totalRows);
+                  const contentTopRow = isScrolled
+                    ? logTopRow
+                    : Math.max(logTopRow, contentBoxBottom - renderedRows + 1);
+                  const contentBottomRow = isScrolled
+                    ? logTopRow + renderedRows - 1
+                    : contentBoxBottom;
+                  logGeomRef.current = {
+                    contentTopRow,
+                    contentBottomRow,
                     firstRowAbs: v.firstRowAbs,
-                    totalRows: v.totalRows,
-                    visibleRows: available,
+                    visibleRows: renderedRows,
+                    cols,
                   };
                   return renderViewport(v, logSelection);
                 })()}
