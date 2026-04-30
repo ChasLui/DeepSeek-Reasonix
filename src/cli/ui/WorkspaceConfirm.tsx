@@ -1,33 +1,29 @@
 import { Box, Text } from "ink";
+// biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
-import { ModalCard } from "./ModalCard.js";
 import { SingleSelect } from "./Select.js";
-import { COLOR } from "./theme.js";
+import { ApprovalCard } from "./cards/ApprovalCard.js";
+import { FG, TONE } from "./theme/tokens.js";
 
-export type WorkspaceConfirmChoice = "switch" | "deny";
+export type WorkspaceConfirmChoice = "archive" | "discard" | "cancel";
 
 export interface WorkspaceConfirmProps {
   /** Resolved absolute path the model wants to switch to. */
   path: string;
   /** Current session root, shown above the target so the user sees the diff. */
   currentRoot: string;
-  /** Number of MCP servers still attached — surfaced so the user knows
-   * those won't follow the switch (their child processes were spawned
-   * with the original cwd). 0 means no warning. */
+  /** Number of MCP servers still attached. */
   mcpServerCount: number;
-  onChoose: (choice: WorkspaceConfirmChoice, denyContext?: string) => void;
+  /** Drives the archive-vs-discard warning text; null = no active plan. */
+  planProgress: { done: number; total: number } | null;
+  onChoose: (choice: WorkspaceConfirmChoice) => void;
 }
 
-/**
- * Modal-style approval for a `change_workspace` tool call. Two
- * choices, Enter / Esc bindings. No "always allow" — workspace
- * switches are per-target by nature. Tab on Deny opens inline
- * context entry, returned as `onChoose`'s 2nd arg.
- */
 export function WorkspaceConfirm({
   path,
   currentRoot,
   mcpServerCount,
+  planProgress,
   onChoose,
 }: WorkspaceConfirmProps) {
   const subtitle =
@@ -35,39 +31,60 @@ export function WorkspaceConfirm({
       ? `MCP servers (${mcpServerCount}) stay anchored to the original launch root.`
       : "Re-registers filesystem / shell / memory tools at the new path.";
 
+  const planLine = planProgress
+    ? `Switching ends the current session. Plan progress (${planProgress.done} of ${planProgress.total} done) will be archived; you can replay it later via /replay.`
+    : "Switching re-roots filesystem / shell / memory tools.";
+
   return (
-    <ModalCard accent={COLOR.warn} icon="⇄" title="switch workspace" subtitle={subtitle}>
+    <ApprovalCard
+      tone="warn"
+      glyph="?"
+      title="Switch workspace"
+      metaRight="awaiting"
+      footerHint="↑↓ pick  ·  ⏎ confirm  ·  esc cancel"
+    >
       <Box flexDirection="column" marginBottom={1}>
         <Box>
-          <Text dimColor>{"from  "}</Text>
-          <Text color={COLOR.info}>{currentRoot}</Text>
+          <Text color={FG.faint}>{"current   "}</Text>
+          <Text bold color={FG.body}>
+            {currentRoot}
+          </Text>
         </Box>
         <Box>
-          <Text dimColor>{"to    "}</Text>
-          <Text color={COLOR.primary} bold>
+          <Text color={FG.faint}>{"new       "}</Text>
+          <Text bold color={TONE.warn}>
             {path}
           </Text>
         </Box>
       </Box>
+      <Box marginBottom={1}>
+        <Text color={FG.sub}>{planLine}</Text>
+      </Box>
+      <Box marginBottom={1}>
+        <Text color={FG.faint}>{subtitle}</Text>
+      </Box>
       <SingleSelect
-        initialValue="switch"
+        initialValue={planProgress ? "archive" : "discard"}
         items={[
           {
-            value: "switch",
-            label: "Switch",
-            hint: "Re-register filesystem / shell / memory tools against the new root.",
+            value: "archive",
+            label: "open & archive plan",
+            hint: planProgress ? "recommended" : "no active plan to archive",
           },
           {
-            value: "deny",
-            label: "Deny",
-            hint: "Tell the model why you're refusing; it will continue without changing directories.",
-            denyWithContext: true,
+            value: "discard",
+            label: "open & discard plan",
+            hint: "throw away the snapshot",
+          },
+          {
+            value: "cancel",
+            label: "cancel",
+            hint: "stay in this workspace",
           },
         ]}
-        onSubmit={(v, ctx) => onChoose(v as WorkspaceConfirmChoice, ctx)}
-        onCancel={() => onChoose("deny")}
-        footer="[↑↓] navigate  ·  [Enter] select  ·  [Tab] add context  ·  [Esc] deny"
+        onSubmit={(v) => onChoose(v as WorkspaceConfirmChoice)}
+        onCancel={() => onChoose("cancel")}
       />
-    </ModalCard>
+    </ApprovalCard>
   );
 }

@@ -685,10 +685,10 @@ describe("dashboard server: modal mirroring (workspace / checkpoint / revision)"
       method: "POST",
       token: TOKEN,
       tokenInHeader: true,
-      body: { kind: "workspace", choice: "switch" },
+      body: { kind: "workspace", choice: "archive" },
     });
     expect(r.status).toBe(200);
-    expect(calls).toEqual(["switch"]);
+    expect(calls).toEqual(["archive"]);
   });
 
   it("POST /api/modal/resolve rejects an unknown workspace choice", async () => {
@@ -762,7 +762,7 @@ describe("dashboard server: modal mirroring (workspace / checkpoint / revision)"
       method: "POST",
       token: TOKEN,
       tokenInHeader: true,
-      body: { kind: "workspace", choice: "switch" },
+      body: { kind: "workspace", choice: "archive" },
     });
     expect(r.status).toBe(503);
   });

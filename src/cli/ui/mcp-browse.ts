@@ -7,10 +7,8 @@ import type {
   McpResourceContents,
   ReadResourceResult,
 } from "../../mcp/types.js";
-import type { DisplayEvent } from "./EventLog.js";
+import type { Scrollback } from "./hooks/useScrollback.js";
 import type { McpServerSummary } from "./slash.js";
-
-export type HistoricalSetter = (updater: (prev: DisplayEvent[]) => DisplayEvent[]) => void;
 
 export function formatResourceList(servers: readonly McpServerSummary[]): string {
   const lines: string[] = [];
@@ -146,41 +144,36 @@ export async function handleMcpBrowseSlash(
   kind: "resource" | "prompt",
   arg: string,
   servers: readonly McpServerSummary[],
-  setHistorical: HistoricalSetter,
+  log: Scrollback,
 ): Promise<void> {
-  const ts = Date.now();
-  const push = (role: DisplayEvent["role"], text: string) => {
-    setHistorical((prev) => [...prev, { id: `mcp-${role}-${ts}-${prev.length}`, role, text }]);
-  };
-
   // No arg → list mode.
   if (!arg) {
-    push("info", kind === "resource" ? formatResourceList(servers) : formatPromptList(servers));
+    log.pushInfo(kind === "resource" ? formatResourceList(servers) : formatPromptList(servers));
     return;
   }
 
   if (kind === "resource") {
     const server = findServerForResource(servers, arg);
     if (!server) {
-      push(
-        "warning",
-        `no server exposes resource "${arg}". \`/resource\` with no arg lists what's available.`,
+      log.pushWarning(
+        `no server exposes resource "${arg}"`,
+        "`/resource` with no arg lists what's available.",
       );
       return;
     }
     const client: McpClient | undefined = server.client;
     if (!client) {
-      push(
-        "warning",
-        `server [${server.label}] is not connected (display-only). Resource read requires a live MCP client.`,
+      log.pushWarning(
+        `server [${server.label}] is not connected (display-only)`,
+        "Resource read requires a live MCP client.",
       );
       return;
     }
     try {
       const result = await client.readResource(arg);
-      push("info", formatResourceContents(arg, result));
+      log.pushInfo(formatResourceContents(arg, result));
     } catch (err) {
-      push("warning", `readResource failed: ${(err as Error).message}`);
+      log.pushWarning("readResource failed", (err as Error).message);
     }
     return;
   }
@@ -188,24 +181,24 @@ export async function handleMcpBrowseSlash(
   // prompt
   const server = findServerForPrompt(servers, arg);
   if (!server) {
-    push(
-      "warning",
-      `no server exposes prompt "${arg}". \`/prompt\` with no arg lists what's available.`,
+    log.pushWarning(
+      `no server exposes prompt "${arg}"`,
+      "`/prompt` with no arg lists what's available.",
     );
     return;
   }
   const client: McpClient | undefined = server.client;
   if (!client) {
-    push(
-      "warning",
-      `server [${server.label}] is not connected (display-only). Prompt fetch requires a live MCP client.`,
+    log.pushWarning(
+      `server [${server.label}] is not connected (display-only)`,
+      "Prompt fetch requires a live MCP client.",
     );
     return;
   }
   try {
     const result = await client.getPrompt(arg);
-    push("info", formatPromptMessages(arg, result));
+    log.pushInfo(formatPromptMessages(arg, result));
   } catch (err) {
-    push("warning", `getPrompt failed: ${(err as Error).message}`);
+    log.pushWarning("getPrompt failed", (err as Error).message);
   }
 }

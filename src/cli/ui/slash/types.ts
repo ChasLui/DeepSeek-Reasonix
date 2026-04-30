@@ -7,6 +7,8 @@ import type { PlanStep } from "../../../tools/plan.js";
 export interface SlashResult {
   /** Text to display back to the user as a system/info line. */
   info?: string;
+  /** Open the SessionPicker modal mid-chat — used by `/sessions` slash. */
+  openSessionsPicker?: boolean;
   /** Exit the app. */
   exit?: boolean;
   /** Clear the visible history. */
@@ -43,9 +45,6 @@ export interface SlashResult {
 }
 
 export interface SlashContext {
-  /** `/context` toggle — returns new visibility; `force` sets directly. */
-  toggleCtxFooter?: (force?: boolean) => boolean;
-
   mcpSpecs?: string[];
   codeUndo?: (args: readonly string[]) => string;
   codeApply?: (indices?: readonly number[]) => string;
@@ -65,6 +64,23 @@ export interface SlashContext {
   /** stop_job is async; handlers return synchronously and let the registry resolve in the background. */
   jobs?: JobRegistry;
   postInfo?: (text: string) => void;
+  /** Push a structured Doctor card with check-by-check status; used by `/doctor`. */
+  postDoctor?: (
+    checks: ReadonlyArray<{ label: string; level: "ok" | "warn" | "fail"; detail: string }>,
+  ) => void;
+  /** Push a verbose Usage card (full bars) — used by `/cost`; auto-emitted per-turn cards stay compact. */
+  postUsage?: (args: {
+    turn: number;
+    promptTokens: number;
+    reasonTokens: number;
+    outputTokens: number;
+    promptCap: number;
+    cacheHit: number;
+    cost: number;
+    sessionCost: number;
+    balance?: number;
+    elapsedMs?: number;
+  }) => void;
   setPlanMode?: (on: boolean) => void;
   /** `/apply-plan` clears the picker so its own `resubmit` doesn't double-fire approval. */
   clearPendingPlan?: () => void;

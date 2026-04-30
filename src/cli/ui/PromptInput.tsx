@@ -6,47 +6,17 @@ import { type MultilineKey, lineAndColumn, processMultilineKey } from "./multili
 import {
   PASTE_SENTINEL_RANGE,
   type PasteEntry,
+  decodePasteSentinel,
   encodePasteSentinel,
   expandPasteSentinels,
+  formatBytesShort,
   listPasteIdsInBuffer,
   makePasteEntry,
 } from "./paste-sentinels.js";
 import { type Segment, buildViewport, stringCells } from "./prompt-viewport.js";
-import { GRADIENT } from "./theme.js";
+import { FG, SURFACE, TONE } from "./theme/tokens.js";
 
-/**
- * Visual anchor: a left vertical rule (▎ + space) running down every
- * line of the input. Colored with the accent color so disabled state
- * dims it; gives the input area a clear "you type here" boundary
- * without using bordered Boxes (those amplified Ink's eraseLines
- * miscount on Windows). Length is fixed at 2 so the prefix-cell math
- * stays trivial.
- */
-const BAR = "▎ ";
-
-/**
- * Prompt input v2 — no Ink useInput, no Yoga text wrapping, no
- * cursor blink. Replaces the bordered-Box / multi-Text approach
- * that was driving the Windows ghost-row regressions.
- *
- * Pipeline:
- *   - Subscribes to the global keystroke bus (which is fed by our
- *     own raw stdin parser, NOT Ink's parse-keypress).
- *   - Pure events: `paste` events go to the paste registry; everything
- *     else flows through `processMultilineKey` (the existing reducer
- *     with all the cursor / submit / history-recall semantics).
- *   - Render: one logical line per <Box> row. Each row renders as
- *     EXACTLY one visual row — content longer than the visible cell
- *     budget is clipped via `buildViewport`, with `‹` / `›` markers
- *     where content is hidden. The cursor moves the viewport so it
- *     stays visible.
- *
- * Cursor blinks at ~480 ms half-period. The ticker that drives the
- * blink also flows the left-bar gradient and the wordmark, so
- * we're already paying for re-render every tick — the cursor blink
- * is free on top of that. Disabled state freezes the cursor solid
- * so the disabled prompt doesn't compete with the active spinner.
- */
+/** Raw-stdin keystroke bus → multiline reducer; one logical line per Box row, viewport-clipped. */
 
 export interface PromptInputProps {
   value: string;
@@ -87,13 +57,6 @@ export function PromptInput({
     if (cursor !== value.length) setCursor(value.length);
   }
 
-  /**
-   * Register one paste blob and insert its sentinel at the current
-   * cursor. Used both by `paste` events from the stdin reader (the
-   * normal path on terminals that support DECSET 2004) and by the
-   * fallback path inside `processMultilineKey` for chunks that
-   * arrived without bracketed-paste markers.
-   */
   const registerPaste = (content: string) => {
     const v = lastLocalValueRef.current;
     const c = cursor;
@@ -147,9 +110,6 @@ export function PromptInput({
     if (action.submit) {
       const raw = action.submitValue ?? value;
       const expanded = expandPasteSentinels(raw, pastesRef.current);
-      // GC unreachable paste entries — anything backspace'd out of
-      // the buffer before submit. Keeps the registry from growing
-      // unbounded across many turns.
       const reachable = new Set(listPasteIdsInBuffer(raw));
       for (const id of pastesRef.current.keys()) {
         if (!reachable.has(id)) pastesRef.current.delete(id);
@@ -164,118 +124,263 @@ export function PromptInput({
 
   const { stdout } = useStdout();
   const cols = stdout?.columns ?? 80;
-  const narrow = cols <= 90;
-  const promptBody = narrow ? "› " : "you › ";
-  const promptPrefix = BAR + promptBody;
-  const continuationIndent = BAR + " ".repeat(promptBody.length);
+  const promptPrefix = "› ";
+  const continuationIndent = "  ";
   const prefixCells = promptPrefix.length;
-  // Reserve 2 cells for the surrounding `paddingX={1}` plus 1 cell
-  // for the cursor block when at end-of-line. Net visible budget per
-  // line.
   const visibleCells = Math.max(8, cols - prefixCells - 3);
 
-  const placeholderActive = narrow
-    ? "type a message, or /command"
-    : "type a message, or /command  ·  [Ctrl+J] newline  ·  [Ctrl+P/N] history";
   const effectivePlaceholder = disabled
     ? (placeholder ?? "…waiting for response…")
-    : (placeholder ?? placeholderActive);
+    : (placeholder ?? "type a message · / for commands · @ to attach a file");
 
   const lines = value.length > 0 ? value.split("\n") : [""];
-  const accentColor = disabled ? "gray" : "cyan";
-  // Static bar + static cursor. Earlier versions flowed the bar
-  // gradient and blinked the cursor via the global ticker; both
-  // drove per-tick re-renders that interleaved badly with terminal
-  // resize (Ink's eraseLines miscounts logical vs visual rows on
-  // wrap, ghost frames stack). The bar still gets a gradient — just
-  // a fixed sweep based on row index, no time component.
-  const barColorAt = (rowIdx: number): string =>
-    disabled ? "gray" : GRADIENT[((rowIdx % GRADIENT.length) + GRADIENT.length) % GRADIENT.length]!;
+  const accentColor = disabled ? FG.faint : TONE.brand;
   const cursorVisible = true;
   const { line: cursorLine, col: cursorCol } = lineAndColumn(value, cursor);
 
-  // Big-buffer mitigation: if the buffer has many logical lines,
-  // collapse middle rows so Ink isn't redrawing 500+ rows per
-  // keystroke.
   const renderItems = collapseLinesForDisplay(lines, cursorLine);
   const showHugeBufferHints = lines.length > 20;
 
   return (
     <Box flexDirection="column" paddingX={1}>
-      {renderItems.map((item, renderIdx) => {
-        if (item.kind === "skip") {
-          return (
-            // biome-ignore lint/suspicious/noArrayIndexKey: stable — collapse markers derive from a fixed sliding window
-            <Box key={`skip-${renderIdx}`}>
-              <Text color={barColorAt(renderIdx)}>{BAR}</Text>
-              <Text dimColor>{continuationIndent.slice(BAR.length)}</Text>
-              <Text dimColor>
-                {`[… ${item.linesHidden} line${item.linesHidden === 1 ? "" : "s"} hidden — full content kept, submitted on Enter …]`}
-              </Text>
-            </Box>
-          );
+      {(() => {
+        const rows: React.ReactNode[] = [];
+        let firstRowEmitted = false;
+        for (let renderIdx = 0; renderIdx < renderItems.length; renderIdx++) {
+          const item = renderItems[renderIdx]!;
+          if (item.kind === "skip") {
+            rows.push(
+              <Box key={`skip-${renderIdx}`}>
+                <Text color={FG.faint}>{continuationIndent}</Text>
+                <Text color={FG.faint}>
+                  {`[… ${item.linesHidden} line${item.linesHidden === 1 ? "" : "s"} hidden — full content kept, submitted on Enter …]`}
+                </Text>
+              </Box>,
+            );
+            continue;
+          }
+          const i = item.originalIndex;
+          const line = item.line;
+          const isCursorLine = i === cursorLine;
+          const showPlaceholder = i === 0 && value.length === 0;
+          if (showPlaceholder) {
+            rows.push(
+              <PromptLine
+                key={`ln-${i}-text-0`}
+                line=""
+                isFirst={true}
+                isCursorLine={isCursorLine && !disabled}
+                cursorCol={isCursorLine ? cursorCol : null}
+                cursorVisible={cursorVisible}
+                showPlaceholder
+                placeholderText={effectivePlaceholder}
+                promptPrefix={promptPrefix}
+                continuationIndent={continuationIndent}
+                visibleCells={visibleCells}
+                accentColor={accentColor}
+                pastes={pastesRef.current}
+                disabled={disabled === true}
+              />,
+            );
+            firstRowEmitted = true;
+            continue;
+          }
+          const segs = splitLineByPastes(line);
+          for (let segIdx = 0; segIdx < segs.length; segIdx++) {
+            const seg = segs[segIdx]!;
+            const isFirst = !firstRowEmitted;
+            firstRowEmitted = true;
+            if (seg.kind === "paste") {
+              const cursorOnIt =
+                isCursorLine && cursorCol >= seg.startOffset && cursorCol <= seg.startOffset + 1;
+              rows.push(
+                <PasteChipRow
+                  key={`ln-${i}-paste-${segIdx}`}
+                  entry={pastesRef.current.get(seg.id)}
+                  pasteId={seg.id}
+                  isFirst={isFirst}
+                  active={cursorOnIt && !disabled}
+                  visibleCells={visibleCells}
+                  accentColor={accentColor}
+                />,
+              );
+              continue;
+            }
+            const segHasCursor =
+              isCursorLine &&
+              cursorCol >= seg.startOffset &&
+              cursorCol <= seg.startOffset + seg.text.length;
+            rows.push(
+              <PromptLine
+                key={`ln-${i}-text-${segIdx}`}
+                line={seg.text}
+                isFirst={isFirst}
+                isCursorLine={segHasCursor && !disabled}
+                cursorCol={segHasCursor ? cursorCol - seg.startOffset : null}
+                cursorVisible={cursorVisible}
+                showPlaceholder={false}
+                placeholderText=""
+                promptPrefix={promptPrefix}
+                continuationIndent={continuationIndent}
+                visibleCells={visibleCells}
+                accentColor={accentColor}
+                pastes={pastesRef.current}
+                disabled={disabled === true}
+              />,
+            );
+          }
+          if (segs.length === 0) {
+            const isFirst = !firstRowEmitted;
+            firstRowEmitted = true;
+            rows.push(
+              <PromptLine
+                key={`ln-${i}-empty`}
+                line=""
+                isFirst={isFirst}
+                isCursorLine={isCursorLine && !disabled}
+                cursorCol={isCursorLine ? 0 : null}
+                cursorVisible={cursorVisible}
+                showPlaceholder={false}
+                placeholderText=""
+                promptPrefix={promptPrefix}
+                continuationIndent={continuationIndent}
+                visibleCells={visibleCells}
+                accentColor={accentColor}
+                pastes={pastesRef.current}
+                disabled={disabled === true}
+              />,
+            );
+          }
         }
-        const i = item.originalIndex;
-        const line = item.line;
-        const isFirst = i === 0;
-        const isCursorLine = i === cursorLine;
-        const showPlaceholder = isFirst && value.length === 0;
-        return (
-          <PromptLine
-            key={`ln-${i}`}
-            line={line}
-            isFirst={isFirst}
-            isCursorLine={isCursorLine && !disabled}
-            cursorCol={isCursorLine ? cursorCol : null}
-            cursorVisible={cursorVisible}
-            showPlaceholder={showPlaceholder}
-            placeholderText={effectivePlaceholder}
-            promptPrefix={promptPrefix}
-            continuationIndent={continuationIndent}
-            visibleCells={visibleCells}
-            accentColor={accentColor}
-            barColor={barColorAt(i)}
-            pastes={pastesRef.current}
-            disabled={disabled === true}
-          />
-        );
-      })}
+        return rows;
+      })()}
       {showHugeBufferHints && !disabled ? (
         <Box>
-          <Text color={barColorAt(0)}>{BAR}</Text>
-          <Text dimColor>{continuationIndent.slice(BAR.length)}</Text>
-          <Text dimColor>
-            {`[${lines.length} lines · PageUp/PageDown jump to top/bottom · Ctrl+U clear · Ctrl+W del word]`}
+          <Text color={FG.faint}>
+            {`  [${lines.length} lines · PgUp/PgDn jump · Ctrl+U clear · Ctrl+W del word]`}
           </Text>
         </Box>
       ) : null}
-      {!disabled && !narrow && value.length > 0 && !value.includes("\n") ? (
-        <Box>
-          <Text color={barColorAt(0)}>{BAR}</Text>
-          <Text dimColor>{continuationIndent.slice(BAR.length)}</Text>
-          <Text dimColor>
-            [Ctrl+J] newline · [Enter] submit · ends with \ for line continuation
+      {!disabled ? (
+        <Box marginTop={1}>
+          <Text color={FG.faint}>
+            {"  ⏎ send  ·  shift/alt+⏎ newline  ·  ↑↓ history  ·  esc abort  ·  ctrl-c quit"}
           </Text>
         </Box>
-      ) : null}
-      {!disabled && !narrow && value.length === 0 ? (
-        <Box>
-          <Text color={barColorAt(0)}>{BAR}</Text>
-          <Text dimColor>{continuationIndent.slice(BAR.length)}</Text>
-          <Text dimColor>
-            [PgUp/PgDn] scroll log · [End] jump to latest · drag to select · auto-scrolls at edge
-          </Text>
+      ) : (
+        <Box marginTop={1}>
+          <Text color={FG.faint}>{"  esc to stop"}</Text>
         </Box>
-      ) : null}
-      {disabled ? (
-        <Box>
-          <Text color={barColorAt(0)}>{BAR}</Text>
-          <Text dimColor>{continuationIndent.slice(BAR.length)}</Text>
-          <Text dimColor>[Esc] to stop</Text>
-        </Box>
-      ) : null}
+      )}
     </Box>
   );
+}
+
+type LineSegment =
+  | { kind: "text"; text: string; startOffset: number }
+  | { kind: "paste"; id: number; startOffset: number };
+
+function splitLineByPastes(line: string): LineSegment[] {
+  const out: LineSegment[] = [];
+  let textBuf = "";
+  let textStart = 0;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]!;
+    const id = decodePasteSentinel(ch);
+    if (id === null) {
+      if (textBuf === "") textStart = i;
+      textBuf += ch;
+      continue;
+    }
+    if (textBuf !== "") {
+      out.push({ kind: "text", text: textBuf, startOffset: textStart });
+      textBuf = "";
+    }
+    out.push({ kind: "paste", id, startOffset: i });
+  }
+  if (textBuf !== "") out.push({ kind: "text", text: textBuf, startOffset: textStart });
+  return out;
+}
+
+interface PasteChipRowProps {
+  entry: PasteEntry | undefined;
+  pasteId: number;
+  isFirst: boolean;
+  active: boolean;
+  visibleCells: number;
+  accentColor: string;
+}
+
+function PasteChipRow({
+  entry,
+  pasteId,
+  isFirst,
+  active,
+  visibleCells,
+  accentColor,
+}: PasteChipRowProps): React.ReactElement {
+  const promptPrefix = "› ";
+  const continuationIndent = "  ";
+  const lead = isFirst ? promptPrefix : continuationIndent;
+  const leadColor = isFirst ? accentColor : FG.faint;
+  const labelText = formatChipLabel(entry, pasteId, visibleCells - 6);
+  if (active) {
+    return (
+      <Box>
+        <Text bold color={leadColor}>
+          {lead}
+        </Text>
+        <Text bold color={accentColor}>
+          {"▸ "}
+        </Text>
+        <Text bold color="black" backgroundColor={accentColor}>
+          {`  ${labelText}  `}
+        </Text>
+      </Box>
+    );
+  }
+  return (
+    <Box>
+      <Text bold color={leadColor}>
+        {lead}
+      </Text>
+      <Text color={FG.faint}>{"  "}</Text>
+      <Text color={FG.meta}>{"┌ "}</Text>
+      <Text color={FG.body} backgroundColor={SURFACE.bgElev}>
+        {`${labelText} `}
+      </Text>
+      <Text color={FG.meta}>{" ┐"}</Text>
+    </Box>
+  );
+}
+
+function formatChipLabel(entry: PasteEntry | undefined, pasteId: number, budget: number): string {
+  if (!entry) return `📋 paste #${pasteId + 1} · (missing)`;
+  const lines = `${entry.lineCount} line${entry.lineCount === 1 ? "" : "s"}`;
+  const bytes = formatBytesShort(entry.charCount);
+  const kind = sniffChipKind(entry.content);
+  const full = `📋 pasted  ${lines} · ${bytes}  ·  ${kind}  ^O expand · ⌫ remove`;
+  if (full.length <= Math.max(40, budget)) return full;
+  const compact = `📋 pasted  ${lines} · ${bytes}  ·  ${kind}`;
+  if (compact.length <= Math.max(30, budget)) return compact;
+  return `📋 pasted  ${lines} · ${bytes}`;
+}
+
+function sniffChipKind(content: string): string {
+  const head = content.slice(0, 1024);
+  if (/^\s*[{[]/.test(head)) {
+    try {
+      JSON.parse(head);
+      return "json";
+    } catch {
+      /* not parseable; fall through */
+    }
+  }
+  if (/\n\s+at\s+\S+\s*\(/.test(head)) return "stacktrace";
+  if (/^(diff --git|@@ )/m.test(head)) return "diff";
+  if (/^\s*<!doctype|^\s*<html/i.test(head)) return "html";
+  if (/^\s*\$\s+\w/.test(head) || /\n\s*\$\s+\w/.test(head)) return "shell";
+  return "text";
 }
 
 // ── PromptLine ────────────────────────────────────────────────────
@@ -285,16 +390,13 @@ interface PromptLineProps {
   isFirst: boolean;
   isCursorLine: boolean;
   cursorCol: number | null;
-  /** True when the cursor block / inverse char should be drawn this tick. */
   cursorVisible: boolean;
   showPlaceholder: boolean;
   placeholderText: string;
   promptPrefix: string;
   continuationIndent: string;
   visibleCells: number;
-  accentColor: "cyan" | "gray";
-  /** Animated gradient color for the leading ▎ bar. Differs per row + tick. */
-  barColor: string;
+  accentColor: string;
   pastes: ReadonlyMap<number, PasteEntry>;
   disabled: boolean;
 }
@@ -311,73 +413,47 @@ function PromptLine({
   continuationIndent,
   visibleCells,
   accentColor,
-  barColor,
   pastes,
   disabled,
 }: PromptLineProps) {
-  // The leading BAR cells of every prefix/continuation are the left
-  // anchor bar — render them as a separate span colored by the
-  // animated gradient so the bar appears to flow vertically.
-  const barText = promptPrefix.slice(0, BAR.length);
-  const bodyPrefix = promptPrefix.slice(BAR.length);
-  const bodyContinuation = continuationIndent.slice(BAR.length);
   if (showPlaceholder) {
     return (
       <Box>
-        <Text color={barColor}>{barText}</Text>
         <Text bold color={accentColor}>
-          {bodyPrefix}
+          {promptPrefix}
         </Text>
         {!disabled ? <Text color={accentColor}>{cursorVisible ? "▌" : " "}</Text> : null}
-        <Text dimColor>{placeholderText}</Text>
+        <Text color={FG.faint}>{placeholderText}</Text>
       </Box>
     );
   }
 
   const viewport = buildViewport(line, isCursorLine ? cursorCol : null, visibleCells, pastes);
 
-  // Render: prefix + (left marker?) + segments-with-cursor + (right marker?)
   return (
     <Box>
-      <Text color={barColor}>{barText}</Text>
       {isFirst ? (
         <Text bold color={accentColor}>
-          {bodyPrefix}
+          {promptPrefix}
         </Text>
       ) : (
-        <Text dimColor>{bodyContinuation}</Text>
+        <Text color={FG.faint}>{continuationIndent}</Text>
       )}
-      {viewport.hiddenLeft ? (
-        <Text color="gray" dimColor>
-          ‹
-        </Text>
-      ) : null}
+      {viewport.hiddenLeft ? <Text color={FG.faint}>{"‹"}</Text> : null}
       <ViewportContent
         segments={viewport.segments}
         cursorCell={isCursorLine ? viewport.cursorCell : null}
         accentColor={accentColor}
         cursorVisible={cursorVisible}
       />
-      {viewport.hiddenRight ? (
-        <Text color="gray" dimColor>
-          ›
-        </Text>
-      ) : null}
+      {viewport.hiddenRight ? <Text color={FG.faint}>{"›"}</Text> : null}
     </Box>
   );
 }
 
 // ── ViewportContent ────────────────────────────────────────────────
 
-/**
- * Render a viewport's segments with a cursor block at `cursorCell`.
- * Walks segments in order; the cursor splits at most one segment
- * (the one containing the cursor cell), producing an inverted char
- * at that position.
- *
- * End-of-line cursor (cursorCell points past the last cell of the
- * last segment): emit a trailing block.
- */
+/** Cursor splits at most one segment; trailing block when past the last cell. */
 function ViewportContent({
   segments,
   cursorCell,
@@ -386,7 +462,7 @@ function ViewportContent({
 }: {
   segments: Segment[];
   cursorCell: number | null;
-  accentColor: "cyan" | "gray";
+  accentColor: string;
   cursorVisible: boolean;
 }) {
   // No cursor on this line — straight render.
@@ -394,8 +470,6 @@ function ViewportContent({
     return <>{segments.map((seg, i) => renderSegment(seg, i, false))}</>;
   }
 
-  // Walk segments tallying cells; once we reach `cursorCell`, split
-  // the segment to insert the cursor block.
   const out: React.ReactNode[] = [];
   let cells = 0;
   let placed = false;
@@ -407,19 +481,18 @@ function ViewportContent({
       continue;
     }
     if (cursorCell >= cells + segCells) {
-      // Cursor isn't in this segment.
       out.push(renderSegment(seg, i, false));
       cells += segCells;
       continue;
     }
-    // Cursor lands inside this segment.
     if (seg.kind === "paste") {
-      // The cursor is "on" the paste sentinel — render the paste
-      // block inversed so the user sees they're at it. Inverse
-      // toggles with the blink so the paste sentinel stays
-      // legible during the cursor's "off" half-cycle.
       out.push(
-        <Text key={`p-${i}-cursor`} color="magenta" bold inverse={cursorVisible}>
+        <Text
+          key={`p-${i}-cursor`}
+          color={FG.body}
+          backgroundColor={SURFACE.bgElev}
+          inverse={cursorVisible}
+        >
           {seg.label}
         </Text>,
       );
@@ -427,7 +500,6 @@ function ViewportContent({
       cells += segCells;
       continue;
     }
-    // text segment — split before/at-cursor/after by cell offset.
     const offsetIntoSeg = cursorCell - cells;
     const split = splitTextByCells(seg.text, offsetIntoSeg);
     if (split.before.length > 0) {
@@ -440,8 +512,6 @@ function ViewportContent({
         </Text>,
       );
     } else {
-      // Cursor sits past the segment's last char (end-of-text in this
-      // segment). Render block here, blinking with the tick.
       out.push(
         <Text key={`t-${i}-c-eol`} color={accentColor}>
           {cursorVisible ? "▌" : " "}
@@ -455,7 +525,6 @@ function ViewportContent({
     cells += segCells;
   }
 
-  // Cursor sits past every segment (end of line).
   if (!placed) {
     out.push(
       <Text key="cursor-eol" color={accentColor}>
@@ -472,12 +541,7 @@ function segmentCells(seg: Segment): number {
   return stringCells(seg.text);
 }
 
-/**
- * Split a text string at a cell offset, returning the chars before
- * the offset, the char AT the offset (the cursor block highlights
- * it), and the chars after. A wide char that straddles the offset
- * is treated as the cursor's char.
- */
+/** Wide char straddling the offset is treated as the cursor's char. */
 function splitTextByCells(
   text: string,
   cellOffset: number,
@@ -490,20 +554,14 @@ function splitTextByCells(
       return { before: text.slice(0, i), atCursor: ch, after: text.slice(i + 1) };
     }
     if (cells + cw > cellOffset) {
-      // The wide char straddles the offset — show it as the cursor char.
       return { before: text.slice(0, i), atCursor: ch, after: text.slice(i + 1) };
     }
     cells += cw;
   }
-  // Cursor at end of text.
   return { before: text, atCursor: "", after: "" };
 }
 
-/**
- * Local cell-counting helper — duplicates `charCells` from
- * prompt-viewport but inlined to avoid a back-and-forth import (this
- * function is hot per-keystroke). Keep in sync.
- */
+/** Inlined cell counter — hot per-keystroke; keep in sync with prompt-viewport. */
 function charCellsForText(ch: string): number {
   const code = ch.charCodeAt(0);
   if (code < 0x20 || code === 0x7f) return 0;
@@ -526,12 +584,8 @@ function renderSegment(seg: Segment, key: number, _inverse: boolean): React.Reac
   if (seg.kind === "text") {
     return <Text key={`s-${key}`}>{seg.text}</Text>;
   }
-  // Paste sentinels render as a fuchsia bg-pill so they're visually
-  // distinct from typed text — the user can see "this is the
-  // collapsed paste, not 47 lines of code I typed". Matches the
-  // bg-pill idiom used elsewhere (mode bars, tool names).
   return (
-    <Text key={`s-${key}`} backgroundColor="#f0abfc" color="black" bold>
+    <Text key={`s-${key}`} backgroundColor={SURFACE.bgElev} color={FG.body}>
       {seg.label}
     </Text>
   );

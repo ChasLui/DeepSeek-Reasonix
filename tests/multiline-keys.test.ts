@@ -160,17 +160,9 @@ describe("processMultilineKey — cursor motion", () => {
     expect(down).toEqual({ next: null, cursor: null, submit: false });
   });
 
-  it("↑/↓ on an empty buffer is a NOOP", () => {
-    expect(processMultilineKey("", 0, key({ upArrow: true }))).toEqual({
-      next: null,
-      cursor: null,
-      submit: false,
-    });
-    expect(processMultilineKey("", 0, key({ downArrow: true }))).toEqual({
-      next: null,
-      cursor: null,
-      submit: false,
-    });
+  it("↑/↓ on an empty buffer hands off to history recall", () => {
+    expect(processMultilineKey("", 0, key({ upArrow: true })).historyHandoff).toBe("prev");
+    expect(processMultilineKey("", 0, key({ downArrow: true })).historyHandoff).toBe("next");
   });
 
   it("Ctrl+P / Ctrl+N hand off to history recall (bash readline binding)", () => {
@@ -205,19 +197,13 @@ describe("processMultilineKey — cursor motion", () => {
     expect(result).toEqual({ next: null, cursor: null, submit: false });
   });
 
-  it("raw `\\x1b[A` escape sequence is rewritten into upArrow (no history handoff)", () => {
-    // Recovery still runs (so wheel-as-↑ doesn't insert literal
-    // `[A` into the buffer), but ↑ now no-ops instead of recalling.
+  it("raw `\\x1b[A` escape sequence is rewritten into upArrow (history handoff on empty buffer)", () => {
     const result = processMultilineKey("", 0, { input: "\x1b[A" });
-    expect(result).toEqual({ next: null, cursor: null, submit: false });
+    expect(result.historyHandoff).toBe("prev");
   });
 
   it("raw `\\x1b[B` becomes downArrow; `\\x1b[C` rightArrow; `\\x1b[D` leftArrow", () => {
-    expect(processMultilineKey("", 0, { input: "\x1b[B" })).toEqual({
-      next: null,
-      cursor: null,
-      submit: false,
-    });
+    expect(processMultilineKey("", 0, { input: "\x1b[B" }).historyHandoff).toBe("next");
     expect(processMultilineKey("abc", 0, { input: "\x1b[C" }).cursor).toBe(1);
     expect(processMultilineKey("abc", 2, { input: "\x1b[D" }).cursor).toBe(1);
   });
@@ -230,16 +216,8 @@ describe("processMultilineKey — cursor motion", () => {
     // newline boundary.
     expect(processMultilineKey("ab\ncd", 2, { input: "[C" }).cursor).toBe(3);
     expect(processMultilineKey("ab\ncd", 3, { input: "[D" }).cursor).toBe(2);
-    expect(processMultilineKey("", 0, { input: "[A" })).toEqual({
-      next: null,
-      cursor: null,
-      submit: false,
-    });
-    expect(processMultilineKey("", 0, { input: "[B" })).toEqual({
-      next: null,
-      cursor: null,
-      submit: false,
-    });
+    expect(processMultilineKey("", 0, { input: "[A" }).historyHandoff).toBe("prev");
+    expect(processMultilineKey("", 0, { input: "[B" }).historyHandoff).toBe("next");
   });
 
   it("↑ moves cursor to the previous line, preserving column when possible", () => {

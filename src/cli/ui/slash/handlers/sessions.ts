@@ -1,39 +1,14 @@
-import { deleteSession, listSessions, pruneStaleSessions } from "../../../../memory/session.js";
+import {
+  deleteSession,
+  listSessions,
+  pruneStaleSessions,
+  renameSession,
+} from "../../../../memory/session.js";
 import type { SlashHandler } from "../dispatch.js";
 
 const STALE_THRESHOLD_DAYS = 90;
 
-const sessions: SlashHandler = (_args, loop) => {
-  const items = listSessions();
-  if (items.length === 0) {
-    return {
-      info: "no saved sessions yet — chat normally and your messages will be saved automatically",
-    };
-  }
-  const now = Date.now();
-  const lines = ["Saved sessions:"];
-  let staleCount = 0;
-  for (const s of items) {
-    const sizeKb = (s.size / 1024).toFixed(1);
-    const when = s.mtime.toISOString().replace("T", " ").slice(0, 16);
-    const marker = s.name === loop.sessionName ? "▸" : " ";
-    const ageDays = Math.floor((now - s.mtime.getTime()) / (24 * 60 * 60 * 1000));
-    const isStale = ageDays >= STALE_THRESHOLD_DAYS;
-    const ageTag = isStale ? `  (${ageDays}d — stale)` : "";
-    if (isStale) staleCount++;
-    lines.push(
-      `  ${marker} ${s.name.padEnd(22)} ${String(s.messageCount).padStart(5)} msgs  ${sizeKb.padStart(7)} KB  ${when}${ageTag}`,
-    );
-  }
-  lines.push("");
-  lines.push("Resume with: reasonix chat --session <name>");
-  if (staleCount > 0) {
-    lines.push(
-      `${staleCount} session${staleCount === 1 ? "" : "s"} idle ≥${STALE_THRESHOLD_DAYS} days — /prune-sessions to remove`,
-    );
-  }
-  return { info: lines.join("\n") };
-};
+const sessions: SlashHandler = () => ({ openSessionsPicker: true });
 
 const forget: SlashHandler = (_args, loop) => {
   if (!loop.sessionName) {
@@ -67,8 +42,35 @@ const pruneSessions: SlashHandler = (args) => {
   };
 };
 
+const rename: SlashHandler = (args, loop) => {
+  const newName = args?.[0]?.trim();
+  if (!newName) return { info: "usage: /rename <new-name>" };
+  if (!loop.sessionName) return { info: "not in a session — nothing to rename" };
+  const ok = renameSession(loop.sessionName, newName);
+  if (!ok) {
+    return {
+      info: `could not rename — "${newName}" already exists or sanitises to the same id as the current session`,
+    };
+  }
+  return {
+    info: `▸ renamed session → "${newName}". Restart the TUI to pick it up under its new name.`,
+  };
+};
+
+const resume: SlashHandler = (args) => {
+  const name = args?.[0]?.trim();
+  if (!name) return { info: "usage: /resume <session-name>  — list with /sessions" };
+  const exists = listSessions().some((s) => s.name === name);
+  if (!exists) return { info: `no session named "${name}" — list with /sessions` };
+  return {
+    info: `▸ to resume "${name}", quit and run: reasonix chat --session ${name}\n  (mid-session swap requires a restart so the message log can rewind cleanly)`,
+  };
+};
+
 export const handlers: Record<string, SlashHandler> = {
   sessions,
   forget,
+  rename,
+  resume,
   "prune-sessions": pruneSessions,
 };

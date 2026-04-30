@@ -1,5 +1,6 @@
 /** JSONL append-only message log under `~/.reasonix/sessions/`; concurrent-write safe. */
 
+import { execFileSync } from "node:child_process";
 import {
   appendFileSync,
   chmodSync,
@@ -7,6 +8,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  renameSync,
   statSync,
   unlinkSync,
   writeFileSync,
@@ -15,12 +17,35 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { ChatMessage } from "../types.js";
 
+/** Best-effort git branch sniff; returns undefined if not a git repo or git missing. */
+export function detectGitBranch(cwd: string): string | undefined {
+  try {
+    const out = execFileSync("git", ["branch", "--show-current"], {
+      cwd,
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 800,
+      encoding: "utf8",
+    }).trim();
+    return out || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export interface SessionInfo {
   name: string;
   path: string;
   size: number;
   messageCount: number;
   mtime: Date;
+  meta: SessionMeta;
+}
+
+export interface SessionMeta {
+  branch?: string;
+  summary?: string;
+  totalCostUsd?: number;
+  turnCount?: number;
 }
 
 export function sessionsDir(): string {
@@ -80,12 +105,71 @@ export function listSessions(): SessionInfo[] {
         const stat = statSync(path);
         const name = file.replace(/\.jsonl$/, "");
         const messageCount = countLines(path);
-        return { name, path, size: stat.size, messageCount, mtime: stat.mtime };
+        return {
+          name,
+          path,
+          size: stat.size,
+          messageCount,
+          mtime: stat.mtime,
+          meta: loadSessionMeta(name),
+        };
       })
       .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
   } catch {
     return [];
   }
+}
+
+function metaPath(name: string): string {
+  return join(sessionsDir(), `${sanitizeName(name)}.meta.json`);
+}
+
+export function loadSessionMeta(name: string): SessionMeta {
+  const p = metaPath(name);
+  if (!existsSync(p)) return {};
+  try {
+    const raw = JSON.parse(readFileSync(p, "utf8")) as SessionMeta;
+    return raw && typeof raw === "object" ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+export function patchSessionMeta(name: string, patch: Partial<SessionMeta>): SessionMeta {
+  const cur = loadSessionMeta(name);
+  const next: SessionMeta = { ...cur, ...patch };
+  const p = metaPath(name);
+  mkdirSync(dirname(p), { recursive: true });
+  writeFileSync(p, JSON.stringify(next), "utf8");
+  try {
+    chmodSync(p, 0o600);
+  } catch {
+    /* chmod not supported */
+  }
+  return next;
+}
+
+/** Renames the JSONL plus all known sidecars together; returns false if target already exists. */
+export function renameSession(oldName: string, newName: string): boolean {
+  const safeOld = sanitizeName(oldName);
+  const safeNew = sanitizeName(newName);
+  if (safeOld === safeNew) return false;
+  const oldJsonl = sessionPath(oldName);
+  const newJsonl = sessionPath(newName);
+  if (!existsSync(oldJsonl) || existsSync(newJsonl)) return false;
+  renameSync(oldJsonl, newJsonl);
+  for (const ext of [".meta.json", ".pending.json", ".plan.json"]) {
+    const oldP = oldJsonl.replace(/\.jsonl$/, ext);
+    const newP = newJsonl.replace(/\.jsonl$/, ext);
+    if (existsSync(oldP)) {
+      try {
+        renameSync(oldP, newP);
+      } catch {
+        /* sidecar rename failed — leave the jsonl rename in place */
+      }
+    }
+  }
+  return true;
 }
 
 /** Best-effort: per-file delete errors are swallowed so partial pruning still finishes. */
@@ -107,11 +191,13 @@ export function deleteSession(name: string): boolean {
     // Best-effort cleanup of side-car files that belong to this session
     // so `/forget` doesn't leave orphans in `sessionsDir()`. Currently
     // just the pending-edits checkpoint (src/code/pending-edits.ts).
-    const sidecar = path.replace(/\.jsonl$/, ".pending.json");
-    try {
-      unlinkSync(sidecar);
-    } catch {
-      /* no sidecar present — expected for sessions without pending edits */
+    for (const ext of [".pending.json", ".meta.json", ".plan.json"]) {
+      const sidecar = path.replace(/\.jsonl$/, ext);
+      try {
+        unlinkSync(sidecar);
+      } catch {
+        /* expected when the sidecar doesn't exist */
+      }
     }
     return true;
   } catch {

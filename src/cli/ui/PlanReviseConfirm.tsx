@@ -1,35 +1,15 @@
-/**
- * Modal shown when the model proposes a plan revision via
- * `revise_plan`. Renders a step-level diff between the old remaining
- * tail and the new proposed tail:
- *
- *    ●● ✓ step-2 · Wire middleware           (kept, dim)
- *  − ●●● ✗ step-3 · Migrate session cookies  (removed, red)
- *  + ●●  ▶ step-3 · Skip cookie migration    (added, green)
- *  + ●●  ▶ step-4 · Update cookie tests      (added, green)
- *
- * Two buttons: Accept / Reject. Accept replaces the in-memory plan's
- * remaining steps with the new ones; Reject leaves the original plan
- * intact and lets the model continue. The picker's border is amber
- * to distinguish from the green checkpoint picker — revisions are a
- * different decision point, deserve a different visual lane.
- */
-
 import { Box, Text } from "ink";
 import React from "react";
 import type { PlanStep } from "../../tools/plan.js";
-import { ModalCard } from "./ModalCard.js";
 import { SingleSelect } from "./Select.js";
+import { ApprovalCard } from "./cards/ApprovalCard.js";
 
 export type ReviseChoice = "accept" | "reject";
 
 export interface PlanReviseConfirmProps {
   reason: string;
-  /** Remaining steps from the current plan (before this revision). */
   oldRemaining: PlanStep[];
-  /** Remaining steps the model is proposing as a replacement. */
   newRemaining: PlanStep[];
-  /** Optional updated plan summary. */
   summary?: string;
   onChoose: (choice: ReviseChoice) => void;
 }
@@ -43,11 +23,9 @@ function computeDiff(oldSteps: PlanStep[], newSteps: PlanStep[]): DiffRow[] {
   const oldIds = new Set(oldSteps.map((s) => s.id));
   const newIds = new Set(newSteps.map((s) => s.id));
   const rows: DiffRow[] = [];
-  // Show removed (in old, not in new) first — preserve original order.
   for (const s of oldSteps) {
     if (!newIds.has(s.id)) rows.push({ kind: "removed", step: s });
   }
-  // Then walk new list. Steps in both lists render as kept; new-only as added.
   for (const s of newSteps) {
     rows.push({ kind: oldIds.has(s.id) ? "kept" : "added", step: s });
   }
@@ -79,11 +57,11 @@ function PlanReviseConfirmInner({
   const addedCount = rows.filter((r) => r.kind === "added").length;
   const keptCount = rows.filter((r) => r.kind === "kept").length;
   return (
-    <ModalCard
-      accent="#fbbf24"
-      icon="✏"
+    <ApprovalCard
+      tone="warn"
+      glyph="✏"
       title="plan revision proposed"
-      subtitle={`−${removedCount}  +${addedCount}  ·  ${keptCount} kept`}
+      metaRight={`−${removedCount}  +${addedCount}  ·  ${keptCount} kept`}
     >
       <Box marginBottom={1}>
         <Text>{reason}</Text>
@@ -132,9 +110,8 @@ function PlanReviseConfirmInner({
         ]}
         onSubmit={(v) => onChoose(v as ReviseChoice)}
         onCancel={() => onChoose("reject")}
-        footer="[↑↓] navigate  ·  [Enter] select  ·  [Esc] reject"
       />
-    </ModalCard>
+    </ApprovalCard>
   );
 }
 

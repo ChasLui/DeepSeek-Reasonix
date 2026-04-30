@@ -20,3 +20,19 @@ export function graphemeWidth(g: string): 0 | 1 | 2 {
 export function stringWidth(s: string): number {
   return stringWidthLib(s);
 }
+
+/** Clip to `maxCells` visual cells; appends `…` if cut. Grapheme-safe. */
+export function clipToCells(s: string, maxCells: number): string {
+  if (maxCells <= 0) return "";
+  if (stringWidthLib(s) <= maxCells) return s;
+  const cap = maxCells - 1;
+  let out = "";
+  let cells = 0;
+  for (const g of graphemes(s)) {
+    const w = graphemeWidth(g);
+    if (cells + w > cap) break;
+    out += g;
+    cells += w;
+  }
+  return `${out}…`;
+}

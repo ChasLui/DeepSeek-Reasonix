@@ -12,12 +12,28 @@ import { checkOllamaStatus } from "../../index/semantic/ollama-launcher.js";
 import { listSessions } from "../../memory/session.js";
 import { VERSION } from "../../version.js";
 
-type Level = "ok" | "warn" | "fail";
+export type DoctorLevel = "ok" | "warn" | "fail";
 
-interface Check {
+export interface DoctorCheck {
   label: string;
-  level: Level;
+  level: DoctorLevel;
   detail: string;
+}
+
+type Level = DoctorLevel;
+type Check = DoctorCheck;
+
+export async function runDoctorChecks(projectRoot: string): Promise<DoctorCheck[]> {
+  return Promise.all([
+    checkApiKey(),
+    checkConfig(),
+    checkApiReach(),
+    checkTokenizer(),
+    checkSessions(),
+    checkHooks(projectRoot),
+    checkOllama(projectRoot),
+    checkProject(projectRoot),
+  ]);
 }
 
 const TTY = process.stdout.isTTY && process.env.TERM !== "dumb";
@@ -327,16 +343,7 @@ export async function doctorCommand(): Promise<void> {
   // Run independent checks in parallel — saves ~5s when api-reach has
   // to time out. Each handler swallows its own throws into a `fail`
   // result so a thrown promise can't kill the whole report.
-  const checks = await Promise.all([
-    checkApiKey(),
-    checkConfig(),
-    checkApiReach(),
-    checkTokenizer(),
-    checkSessions(),
-    checkHooks(projectRoot),
-    checkOllama(projectRoot),
-    checkProject(projectRoot),
-  ]);
+  const checks = await runDoctorChecks(projectRoot);
 
   for (const c of checks) {
     console.log(`  ${badge(c.level)}  ${c.label}  ${c.detail}`);

@@ -17,10 +17,9 @@ const think: SlashHandler = (_args, loop) => {
 };
 
 const tool: SlashHandler = (args, _loop, ctx) => {
-  // EventLog renders tool results as a one-line summary for display.
-  // When the user wants to check what the model actually read (e.g.
-  // to verify it isn't hallucinating a file's contents), they need
-  // the full text. `/tool` is the escape hatch.
+  // ToolCard clips display to a one-line summary; users need the full
+  // text to verify the model isn't hallucinating a file's contents.
+  // `/tool` is the escape hatch.
   const history = ctx.toolHistory?.() ?? [];
   if (history.length === 0) {
     return {
@@ -53,16 +52,7 @@ const tool: SlashHandler = (args, _loop, ctx) => {
   };
 };
 
-const context: SlashHandler = (args, loop, ctx) => {
-  // Toggle the persistent footer when wired (TUI). Falls back to a
-  // one-shot scrollback breakdown push for headless / replay surfaces
-  // that don't carry the toggle callback.
-  if (ctx.toggleCtxFooter) {
-    const arg = (args[0] ?? "").toLowerCase();
-    const force = arg === "on" ? true : arg === "off" ? false : undefined;
-    const next = ctx.toggleCtxFooter(force);
-    return { info: `▸ context footer: ${next ? "on" : "off"}` };
-  }
+const context: SlashHandler = (_args, loop) => {
   const breakdown = computeCtxBreakdown(loop);
   const total =
     breakdown.systemTokens + breakdown.toolsTokens + breakdown.logTokens + breakdown.inputTokens;
@@ -171,6 +161,29 @@ const compact: SlashHandler = (args, loop) => {
   };
 };
 
+const cost: SlashHandler = (_args, loop, ctx) => {
+  const t = loop.stats.turns[loop.stats.turns.length - 1];
+  if (!t) {
+    return { info: "no turn yet — `/cost` shows the most recent turn's token + spend breakdown." };
+  }
+  if (!ctx.postUsage) {
+    return { info: "/cost needs a TUI context (postUsage wired)." };
+  }
+  const summary = loop.stats.summary();
+  const ctxMax = DEEPSEEK_CONTEXT_TOKENS[loop.model] ?? DEFAULT_CONTEXT_TOKENS;
+  ctx.postUsage({
+    turn: t.turn,
+    promptTokens: t.usage.promptTokens,
+    reasonTokens: 0,
+    outputTokens: t.usage.completionTokens,
+    promptCap: ctxMax,
+    cacheHit: t.cacheHitRatio,
+    cost: t.cost,
+    sessionCost: summary.totalCostUsd,
+  });
+  return {};
+};
+
 export const handlers: Record<string, SlashHandler> = {
   think,
   reasoning: think,
@@ -178,4 +191,5 @@ export const handlers: Record<string, SlashHandler> = {
   context,
   status,
   compact,
+  cost,
 };

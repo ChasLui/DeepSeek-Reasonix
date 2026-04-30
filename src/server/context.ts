@@ -53,7 +53,7 @@ export interface DashboardContext {
   resolveChoiceConfirm?: (choice: ChoiceResolution) => void;
   resolvePlanConfirm?: (choice: "approve" | "refine" | "cancel", text?: string) => void;
   resolveEditReview?: (choice: "apply" | "reject" | "apply-rest-of-turn" | "flip-to-auto") => void;
-  resolveWorkspaceConfirm?: (choice: "switch" | "deny") => void;
+  resolveWorkspaceConfirm?: (choice: "archive" | "discard" | "cancel") => void;
   resolveCheckpointConfirm?: (choice: "continue" | "revise" | "stop", text?: string) => void;
   resolveReviseConfirm?: (choice: "accept" | "reject") => void;
 

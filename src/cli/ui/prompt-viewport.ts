@@ -61,7 +61,7 @@ export function stringCells(s: string, pastes?: ReadonlyMap<number, PasteEntry>)
   return n;
 }
 
-/** Paste sentinel placeholder width — what we'd render for that sentinel. */
+/** Compact placeholder for cell-width arithmetic; the visible chip lives in PasteChipRow. */
 export function pasteSentinelLabel(id: number, entry: PasteEntry | undefined): string {
   if (!entry) return `[paste #${id + 1} · (missing)]`;
   return `[paste #${id + 1} · ${entry.lineCount}l · ${formatBytesShort(entry.charCount)}]`;

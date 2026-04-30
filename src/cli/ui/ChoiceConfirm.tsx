@@ -1,23 +1,10 @@
-/**
- * Modal picker shown when the model calls `ask_choice`. Renders the
- * question + 2–4 option rows (title + dimmed summary) + an optional
- * "Let me type my own answer" escape hatch when `allowCustom` is true.
- *
- * The escape hatch matters because DeepSeek flash sometimes misframes
- * the alternatives — none actually fit the user's intent. Without a
- * bailout the user would have to cancel, type feedback, and wait for
- * another round-trip. With it they just type and ship.
- *
- * Border color: magenta — deliberately distinct from cyan (plan),
- * green (checkpoint), red (shell) so the user's eye learns the modes
- * without reading headers.
- */
+/** Modal picker for `ask_choice` — options + optional "type my own" escape hatch. */
 
-import { Box } from "ink";
+// biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
 import type { ChoiceOption } from "../../tools/choice.js";
-import { ModalCard } from "./ModalCard.js";
 import { SingleSelect } from "./Select.js";
+import { ApprovalCard } from "./cards/ApprovalCard.js";
 
 export type ChoiceConfirmChoice =
   | { kind: "pick"; optionId: string }
@@ -54,21 +41,18 @@ function ChoiceConfirmInner({ question, options, allowCustom, onChoose }: Choice
   });
 
   return (
-    <ModalCard accent="#f0abfc" icon="🔀" title="model wants you to pick" subtitle={question}>
-      <Box>
-        <SingleSelect
-          initialValue={options[0]?.id}
-          items={items}
-          onSubmit={(v) => {
-            if (v === CUSTOM_VALUE) onChoose({ kind: "custom" });
-            else if (v === CANCEL_VALUE) onChoose({ kind: "cancel" });
-            else onChoose({ kind: "pick", optionId: v });
-          }}
-          onCancel={() => onChoose({ kind: "cancel" })}
-          footer="[↑↓] navigate  ·  [Enter] select  ·  [Esc] cancel"
-        />
-      </Box>
-    </ModalCard>
+    <ApprovalCard tone="info" title={question} metaRight="awaiting">
+      <SingleSelect
+        initialValue={options[0]?.id}
+        items={items}
+        onSubmit={(v) => {
+          if (v === CUSTOM_VALUE) onChoose({ kind: "custom" });
+          else if (v === CANCEL_VALUE) onChoose({ kind: "cancel" });
+          else onChoose({ kind: "pick", optionId: v });
+        }}
+        onCancel={() => onChoose({ kind: "cancel" })}
+      />
+    </ApprovalCard>
   );
 }
 

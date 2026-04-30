@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { appendUsage } from "../../telemetry/usage.js";
 import type { SubagentEvent, SubagentSink } from "../../tools/subagent.js";
-import type { DisplayEvent } from "./EventLog.js";
+import type { Scrollback } from "./hooks/useScrollback.js";
 
 export interface SubagentActivity {
   task: string;
@@ -11,7 +11,7 @@ export interface SubagentActivity {
 
 export interface UseSubagentParams {
   session: string | undefined;
-  setHistorical: React.Dispatch<React.SetStateAction<DisplayEvent[]>>;
+  log: Scrollback;
 }
 
 export interface UseSubagentResult {
@@ -20,7 +20,7 @@ export interface UseSubagentResult {
   sinkRef: React.MutableRefObject<SubagentSink>;
 }
 
-export function useSubagent({ session, setHistorical }: UseSubagentParams): UseSubagentResult {
+export function useSubagent({ session, log }: UseSubagentParams): UseSubagentResult {
   const [activity, setActivity] = useState<SubagentActivity | null>(null);
   const sinkRef = useRef<SubagentSink>({ current: null });
 
@@ -45,21 +45,13 @@ export function useSubagent({ session, setHistorical }: UseSubagentParams): UseS
       // end
       setActivity(null);
       const seconds = ((ev.elapsedMs ?? 0) / 1000).toFixed(1);
-      // Inline cost: the one number most users look at. Shown in the
-      // Historical row so they don't have to run `/stats` to see it.
+      // Inline cost: the one number most users look at. Saves a /stats round-trip.
       const costTail =
         ev.costUsd !== undefined && ev.costUsd > 0 ? ` · $${ev.costUsd.toFixed(4)}` : "";
       const summary = ev.error
         ? `⌬ subagent "${ev.task}" failed after ${seconds}s · ${ev.iter ?? 0} tool call(s) — ${ev.error}`
         : `⌬ subagent "${ev.task}" done in ${seconds}s · ${ev.iter ?? 0} tool call(s) · ${ev.turns ?? 0} turn(s)${costTail}`;
-      setHistorical((prev) => [
-        ...prev,
-        {
-          id: `subagent-end-${Date.now()}`,
-          role: "info",
-          text: summary,
-        },
-      ]);
+      log.pushInfo(summary);
       // Persist a subagent summary row to ~/.reasonix/usage.jsonl so
       // `/stats` and `reasonix stats` surface it. Skipped on error —
       // we only record what actually cost money and did work.
@@ -81,7 +73,7 @@ export function useSubagent({ session, setHistorical }: UseSubagentParams): UseS
     return () => {
       sinkRef.current.current = null;
     };
-  }, [session, setHistorical]);
+  }, [session, log]);
 
   return { activity, sinkRef };
 }

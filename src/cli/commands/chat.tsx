@@ -11,7 +11,10 @@ import { SseTransport } from "../../mcp/sse.js";
 import { type McpTransport, StdioTransport } from "../../mcp/stdio.js";
 import { StreamableHttpTransport } from "../../mcp/streamable-http.js";
 import {
+  deleteSession,
+  listSessions,
   loadSessionMessages,
+  renameSession,
   rewriteSession,
   sessionPath as sessionPathOf,
 } from "../../memory/session.js";
@@ -89,16 +92,10 @@ interface RootProps extends ChatOptions {
   tools: ToolRegistry | undefined;
   mcpSpecs: string[];
   mcpServers: McpServerSummary[];
-  /**
-   * Shared ref the bridge's `onProgress` callback writes through.
-   * App sets `.current` to its own handler on mount so every
-   * progress frame from any bridged tool lands in the UI's
-   * `OngoingToolRow`. Ref keeps the wire-up synchronous with
-   * React reconciliation (no effect-timing surprises).
-   */
+  /** App.tsx writes its progress handler here on mount so MCP frames flow into OngoingToolRow. */
   progressSink: { current: ((info: ProgressInfo) => void) | null };
-  /** Present when the session has prior messages; drives the picker. */
-  sessionPreview?: { messageCount: number; lastActive: Date };
+  /** Show the SessionPicker (full list) when no --session was specified and saved sessions exist. */
+  showPicker: boolean;
 }
 
 function Root({
@@ -107,13 +104,13 @@ function Root({
   mcpSpecs,
   mcpServers,
   progressSink,
-  sessionPreview,
+  showPicker,
   ...appProps
 }: RootProps) {
   const [key, setKey] = useState<string | undefined>(initialKey);
-  // `null` once the picker is resolved (or was never needed). Starts as
-  // the preview so we can render the picker once before mounting App.
-  const [pending, setPending] = useState<typeof sessionPreview>(sessionPreview);
+  const [pickerOpen, setPickerOpen] = useState(showPicker);
+  const [activeSession, setActiveSession] = useState<string | undefined>(appProps.session);
+  const [sessions, setSessions] = useState(() => listSessions());
 
   if (!key) {
     return (
@@ -127,27 +124,36 @@ function Root({
   }
   process.env.DEEPSEEK_API_KEY = key;
 
-  // KeystrokeProvider must wrap App from OUTSIDE — App.tsx itself
-  // calls `useKeystroke` in its function body for global hotkeys
-  // (Ctrl+C, Esc abort, Shift+Tab edit-mode cycle, @-mention picker,
-  // slash-suggestion navigation). If the provider lives inside App's
-  // render, `useContext(KeystrokeContext)` returns `null` at hook
-  // call time and those handlers silently never subscribe.
-  if (pending && appProps.session) {
+  if (pickerOpen) {
     return (
       <KeystrokeProvider>
         <SessionPicker
-          sessionName={appProps.session}
-          messageCount={pending.messageCount}
-          lastActive={pending.lastActive}
-          onChoose={(choice) => {
-            if (choice === "new" || choice === "delete") {
-              // Wipe the session file. "new" and "delete" do the same thing
-              // at this step — the distinction is only in the picker's
-              // wording. A future enhancement could archive on "new".
-              rewriteSession(appProps.session!, []);
+          sessions={sessions}
+          workspace={appProps.codeMode?.rootDir ?? process.cwd()}
+          onChoose={(outcome) => {
+            if (outcome.kind === "open") {
+              setActiveSession(outcome.name);
+              setPickerOpen(false);
+              return;
             }
-            setPending(undefined);
+            if (outcome.kind === "new") {
+              setActiveSession(undefined);
+              setPickerOpen(false);
+              return;
+            }
+            if (outcome.kind === "delete") {
+              deleteSession(outcome.name);
+              setSessions(listSessions());
+              return;
+            }
+            if (outcome.kind === "rename") {
+              renameSession(outcome.name, outcome.newName);
+              setSessions(listSessions());
+              return;
+            }
+            if (outcome.kind === "quit") {
+              process.exit(0);
+            }
           }}
         />
       </KeystrokeProvider>
@@ -163,7 +169,7 @@ function Root({
         harvest={appProps.harvest}
         branch={appProps.branch}
         budgetUsd={appProps.budgetUsd}
-        session={appProps.session}
+        session={activeSession}
         tools={tools}
         mcpSpecs={mcpSpecs}
         mcpServers={mcpServers}
@@ -236,6 +242,7 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
             tools: { supported: true, items: [] },
             resources: { supported: false, reason: "inspect failed" },
             prompts: { supported: false, reason: "inspect failed" },
+            elapsedMs: 0,
           };
         }
         const label = spec.name ?? "anon";
@@ -303,20 +310,12 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
     registerChoiceTool(tools);
   }
 
-  // Decide whether to show the session picker. It's gated on: session
-  // persistence is on, the session file already has prior messages, and
-  // the caller didn't pre-commit to one of the choices via --resume /
-  // --new flags. `--new` wipes the file now (before the loop opens),
-  // so the App mounts against a fresh log.
-  let sessionPreview: { messageCount: number; lastActive: Date } | undefined;
-  if (opts.session && !opts.forceResume && !opts.forceNew) {
-    const prior = loadSessionMessages(opts.session);
-    if (prior.length > 0) {
-      const p = sessionPathOf(opts.session);
-      const mtime = existsSync(p) ? statSync(p).mtime : new Date();
-      sessionPreview = { messageCount: prior.length, lastActive: mtime };
-    }
-  } else if (opts.session && opts.forceNew) {
+  // Picker shows the full saved-session list when the user did not pre-commit
+  // (no --session, no --force-resume, no --force-new) and at least one
+  // session exists. --force-new wipes the explicit session here so App mounts
+  // against a fresh log.
+  const showPicker = !opts.session && !opts.forceResume && listSessions().length > 0;
+  if (opts.session && opts.forceNew) {
     rewriteSession(opts.session, []);
   }
 
@@ -338,7 +337,7 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
       mcpSpecs={mcpSpecs}
       mcpServers={mcpServers}
       progressSink={progressSink}
-      sessionPreview={sessionPreview}
+      showPicker={showPicker}
       {...opts}
     />,
     // patchConsole:false — we never log to console during the TUI, and the

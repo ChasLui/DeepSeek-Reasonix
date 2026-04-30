@@ -1,17 +1,19 @@
-/** Single-line text input for deny-with-reason — uses our KeystrokeContext, not ink-text-input. */
-
 import { Box, Text } from "ink";
 import React, { useState } from "react";
 import { useKeystroke } from "./keystroke-context.js";
+import { FG, TONE } from "./theme/tokens.js";
 
 export interface DenyContextInputProps {
-  label?: string;
+  description?: string;
   onSubmit: (context: string) => void;
   onCancel: () => void;
 }
 
+const DEFAULT_DESCRIPTION =
+  "Tell the agent why you denied this. The next attempt will see your reason as additional context.";
+
 export function DenyContextInput({
-  label = "Reason for denying:",
+  description = DEFAULT_DESCRIPTION,
   onSubmit,
   onCancel,
 }: DenyContextInputProps) {
@@ -41,24 +43,16 @@ export function DenyContextInput({
 
   return (
     <Box flexDirection="column">
-      <Box>
-        <Text dimColor>{label} </Text>
-        <Text>{value}</Text>
-        <Text backgroundColor="#67e8f9" color="black">
-          {" "}
-        </Text>
+      <Box flexDirection="column" marginBottom={1}>
+        <Text color={FG.sub}>{description}</Text>
       </Box>
-      <Box marginTop={1}>
-        <Text dimColor>
-          {"["}
-          <Text color="#67e8f9" bold>
-            Enter
-          </Text>
-          {"] confirm  ·  ["}
-          <Text color="#67e8f9" bold>
-            Esc
-          </Text>
-          {"] cancel"}
+      <Box>
+        <Text bold color={TONE.brand}>
+          {"› "}
+        </Text>
+        <Text color={FG.body}>{value}</Text>
+        <Text backgroundColor={TONE.brand} color={"#000"}>
+          {" "}
         </Text>
       </Box>
     </Box>

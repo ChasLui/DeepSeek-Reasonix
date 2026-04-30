@@ -9,8 +9,22 @@ import {
 } from "../../../../hooks.js";
 import { aggregateUsage, defaultUsageLogPath, readUsageLog } from "../../../../telemetry/usage.js";
 import { VERSION, compareVersions, isNpxInstall } from "../../../../version.js";
+import { runDoctorChecks } from "../../../commands/doctor.js";
 import { renderDashboard } from "../../../commands/stats.js";
 import type { SlashHandler } from "../dispatch.js";
+
+/** Async via postDoctor — slash dispatch is sync, doctor checks aren't. */
+const doctor: SlashHandler = (_args, _loop, ctx) => {
+  const root = ctx.codeRoot ?? process.cwd();
+  if (!ctx.postDoctor) return { info: "/doctor needs a TUI context (postDoctor wired)." };
+  void (async () => {
+    const checks = await runDoctorChecks(root);
+    ctx.postDoctor!(
+      checks.map((c) => ({ label: c.label.trim(), level: c.level, detail: c.detail })),
+    );
+  })();
+  return { info: "⚕ Doctor — running health checks…" };
+};
 
 const hooks: SlashHandler = (args, loop, ctx) => {
   const sub = (args[0] ?? "").toLowerCase();
@@ -181,4 +195,5 @@ export const handlers: Record<string, SlashHandler> = {
   cwd,
   update,
   stats,
+  doctor,
 };

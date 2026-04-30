@@ -99,8 +99,11 @@ export async function handleModal(
       if (!ctx.resolveWorkspaceConfirm) {
         return { status: 503, body: { error: "workspace modal resolution not wired" } };
       }
-      if (choice !== "switch" && choice !== "deny") {
-        return { status: 400, body: { error: "workspace choice must be switch / deny" } };
+      if (choice !== "archive" && choice !== "discard" && choice !== "cancel") {
+        return {
+          status: 400,
+          body: { error: "workspace choice must be archive / discard / cancel" },
+        };
       }
       ctx.resolveWorkspaceConfirm(choice);
       return { status: 200, body: { resolved: true } };

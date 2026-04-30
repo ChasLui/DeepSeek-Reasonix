@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { DisplayEvent } from "../src/cli/ui/EventLog.js";
+import type { Scrollback } from "../src/cli/ui/hooks/useScrollback.js";
 import {
   findServerForPrompt,
   findServerForResource,
@@ -11,6 +11,44 @@ import {
 } from "../src/cli/ui/mcp-browse.js";
 import type { McpServerSummary } from "../src/cli/ui/slash.js";
 import type { McpClient } from "../src/mcp/client.js";
+
+interface PushedRow {
+  role: "info" | "warning";
+  text: string;
+}
+
+function makeFakeLog() {
+  const rows: PushedRow[] = [];
+  const log = {
+    pushUser: () => "u",
+    pushWarning: (title: string, message: string) => {
+      rows.push({ role: "warning", text: message ? `${title}: ${message}` : title });
+      return "w";
+    },
+    pushError: () => "e",
+    pushInfo: (text: string) => {
+      rows.push({ role: "info", text });
+      return "i";
+    },
+    pushStepProgress: () => "s",
+    pushPlanAnnounce: () => "p",
+    startReasoning: () => "r",
+    appendReasoning: () => undefined,
+    endReasoning: () => undefined,
+    startStreaming: () => "s",
+    appendStreaming: () => undefined,
+    endStreaming: () => undefined,
+    startTool: () => "t",
+    appendToolOutput: () => undefined,
+    endTool: () => undefined,
+    retryTool: () => undefined,
+    thinking: () => "th",
+    abortTurn: () => undefined,
+    endTurn: () => undefined,
+    reset: () => undefined,
+  } satisfies Scrollback;
+  return { rows, log };
+}
 
 function server(partial: Partial<McpServerSummary> & { label: string }): McpServerSummary {
   return {
@@ -203,32 +241,23 @@ describe("formatPromptMessages", () => {
 });
 
 describe("handleMcpBrowseSlash", () => {
-  function makeSetter() {
-    const rows: DisplayEvent[] = [];
-    const setter = (updater: (prev: DisplayEvent[]) => DisplayEvent[]) => {
-      const next = updater(rows.slice());
-      rows.splice(0, rows.length, ...next);
-    };
-    return { rows, setter };
-  }
-
   it("list mode: no arg writes a single info row with the list text", async () => {
-    const { rows, setter } = makeSetter();
-    await handleMcpBrowseSlash("resource", "", [], setter);
+    const { rows, log } = makeFakeLog();
+    await handleMcpBrowseSlash("resource", "", [], log);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.role).toBe("info");
     expect(rows[0]?.text).toMatch(/No resources/);
   });
 
   it("read mode: unknown URI emits a warning row", async () => {
-    const { rows, setter } = makeSetter();
-    await handleMcpBrowseSlash("resource", "mystery://1", [], setter);
+    const { rows, log } = makeFakeLog();
+    await handleMcpBrowseSlash("resource", "mystery://1", [], log);
     expect(rows[0]?.role).toBe("warning");
     expect(rows[0]?.text).toContain("no server exposes resource");
   });
 
   it("read mode: calls client.readResource and emits the formatted contents", async () => {
-    const { rows, setter } = makeSetter();
+    const { rows, log } = makeFakeLog();
     const readResource = vi.fn(async () => ({
       contents: [{ uri: "x://1", text: "hello" }],
     }));
@@ -244,14 +273,14 @@ describe("handleMcpBrowseSlash", () => {
       },
       client: { readResource } as unknown as McpClient,
     });
-    await handleMcpBrowseSlash("resource", "x://1", [fake], setter);
+    await handleMcpBrowseSlash("resource", "x://1", [fake], log);
     expect(readResource).toHaveBeenCalledWith("x://1");
     expect(rows[0]?.role).toBe("info");
     expect(rows[0]?.text).toContain("hello");
   });
 
   it("read mode: surfaces readResource rejection as a warning row", async () => {
-    const { rows, setter } = makeSetter();
+    const { rows, log } = makeFakeLog();
     const fake: McpServerSummary = server({
       label: "a",
       report: {
@@ -268,13 +297,13 @@ describe("handleMcpBrowseSlash", () => {
         }),
       } as unknown as McpClient,
     });
-    await handleMcpBrowseSlash("resource", "x://1", [fake], setter);
+    await handleMcpBrowseSlash("resource", "x://1", [fake], log);
     expect(rows[0]?.role).toBe("warning");
     expect(rows[0]?.text).toContain("-32002");
   });
 
   it("prompt mode: calls client.getPrompt and emits messages", async () => {
-    const { rows, setter } = makeSetter();
+    const { rows, log } = makeFakeLog();
     const getPrompt = vi.fn(async () => ({
       description: "hi",
       messages: [{ role: "user", content: { type: "text", text: "Hello." } as any }],
@@ -291,7 +320,7 @@ describe("handleMcpBrowseSlash", () => {
       },
       client: { getPrompt } as unknown as McpClient,
     });
-    await handleMcpBrowseSlash("prompt", "greet", [fake], setter);
+    await handleMcpBrowseSlash("prompt", "greet", [fake], log);
     expect(getPrompt).toHaveBeenCalledWith("greet");
     expect(rows[0]?.role).toBe("info");
     expect(rows[0]?.text).toContain("Hello.");

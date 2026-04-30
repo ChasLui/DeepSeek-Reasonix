@@ -104,13 +104,12 @@ export const SLASH_COMMANDS: readonly SlashCommandSpec[] = [
     summary:
       "cross-session cost dashboard (today / week / month / all-time · cache hit · vs Claude)",
   },
+  { cmd: "cost", summary: "show the most recent turn's token + spend breakdown (Usage card)" },
+  { cmd: "doctor", summary: "health check (api / config / api-reach / index / hooks / project)" },
   { cmd: "think", summary: "dump the last turn's full R1 reasoning (reasoner only)" },
   {
     cmd: "context",
-    argsHint: "[on|off]",
-    summary:
-      "toggle the always-on context-breakdown footer (system / tools / log / input). no arg → flip; on/off → force",
-    argCompleter: ["on", "off"],
+    summary: "show context-window breakdown (system / tools / log / input)",
   },
   { cmd: "retry", summary: "truncate & resend your last message (fresh sample)" },
   {
@@ -127,6 +126,12 @@ export const SLASH_COMMANDS: readonly SlashCommandSpec[] = [
     argsHint: "[N]",
   },
   { cmd: "sessions", summary: "list saved sessions (current marked with ▸)" },
+  { cmd: "rename", argsHint: "<new-name>", summary: "rename the current session on disk" },
+  {
+    cmd: "resume",
+    argsHint: "<name>",
+    summary: "show the launch command to resume a saved session",
+  },
   { cmd: "forget", summary: "delete the current session from disk" },
   {
     cmd: "prune-sessions",

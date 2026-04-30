@@ -88,10 +88,12 @@ export function processMultilineKey(
     return { next: null, cursor: Math.min(value.length, cursor + 1), submit: false };
   }
   if (key.upArrow) {
+    if (value.length === 0) return { ...NOOP, historyHandoff: "prev" };
     const moved = moveCursorUp(value, cursor);
     return moved === cursor ? NOOP : { next: null, cursor: moved, submit: false };
   }
   if (key.downArrow) {
+    if (value.length === 0) return { ...NOOP, historyHandoff: "next" };
     const moved = moveCursorDown(value, cursor);
     return moved === cursor ? NOOP : { next: null, cursor: moved, submit: false };
   }
@@ -161,7 +163,7 @@ export function processMultilineKey(
   }
 
   if (key.return) {
-    if (key.shift) return insertAt(value, cursor, "\n");
+    if (key.shift || key.meta) return insertAt(value, cursor, "\n");
     // Bash-style line continuation: trailing '\' + Enter (only when the
     // cursor sits at end-of-buffer, so a stray '\' mid-line doesn't
     // trigger it).
