@@ -3,7 +3,7 @@
 All notable changes to Reasonix. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.17.0] — 2026-04-29
 
 **Headline:** `reasonix index` is now config-driven — what gets walked
 is defined entirely by `~/.reasonix/config.json` (with sensible
