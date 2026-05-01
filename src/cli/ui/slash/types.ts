@@ -85,7 +85,6 @@ export interface SlashContext {
   /** `/apply-plan` clears the picker so its own `resubmit` doesn't double-fire approval. */
   clearPendingPlan?: () => void;
   reloadHooks?: () => number;
-  setCwd?: (path: string) => string;
   /** `null` → still in flight OR offline; consumers can't distinguish, so always offer `refreshLatestVersion`. */
   latestVersion?: string | null;
   refreshLatestVersion?: () => void;

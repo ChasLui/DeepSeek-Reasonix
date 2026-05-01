@@ -667,43 +667,6 @@ describe("dashboard server: modal mirroring (workspace / checkpoint / revision)"
     return handle.url.split("?")[0]!;
   }
 
-  it("GET /api/modal surfaces a workspace modal when one is up", async () => {
-    const base = await boot({
-      getActiveModal: () => ({ kind: "workspace", path: "/tmp/somewhere" }),
-    });
-    const r = await call(`${base}api/modal`, { token: TOKEN });
-    expect(r.status).toBe(200);
-    expect(r.body.modal).toEqual({ kind: "workspace", path: "/tmp/somewhere" });
-  });
-
-  it("POST /api/modal/resolve routes a workspace switch to the callback", async () => {
-    const calls: string[] = [];
-    const base = await boot({
-      resolveWorkspaceConfirm: (c) => calls.push(c),
-    });
-    const r = await call(`${base}api/modal/resolve`, {
-      method: "POST",
-      token: TOKEN,
-      tokenInHeader: true,
-      body: { kind: "workspace", choice: "archive" },
-    });
-    expect(r.status).toBe(200);
-    expect(calls).toEqual(["archive"]);
-  });
-
-  it("POST /api/modal/resolve rejects an unknown workspace choice", async () => {
-    const base = await boot({
-      resolveWorkspaceConfirm: () => undefined,
-    });
-    const r = await call(`${base}api/modal/resolve`, {
-      method: "POST",
-      token: TOKEN,
-      tokenInHeader: true,
-      body: { kind: "workspace", choice: "maybe" },
-    });
-    expect(r.status).toBe(400);
-  });
-
   it("POST /api/modal/resolve forwards a checkpoint revise + feedback", async () => {
     const calls: Array<[string, string | undefined]> = [];
     const base = await boot({
@@ -762,7 +725,7 @@ describe("dashboard server: modal mirroring (workspace / checkpoint / revision)"
       method: "POST",
       token: TOKEN,
       tokenInHeader: true,
-      body: { kind: "workspace", choice: "archive" },
+      body: { kind: "checkpoint", choice: "continue" },
     });
     expect(r.status).toBe(503);
   });

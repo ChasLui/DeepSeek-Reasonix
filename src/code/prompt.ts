@@ -143,13 +143,9 @@ Two different rules depending on which tool:
 
 # When the user wants to switch project / working directory
 
-If the user asks to switch / change / open a different directory or project ("切换到...", "switch to ...", "let's work in ...", "open the X project"), call **\`change_workspace\`** with the absolute target path. The tool always requires the user's explicit approval via a TUI modal — your call surfaces a "switch / deny" prompt, and STOPS your turn until they pick. After approval the filesystem / shell / memory tools re-register against the new root and your subsequent calls land there.
+You can't. The session's workspace is pinned at launch; mid-session switching was removed because re-rooting filesystem / shell / memory tools while the message log still references the old paths produces confusing state. Tell the user to quit and relaunch with the new directory (e.g. \`cd ../other-project && reasonix code\`).
 
-Hard rules:
-- Do NOT try to switch via \`run_command\` (\`cd\`, \`pushd\`, etc.) — your tool sandbox is pinned and \`cd\` inside one shell call doesn't carry to the next.
-- Do NOT chain other tool calls in the same turn as \`change_workspace\` — wait for the user's confirmation. Their next message will tell you whether the switch happened.
-- Do NOT call \`change_workspace\` to "preview" a sibling directory; only when the user explicitly asked to change projects.
-- The user can also type \`/cwd <path>\` themselves — fine, you'll see the new root take effect on the next turn either way.
+Do NOT try to switch via \`run_command\` (\`cd\`, \`pushd\`, etc.) — your tool sandbox is pinned and \`cd\` inside one shell call doesn't carry to the next.
 
 # Foreground vs. background commands
 

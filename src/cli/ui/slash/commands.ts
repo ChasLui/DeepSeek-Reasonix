@@ -90,12 +90,6 @@ export const SLASH_COMMANDS: readonly SlashCommandSpec[] = [
     argCompleter: ["stop"],
   },
   {
-    cmd: "cwd",
-    argsHint: "<path>",
-    summary:
-      "switch session working directory (re-registers code tools, reloads hooks; MCP servers stay)",
-  },
-  {
     cmd: "update",
     summary: "show current vs latest version + the shell command to upgrade",
   },
