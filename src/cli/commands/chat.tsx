@@ -1,4 +1,3 @@
-import { existsSync, statSync } from "node:fs";
 import { render } from "ink";
 import React, { useState } from "react";
 import { loadApiKey, searchEnabled } from "../../config.js";
@@ -13,10 +12,8 @@ import { StreamableHttpTransport } from "../../mcp/streamable-http.js";
 import {
   deleteSession,
   listSessions,
-  loadSessionMessages,
   renameSession,
-  rewriteSession,
-  sessionPath as sessionPathOf,
+  resolveSession,
 } from "../../memory/session.js";
 import { ToolRegistry } from "../../tools.js";
 import { registerChoiceTool } from "../../tools/choice.js";
@@ -310,14 +307,20 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
     registerChoiceTool(tools);
   }
 
-  // Picker shows the full saved-session list when the user did not pre-commit
-  // (no --session, no --force-resume, no --force-new) and at least one
-  // session exists. --force-new wipes the explicit session here so App mounts
-  // against a fresh log.
+  // Resolve `--session` for callers that pre-committed a name. resolveSession
+  // handles the timestamping invariants: --new generates a fresh timestamped
+  // name (old session preserved on disk); --resume finds the latest prefixed
+  // session; default falls through to the latest prefixed-or-base. The
+  // returned preview is unused — we don't show the legacy resume/new modal,
+  // since the full-list picker below covers session management.
+  const { resolved: resolvedSession } = resolveSession(
+    opts.session,
+    opts.forceNew,
+    opts.forceResume,
+  );
+  // Full-list picker only fires when the user did not pre-commit a session
+  // (no --session, no --force-resume) and at least one is saved.
   const showPicker = !opts.session && !opts.forceResume && listSessions().length > 0;
-  if (opts.session && opts.forceNew) {
-    rewriteSession(opts.session, []);
-  }
 
   // No startup clear, no resize listener. Earlier attempts wrote
   // various combinations of \x1b[2J / \x1b[3J / cursor-home to
@@ -339,6 +342,7 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
       progressSink={progressSink}
       showPicker={showPicker}
       {...opts}
+      session={resolvedSession}
     />,
     // patchConsole:false — we never log to console during the TUI, and the
     // patch is a known redraw-glitch source on winpty/MINTTY terminals.
