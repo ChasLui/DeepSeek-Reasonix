@@ -49,10 +49,8 @@ export function PromptInput({
   const pastesRef = useRef<Map<number, PasteEntry>>(new Map());
   const nextPasteIdRef = useRef<number>(0);
 
-  // Refs mirror value/cursor so the keystroke handler reads the latest
-  // state even when multiple events arrive in one stdin chunk. Without
-  // this, the second event in the chunk sees the pre-render closure and
-  // a fast `/`+Backspace flips to NOOP, leaving the slash stuck.
+  // Refs (not props/state) — multiple keystrokes in one stdin chunk dispatch
+  // before re-render, so the handler must read the latest value/cursor.
   const lastLocalValueRef = useRef(value);
   const cursorRef = useRef(cursor);
   cursorRef.current = cursor;
