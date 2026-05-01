@@ -1,10 +1,37 @@
 /** cwd pinned to root; non-allowlisted commands throw to a UI confirm gate; spawn is `shell: false`, tokenized argv only. */
 
-import { type SpawnOptions, spawn } from "node:child_process";
+import { type ChildProcess, type SpawnOptions, spawn, spawnSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import * as pathMod from "node:path";
 import type { ToolRegistry } from "../tools.js";
 import { JobRegistry } from "./jobs.js";
+
+/** Kill child + descendants. Windows: taskkill /T /F. Unix: SIGKILL the process group when detached, else fall back to SIGKILL on the leader. */
+function killProcessTree(child: ChildProcess): void {
+  if (!child.pid || child.killed) return;
+  if (process.platform === "win32") {
+    try {
+      spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      return;
+    } catch {
+      /* fall through to SIGKILL */
+    }
+  }
+  try {
+    process.kill(-child.pid, "SIGKILL");
+    return;
+  } catch {
+    /* not a process group leader — fall through */
+  }
+  try {
+    child.kill("SIGKILL");
+  } catch {
+    /* already gone */
+  }
+}
 
 export interface ShellToolsOptions {
   /** Directory to run commands in. Must be an absolute path. */
@@ -250,12 +277,24 @@ export async function runCommand(
     let totalBytes = 0;
     const byteCap = maxChars * 2 * 4; // worst-case 4 bytes/char for utf-8/gbk
     let timedOut = false;
+    let aborted = false;
+    const killChildTree = () => killProcessTree(child);
     const killTimer = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGKILL");
+      killChildTree();
     }, timeoutMs);
-    const onAbort = () => child.kill("SIGKILL");
-    opts.signal?.addEventListener("abort", onAbort, { once: true });
+    const onAbort = () => {
+      aborted = true;
+      killChildTree();
+    };
+    // Check synchronously first — if the signal aborted before listener attach
+    // (parent loop was already cancelled), addEventListener with `once:true`
+    // never fires, child runs unbounded.
+    if (opts.signal?.aborted) {
+      onAbort();
+    } else {
+      opts.signal?.addEventListener("abort", onAbort, { once: true });
+    }
 
     const onData = (chunk: Buffer | string) => {
       const b = typeof chunk === "string" ? Buffer.from(chunk) : chunk;

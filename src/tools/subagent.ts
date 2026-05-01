@@ -13,7 +13,7 @@ import { ToolRegistry } from "../tools.js";
 
 /** Side-channel — subagents run inside a tool-dispatch frame, can't go through parent's `LoopEvent` stream. */
 export interface SubagentEvent {
-  kind: "start" | "progress" | "end";
+  kind: "start" | "progress" | "end" | "inner" | "phase";
   task: string;
   skillName?: string;
   model?: string;
@@ -24,6 +24,10 @@ export interface SubagentEvent {
   turns?: number;
   costUsd?: number;
   usage?: Usage;
+  /** When kind === "inner": the raw child loop event. Parent UI translates to a child summary. */
+  inner?: import("../loop.js").LoopEvent;
+  /** When kind === "phase": coarse status verb for the activity row. */
+  phase?: "exploring" | "summarising";
 }
 
 export interface SubagentSink {
@@ -134,7 +138,10 @@ export async function spawnSubagent(opts: SpawnSubagentOptions): Promise<Subagen
     reasoningEffort: DEFAULT_SUBAGENT_EFFORT,
     maxToolIters,
     hooks: [],
-    stream: false,
+    // Streaming on so the parent UI can flip the "summarising" phase the
+    // moment the model starts emitting the final answer (first assistant_delta
+    // after the last tool result, before assistant_final lands).
+    stream: true,
   });
 
   // Wire parent-abort → child-abort. Two pitfalls we have to handle:
@@ -160,10 +167,15 @@ export async function spawnSubagent(opts: SpawnSubagentOptions): Promise<Subagen
   let final = "";
   let errorMessage: string | undefined;
   let toolIter = 0;
+  let summarisingEmitted = false;
   try {
     for await (const ev of childLoop.step(opts.task)) {
+      sink?.current?.({ kind: "inner", task: taskPreview, skillName, model, inner: ev });
+
       if (ev.role === "tool") {
         toolIter++;
+        // New tool dispatched — the model went back to deciding, summarising flag resets so the next final-answer delta re-emits.
+        summarisingEmitted = false;
         sink?.current?.({
           kind: "progress",
           task: taskPreview,
@@ -173,15 +185,21 @@ export async function spawnSubagent(opts: SpawnSubagentOptions): Promise<Subagen
           elapsedMs: Date.now() - startedAt,
         });
       }
+      // First content delta (no concurrent tool_call_delta role) = the
+      // model is now writing its final answer, not deciding the next tool.
+      if (ev.role === "assistant_delta" && !summarisingEmitted && (ev.content ?? "").length > 0) {
+        summarisingEmitted = true;
+        sink?.current?.({
+          kind: "phase",
+          task: taskPreview,
+          skillName,
+          model,
+          phase: "summarising",
+          iter: toolIter,
+          elapsedMs: Date.now() - startedAt,
+        });
+      }
       if (ev.role === "assistant_final") {
-        // `forcedSummary: true` is the loop's signal that this isn't
-        // a real model answer — it's an abort placeholder, a budget-
-        // exhaustion summary, or a context-guard fallback. Treating
-        // them as success means parent agents would happily render
-        // "[aborted by user (Esc) — no summary produced.]" as the
-        // subagent's actual answer. Surface it as an error instead so
-        // `success: false` reaches the caller and `/skill` doesn't
-        // pretend the run completed normally.
         if (ev.forcedSummary) {
           errorMessage = ev.content?.trim() || "subagent ended without producing an answer";
         } else {

@@ -29,6 +29,29 @@ function fakeFetch(responses: FakeResponseShape[]): typeof fetch {
   return vi.fn(async (_url: any, init: any) => {
     const body = init?.body ? JSON.parse(init.body) : {};
     const resp = responses[i++] ?? responses[responses.length - 1]!;
+    const usage = resp.usage ?? {
+      prompt_tokens: 100,
+      completion_tokens: 20,
+      total_tokens: 120,
+      prompt_cache_hit_tokens: 0,
+      prompt_cache_miss_tokens: 100,
+    };
+    if (body.stream === true) {
+      const finish = resp.tool_calls ? "tool_calls" : "stop";
+      const delta: Record<string, unknown> = {};
+      if (resp.content) delta.content = resp.content;
+      if (resp.reasoning_content) delta.reasoning_content = resp.reasoning_content;
+      if (resp.tool_calls) delta.tool_calls = resp.tool_calls;
+      const frames = [
+        `data: ${JSON.stringify({ choices: [{ index: 0, delta }] })}\n\n`,
+        `data: ${JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: finish }], usage })}\n\n`,
+        "data: [DONE]\n\n",
+      ];
+      return new Response(new TextEncoder().encode(frames.join("")), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    }
     return new Response(
       JSON.stringify({
         _echo_messages: body.messages,
@@ -44,13 +67,7 @@ function fakeFetch(responses: FakeResponseShape[]): typeof fetch {
             finish_reason: resp.tool_calls ? "tool_calls" : "stop",
           },
         ],
-        usage: resp.usage ?? {
-          prompt_tokens: 100,
-          completion_tokens: 20,
-          total_tokens: 120,
-          prompt_cache_hit_tokens: 0,
-          prompt_cache_miss_tokens: 100,
-        },
+        usage,
       }),
       { status: 200, headers: { "Content-Type": "application/json" } },
     );
