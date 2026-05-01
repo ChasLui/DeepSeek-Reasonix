@@ -46,6 +46,8 @@ export interface SessionMeta {
   summary?: string;
   totalCostUsd?: number;
   turnCount?: number;
+  /** Absolute path of the workspace root the session was created/used in. */
+  workspace?: string;
 }
 
 export function sessionsDir(): string {
@@ -61,14 +63,12 @@ export function sanitizeName(name: string): string {
   return cleaned || "default";
 }
 
-/** Compact sortable timestamp: YYYYMMDDHHmm (e.g. 202604301432) */
+/** Sortable timestamp `YYYYMMDDHHmm` — used as a session-name suffix. */
 export function timestampSuffix(): string {
   return new Date().toISOString().replace(/[^\d]/g, "").slice(0, 12);
 }
 
-/** Alpha-reverse by filename — newest session first (no stat I/O).
- *  TODO: switch to `statSync(f).mtimeMs` for "most recently used" order
- *  (costs O(n) reads but discounts idle-but-recent activity). */
+/** Names of `.jsonl` sessions starting with `prefix`, newest-first by filename. */
 export function findSessionsByPrefix(prefix: string): string[] {
   const dir = sessionsDir();
   if (!existsSync(dir)) return [];
@@ -83,13 +83,12 @@ export function findSessionsByPrefix(prefix: string): string[] {
   }
 }
 
-/** Session picker metadata. */
 export interface SessionPreview {
   messageCount: number;
   lastActive: Date;
 }
 
-/** Resolve session name + picker preview. Priority order in description.md. */
+/** Resolve launch-time session: forceNew → timestamped suffix; else latest `${name}-*` if any, else base. Preview returned only on the default branch when messages exist. */
 export function resolveSession(
   sessionName: string | undefined,
   forceNew?: boolean,
@@ -180,6 +179,11 @@ export function listSessions(): SessionInfo[] {
   } catch {
     return [];
   }
+}
+
+/** Sessions whose meta.workspace matches OR have no workspace yet (legacy / fresh). */
+export function listSessionsForWorkspace(workspace: string): SessionInfo[] {
+  return listSessions().filter((s) => !s.meta.workspace || s.meta.workspace === workspace);
 }
 
 function metaPath(name: string): string {
