@@ -14,6 +14,8 @@ export class JsonlEventSink implements EventSink {
   constructor(private readonly stream: WriteStream) {}
 
   append(ev: Event): void {
+    // Skip model.delta — recoverable from model.final.text, would balloon sidecar.
+    if (ev.type === "model.delta") return;
     this.stream.write(`${JSON.stringify(ev)}\n`);
     this.buffered++;
   }

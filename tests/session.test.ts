@@ -10,8 +10,11 @@ import {
   deleteSession,
   findSessionsByPrefix,
   listSessions,
+  listSessionsForWorkspace,
   loadSessionMessages,
+  patchSessionMeta,
   pruneStaleSessions,
+  renameSession,
   resolveSession,
   sanitizeName,
   sessionPath,
@@ -95,6 +98,40 @@ describe("session persistence", () => {
     const beta = items.find((s) => s.name === "beta")!;
     expect(beta.messageCount).toBe(2);
     expect(beta.size).toBeGreaterThan(0);
+  });
+
+  it("listSessions excludes .events.jsonl sidecars", () => {
+    appendSessionMessage("real", { role: "user", content: "x" });
+    writeFileSync(sessionPath("real").replace(/\.jsonl$/, ".events.jsonl"), '{"id":1}\n');
+    const names = listSessions().map((s) => s.name);
+    expect(names).toEqual(["real"]);
+  });
+
+  it("listSessionsForWorkspace strict-matches meta.workspace", () => {
+    appendSessionMessage("here", { role: "user", content: "x" });
+    appendSessionMessage("there", { role: "user", content: "x" });
+    appendSessionMessage("untagged", { role: "user", content: "x" });
+    patchSessionMeta("here", { workspace: "/proj/a" });
+    patchSessionMeta("there", { workspace: "/proj/b" });
+    const names = listSessionsForWorkspace("/proj/a").map((s) => s.name);
+    expect(names).toEqual(["here"]);
+  });
+
+  it("renameSession also moves the .events.jsonl sidecar", () => {
+    appendSessionMessage("orig", { role: "user", content: "x" });
+    const oldEvents = sessionPath("orig").replace(/\.jsonl$/, ".events.jsonl");
+    writeFileSync(oldEvents, '{"id":1}\n');
+    expect(renameSession("orig", "renamed")).toBe(true);
+    expect(existsSync(oldEvents)).toBe(false);
+    expect(existsSync(sessionPath("renamed").replace(/\.jsonl$/, ".events.jsonl"))).toBe(true);
+  });
+
+  it("deleteSession removes the .events.jsonl sidecar too", () => {
+    appendSessionMessage("trash", { role: "user", content: "x" });
+    const events = sessionPath("trash").replace(/\.jsonl$/, ".events.jsonl");
+    writeFileSync(events, '{"id":1}\n');
+    deleteSession("trash");
+    expect(existsSync(events)).toBe(false);
   });
 
   it("deleteSession removes the file", () => {

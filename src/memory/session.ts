@@ -159,7 +159,10 @@ export function listSessions(): SessionInfo[] {
   const dir = sessionsDir();
   if (!existsSync(dir)) return [];
   try {
-    const files = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
+    // Exclude `.events.jsonl` sidecars — they share the .jsonl suffix.
+    const files = readdirSync(dir).filter(
+      (f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl"),
+    );
     return files
       .map((file) => {
         const path = join(dir, file);
@@ -181,9 +184,9 @@ export function listSessions(): SessionInfo[] {
   }
 }
 
-/** Sessions whose meta.workspace matches OR have no workspace yet (legacy / fresh). */
+/** Strict match — legacy sessions without meta.workspace are hidden; resume by name still works. */
 export function listSessionsForWorkspace(workspace: string): SessionInfo[] {
-  return listSessions().filter((s) => !s.meta.workspace || s.meta.workspace === workspace);
+  return listSessions().filter((s) => s.meta.workspace === workspace);
 }
 
 function metaPath(name: string): string {
@@ -224,7 +227,7 @@ export function renameSession(oldName: string, newName: string): boolean {
   const newJsonl = sessionPath(newName);
   if (!existsSync(oldJsonl) || existsSync(newJsonl)) return false;
   renameSync(oldJsonl, newJsonl);
-  for (const ext of [".meta.json", ".pending.json", ".plan.json"]) {
+  for (const ext of [".events.jsonl", ".meta.json", ".pending.json", ".plan.json"]) {
     const oldP = oldJsonl.replace(/\.jsonl$/, ext);
     const newP = newJsonl.replace(/\.jsonl$/, ext);
     if (existsSync(oldP)) {
@@ -254,12 +257,7 @@ export function deleteSession(name: string): boolean {
   const path = sessionPath(name);
   try {
     unlinkSync(path);
-    // Best-effort cleanup of side-car files that belong to this session
-    // so `/forget` doesn't leave orphans in `sessionsDir()`:
-    //   - .pending.json   pending-edits checkpoint
-    //   - .meta.json      branch / summary / cost / turn count sidecar
-    //   - .plan.json      structured plan state
-    for (const ext of [".pending.json", ".meta.json", ".plan.json"]) {
+    for (const ext of [".events.jsonl", ".pending.json", ".meta.json", ".plan.json"]) {
       const sidecar = path.replace(/\.jsonl$/, ext);
       try {
         unlinkSync(sidecar);
