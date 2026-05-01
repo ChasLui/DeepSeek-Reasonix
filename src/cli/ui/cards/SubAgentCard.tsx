@@ -40,6 +40,7 @@ export function SubAgentCard({ card }: { card: SubAgentCardData }): React.ReactE
           </BarRow>
           {card.children.map((child) => (
             <BarRow key={child.id} tone="subagent">
+              <Text color={CARD.subagent.color}>{"▎  "}</Text>
               <ChildSummary card={child} />
             </BarRow>
           ))}

@@ -1,12 +1,52 @@
 import { useEffect, useRef, useState } from "react";
+import type { LoopEvent } from "../../loop.js";
 import { appendUsage } from "../../telemetry/usage.js";
 import type { SubagentEvent, SubagentSink } from "../../tools/subagent.js";
 import type { Scrollback } from "./hooks/useScrollback.js";
+import { CARD, TONE } from "./theme/tokens.js";
+
+function summariseInner(ev: LoopEvent): SubagentInnerSummary | null {
+  if (ev.role === "tool_start") {
+    return {
+      glyph: "▣",
+      color: CARD.tool.color,
+      label: ev.toolName ?? "tool",
+      meta: "running",
+    };
+  }
+  if (ev.role === "tool") {
+    return {
+      glyph: "▣",
+      color: CARD.tool.color,
+      label: ev.toolName ?? "tool",
+      meta: "done",
+    };
+  }
+  if (ev.role === "warning") {
+    return { glyph: "⚠", color: TONE.warn, label: "warning", meta: ev.content?.slice(0, 40) };
+  }
+  if (ev.role === "error") {
+    return { glyph: "✖", color: TONE.err, label: ev.error ?? "error" };
+  }
+  return null;
+}
+
+export interface SubagentInnerSummary {
+  /** Card-kind-ish glyph (◆ reasoning, ▣ tool, ▶ streaming, ✖ error). */
+  glyph: string;
+  color: string;
+  label: string;
+  meta?: string;
+}
 
 export interface SubagentActivity {
   task: string;
   iter: number;
   elapsedMs: number;
+  skillName?: string;
+  model?: string;
+  phase?: "exploring" | "summarising";
+  lastInner: SubagentInnerSummary | null;
 }
 
 export interface UseSubagentParams {
@@ -31,15 +71,41 @@ export function useSubagent({ session, log }: UseSubagentParams): UseSubagentRes
           task: ev.task,
           iter: ev.iter ?? 0,
           elapsedMs: ev.elapsedMs ?? 0,
+          skillName: ev.skillName,
+          model: ev.model,
+          phase: "exploring",
+          lastInner: null,
         });
         return;
       }
       if (ev.kind === "progress") {
-        setActivity({
-          task: ev.task,
-          iter: ev.iter ?? 0,
-          elapsedMs: ev.elapsedMs ?? 0,
-        });
+        setActivity((prev) =>
+          prev
+            ? {
+                ...prev,
+                iter: ev.iter ?? prev.iter,
+                elapsedMs: ev.elapsedMs ?? prev.elapsedMs,
+              }
+            : {
+                task: ev.task,
+                iter: ev.iter ?? 0,
+                elapsedMs: ev.elapsedMs ?? 0,
+                skillName: ev.skillName,
+                model: ev.model,
+                phase: "exploring",
+                lastInner: null,
+              },
+        );
+        return;
+      }
+      if (ev.kind === "phase") {
+        setActivity((prev) => (prev ? { ...prev, phase: ev.phase } : prev));
+        return;
+      }
+      if (ev.kind === "inner" && ev.inner) {
+        const summary = summariseInner(ev.inner);
+        if (!summary) return;
+        setActivity((prev) => (prev ? { ...prev, lastInner: summary } : prev));
         return;
       }
       // end

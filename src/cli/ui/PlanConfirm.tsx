@@ -7,7 +7,7 @@ import type { PlanStep } from "../../tools/plan.js";
 import { PlanStepList } from "./PlanStepList.js";
 import { SingleSelect } from "./Select.js";
 import { ApprovalCard } from "./cards/ApprovalCard.js";
-import { TONE } from "./theme/tokens.js";
+import { CARD, TONE } from "./theme/tokens.js";
 
 export type PlanConfirmChoice = "approve" | "refine" | "revise" | "cancel";
 
@@ -20,13 +20,19 @@ export interface PlanConfirmProps {
   projectRoot?: string;
 }
 
-function PlanConfirmInner({ plan, steps, summary, onChoose }: PlanConfirmProps) {
+function PlanConfirmInner({ plan, steps, onChoose }: PlanConfirmProps) {
   const hasOpenQuestions =
     /^#{1,6}\s*(open[-\s]?questions?|risks?|unknowns?|assumptions?|unclear)/im.test(plan) ||
     /^#{1,6}\s*(待确认|开放问题|风险|未知|假设|不确定)/im.test(plan);
 
   return (
-    <ApprovalCard tone="accent" glyph="⊞" title="Approve plan" metaRight={summary ?? "awaiting"}>
+    <ApprovalCard
+      tone="accent"
+      glyph="⊞"
+      title="Approve plan"
+      metaRight="awaiting"
+      metaRightColor={CARD.plan.color}
+    >
       {hasOpenQuestions ? (
         <Box marginBottom={1}>
           <Text color={TONE.warn}>

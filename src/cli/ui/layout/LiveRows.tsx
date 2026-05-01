@@ -138,25 +138,102 @@ export function UndoBanner({
   );
 }
 
-/** Live row for a running subagent — outer dispatch + inner task signal. */
+function subagentPhaseLabel(
+  phase: "exploring" | "summarising" | undefined,
+  iter: number,
+  elapsedMs: number,
+): string {
+  if (phase === "summarising") return "summarising findings…";
+  if (iter === 0 && elapsedMs < 2000) return "exploring task…";
+  if (iter === 0) return "thinking…";
+  return "working through tools…";
+}
+
+function subagentTitle(skillName: string | undefined, task: string): string {
+  if (skillName) return `Sub-agent · ${skillName}`;
+  const short = task.length > 32 ? `${task.slice(0, 32)}…` : task;
+  return `Sub-agent · ${short || "anonymous"}`;
+}
+
+/** Live block for a running subagent. Fixed row count — never grows as inner events arrive, so the screen doesn't jump. */
 export function SubagentRow({
   activity,
 }: {
-  activity: { task: string; iter: number; elapsedMs: number };
+  activity: {
+    task: string;
+    iter: number;
+    elapsedMs: number;
+    skillName?: string;
+    model?: string;
+    phase?: "exploring" | "summarising";
+    lastInner: { glyph: string; color: string; label: string; meta?: string } | null;
+  };
 }) {
   const tick = useTick();
   const seconds = (activity.elapsedMs / 1000).toFixed(1);
+  const phase = subagentPhaseLabel(activity.phase, activity.iter, activity.elapsedMs);
+  const last = activity.lastInner;
   return (
-    <Box paddingLeft={3}>
-      <Text color={CARD.subagent.color} bold>
-        {SPINNER_FRAMES[tick % SPINNER_FRAMES.length]}
-      </Text>
-      <Text>{"  "}</Text>
-      <Text color={CARD.subagent.color} bold>
-        ⌬ subagent
-      </Text>
-      <Text color={CARD.subagent.color}>{`  ${activity.task}`}</Text>
-      <Text color={FG.faint}>{`   iter ${activity.iter}  ·  ${seconds}s`}</Text>
+    <Box flexDirection="column" marginY={1}>
+      <Box>
+        <Text>{"  "}</Text>
+        <Text color={CARD.subagent.color}>{"▎ "}</Text>
+        <Text bold color={CARD.subagent.color}>
+          {`⌬ ${subagentTitle(activity.skillName, activity.task)}`}
+        </Text>
+        <Box flexGrow={1} />
+        <Text color={CARD.subagent.color}>{`iter ${activity.iter} · ${seconds}s`}</Text>
+        <Text>{"  "}</Text>
+        <Text color={CARD.subagent.color} bold>
+          {SPINNER_FRAMES[tick % SPINNER_FRAMES.length]}
+        </Text>
+      </Box>
+      <Box>
+        <Text>{"  "}</Text>
+        <Text color={CARD.subagent.color}>{"▎"}</Text>
+      </Box>
+      <Box>
+        <Text>{"  "}</Text>
+        <Text color={CARD.subagent.color}>{"▎   "}</Text>
+        <Text color={FG.faint}>{"Task   "}</Text>
+        <Text color={FG.sub}>{activity.task}</Text>
+      </Box>
+      <Box>
+        <Text>{"  "}</Text>
+        <Text color={CARD.subagent.color}>{"▎   "}</Text>
+        <Text color={FG.faint}>{"Model  "}</Text>
+        <Text color={FG.sub}>{activity.model ?? "—"}</Text>
+      </Box>
+      <Box>
+        <Text>{"  "}</Text>
+        <Text color={CARD.subagent.color}>{"▎"}</Text>
+      </Box>
+      <Box>
+        <Text>{"  "}</Text>
+        <Text color={CARD.subagent.color}>{"▎   "}</Text>
+        <Text color={FG.faint}>{"Last   "}</Text>
+        {last ? (
+          <>
+            <Text color={last.color}>{`${last.glyph} `}</Text>
+            <Text color={FG.body}>{last.label}</Text>
+            {last.meta ? <Text color={FG.faint}>{`   ${last.meta}`}</Text> : null}
+          </>
+        ) : (
+          <Text color={FG.faint}>{"queued…"}</Text>
+        )}
+      </Box>
+      <Box>
+        <Text>{"  "}</Text>
+        <Text color={CARD.subagent.color}>{"▎"}</Text>
+      </Box>
+      <Box>
+        <Text>{"  "}</Text>
+        <Text color={CARD.subagent.color}>{"▎   "}</Text>
+        <Text bold color={TONE.brand}>
+          {"▶ "}
+        </Text>
+        <Text color={TONE.brand}>{phase}</Text>
+      </Box>
     </Box>
   );
 }

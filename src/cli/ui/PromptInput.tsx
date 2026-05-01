@@ -49,23 +49,31 @@ export function PromptInput({
   const pastesRef = useRef<Map<number, PasteEntry>>(new Map());
   const nextPasteIdRef = useRef<number>(0);
 
-  // Track external value replacement (history recall, slash completion).
-  // When the parent swaps `value` we snap cursor to end.
+  // Refs mirror value/cursor so the keystroke handler reads the latest
+  // state even when multiple events arrive in one stdin chunk. Without
+  // this, the second event in the chunk sees the pre-render closure and
+  // a fast `/`+Backspace flips to NOOP, leaving the slash stuck.
   const lastLocalValueRef = useRef(value);
+  const cursorRef = useRef(cursor);
+  cursorRef.current = cursor;
   if (value !== lastLocalValueRef.current) {
     lastLocalValueRef.current = value;
-    if (cursor !== value.length) setCursor(value.length);
+    if (cursor !== value.length) {
+      cursorRef.current = value.length;
+      setCursor(value.length);
+    }
   }
 
   const registerPaste = (content: string) => {
     const v = lastLocalValueRef.current;
-    const c = cursor;
+    const c = cursorRef.current;
     const id = nextPasteIdRef.current % PASTE_SENTINEL_RANGE;
     nextPasteIdRef.current = id + 1;
     pastesRef.current.set(id, makePasteEntry(id, content));
     const sentinel = encodePasteSentinel(id);
     const next = v.slice(0, c) + sentinel + v.slice(c);
     lastLocalValueRef.current = next;
+    cursorRef.current = c + 1;
     onChange(next);
     setCursor(c + 1);
   };
@@ -95,7 +103,7 @@ export function PromptInput({
       pageUp: ev.pageUp,
       pageDown: ev.pageDown,
     };
-    const action = processMultilineKey(value, cursor, key);
+    const action = processMultilineKey(lastLocalValueRef.current, cursorRef.current, key);
     if (action.pasteRequest) {
       registerPaste(action.pasteRequest.content);
       return;
@@ -105,10 +113,11 @@ export function PromptInput({
       onChange(action.next);
     }
     if (action.cursor !== null) {
+      cursorRef.current = action.cursor;
       setCursor(action.cursor);
     }
     if (action.submit) {
-      const raw = action.submitValue ?? value;
+      const raw = action.submitValue ?? lastLocalValueRef.current;
       const expanded = expandPasteSentinels(raw, pastesRef.current);
       const reachable = new Set(listPasteIdsInBuffer(raw));
       for (const id of pastesRef.current.keys()) {

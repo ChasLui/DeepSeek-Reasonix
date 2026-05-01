@@ -1,4 +1,3 @@
-import * as pathMod from "node:path";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { archivePlanState } from "../../../code/plan-store.js";
 import type { LoopEvent } from "../../../loop.js";
@@ -19,7 +18,6 @@ export interface ToolEventContext {
   setPendingShell: Dispatch<
     SetStateAction<{ command: string; kind: "run_command" | "run_background" } | null>
   >;
-  setPendingWorkspace: Dispatch<SetStateAction<{ path: string } | null>>;
   setPendingPlan: Dispatch<SetStateAction<string | null>>;
   setPendingRevision: Dispatch<
     SetStateAction<{ reason: string; remainingSteps: PlanStep[]; summary?: string } | null>
@@ -70,30 +68,6 @@ export function handleToolEvent(ev: LoopEvent, ctx: ToolEventContext): void {
           command: parsed.command.trim(),
           kind: ev.toolName as "run_command" | "run_background",
         });
-      }
-    } catch {
-      /* malformed args — skip the prompt */
-    }
-  }
-
-  // change_workspace surfaced its WorkspaceConfirmationError. Re-resolve
-  // the path from args (not the error message) so a future error rewording
-  // doesn't break the modal.
-  if (
-    ev.toolName === "change_workspace" &&
-    ev.content.includes('"WorkspaceConfirmationError:') &&
-    ev.toolArgs
-  ) {
-    try {
-      const parsed = JSON.parse(ev.toolArgs) as { path?: unknown };
-      if (typeof parsed.path === "string" && parsed.path.trim()) {
-        const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
-        const expanded =
-          parsed.path.startsWith("~") && home
-            ? pathMod.join(home, parsed.path.slice(1))
-            : parsed.path;
-        const abs = pathMod.resolve(expanded);
-        ctx.setPendingWorkspace({ path: abs });
       }
     } catch {
       /* malformed args — skip the prompt */

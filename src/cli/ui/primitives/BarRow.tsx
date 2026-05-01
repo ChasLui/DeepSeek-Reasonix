@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
+import { STRUCT } from "../cards/glyphs.js";
 import { CARD, type CardTone } from "../theme/tokens.js";
 import { useTick } from "../ticker.js";
 
@@ -23,14 +24,16 @@ export function BarRow({
   return (
     <Box flexDirection="row">
       <Text>{"  "}</Text>
+      <Text color={t.color}>{STRUCT.bar}</Text>
       {glyph !== undefined ? (
         <Text bold={glyphBold} color={t.color}>
+          {" "}
           {glyph}
           {indent === 3 ? "  " : " "}
         </Text>
-      ) : (
+      ) : indent > 0 ? (
         <Text>{" ".repeat(indent + 1)}</Text>
-      )}
+      ) : null}
       {children}
     </Box>
   );

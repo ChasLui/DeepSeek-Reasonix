@@ -15,6 +15,8 @@ export interface ApprovalCardProps {
   glyph?: string;
   title: string;
   metaRight?: string;
+  /** Override metaRight color — defaults to FG.faint. Use the tone color to match design's status indicator (e.g. "awaiting" in accent for plan-confirm). */
+  metaRightColor?: string;
   children?: React.ReactNode;
   footerHint?: string;
 }
@@ -38,6 +40,7 @@ export function ApprovalCard({
   glyph,
   title,
   metaRight,
+  metaRightColor,
   children,
   footerHint = DEFAULT_FOOTER,
 }: ApprovalCardProps): React.ReactElement {
@@ -60,7 +63,7 @@ export function ApprovalCard({
           {` ${title} `}
         </Text>
         {metaRight !== undefined && (
-          <Text color={FG.faint} backgroundColor={SURFACE.bgElev}>
+          <Text color={metaRightColor ?? FG.faint} backgroundColor={SURFACE.bgElev}>
             {`  ${metaRight} `}
           </Text>
         )}

@@ -43,7 +43,8 @@ import type { LoopEvent } from "../../loop.js";
 import {
   deleteSession,
   detectGitBranch,
-  listSessions,
+  type listSessions,
+  listSessionsForWorkspace,
   loadSessionMeta,
   patchSessionMeta,
   renameSession,
@@ -68,7 +69,6 @@ import { formatCommandResult, runCommand } from "../../tools/shell.js";
 import { registerSkillTools } from "../../tools/skills.js";
 import { formatSubagentResult, spawnSubagent } from "../../tools/subagent.js";
 import { webFetch } from "../../tools/web.js";
-import { registerWorkspaceTool } from "../../tools/workspace.js";
 import { openTranscriptFile, recordFromLoopEvent, writeRecord } from "../../transcript/log.js";
 import { AtMentionSuggestions } from "./AtMentionSuggestions.js";
 import { ChoiceConfirm, type ChoiceConfirmChoice } from "./ChoiceConfirm.js";
@@ -84,8 +84,8 @@ import { ShellConfirm, type ShellConfirmChoice, derivePrefix } from "./ShellConf
 import { SlashArgPicker } from "./SlashArgPicker.js";
 import { SlashSuggestions } from "./SlashSuggestions.js";
 import { WelcomeBanner } from "./WelcomeBanner.js";
-import { WorkspaceConfirm, type WorkspaceConfirmChoice } from "./WorkspaceConfirm.js";
 import { detectBangCommand, formatBangUserMessage } from "./bang.js";
+import { PlanCard } from "./cards/PlanCard.js";
 import { writeClipboard } from "./clipboard.js";
 import { formatEditResults, partitionEdits } from "./edit-history.js";
 import { loopEventToDashboard } from "./effects/loop-to-dashboard.js";
@@ -279,6 +279,19 @@ function AppInner({
     s.cards.some((c) => c.kind === "user" || c.kind === "streaming"),
   );
   const isStreaming = useAgentState((s) => s.cards.some((c) => c.kind === "streaming" && !c.done));
+  const activePlanCard = useAgentState((s) => {
+    for (let i = s.cards.length - 1; i >= 0; i--) {
+      const c = s.cards[i];
+      if (
+        c?.kind === "plan" &&
+        c.variant === "active" &&
+        c.steps.some((step) => step.status !== "done" && step.status !== "skipped")
+      ) {
+        return c;
+      }
+    }
+    return null;
+  });
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   // Tracks whether the current turn has been aborted via Esc, so the
@@ -512,13 +525,6 @@ function AppInner({
      */
     kind: "run_command" | "run_background";
   } | null>(null);
-  // The latest `change_workspace` request awaiting user approval.
-  // Populated from the WorkspaceConfirmationError surfaced in the
-  // tool result; cleared once the user picks Switch / Deny in
-  // WorkspaceConfirm. Mutually exclusive with pendingShell — only
-  // one modal can be open at a time, and we gate input + render on
-  // both flags wherever pendingShell is gated.
-  const [pendingWorkspace, setPendingWorkspace] = useState<{ path: string } | null>(null);
   // Plan text the model submitted via `submit_plan` while plan mode
   // was active. Non-null renders PlanConfirm; user picks Approve /
   // Refine / Cancel and we drive the loop from there. Separate from
@@ -782,10 +788,11 @@ function AppInner({
     if (tools && !tools.has("run_skill")) {
       registerSkillTools(tools, {
         projectRoot: codeMode?.rootDir,
-        subagentRunner: async (skill, task) => {
+        subagentRunner: async (skill, task, signal) => {
           const result = await spawnSubagent({
             client,
             parentRegistry: tools,
+            parentSignal: signal,
             // Skill body is the subagent's persona/playbook; the user-
             // supplied task is what to actually do inside it.
             system: skill.body,
@@ -801,16 +808,6 @@ function AppInner({
           return formatSubagentResult(result);
         },
       });
-    }
-    // `change_workspace` — model-callable workspace switching, gated
-    // on a confirmation modal driven by App.tsx (see pendingWorkspace
-    // state below). Tool fn validates the path and throws
-    // WorkspaceConfirmationError; the actual swap happens when the
-    // user approves. Registered here (not in code.tsx) so chat-mode
-    // sessions also expose it — `setCwd` works in chat mode too,
-    // just doesn't have a tool sandbox to re-register.
-    if (tools && !tools.has("change_workspace")) {
-      registerWorkspaceTool(tools);
     }
     const prefix = new ImmutablePrefix({
       system,
@@ -842,77 +839,6 @@ function AppInner({
   useEffect(() => {
     loop.hooks = hookList;
   }, [loop, hookList]);
-
-  // Shared cwd-switch implementation — drives BOTH the `/cwd` slash
-  // command and the `change_workspace` tool's confirmation handler.
-  // Returns a multi-line info string the caller can surface to the
-  // user (slash) or fold into a synthetic message (tool). Idempotent
-  // on the same path.
-  const applyCwdChange = useCallback(
-    (newRoot: string): string => {
-      // Update the React state — every memoized derivation that reads
-      // `currentRootDir` (memoryRoot, hookCwd via useEffect,
-      // applyEditBlocks paths, mention root, run_command cwd) picks
-      // up the new path on the next render.
-      setCurrentRootDir(newRoot);
-      // Reload hooks against the new project (different
-      // .reasonix/settings.json may exist there).
-      const fresh = loadHooks({ projectRoot: codeMode ? newRoot : undefined });
-      setHookList(fresh);
-      // Re-register every rootDir-dependent native tool so file
-      // reads/writes and shell calls land in the new sandbox. Only
-      // available in code mode (chat mode has no rootDir-bound tools
-      // beyond memory, which we re-register inline below).
-      const codeRebound = codeMode?.reregisterTools !== undefined;
-      if (codeMode?.reregisterTools) {
-        codeMode.reregisterTools(newRoot);
-      }
-      // Keep `run_skill`'s closured projectRoot in sync too. It's
-      // owned by App.tsx (the subagent runner needs in-process refs),
-      // so the codeMode reregister hook above doesn't touch it. Safe
-      // to re-register: the registry overwrites by tool name, the
-      // spec is identical, prefix cache stays.
-      if (tools) {
-        registerSkillTools(tools, {
-          projectRoot: codeMode ? newRoot : undefined,
-          subagentRunner: async (skill, task) => {
-            const result = await spawnSubagent({
-              client: loop.client,
-              parentRegistry: tools,
-              system: skill.body,
-              task,
-              model: skill.model,
-              sink: subagentSinkRef.current,
-              skillName: skill.name,
-            });
-            return formatSubagentResult(result);
-          },
-        });
-      }
-      const lines = [`▸ cwd → ${newRoot}`, `  hooks reloaded (${fresh.length} active)`];
-      if (codeMode) {
-        lines.push(
-          codeRebound
-            ? "  filesystem / shell / memory tools rebound to new root"
-            : "  warning: reregisterTools callback missing — tool sandbox unchanged",
-        );
-        lines.push(
-          "  note: system prompt context (gitignore, REASONIX.md stack) was",
-          "        baked at session start and still references the original root.",
-        );
-      }
-      return lines.join("\n");
-    },
-    [codeMode, loop, tools, subagentSinkRef],
-  );
-
-  // Mirror `currentRootDir` into the loop's mutable `hookCwd` so
-  // `/cwd` switches the path threaded into every hook's stdin
-  // envelope without reconstructing the loop. Same shape as the
-  // hookList sync above — the loop holds a parallel mutable copy.
-  useEffect(() => {
-    loop.hookCwd = currentRootDir;
-  }, [loop, currentRootDir]);
 
   // Ambient session info (balance, model catalog, latest published
   // version) — three independent mount-time fetches behind one hook
@@ -1053,17 +979,6 @@ function AppInner({
       broadcastDashboardEvent({ kind: "modal-down", modalKind: "edit-review" });
     };
   }, [pendingEditReview, broadcastDashboardEvent]);
-
-  useEffect(() => {
-    if (!pendingWorkspace) return;
-    broadcastDashboardEvent({
-      kind: "modal-up",
-      modal: { kind: "workspace", path: pendingWorkspace.path },
-    });
-    return () => {
-      broadcastDashboardEvent({ kind: "modal-down", modalKind: "workspace" });
-    };
-  }, [pendingWorkspace, broadcastDashboardEvent]);
 
   useEffect(() => {
     if (!pendingCheckpoint) return;
@@ -1324,7 +1239,6 @@ function AppInner({
       key.shift &&
       key.tab &&
       !pendingShell &&
-      !pendingWorkspace &&
       !pendingPlan &&
       !pendingReviseEditor &&
       !pendingSessionsPicker &&
@@ -1360,7 +1274,6 @@ function AppInner({
       input.length === 0 &&
       (chKey === "u" || chKey === "U") &&
       !pendingShell &&
-      !pendingWorkspace &&
       !pendingPlan &&
       !pendingReviseEditor &&
       !pendingSessionsPicker &&
@@ -1875,9 +1788,6 @@ function AppInner({
               remaining: pendingEdits.current.length,
             };
           }
-          if (pendingWorkspace) {
-            return { kind: "workspace", path: pendingWorkspace.path };
-          }
           if (pendingCheckpoint) {
             return {
               kind: "checkpoint",
@@ -1932,9 +1842,6 @@ function AppInner({
             resolve({ choice, denyContext: undefined });
           }
         },
-        resolveWorkspaceConfirm: (choice) => {
-          handleWorkspaceConfirmRef.current(choice).catch(() => undefined);
-        },
         resolveCheckpointConfirm: (choice, text) => {
           // Web's "revise" path sends feedback in one shot; we hand the
           // current pending checkpoint to the submit handler directly,
@@ -1982,7 +1889,6 @@ function AppInner({
     pendingShell,
     pendingChoice,
     pendingEditReview,
-    pendingWorkspace,
     pendingCheckpoint,
     pendingRevision,
     agentStore,
@@ -2298,14 +2204,13 @@ function AppInner({
             setHookList(fresh);
             return fresh.length;
           },
-          setCwd: (newRoot: string) => applyCwdChange(newRoot),
           latestVersion,
           refreshLatestVersion,
           models,
           refreshModels,
         });
         if (result.openSessionsPicker) {
-          setSessionsPickerList(listSessions());
+          setSessionsPickerList(listSessionsForWorkspace(currentRootDir));
           setPendingSessionsPicker(true);
           promptHistory.current.push(text);
           return;
@@ -2360,6 +2265,7 @@ function AppInner({
         const patch: Parameters<typeof patchSessionMeta>[1] = {};
         if (!existing.summary) patch.summary = text.replace(/\s+/g, " ").slice(0, 80);
         if (!existing.branch) patch.branch = detectGitBranch(currentRootDir);
+        if (!existing.workspace) patch.workspace = currentRootDir;
         if (Object.keys(patch).length > 0) patchSessionMeta(session, patch);
       }
 
@@ -2583,7 +2489,6 @@ function AppInner({
               toolStartedAtRef,
               toolHistoryRef,
               setPendingShell,
-              setPendingWorkspace,
               setPendingPlan,
               setPendingRevision,
               setPendingChoice,
@@ -2698,7 +2603,6 @@ function AppInner({
       stopDashboard,
       getDashboardUrl,
       broadcastDashboardEvent,
-      applyCwdChange,
       touchedPaths,
       model,
       prefixHash,
@@ -2844,57 +2748,6 @@ function AppInner({
       void handleSubmit(text);
     }
   }, [busy, queuedSubmit, handleSubmit]);
-
-  /**
-   * WorkspaceConfirm callback. Two outcomes, both ending with a
-   * synthetic user message so the model sees what happened on its
-   * next turn:
-   *   - deny → tell the model the user refused, continue without it.
-   *   - switch → call applyCwdChange (same path as `/cwd`), surface
-   *     the cwd-change info row to scrollback, hand the model a
-   *     short confirmation so it can resume the user's request
-   *     against the new sandbox.
-   */
-  const handleWorkspaceConfirm = useCallback(
-    async (choice: WorkspaceConfirmChoice) => {
-      const pending = pendingWorkspace;
-      if (!pending) return;
-      const target = pending.path;
-      setPendingWorkspace(null);
-
-      if (choice === "cancel") {
-        log.pushInfo(`▸ stayed in ${currentRootDir}`);
-        await syntheticSubmit.submit(
-          `I cancelled the workspace switch to \`${target}\`. Continue without changing directories.`,
-        );
-        return;
-      }
-
-      const hadPlan = (planStepsRef.current?.length ?? 0) > 0;
-      let planNote = "";
-      if (hadPlan && session) {
-        if (choice === "archive") {
-          const archive = archivePlanState(session);
-          planNote = archive ? " · plan archived (replay via /replay)" : "";
-        } else {
-          clearPlanState(session);
-          planNote = " · plan discarded";
-        }
-        planStepsRef.current = null;
-        completedStepIdsRef.current = new Set();
-        planBodyRef.current = null;
-        planSummaryRef.current = null;
-      }
-
-      const info = applyCwdChange(target);
-      log.pushInfo(`${info}${planNote}`);
-      const synthetic = hadPlan
-        ? `I approved the workspace switch and ${choice === "archive" ? "archived" : "discarded"} the prior plan. The session is now rooted at \`${target}\` — re-evaluate the user's original request against this new root.`
-        : `I approved the workspace switch. The session is now rooted at \`${target}\` — your filesystem / shell / memory tools resolve against that path on every subsequent call. Continue with my original request from this new root.`;
-      await syntheticSubmit.submit(synthetic);
-    },
-    [pendingWorkspace, applyCwdChange, syntheticSubmit, log, currentRootDir, session],
-  );
 
   /**
    * PlanConfirm callback. Three outcomes, all ending with a synthetic
@@ -3194,10 +3047,6 @@ function AppInner({
   );
   // Ref-mirrors so the web's resolveXxx callbacks (registered in
   // startDashboard, frozen at boot) keep calling the latest handler.
-  const handleWorkspaceConfirmRef = useRef(handleWorkspaceConfirm);
-  useEffect(() => {
-    handleWorkspaceConfirmRef.current = handleWorkspaceConfirm;
-  }, [handleWorkspaceConfirm]);
   const handleCheckpointReviseSubmitRef = useRef(handleCheckpointReviseSubmit);
   useEffect(() => {
     handleCheckpointReviseSubmitRef.current = handleCheckpointReviseSubmit;
@@ -3294,7 +3143,6 @@ function AppInner({
           !!pendingReviseEditor ||
           pendingSessionsPicker ||
           !!pendingShell ||
-          !!pendingWorkspace ||
           !!pendingEditReview ||
           walkthroughActive ||
           !!pendingCheckpoint ||
@@ -3315,7 +3163,7 @@ function AppInner({
       >
         <Box flexDirection="column">
           <Box flexDirection="column">
-            <CardStream />
+            <CardStream excludeId={activePlanCard?.id} />
             {/*
           Welcome card on the empty state. Visible only when nothing
           has happened yet (no past events, nothing in flight, no
@@ -3334,7 +3182,6 @@ function AppInner({
         */}
             {!PLAIN_UI &&
             !pendingShell &&
-            !pendingWorkspace &&
             !pendingPlan &&
             !pendingReviseEditor &&
             !pendingSessionsPicker &&
@@ -3347,7 +3194,6 @@ function AppInner({
             ) : null}
             {!PLAIN_UI &&
             !pendingShell &&
-            !pendingWorkspace &&
             !pendingPlan &&
             !pendingReviseEditor &&
             !pendingSessionsPicker &&
@@ -3360,7 +3206,6 @@ function AppInner({
             ) : null}
             {!PLAIN_UI &&
             !pendingShell &&
-            !pendingWorkspace &&
             !pendingPlan &&
             !pendingReviseEditor &&
             !pendingSessionsPicker &&
@@ -3375,7 +3220,6 @@ function AppInner({
             {!PLAIN_UI &&
             undoBanner &&
             !pendingShell &&
-            !pendingWorkspace &&
             !pendingPlan &&
             !pendingReviseEditor &&
             !pendingSessionsPicker &&
@@ -3398,7 +3242,6 @@ function AppInner({
         */}
             {!PLAIN_UI &&
             !pendingShell &&
-            !pendingWorkspace &&
             !pendingPlan &&
             !pendingReviseEditor &&
             !pendingSessionsPicker &&
@@ -3414,6 +3257,11 @@ function AppInner({
             ) : null}
             <ToastRail />
           </Box>
+          {!PLAIN_UI && activePlanCard ? (
+            <Box flexDirection="column" marginY={1}>
+              <PlanCard card={activePlanCard} />
+            </Box>
+          ) : null}
           {stagedInput ? (
             <PlanRefineInput
               mode={stagedInput.mode}
@@ -3480,12 +3328,12 @@ function AppInner({
                 }
                 if (outcome.kind === "delete") {
                   deleteSession(outcome.name);
-                  setSessionsPickerList(listSessions());
+                  setSessionsPickerList(listSessionsForWorkspace(currentRootDir));
                   return;
                 }
                 if (outcome.kind === "rename") {
                   renameSession(outcome.name, outcome.newName);
-                  setSessionsPickerList(listSessions());
+                  setSessionsPickerList(listSessionsForWorkspace(currentRootDir));
                   return;
                 }
                 if (outcome.kind === "quit") {
@@ -3525,21 +3373,6 @@ function AppInner({
               allowPrefix={derivePrefix(pendingShell.command)}
               kind={pendingShell.kind}
               onChoose={handleShellConfirm}
-            />
-          ) : pendingWorkspace ? (
-            <WorkspaceConfirm
-              path={pendingWorkspace.path}
-              currentRoot={currentRootDir}
-              mcpServerCount={mcpServers?.length ?? 0}
-              planProgress={
-                planStepsRef.current && planStepsRef.current.length > 0
-                  ? {
-                      done: completedStepIdsRef.current.size,
-                      total: planStepsRef.current.length,
-                    }
-                  : null
-              }
-              onChoose={handleWorkspaceConfirm}
             />
           ) : pendingEditReview ? (
             <EditConfirm
