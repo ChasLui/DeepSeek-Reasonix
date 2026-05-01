@@ -10,8 +10,11 @@ import {
   deleteSession,
   findSessionsByPrefix,
   listSessions,
+  listSessionsForWorkspace,
   loadSessionMessages,
+  patchSessionMeta,
   pruneStaleSessions,
+  renameSession,
   resolveSession,
   sanitizeName,
   sessionPath,
@@ -97,6 +100,40 @@ describe("session persistence", () => {
     expect(beta.size).toBeGreaterThan(0);
   });
 
+  it("listSessions excludes .events.jsonl sidecars", () => {
+    appendSessionMessage("real", { role: "user", content: "x" });
+    writeFileSync(sessionPath("real").replace(/\.jsonl$/, ".events.jsonl"), '{"id":1}\n');
+    const names = listSessions().map((s) => s.name);
+    expect(names).toEqual(["real"]);
+  });
+
+  it("listSessionsForWorkspace strict-matches meta.workspace", () => {
+    appendSessionMessage("here", { role: "user", content: "x" });
+    appendSessionMessage("there", { role: "user", content: "x" });
+    appendSessionMessage("untagged", { role: "user", content: "x" });
+    patchSessionMeta("here", { workspace: "/proj/a" });
+    patchSessionMeta("there", { workspace: "/proj/b" });
+    const names = listSessionsForWorkspace("/proj/a").map((s) => s.name);
+    expect(names).toEqual(["here"]);
+  });
+
+  it("renameSession also moves the .events.jsonl sidecar", () => {
+    appendSessionMessage("orig", { role: "user", content: "x" });
+    const oldEvents = sessionPath("orig").replace(/\.jsonl$/, ".events.jsonl");
+    writeFileSync(oldEvents, '{"id":1}\n');
+    expect(renameSession("orig", "renamed")).toBe(true);
+    expect(existsSync(oldEvents)).toBe(false);
+    expect(existsSync(sessionPath("renamed").replace(/\.jsonl$/, ".events.jsonl"))).toBe(true);
+  });
+
+  it("deleteSession removes the .events.jsonl sidecar too", () => {
+    appendSessionMessage("trash", { role: "user", content: "x" });
+    const events = sessionPath("trash").replace(/\.jsonl$/, ".events.jsonl");
+    writeFileSync(events, '{"id":1}\n');
+    deleteSession("trash");
+    expect(existsSync(events)).toBe(false);
+  });
+
   it("deleteSession removes the file", () => {
     appendSessionMessage("gone", { role: "user", content: "x" });
     expect(existsSync(sessionPath("gone"))).toBe(true);
@@ -106,9 +143,6 @@ describe("session persistence", () => {
   });
 
   it("deleteSession removes the plan-state sidecar too", () => {
-    // Regression: before plan-state sidecar cleanup was added,
-    // /forget left orphaned .plan.json files that caused "RESUMED
-    // PLAN" banners on fresh sessions sharing the same name.
     appendSessionMessage("plan-sidecar", { role: "user", content: "hi" });
     const planPath = sessionPath("plan-sidecar").replace(/\.jsonl$/, ".plan.json");
     writeFileSync(
@@ -226,8 +260,6 @@ describe("session persistence", () => {
     });
 
     it("ignores timestamped sessions that have only .events.jsonl (no messages file)", () => {
-      // Simulate: a "new" created a timestamped session, App mounted and
-      // wrote .events.jsonl, but no messages were ever sent — so no .jsonl.
       appendSessionMessage("myproject", { role: "user", content: "real messages" });
       const eventsPath = sessionPath("myproject-20260430T200000").replace(
         /\.jsonl$/,
@@ -236,7 +268,6 @@ describe("session persistence", () => {
       writeFileSync(eventsPath, "{}");
 
       const { resolved, preview } = resolveSession("myproject");
-      // Should fall back to the base session, not the empty timestamped one
       expect(resolved).toBe("myproject");
       expect(preview).toBeDefined();
       expect(preview!.messageCount).toBe(1);
@@ -251,17 +282,7 @@ describe("session persistence", () => {
       utimesSync(sessionPath("project-20260430T154500"), evenLater, evenLater);
 
       const { resolved, preview } = resolveSession("project");
-      // Alpha-reverse: "project-20260430T154500" sorts before "project-20260430T091500".
-      // "project" sorts after both ('.' > '-'), so it comes first in reverse.
-      // Wait — let's trace: ascending = project-2026..., project-2026..., project
-      // Actually '.' (46) > '-' (45), so ascending: project-2026..., project-2026..., project
-      // Then reverse: project, project-2026..., project-2026...
-      // So 'project' (no timestamp) would be first after reverse...
-      // Hmm, that's not what we want. Let me just check the behavior.
-      //
-      // Actually, for the prefix-based resolution, resolveSession calls
-      // findSessionsByPrefix("project-") which excludes the bare "project"
-      // (doesn't start with "project-"). So only timestamped ones compete.
+      // Bare "project" is excluded — prefix lookup uses "project-" (with dash).
       expect(resolved).toBe("project-20260430T154500");
       expect(preview).toBeDefined();
     });
@@ -283,19 +304,14 @@ describe("session persistence", () => {
 
   describe("findSessionsByPrefix", () => {
     it("returns [] when the sessions directory does not exist", () => {
-      // Remove the sessions dir to simulate a clean state
       const dir = sessionsDir();
       if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
       expect(findSessionsByPrefix("anything")).toEqual([]);
     });
 
     it("returns session names matching the prefix, sorted alpha-reverse", () => {
-      // Sort is by filename (no stat I/O). Timestamped names sort
-      // correctly because YYYYMMDDHHmm is zero-padded; the largest
-      // (newest) timestamp sorts last ascending → first after reverse.
-      // Non-timestamped names like "code-reasonix-old" start with a
-      // letter, which in ASCII sorts after digits, so they come first
-      // after reverse — a minor edge case that doesn't affect real use.
+      // Filename sort — zero-padded YYYYMMDDHHmm sorts newest-first after reverse.
+      // Non-digit suffixes (letters > digits in ASCII) sort above timestamps.
       appendSessionMessage("code-reasonix-old", { role: "user", content: "x" });
       appendSessionMessage("code-reasonix-20260430T143200", { role: "user", content: "y" });
       appendSessionMessage("code-reasonix-20260430T154500", { role: "user", content: "z" });
@@ -318,15 +334,9 @@ describe("session persistence", () => {
 
     it("only matches .jsonl files, not sidecar files", () => {
       appendSessionMessage("alpha-001", { role: "user", content: "x" });
-      // Write a .plan.json sidecar manually — should be ignored
-      const planPath = sessionPath("alpha-001").replace(/\.jsonl$/, ".plan.json");
-      writeFileSync(planPath, "{}");
-      // Write a .pending.json sidecar
-      const pendingPath = sessionPath("alpha-001").replace(/\.jsonl$/, ".pending.json");
-      writeFileSync(pendingPath, "{}");
-      // Write a .events.jsonl sidecar — ends with .jsonl but is NOT a session
-      const eventsPath = sessionPath("alpha-001").replace(/\.jsonl$/, ".events.jsonl");
-      writeFileSync(eventsPath, "{}");
+      writeFileSync(sessionPath("alpha-001").replace(/\.jsonl$/, ".plan.json"), "{}");
+      writeFileSync(sessionPath("alpha-001").replace(/\.jsonl$/, ".pending.json"), "{}");
+      writeFileSync(sessionPath("alpha-001").replace(/\.jsonl$/, ".events.jsonl"), "{}");
 
       const result = findSessionsByPrefix("alpha-");
       expect(result).toEqual(["alpha-001"]);
@@ -336,11 +346,8 @@ describe("session persistence", () => {
       appendSessionMessage("project", { role: "user", content: "a" });
       appendSessionMessage("project-20260430T143200", { role: "user", content: "b" });
 
-      // Prefix with dash: matches "project-*" but not bare "project"
       expect(findSessionsByPrefix("project-")).toEqual(["project-20260430T143200"]);
-      // Prefix without dash matches everything starting with "project".
-      // "project" (no dash) sorts before "project-..." because '.' (46)
-      // comes after '-' (45) in ASCII, so reverse puts "project" first.
+      // No-dash prefix matches both; reverse-sort puts the bare name first ('.' > '-' in ASCII).
       expect(findSessionsByPrefix("project")).toEqual(["project", "project-20260430T143200"]);
     });
   });

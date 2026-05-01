@@ -1,5 +1,6 @@
 /** JSONL append-only message log under `~/.reasonix/sessions/`; concurrent-write safe. */
 
+import { execFileSync } from "node:child_process";
 import {
   appendFileSync,
   chmodSync,
@@ -7,6 +8,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  renameSync,
   statSync,
   unlinkSync,
   writeFileSync,
@@ -15,12 +17,37 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { ChatMessage } from "../types.js";
 
+/** Best-effort git branch sniff; returns undefined if not a git repo or git missing. */
+export function detectGitBranch(cwd: string): string | undefined {
+  try {
+    const out = execFileSync("git", ["branch", "--show-current"], {
+      cwd,
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 800,
+      encoding: "utf8",
+    }).trim();
+    return out || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export interface SessionInfo {
   name: string;
   path: string;
   size: number;
   messageCount: number;
   mtime: Date;
+  meta: SessionMeta;
+}
+
+export interface SessionMeta {
+  branch?: string;
+  summary?: string;
+  totalCostUsd?: number;
+  turnCount?: number;
+  /** Absolute path of the workspace root the session was created/used in. */
+  workspace?: string;
 }
 
 export function sessionsDir(): string {
@@ -36,14 +63,12 @@ export function sanitizeName(name: string): string {
   return cleaned || "default";
 }
 
-/** Compact sortable timestamp: YYYYMMDDHHmm (e.g. 202604301432) */
+/** Sortable timestamp `YYYYMMDDHHmm` — used as a session-name suffix. */
 export function timestampSuffix(): string {
   return new Date().toISOString().replace(/[^\d]/g, "").slice(0, 12);
 }
 
-/** Alpha-reverse by filename — newest session first (no stat I/O).
- *  TODO: switch to `statSync(f).mtimeMs` for "most recently used" order
- *  (costs O(n) reads but discounts idle-but-recent activity). */
+/** Names of `.jsonl` sessions starting with `prefix`, newest-first by filename. */
 export function findSessionsByPrefix(prefix: string): string[] {
   const dir = sessionsDir();
   if (!existsSync(dir)) return [];
@@ -58,13 +83,12 @@ export function findSessionsByPrefix(prefix: string): string[] {
   }
 }
 
-/** Session picker metadata. */
 export interface SessionPreview {
   messageCount: number;
   lastActive: Date;
 }
 
-/** Resolve session name + picker preview. Priority order in description.md. */
+/** Resolve launch-time session: forceNew → timestamped suffix; else latest `${name}-*` if any, else base. Preview returned only on the default branch when messages exist. */
 export function resolveSession(
   sessionName: string | undefined,
   forceNew?: boolean,
@@ -135,19 +159,86 @@ export function listSessions(): SessionInfo[] {
   const dir = sessionsDir();
   if (!existsSync(dir)) return [];
   try {
-    const files = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
+    // Exclude `.events.jsonl` sidecars — they share the .jsonl suffix.
+    const files = readdirSync(dir).filter(
+      (f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl"),
+    );
     return files
       .map((file) => {
         const path = join(dir, file);
         const stat = statSync(path);
         const name = file.replace(/\.jsonl$/, "");
         const messageCount = countLines(path);
-        return { name, path, size: stat.size, messageCount, mtime: stat.mtime };
+        return {
+          name,
+          path,
+          size: stat.size,
+          messageCount,
+          mtime: stat.mtime,
+          meta: loadSessionMeta(name),
+        };
       })
       .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
   } catch {
     return [];
   }
+}
+
+/** Strict match — legacy sessions without meta.workspace are hidden; resume by name still works. */
+export function listSessionsForWorkspace(workspace: string): SessionInfo[] {
+  return listSessions().filter((s) => s.meta.workspace === workspace);
+}
+
+function metaPath(name: string): string {
+  return join(sessionsDir(), `${sanitizeName(name)}.meta.json`);
+}
+
+export function loadSessionMeta(name: string): SessionMeta {
+  const p = metaPath(name);
+  if (!existsSync(p)) return {};
+  try {
+    const raw = JSON.parse(readFileSync(p, "utf8")) as SessionMeta;
+    return raw && typeof raw === "object" ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+export function patchSessionMeta(name: string, patch: Partial<SessionMeta>): SessionMeta {
+  const cur = loadSessionMeta(name);
+  const next: SessionMeta = { ...cur, ...patch };
+  const p = metaPath(name);
+  mkdirSync(dirname(p), { recursive: true });
+  writeFileSync(p, JSON.stringify(next), "utf8");
+  try {
+    chmodSync(p, 0o600);
+  } catch {
+    /* chmod not supported */
+  }
+  return next;
+}
+
+/** Renames the JSONL plus all known sidecars together; returns false if target already exists. */
+export function renameSession(oldName: string, newName: string): boolean {
+  const safeOld = sanitizeName(oldName);
+  const safeNew = sanitizeName(newName);
+  if (safeOld === safeNew) return false;
+  const oldJsonl = sessionPath(oldName);
+  const newJsonl = sessionPath(newName);
+  if (!existsSync(oldJsonl) || existsSync(newJsonl)) return false;
+  renameSync(oldJsonl, newJsonl);
+  for (const ext of [".events.jsonl", ".meta.json", ".pending.json", ".plan.json"]) {
+    const oldP = oldJsonl.replace(/\.jsonl$/, ext);
+    const newP = newJsonl.replace(/\.jsonl$/, ext);
+    if (existsSync(oldP)) {
+      try {
+        renameSync(oldP, newP);
+      } catch {
+        /* sidecar rename failed — leave the jsonl rename in place */
+      }
+    }
+  }
+  return true;
 }
 
 /** Best-effort: per-file delete errors are swallowed so partial pruning still finishes. */
@@ -166,19 +257,12 @@ export function deleteSession(name: string): boolean {
   const path = sessionPath(name);
   try {
     unlinkSync(path);
-    // Best-effort cleanup of side-car files that belong to this session
-    // so `/forget` doesn't leave orphans in `sessionsDir()`:
-    //   - .pending.json   pending-edits checkpoint (src/code/pending-edits.ts)
-    //   - .plan.json      structured plan state (src/code/plan-store.ts)
-    const sidecars = [
-      path.replace(/\.jsonl$/, ".pending.json"),
-      path.replace(/\.jsonl$/, ".plan.json"),
-    ];
-    for (const sc of sidecars) {
+    for (const ext of [".events.jsonl", ".pending.json", ".meta.json", ".plan.json"]) {
+      const sidecar = path.replace(/\.jsonl$/, ext);
       try {
-        unlinkSync(sc);
+        unlinkSync(sidecar);
       } catch {
-        /* no sidecar present — expected */
+        /* expected when the sidecar doesn't exist */
       }
     }
     return true;

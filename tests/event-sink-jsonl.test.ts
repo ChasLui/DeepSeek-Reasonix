@@ -68,6 +68,28 @@ describe("JsonlEventSink", () => {
     expect(readFileSync(path, "utf8")).toContain('"text":"x"');
   });
 
+  it("does not persist model.delta events", async () => {
+    const path = join(dir, "delta.events.jsonl");
+    const sink = openEventSink(path);
+    sink.append(ev(1, "user.message", "hi"));
+    sink.append({
+      id: 2,
+      ts: "2026-04-29T12:00:00Z",
+      turn: 1,
+      type: "model.delta",
+      channel: "content",
+      text: "tok",
+    } as Event);
+    sink.append(ev(3, "status", "thinking"));
+    await sink.close();
+
+    const lines = readFileSync(path, "utf8")
+      .split(/\r?\n/)
+      .filter((l) => l.trim().length > 0);
+    expect(lines.length).toBe(2);
+    expect(lines.every((l) => !l.includes('"model.delta"'))).toBe(true);
+  });
+
   it("instance type matches the EventSink port shape", async () => {
     const path = join(dir, "shape.events.jsonl");
     const sink = openEventSink(path);

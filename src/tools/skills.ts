@@ -4,7 +4,7 @@ import { type Skill, SkillStore } from "../skills.js";
 import type { ToolRegistry } from "../tools.js";
 
 /** Returns serialized tool-result string — dispatch path is pure pass-through. */
-export type SubagentRunner = (skill: Skill, task: string) => Promise<string>;
+export type SubagentRunner = (skill: Skill, task: string, signal?: AbortSignal) => Promise<string>;
 
 export interface SkillToolsOptions {
   /** Override `$HOME` — tests set this to a tmpdir. */
@@ -48,7 +48,7 @@ export function registerSkillTools(
       },
       required: ["name"],
     },
-    fn: async (args: { name?: unknown; arguments?: unknown }) => {
+    fn: async (args: { name?: unknown; arguments?: unknown }, ctx) => {
       const raw = typeof args.name === "string" ? args.name.trim() : "";
       if (!raw) {
         return JSON.stringify({ error: "run_skill requires a 'name' argument" });
@@ -95,7 +95,7 @@ export function registerSkillTools(
             error: `run_skill: skill ${JSON.stringify(name)} is a subagent and requires 'arguments' — the subagent has no other context, so describe the concrete task in the arguments field.`,
           });
         }
-        return subagentRunner(skill, rawArgs);
+        return subagentRunner(skill, rawArgs, ctx?.signal);
       }
 
       // inline path — body becomes the tool result.

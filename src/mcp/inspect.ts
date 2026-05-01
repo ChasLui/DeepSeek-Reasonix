@@ -11,6 +11,8 @@ export interface InspectionReport {
   tools: SectionResult<McpTool>;
   resources: SectionResult<McpResource>;
   prompts: SectionResult<McpPrompt>;
+  /** Wall-clock for the three list calls combined; surfaced as the server's "p95-ish" latency in the browser. */
+  elapsedMs: number;
 }
 
 export type SectionResult<T> =
@@ -19,9 +21,8 @@ export type SectionResult<T> =
 
 /** Caller owns initialize() / close() — keeps this pure so tests can feed a FakeMcpTransport. */
 export async function inspectMcpServer(client: McpClient): Promise<InspectionReport> {
-  // We always *try* the three listings so the client learns whether a
-  // server without explicit capability flags still serves them —
-  // some servers omit capabilities but still respond to the methods.
+  const t0 = Date.now();
+  // Always try all three listings — some servers omit capability flags but still serve the methods.
   const tools = await trySection<McpTool>(() => client.listTools().then((r) => r.tools));
   const resources = await trySection<McpResource>(() =>
     client.listResources().then((r) => r.resources),
@@ -36,6 +37,7 @@ export async function inspectMcpServer(client: McpClient): Promise<InspectionRep
     tools,
     resources,
     prompts,
+    elapsedMs: Date.now() - t0,
   };
 }
 

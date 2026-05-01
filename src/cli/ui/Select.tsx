@@ -1,13 +1,4 @@
-/**
- * Minimal arrow-key list components for Ink — single-select and
- * multi-select. No external deps beyond Ink's `useInput`.
- *
- * Why hand-roll: `ink-select-input` exists, but it defaults to
- * Enter-only interaction (no space-to-toggle for multi-select), doesn't
- * expose the "hint / footer" slot we want under each item, and would be
- * another dep for ~60 lines of UI code. Reasonix already has one React
- * rendering quirk bundled (`ink-text-input`); adding more is low value.
- */
+/** Arrow-key list components for Ink — single-select and multi-select. */
 
 import { Box, Text } from "ink";
 import React, { useState } from "react";
@@ -15,24 +6,20 @@ import { useKeystroke } from "./keystroke-context.js";
 import { COLOR } from "./theme.js";
 
 export interface SelectItem<V extends string = string> {
-  /** Stable identifier — returned to caller on submit. */
   value: V;
-  /** First-row label. */
   label: string;
   /** Optional second row rendered dimmed. */
   hint?: string;
-  /** If true, item is not selectable (rendered dimmed, skipped on nav). */
+  /** Disabled rows render dimmed and are skipped on nav. */
   disabled?: boolean;
-  /** Tab on this item starts inline-edit; typed text is forwarded as `onSubmit`'s 2nd arg. */
-  denyWithContext?: boolean;
 }
 
 export interface SingleSelectProps<V extends string> {
   items: SelectItem<V>[];
   initialValue?: V;
-  onSubmit: (value: V, context?: string) => void;
+  onSubmit: (value: V) => void;
   onCancel?: () => void;
-  /** Optional dim footer beneath the list — e.g. "[↑↓] navigate · [Enter] select · [Esc] cancel". */
+  /** Optional dim footer beneath the list. */
   footer?: string;
 }
 
@@ -48,46 +35,13 @@ export function SingleSelect<V extends string>({
     items.findIndex((i) => i.value === initialValue && !i.disabled),
   );
   const [index, setIndex] = useState(initialIndex === -1 ? 0 : initialIndex);
-  const [editingContext, setEditingContext] = useState<string | null>(null);
-  const activeItem = items[index];
-  const isEditing = editingContext !== null;
 
   useKeystroke((ev) => {
-    if (isEditing) {
-      if (ev.paste) {
-        setEditingContext((v) => (v ?? "") + ev.input);
-        return;
-      }
-      if (ev.escape) {
-        setEditingContext(null);
-      } else if (ev.upArrow || ev.downArrow) {
-        setEditingContext(null);
-        setIndex((i) => findNextEnabled(items, i, ev.upArrow ? -1 : +1));
-      } else if (ev.return) {
-        const chosen = items[index];
-        if (chosen && !chosen.disabled) {
-          const ctx = editingContext || undefined;
-          setEditingContext(null);
-          onSubmit(chosen.value, ctx);
-        }
-      } else if (ev.backspace) {
-        setEditingContext((v) => (v ?? "").slice(0, -1));
-      } else if (ev.tab) {
-        setEditingContext((v) => `${v ?? ""}, `);
-      } else if (ev.input) {
-        setEditingContext((v) => (v ?? "") + ev.input);
-      }
-      return;
-    }
-
     if (ev.paste) return;
-
     if (ev.upArrow) {
       setIndex((i) => findNextEnabled(items, i, -1));
     } else if (ev.downArrow) {
       setIndex((i) => findNextEnabled(items, i, +1));
-    } else if (ev.tab && activeItem?.denyWithContext) {
-      setEditingContext("");
     } else if (ev.return) {
       const chosen = items[index];
       if (chosen && !chosen.disabled) onSubmit(chosen.value);
@@ -96,35 +50,19 @@ export function SingleSelect<V extends string>({
     }
   });
 
-  const canDenyWithContext = activeItem?.denyWithContext;
-  const resolvedFooter = (() => {
-    if (isEditing) return "[Enter] confirm · [Esc] cancel · [↑↓] change option";
-    return (
-      footer ??
-      (canDenyWithContext
-        ? "[↑↓] navigate · [Enter] select · [Tab] add context · [Esc] cancel"
-        : undefined)
-    );
-  })();
-
   return (
     <Box flexDirection="column">
-      {items.map((item, i) => {
-        const showEditing = i === index && isEditing;
-        const displayLabel = showEditing ? `${item.label}, ${editingContext}` : item.label;
-        return (
-          <SelectRow
-            key={item.value}
-            item={{ ...item, label: displayLabel }}
-            active={i === index}
-            marker={i === index ? "▸" : " "}
-            showInlineCursor={showEditing}
-          />
-        );
-      })}
-      {resolvedFooter ? (
+      {items.map((item, i) => (
+        <SelectRow
+          key={item.value}
+          item={item}
+          active={i === index}
+          marker={i === index ? "▸" : " "}
+        />
+      ))}
+      {footer ? (
         <Box marginTop={1}>
-          <Text dimColor>{resolvedFooter}</Text>
+          <Text dimColor>{footer}</Text>
         </Box>
       ) : null}
     </Box>
@@ -169,9 +107,7 @@ export function MultiSelect<V extends string>({
         return next;
       });
     } else if (ev.return) {
-      // Preserve catalog order rather than insertion order, so reruns
-      // produce the same spec list for the same checkbox set — makes the
-      // `config.json` diff trivially stable.
+      // Catalog order keeps the resulting config.json diff stable across reruns.
       const ordered = items.filter((i) => selected.has(i.value)).map((i) => i.value);
       onSubmit(ordered);
     } else if (ev.escape && onCancel) {
@@ -202,22 +138,15 @@ export function MultiSelect<V extends string>({
   );
 }
 
-// ---------- internals ----------
-
 function SelectRow<V extends string>({
   item,
   active,
   marker,
-  showInlineCursor = false,
 }: {
   item: SelectItem<V>;
   active: boolean;
   marker: string;
-  showInlineCursor?: boolean;
 }) {
-  // Color: dim for disabled, primary cyan + bold for active, plain
-  // default for inactive. Keeps the active-row affordance consistent
-  // with the slash + at-mention pickers (▸ + colored text).
   const color = item.disabled ? COLOR.info : active ? COLOR.primary : undefined;
   return (
     <Box flexDirection="column">
@@ -225,11 +154,6 @@ function SelectRow<V extends string>({
         <Text color={color} bold={active} dimColor={item.disabled}>
           {marker} {item.label}
         </Text>
-        {showInlineCursor ? (
-          <Text backgroundColor="#67e8f9" color="black">
-            {" "}
-          </Text>
-        ) : null}
       </Box>
       {item.hint ? (
         <Box paddingLeft={marker.length + 1}>

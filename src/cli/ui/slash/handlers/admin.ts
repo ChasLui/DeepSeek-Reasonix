@@ -1,5 +1,3 @@
-import { existsSync, statSync } from "node:fs";
-import * as pathMod from "node:path";
 import {
   HOOK_EVENTS,
   type HookEvent,
@@ -9,8 +7,22 @@ import {
 } from "../../../../hooks.js";
 import { aggregateUsage, defaultUsageLogPath, readUsageLog } from "../../../../telemetry/usage.js";
 import { VERSION, compareVersions, isNpxInstall } from "../../../../version.js";
+import { runDoctorChecks } from "../../../commands/doctor.js";
 import { renderDashboard } from "../../../commands/stats.js";
 import type { SlashHandler } from "../dispatch.js";
+
+/** Async via postDoctor — slash dispatch is sync, doctor checks aren't. */
+const doctor: SlashHandler = (_args, _loop, ctx) => {
+  const root = ctx.codeRoot ?? process.cwd();
+  if (!ctx.postDoctor) return { info: "/doctor needs a TUI context (postDoctor wired)." };
+  void (async () => {
+    const checks = await runDoctorChecks(root);
+    ctx.postDoctor!(
+      checks.map((c) => ({ label: c.label.trim(), level: c.level, detail: c.detail })),
+    );
+  })();
+  return { info: "⚕ Doctor — running health checks…" };
+};
 
 const hooks: SlashHandler = (args, loop, ctx) => {
   const sub = (args[0] ?? "").toLowerCase();
@@ -130,55 +142,10 @@ const stats: SlashHandler = () => {
   return { info: renderDashboard(agg, path) };
 };
 
-/** MCP servers don't follow the switch — their stdio child anchored to original cwd at spawn. */
-const cwd: SlashHandler = (args, _loop, ctx) => {
-  if (!ctx.setCwd) {
-    return {
-      info: "/cwd is not available in this context (no setCwd callback wired).",
-    };
-  }
-  const raw = (args[0] ?? "").trim();
-  if (!raw) {
-    return {
-      info: "usage: /cwd <path>   (absolute or relative, ~ expands to home)",
-    };
-  }
-  const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
-  const expanded = raw.startsWith("~") && home ? pathMod.join(home, raw.slice(1)) : raw;
-  const abs = pathMod.resolve(expanded);
-  if (!existsSync(abs)) {
-    return { info: `▸ /cwd: path does not exist — ${abs}` };
-  }
-  let isDir = false;
-  try {
-    isDir = statSync(abs).isDirectory();
-  } catch {
-    // Permission denied or transient FS error — treat as not-a-dir
-    // and let the user see the exact path so they can investigate.
-  }
-  if (!isDir) {
-    return { info: `▸ /cwd: not a directory — ${abs}` };
-  }
-  let info: string;
-  try {
-    info = ctx.setCwd(abs);
-  } catch (err) {
-    return { info: `▸ /cwd failed: ${(err as Error).message}` };
-  }
-  const lines = [info];
-  if (ctx.mcpServers && ctx.mcpServers.length > 0) {
-    lines.push(
-      `  note: ${ctx.mcpServers.length} MCP server(s) still anchored to the original cwd —`,
-      "        their tools won't follow this switch. Restart the session for full reset.",
-    );
-  }
-  return { info: lines.join("\n") };
-};
-
 export const handlers: Record<string, SlashHandler> = {
   hook: hooks,
   hooks,
-  cwd,
   update,
   stats,
+  doctor,
 };

@@ -240,7 +240,11 @@ export class JobRegistry {
     });
 
     const onAbort = () => this.stop(id, { graceMs: 100 });
-    opts.signal?.addEventListener("abort", onAbort, { once: true });
+    if (opts.signal?.aborted) {
+      onAbort();
+    } else {
+      opts.signal?.addEventListener("abort", onAbort, { once: true });
+    }
 
     // Race: (a) ready signal, (b) child exit, (c) wait deadline.
     let timer: ReturnType<typeof setTimeout> | null = null;

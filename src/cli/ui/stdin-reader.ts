@@ -291,6 +291,14 @@ export class StdinReader {
           i++;
           continue;
         }
+        // Alt+Enter: ESC + CR (or ESC + LF). Universal newline shortcut on terminals
+        // that don't support modifyOtherKeys (Shift+Enter falls through to plain Enter there).
+        if (ch === "\r" || ch === "\n") {
+          this.dispatch({ input: "", return: true, meta: true });
+          this.state = "idle";
+          i++;
+          continue;
+        }
         // ESC + any other char = Alt+key (rare; we still dispatch).
         this.dispatch({ input: ch, meta: true });
         this.state = "idle";

@@ -22,7 +22,8 @@ const mcp: SlashHandler = (_args, loop, ctx) => {
       const { report } = s;
       const serverName = report.serverInfo.name || "(unknown)";
       const serverVer = report.serverInfo.version ? ` v${report.serverInfo.version}` : "";
-      lines.push(`[${s.label}] ${serverName}${serverVer}  —  ${s.spec}`);
+      const health = healthBadge(report.elapsedMs);
+      lines.push(`${health}  [${s.label}] ${serverName}${serverVer}  —  ${s.spec}`);
       lines.push(`  tools     ${s.toolCount}`);
       appendSection(lines, "resources", report.resources);
       appendSection(lines, "prompts  ", report.prompts);
@@ -60,5 +61,11 @@ const mcp: SlashHandler = (_args, loop, ctx) => {
   lines.push("To change this set, exit and run `reasonix setup`.");
   return { info: lines.join("\n") };
 };
+
+function healthBadge(elapsedMs: number): string {
+  if (elapsedMs < 500) return `● healthy · ${elapsedMs}ms`;
+  if (elapsedMs < 3000) return `◌ slow · ${elapsedMs}ms`;
+  return `✗ very slow · ${elapsedMs}ms`;
+}
 
 export const handlers: Record<string, SlashHandler> = { mcp };

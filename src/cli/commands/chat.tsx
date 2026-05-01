@@ -9,7 +9,12 @@ import { parseMcpSpec } from "../../mcp/spec.js";
 import { SseTransport } from "../../mcp/sse.js";
 import { type McpTransport, StdioTransport } from "../../mcp/stdio.js";
 import { StreamableHttpTransport } from "../../mcp/streamable-http.js";
-import { resolveSession, timestampSuffix } from "../../memory/session.js";
+import {
+  deleteSession,
+  listSessionsForWorkspace,
+  renameSession,
+  resolveSession,
+} from "../../memory/session.js";
 import { ToolRegistry } from "../../tools.js";
 import { registerChoiceTool } from "../../tools/choice.js";
 import { registerMemoryTools } from "../../tools/memory.js";
@@ -84,23 +89,10 @@ interface RootProps extends ChatOptions {
   tools: ToolRegistry | undefined;
   mcpSpecs: string[];
   mcpServers: McpServerSummary[];
-  /**
-   * Shared ref the bridge's `onProgress` callback writes through.
-   * App sets `.current` to its own handler on mount so every
-   * progress frame from any bridged tool lands in the UI's
-   * `OngoingToolRow`. Ref keeps the wire-up synchronous with
-   * React reconciliation (no effect-timing surprises).
-   */
+  /** App.tsx writes its progress handler here on mount so MCP frames flow into OngoingToolRow. */
   progressSink: { current: ((info: ProgressInfo) => void) | null };
-  /** Present when the session has prior messages; drives the picker. */
-  sessionPreview?: { messageCount: number; lastActive: Date };
-  /**
-   * Original base session name before any timestamp resolution. Used
-   * by the "new" handler to generate fresh timestamped names without
-   * nesting (e.g. `code-reasonix` stays the base even when the
-   * effective session is `code-reasonix-20260430T143200`).
-   */
-  baseSession?: string;
+  /** Show the SessionPicker (full list) when no --session was specified and saved sessions exist. */
+  showPicker: boolean;
 }
 
 function Root({
@@ -109,16 +101,14 @@ function Root({
   mcpSpecs,
   mcpServers,
   progressSink,
-  sessionPreview,
+  showPicker,
   ...appProps
 }: RootProps) {
   const [key, setKey] = useState<string | undefined>(initialKey);
-  // `null` once the picker is resolved (or was never needed). Starts as
-  // the preview so we can render the picker once before mounting App.
-  const [pending, setPending] = useState<typeof sessionPreview>(sessionPreview);
-  // Effective session name — starts as the prop (resolved by chatCommand)
-  // but changes when the user picks "new" (creates a timestamped name).
-  const [effectiveSession, setEffectiveSession] = useState<string | undefined>(appProps.session);
+  const [pickerOpen, setPickerOpen] = useState(showPicker);
+  const [activeSession, setActiveSession] = useState<string | undefined>(appProps.session);
+  const workspaceRoot = appProps.codeMode?.rootDir ?? process.cwd();
+  const [sessions, setSessions] = useState(() => listSessionsForWorkspace(workspaceRoot));
 
   if (!key) {
     return (
@@ -132,29 +122,36 @@ function Root({
   }
   process.env.DEEPSEEK_API_KEY = key;
 
-  // KeystrokeProvider must wrap App from OUTSIDE — App.tsx itself
-  // calls `useKeystroke` in its function body for global hotkeys
-  // (Ctrl+C, Esc abort, Shift+Tab edit-mode cycle, @-mention picker,
-  // slash-suggestion navigation). If the provider lives inside App's
-  // render, `useContext(KeystrokeContext)` returns `null` at hook
-  // call time and those handlers silently never subscribe.
-  if (pending && appProps.session) {
+  if (pickerOpen) {
     return (
       <KeystrokeProvider>
         <SessionPicker
-          sessionName={appProps.session}
-          messageCount={pending.messageCount}
-          lastActive={pending.lastActive}
-          onChoose={(choice) => {
-            if (choice === "new") {
-              // Create a new timestamped session instead of truncating
-              // the old one. The old session files remain intact on disk
-              // and can be resumed via --session <name> --resume.
-              const base = appProps.baseSession ?? appProps.session!;
-              const ts = timestampSuffix();
-              setEffectiveSession(`${base}-${ts}`);
+          sessions={sessions}
+          workspace={workspaceRoot}
+          onChoose={(outcome) => {
+            if (outcome.kind === "open") {
+              setActiveSession(outcome.name);
+              setPickerOpen(false);
+              return;
             }
-            setPending(undefined);
+            if (outcome.kind === "new") {
+              setActiveSession(undefined);
+              setPickerOpen(false);
+              return;
+            }
+            if (outcome.kind === "delete") {
+              deleteSession(outcome.name);
+              setSessions(listSessionsForWorkspace(workspaceRoot));
+              return;
+            }
+            if (outcome.kind === "rename") {
+              renameSession(outcome.name, outcome.newName);
+              setSessions(listSessionsForWorkspace(workspaceRoot));
+              return;
+            }
+            if (outcome.kind === "quit") {
+              process.exit(0);
+            }
           }}
         />
       </KeystrokeProvider>
@@ -164,19 +161,22 @@ function Root({
   return (
     <KeystrokeProvider>
       <App
+        // key forces a full remount (and fresh transcript / scrollback / cards) on switch.
+        key={activeSession ?? "__new__"}
         model={appProps.model}
         system={appProps.system}
         transcript={appProps.transcript}
         harvest={appProps.harvest}
         branch={appProps.branch}
         budgetUsd={appProps.budgetUsd}
-        session={effectiveSession}
+        session={activeSession}
         tools={tools}
         mcpSpecs={mcpSpecs}
         mcpServers={mcpServers}
         progressSink={progressSink}
         codeMode={appProps.codeMode}
         noDashboard={appProps.noDashboard}
+        onSwitchSession={setActiveSession}
       />
     </KeystrokeProvider>
   );
@@ -243,6 +243,7 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
             tools: { supported: true, items: [] },
             resources: { supported: false, reason: "inspect failed" },
             prompts: { supported: false, reason: "inspect failed" },
+            elapsedMs: 0,
           };
         }
         const label = spec.name ?? "anon";
@@ -310,13 +311,17 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
     registerChoiceTool(tools);
   }
 
-  // Resolve the effective session name and decide whether to show the
-  // session picker. Delegated to resolveSession() in session.ts.
-  const { resolved: resolvedSession, preview: sessionPreview } = resolveSession(
+  // resolveSession handles --new (timestamped name, old session preserved)
+  // and --resume (latest prefixed). Default falls through to the latest
+  // prefixed-or-base.
+  const { resolved: resolvedSession } = resolveSession(
     opts.session,
     opts.forceNew,
     opts.forceResume,
   );
+  const launchWorkspace = opts.codeMode?.rootDir ?? process.cwd();
+  const showPicker =
+    !opts.session && !opts.forceResume && listSessionsForWorkspace(launchWorkspace).length > 0;
 
   // No startup clear, no resize listener. Earlier attempts wrote
   // various combinations of \x1b[2J / \x1b[3J / cursor-home to
@@ -336,14 +341,13 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
       mcpSpecs={mcpSpecs}
       mcpServers={mcpServers}
       progressSink={progressSink}
-      sessionPreview={sessionPreview}
+      showPicker={showPicker}
       {...opts}
       session={resolvedSession}
-      baseSession={opts.session}
     />,
-    // patchConsole:false — we never log to console during the TUI, and the
-    // patch is a known redraw-glitch source on winpty/MINTTY terminals.
-    { exitOnCtrlC: true, patchConsole: false },
+    // patchConsole:false — winpty/MINTTY redraw-glitch source.
+    // debug:true forces full-frame writes; log-update's diff drops frames on Windows ConPTY.
+    { exitOnCtrlC: true, patchConsole: false, debug: true },
   );
   try {
     await waitUntilExit();

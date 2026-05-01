@@ -1,4 +1,4 @@
-/** Pure tool-result summarizer — lives outside EventLog so replay / transcript-export can reuse it. */
+/** Pure tool-result summarizer — shared by ToolCard, replay, and transcript export. */
 
 const MAX_SUMMARY_CHARS = 80;
 const TRAILING_ELLIPSIS = "…";

@@ -1,101 +1,96 @@
 import { Box, Text } from "ink";
-import React from "react";
-import { ModalCard } from "./ModalCard.js";
+// biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
+import React, { useState } from "react";
+import { DenyContextInput } from "./DenyContextInput.js";
 import { SingleSelect } from "./Select.js";
-import { COLOR } from "./theme.js";
+import { ApprovalCard } from "./cards/ApprovalCard.js";
+import { FG, TONE } from "./theme/tokens.js";
 
 export type ShellConfirmChoice = "run_once" | "always_allow" | "deny";
 
 export interface ShellConfirmProps {
   command: string;
-  /**
-   * The prefix that would be persisted if the user picks
-   * "always allow". Typically the first 1-2 tokens of `command`.
-   */
+  /** Prefix that would be persisted if the user picks "always allow". */
   allowPrefix: string;
-  /**
-   * Which tool is asking. `run_background` spawns via JobRegistry and
-   * returns early; `run_command` (default) blocks until the process
-   * exits. Shown as a hint in the modal so the user knows whether
-   * approving will block the TUI or not.
-   */
+  /** `run_background` returns early; `run_command` blocks the TUI. */
   kind?: "run_command" | "run_background";
   onChoose: (choice: ShellConfirmChoice, denyContext?: string) => void;
 }
 
-/**
- * Modal-style approval for a shell command the model wants to run.
- * Three choices:
- *   1. Run once — execute this invocation, prefix NOT remembered.
- *   2. Always allow — persist the prefix to `~/.reasonix/config.json`
- *      under this project so every future invocation with that prefix
- *      auto-runs.
- *   3. Deny — tell the model the user refused.
- * Arrow keys + Enter. No y/n hotkey — too easy to trigger by accident
- * when the user was mid-typing a response. Tab on Deny opens inline
- * context entry, returned as `onChoose`'s 2nd arg.
- */
 export function ShellConfirm({ command, allowPrefix, kind, onChoose }: ShellConfirmProps) {
   const isBackground = kind === "run_background";
   const subtitle = isBackground
     ? "long-running process — keeps running after approval, /kill to stop"
     : "model wants to run a shell command";
 
-  const denyItem = {
-    value: "deny" as const,
-    label: "Deny",
-    hint: "Not what you wanted? Press Tab to append `,` and tell the model what to do instead.",
-    denyWithContext: true as const,
-  };
+  const [phase, setPhase] = useState<"pick" | "deny">("pick");
+
+  if (phase === "deny") {
+    return (
+      <ApprovalCard
+        tone="error"
+        glyph="✗"
+        title="Deny — provide context"
+        metaRight="optional"
+        footerHint="⏎ submit  ·  esc skip (deny without reason)"
+      >
+        <DenyContextInput
+          onSubmit={(context) => onChoose("deny", context || undefined)}
+          onCancel={() => onChoose("deny")}
+        />
+      </ApprovalCard>
+    );
+  }
 
   return (
-    <ModalCard
-      accent={COLOR.err}
-      icon={isBackground ? "⏱" : "⚡"}
-      title={isBackground ? "background process" : "shell command"}
-      subtitle={subtitle}
+    <ApprovalCard
+      tone="warn"
+      glyph={isBackground ? "⏱" : "?"}
+      title={isBackground ? "Background process" : "Shell command"}
+      metaRight="awaiting"
+      footerHint="↑↓ pick  ·  ⏎ confirm  ·  esc cancel"
     >
       <Box marginBottom={1}>
-        <Text color={COLOR.primary} bold>
+        <Text color={FG.faint}>{subtitle}</Text>
+      </Box>
+      <Box marginBottom={1}>
+        <Text bold color={TONE.err}>
           {"$ "}
         </Text>
-        <Text bold>{command}</Text>
+        <Text bold color={FG.strong}>
+          {command}
+        </Text>
       </Box>
       <SingleSelect
         initialValue="run_once"
         items={[
           {
             value: "run_once",
-            label: "Run once",
-            hint: "Execute this command, don't remember it.",
+            label: "allow once",
+            hint: "run this command, ask again next time",
           },
           {
             value: "always_allow",
-            label: `Always allow "${allowPrefix}" in this project`,
-            hint: "Save the prefix to ~/.reasonix/config.json; future matches auto-run.",
+            label: "allow always",
+            hint: `remember \`${allowPrefix}\` for this project`,
           },
-          denyItem,
+          {
+            value: "deny",
+            label: "deny",
+            hint: "skip; agent will pick an alternative",
+          },
         ]}
-        onSubmit={(v, ctx) => {
-          if (v === "deny") onChoose("deny", ctx);
+        onSubmit={(v) => {
+          if (v === "deny") setPhase("deny");
           else onChoose(v as ShellConfirmChoice);
         }}
         onCancel={() => onChoose("deny")}
-        footer="[↑↓] navigate  ·  [Enter] select  ·  [Tab] add context  ·  [Esc] deny"
       />
-    </ModalCard>
+    </ApprovalCard>
   );
 }
 
-/**
- * Pick the "always allow" prefix from a full command. Heuristic:
- *   - one-token commands ("ls", "pytest") → the token itself
- *   - multi-token → first two tokens for well-known wrappers
- *     (`npm install`, `git commit`, `cargo add`, `docker run` …)
- *     otherwise just the first token (covers `node <script>` where the
- *     second token is usually a file path specific to this invocation).
- * Exported so tests can pin the heuristic.
- */
+/** First two tokens for known wrappers (`npm install`, `git commit`, …); else first token only. */
 export function derivePrefix(command: string): string {
   const tokens = command.trim().split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return "";

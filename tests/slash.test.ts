@@ -858,9 +858,9 @@ describe("handleSlash", () => {
     expect(r.info).toMatch(/git (add|commit) failed/);
   });
 
-  it("/sessions returns a hint when none exist", () => {
+  it("/sessions opens the session picker", () => {
     const r = handleSlash("sessions", [], makeLoop());
-    expect(r.info).toMatch(/no saved sessions yet|Saved sessions/);
+    expect(r.openSessionsPicker).toBe(true);
   });
 
   it("/forget on a session-less loop says nothing to forget", () => {

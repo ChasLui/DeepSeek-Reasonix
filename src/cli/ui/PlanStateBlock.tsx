@@ -1,7 +1,6 @@
 /**
- * Shared Ink block that renders a TypedPlanState. Used by the live chat
- * EventLog AND by the RecordView in replay/diff TUIs, so harvest output
- * looks identical live and on replay.
+ * Shared Ink block that renders a TypedPlanState. Used by RecordView in
+ * replay/diff TUIs.
  *
  * Colors are semantic (not decorative):
  *   - subgoals:       cyan         — structure / plan

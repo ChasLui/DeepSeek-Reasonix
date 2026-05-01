@@ -95,16 +95,6 @@ export async function handleModal(
       ctx.resolveEditReview(choice);
       return { status: 200, body: { resolved: true } };
     }
-    if (kind === "workspace") {
-      if (!ctx.resolveWorkspaceConfirm) {
-        return { status: 503, body: { error: "workspace modal resolution not wired" } };
-      }
-      if (choice !== "switch" && choice !== "deny") {
-        return { status: 400, body: { error: "workspace choice must be switch / deny" } };
-      }
-      ctx.resolveWorkspaceConfirm(choice);
-      return { status: 200, body: { resolved: true } };
-    }
     if (kind === "checkpoint") {
       if (!ctx.resolveCheckpointConfirm) {
         return { status: 503, body: { error: "checkpoint modal resolution not wired" } };

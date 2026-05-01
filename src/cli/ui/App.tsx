@@ -1,5 +1,4 @@
 import type { WriteStream } from "node:fs";
-import * as pathMod from "node:path";
 import { Box, Text, useStdout } from "ink";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -8,11 +7,11 @@ import {
   openEventSink,
 } from "../../adapters/event-sink-jsonl.js";
 import { type AtUrlExpansion, expandAtMentions, expandAtUrls } from "../../at-mentions.js";
+import { createCheckpoint } from "../../code/checkpoints.js";
 import {
   type ApplyResult,
   type EditBlock,
   applyEditBlocks,
-  parseEditBlocks,
   snapshotBeforeEdits,
   toWholeFileEditBlock,
 } from "../../code/edit-blocks.js";
@@ -41,6 +40,16 @@ import { Eventizer } from "../../core/eventize.js";
 import { type ResolvedHook, formatHookOutcomeMessage, loadHooks, runHooks } from "../../hooks.js";
 import { CacheFirstLoop, DeepSeekClient, ImmutablePrefix } from "../../index.js";
 import type { LoopEvent } from "../../loop.js";
+import {
+  deleteSession,
+  detectGitBranch,
+  type listSessions,
+  listSessionsForWorkspace,
+  loadSessionMessages,
+  loadSessionMeta,
+  patchSessionMeta,
+  renameSession,
+} from "../../memory/session.js";
 import type {
   ActiveModal,
   DashboardEvent,
@@ -53,58 +62,67 @@ import {
   DEFAULT_CONTEXT_TOKENS,
   type SessionSummary,
 } from "../../telemetry/stats.js";
-import { appendUsage, defaultUsageLogPath } from "../../telemetry/usage.js";
+import { defaultUsageLogPath } from "../../telemetry/usage.js";
 import type { ToolRegistry } from "../../tools.js";
 import type { ChoiceOption } from "../../tools/choice.js";
-import type { PlanStep, StepCompletion } from "../../tools/plan.js";
+import type { PlanStep } from "../../tools/plan.js";
 import { formatCommandResult, runCommand } from "../../tools/shell.js";
 import { registerSkillTools } from "../../tools/skills.js";
 import { formatSubagentResult, spawnSubagent } from "../../tools/subagent.js";
 import { webFetch } from "../../tools/web.js";
-import { registerWorkspaceTool } from "../../tools/workspace.js";
 import { openTranscriptFile, recordFromLoopEvent, writeRecord } from "../../transcript/log.js";
 import { AtMentionSuggestions } from "./AtMentionSuggestions.js";
 import { ChoiceConfirm, type ChoiceConfirmChoice } from "./ChoiceConfirm.js";
-import { ChromeBar } from "./ChromeBar.js";
-import { CtxFooter } from "./CtxFooter.js";
 import { EditConfirm, type EditReviewChoice } from "./EditConfirm.js";
-import { type DisplayEvent, EventRow } from "./EventLog.js";
-import { ModeStatusBar, OngoingToolRow, StatusRow, SubagentRow, UndoBanner } from "./LiveRows.js";
 import { type CheckpointChoice, PlanCheckpointConfirm } from "./PlanCheckpointConfirm.js";
 import { PlanConfirm, type PlanConfirmChoice } from "./PlanConfirm.js";
 import { PlanRefineInput } from "./PlanRefineInput.js";
 import { PlanReviseConfirm, type ReviseChoice } from "./PlanReviseConfirm.js";
+import { PlanReviseEditor } from "./PlanReviseEditor.js";
 import { PromptInput } from "./PromptInput.js";
+import { SessionPicker } from "./SessionPicker.js";
 import { ShellConfirm, type ShellConfirmChoice, derivePrefix } from "./ShellConfirm.js";
 import { SlashArgPicker } from "./SlashArgPicker.js";
 import { SlashSuggestions } from "./SlashSuggestions.js";
 import { WelcomeBanner } from "./WelcomeBanner.js";
-import { WorkspaceConfirm, type WorkspaceConfirmChoice } from "./WorkspaceConfirm.js";
-import { useAltScreen } from "./alt-screen.js";
 import { detectBangCommand, formatBangUserMessage } from "./bang.js";
+import { PlanCard } from "./cards/PlanCard.js";
 import { writeClipboard } from "./clipboard.js";
-import {
-  describeRepair,
-  formatEditResults,
-  formatPendingPreview,
-  partitionEdits,
-} from "./edit-history.js";
+import { formatEditResults, partitionEdits } from "./edit-history.js";
+import { loopEventToDashboard } from "./effects/loop-to-dashboard.js";
 import { renderFrame } from "./frame-render.js";
 import { appendGlobalMemory, appendProjectMemory, detectHashMemory } from "./hash-memory.js";
-import { useKeystroke } from "./keystroke-context.js";
+import { applySlashResult } from "./hooks/apply-slash-result.js";
+import { handleAssistantFinal } from "./hooks/handle-assistant-final.js";
 import {
-  type LogSelection,
-  eventsToAtoms,
-  extractSelection,
-  renderViewport,
-  viewportLog,
-} from "./log-frame.js";
-import { BottomHint } from "./log-rows.js";
+  handleErrorEvent,
+  handleToolStart,
+  handleWarningEvent,
+} from "./hooks/handle-stream-events.js";
+import { handleToolEvent } from "./hooks/handle-tool-event.js";
+import { useAgentSession } from "./hooks/useAgentSession.js";
+import { useScrollback } from "./hooks/useScrollback.js";
+import { useSyntheticSubmit } from "./hooks/useSyntheticSubmit.js";
+import { useKeystroke } from "./keystroke-context.js";
+import { CardStream } from "./layout/CardStream.js";
+import {
+  ModeStatusBar,
+  OngoingToolRow,
+  SubagentRow,
+  ThinkingRow,
+  UndoBanner,
+} from "./layout/LiveRows.js";
+import { StatusRow } from "./layout/StatusRow.js";
+import { ToastRail } from "./layout/ToastRail.js";
 import { formatLoopStatus } from "./loop.js";
 import { handleMcpBrowseSlash } from "./mcp-browse.js";
 import { formatLongPaste } from "./paste-collapse.js";
 import { resolvePreset } from "./presets.js";
 import { type McpServerSummary, handleSlash, parseSlash, suggestSlashCommands } from "./slash.js";
+import { TurnTranslator } from "./state/TurnTranslator.js";
+import { cardsToDashboardMessages } from "./state/cards-to-messages.js";
+import { hydrateCardsFromMessages } from "./state/hydrate.js";
+import { AgentStoreProvider, useAgentState, useAgentStore } from "./state/provider.js";
 import { COLOR } from "./theme.js";
 import { TickerProvider } from "./ticker.js";
 import { useCompletionPickers } from "./useCompletionPickers.js";
@@ -172,6 +190,8 @@ export interface AppProps {
    * who don't want a localhost listener.
    */
   noDashboard?: boolean;
+  /** Mid-chat session swap — Root remounts App with the new session via key. */
+  onSwitchSession?: (name: string | undefined) => void;
 }
 
 /**
@@ -204,7 +224,6 @@ const PLAIN_UI = process.env.REASONIX_UI === "plain";
  * Single-line status pill rendered below the modeline whenever a /loop
  * is active. Re-renders every second so the countdown ticks.
  */
-
 function LoopStatusRow({
   loop,
 }: {
@@ -230,7 +249,24 @@ interface StreamingState {
   toolCallBuild?: { name: string; chars: number };
 }
 
-export function App({
+export function App(props: AppProps): React.ReactElement {
+  const session = useAgentSession({
+    sessionId: props.session,
+    model: props.model,
+    workspace: props.codeMode?.rootDir ?? process.cwd(),
+  });
+  const initialCards = React.useMemo(
+    () => (props.session ? hydrateCardsFromMessages(loadSessionMessages(props.session)) : []),
+    [props.session],
+  );
+  return (
+    <AgentStoreProvider session={session} initialCards={initialCards}>
+      <AppInner {...props} />
+    </AgentStoreProvider>
+  );
+}
+
+function AppInner({
   model,
   system,
   transcript,
@@ -244,157 +280,27 @@ export function App({
   progressSink,
   codeMode,
   noDashboard,
+  onSwitchSession,
 }: AppProps) {
-  // Take over the alt screen on mount so the TUI gets the entire
-  // terminal viewport: sticky StatsPanel at row 1, scrollable log in
-  // the middle, sticky PromptInput at the last row. Restored on unmount
-  // (and on SIGINT/SIGTERM/exit) so the user's terminal returns to its
-  // pre-launch state.
-  useAltScreen();
-  const [historical, setHistorical] = useState<DisplayEvent[]>([]);
-  const [streaming, setStreaming] = useState<DisplayEvent | null>(null);
-  const [ctxFooterVisible, setCtxFooterVisible] = useState(true);
-  const [logSelection, setLogSelection] = useState<LogSelection | null>(null);
-  const dragAnchorRef = useRef<{ row: number; col: number } | null>(null);
-  const autoScrollTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const autoScrollDirRef = useRef<-1 | 0 | 1>(0);
-  const lastDragColRef = useRef(0);
-  // Live geometry of the rendered log content area, in 1-based terminal rows.
-  const logGeomRef = useRef<{
-    contentTopRow: number;
-    contentBottomRow: number;
-    firstRowAbs: number;
-    visibleRows: number;
-    cols: number;
-  }>({ contentTopRow: 1, contentBottomRow: 1, firstRowAbs: 0, visibleRows: 0, cols: 80 });
-
-  // Log scroll state — number of events skipped from the END.
-  //   0   → at bottom (always show latest, auto-track new events)
-  //   N>0 → user scrolled up; new events drift visible-window forward
-  //         but the scroll offset stays put until the user presses End
-  //         to jump back to latest. Mimics the chat-app pattern where
-  //         "I'm reading old messages" pauses the auto-scroll.
-  const [logScrollOffset, setLogScrollOffset] = useState(0);
-  // Smooth-scroll engine — every key/wheel scroll sets a target offset
-  // and a setInterval ease-towards loop interpolates the displayed
-  // offset over ~6-8 frames at 30fps. Wheel ticks queue: rapid wheels
-  // bump the target further before the previous animation finishes,
-  // so the eye sees one continuous glide rather than discrete jumps.
-  const scrollAnimRef = useRef<NodeJS.Timeout | null>(null);
-  const scrollTargetRef = useRef<number>(0);
-  const scrollDisplayedRef = useRef<number>(0);
-  // Row-pipeline mirrors. The slicer fills these on every render so
-  // the keystroke handler can clamp scroll inputs without recomputing
-  // event row counts.
-  const scrollMaxRowsRef = useRef<number>(0);
-  // Cumulative row count over `historical` from the previous render —
-  // used by the append-anchor effect below to bump `scrollTargetRef`
-  // by the row-delta (not event-delta) when content arrives while the
-  // user is scrolled up.
-  const lastTotalRowsRef = useRef<number>(0);
-  useEffect(() => {
-    return () => {
-      if (scrollAnimRef.current) {
-        clearInterval(scrollAnimRef.current);
-        scrollAnimRef.current = null;
-      }
-    };
-  }, []);
-  // Set a new target. `next` is either a number or an updater function
-  // — same shape as React state setters. The animation easing handles
-  // the transition.
-  const animateScrollTo = useCallback((next: number | ((prev: number) => number)) => {
-    const newTarget = typeof next === "function" ? next(scrollTargetRef.current) : next;
-    scrollTargetRef.current = Math.max(0, newTarget);
-    // If already running, the existing interval picks up the new
-    // target on its next tick — no need to restart.
-    if (scrollAnimRef.current) return;
-    scrollAnimRef.current = setInterval(() => {
-      const target = scrollTargetRef.current;
-      const cur = scrollDisplayedRef.current;
-      const diff = target - cur;
-      // Snap when within 1 unit — finer steps would just round to
-      // the same integer.
-      if (Math.abs(diff) < 1) {
-        scrollDisplayedRef.current = target;
-        setLogScrollOffset(target);
-        if (scrollAnimRef.current) {
-          clearInterval(scrollAnimRef.current);
-          scrollAnimRef.current = null;
-        }
-        return;
-      }
-      // Ease-out: move 25% of remaining distance per frame, with a
-      // minimum 1-step nudge so big distances still finish in a
-      // bounded number of frames.
-      const step =
-        diff > 0 ? Math.max(1, Math.ceil(diff * 0.25)) : Math.min(-1, Math.floor(diff * 0.25));
-      scrollDisplayedRef.current = cur + step;
-      setLogScrollOffset(scrollDisplayedRef.current);
-    }, 33);
-  }, []);
-  // No-op kept for compat with any remaining call sites; the animation
-  // loop now owns its lifecycle.
-  const stopScrollAnimation = useCallback(() => {
-    /* animateScrollTo handles its own teardown on each new target */
-  }, []);
-  // Anchor + clamp the visible window when historical changes:
-  //   · GROWS while the user is scrolled up — bump offset by the ROWS
-  //     of newly-appended content so the same lines stay framed.
-  //     Without this, every appended turn slides the window forward
-  //     and pushes what the user was reading off-screen. Row-deltas
-  //     are exact (computed from the row pipeline) so a 50-row diff
-  //     bumps the offset by 50, not 1.
-  //   · SHRINKS (e.g. /new wipes log) — clamp offset to the slicer's
-  //     new `maxScrollRows`. Otherwise the user is left looking at an
-  //     empty middle.
-  const lastHistoricalLenRef = useRef(0);
-  useEffect(() => {
-    const prevLen = lastHistoricalLenRef.current;
-    const curLen = historical.length;
-    lastHistoricalLenRef.current = curLen;
-    if (curLen > prevLen && scrollTargetRef.current > 0) {
-      // Row-deltas: convert each newly-appended event to its Atom
-      // representation and sum the rows. Exact for `frame` atoms
-      // (frame.rows.length is precise); estimated for `ink` atoms
-      // (`atom.rows`). projectRoot only matters when the atom is
-      // RENDERED — we're only counting here, so undefined is fine.
-      const cols = stdout?.columns ?? 80;
-      let deltaRows = 0;
-      for (const a of eventsToAtoms(historical.slice(prevLen, curLen), undefined, cols)) {
-        deltaRows += a.kind === "frame" ? a.frame.rows.length : a.rows;
-      }
-      if (deltaRows > 0) {
-        scrollTargetRef.current += deltaRows;
-        scrollDisplayedRef.current += deltaRows;
-        setLogScrollOffset((p) => p + deltaRows);
-      }
-    } else if (curLen < prevLen) {
-      const newMax = scrollMaxRowsRef.current;
-      if (scrollTargetRef.current > newMax) {
-        scrollTargetRef.current = newMax;
-        scrollDisplayedRef.current = newMax;
-        setLogScrollOffset(newMax);
+  const log = useScrollback();
+  const agentStore = useAgentStore();
+  const hasConversation = useAgentState((s) =>
+    s.cards.some((c) => c.kind === "user" || c.kind === "streaming"),
+  );
+  const isStreaming = useAgentState((s) => s.cards.some((c) => c.kind === "streaming" && !c.done));
+  const activePlanCard = useAgentState((s) => {
+    for (let i = s.cards.length - 1; i >= 0; i--) {
+      const c = s.cards[i];
+      if (
+        c?.kind === "plan" &&
+        c.variant === "active" &&
+        c.steps.some((step) => step.status !== "done" && step.status !== "skipped")
+      ) {
+        return c;
       }
     }
-  }, [historical]);
-  // Belt-and-suspenders clamp: if `logScrollOffset` ever ends up past
-  // the slicer's `maxScrollRows` (terminal resize, role-rendering
-  // height changes mid-stream, anything that perturbs the row total),
-  // snap it back. Without this the user can wheel into "empty
-  // viewport" territory because the row-pipeline's `LogBlock` height
-  // estimates can drift from what's actually rendered. The slicer
-  // itself clamps internally for picking items, but the React state
-  // (which the ScrollBar reads) must mirror the same upper bound or
-  // the thumb shows a confusing "scrolling past content" position.
-  useEffect(() => {
-    const max = scrollMaxRowsRef.current;
-    if (logScrollOffset > max) {
-      scrollTargetRef.current = max;
-      scrollDisplayedRef.current = max;
-      setLogScrollOffset(max);
-    }
-  }, [logScrollOffset]);
+    return null;
+  });
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   // Tracks whether the current turn has been aborted via Esc, so the
@@ -421,11 +327,11 @@ export function App({
     total?: number;
     message?: string;
   } | null>(null);
-  // stdout handle for `/clear`-style hard screen wipes. Clearing only
-  // React state (setHistorical([])) leaves the terminal scrollback
-  // intact — the user keeps seeing prior turns until they scroll past
-  // them. Writing CSI 2J + 3J + H genuinely nukes viewport AND
-  // scrollback, which is what `/clear` means to a shell user.
+  // stdout handle for `/clear`-style hard screen wipes. Clearing the
+  // store alone leaves the terminal scrollback intact — the user keeps
+  // seeing prior turns until they scroll past them. Writing CSI 2J + 3J +
+  // H genuinely nukes viewport AND scrollback, which is what `/clear`
+  // means to a shell user.
   const { stdout } = useStdout();
   // Terminal input modes we opt into at startup, all paired with
   // disable-on-unmount so the user's shell doesn't inherit them:
@@ -490,7 +396,7 @@ export function App({
   // subagentRunner closure can read the ref.
   const { activity: subagentActivity, sinkRef: subagentSinkRef } = useSubagent({
     session,
-    setHistorical,
+    log,
   });
   // Transient "what's happening" text set by the loop during silent
   // phases (harvest round-trip, between-iteration R1 thinking, forced
@@ -628,19 +534,17 @@ export function App({
      */
     kind: "run_command" | "run_background";
   } | null>(null);
-  // The latest `change_workspace` request awaiting user approval.
-  // Populated from the WorkspaceConfirmationError surfaced in the
-  // tool result; cleared once the user picks Switch / Deny in
-  // WorkspaceConfirm. Mutually exclusive with pendingShell — only
-  // one modal can be open at a time, and we gate input + render on
-  // both flags wherever pendingShell is gated.
-  const [pendingWorkspace, setPendingWorkspace] = useState<{ path: string } | null>(null);
   // Plan text the model submitted via `submit_plan` while plan mode
   // was active. Non-null renders PlanConfirm; user picks Approve /
   // Refine / Cancel and we drive the loop from there. Separate from
   // `planMode` because a pending plan is a one-shot decision even if
   // plan mode stays on (Refine keeps mode on; Approve/Cancel flip off).
   const [pendingPlan, setPendingPlan] = useState<string | null>(null);
+  /** While the user is interactively editing the proposed plan via PlanReviseEditor; null = not editing. */
+  const [pendingReviseEditor, setPendingReviseEditor] = useState<string | null>(null);
+  /** True while the SessionPicker is open mid-chat (triggered by `/sessions`). */
+  const [pendingSessionsPicker, setPendingSessionsPicker] = useState(false);
+  const [sessionsPickerList, setSessionsPickerList] = useState<ReturnType<typeof listSessions>>([]);
   // Stashed plan + intent while the user types free-form feedback
   // (refinement or last instructions on approve). When the picker
   // returns "refine" or "approve", we defer the loop-resume and show
@@ -765,9 +669,9 @@ export function App({
   useEffect(() => {
     activeLoopRef.current = activeLoop;
   }, [activeLoop]);
-  // Full untruncated tool results, in arrival order. The EventLog
-  // renderer clips tool output at 400 chars for display; `/tool N`
-  // reads from this ref to show the real thing. Not persisted — a
+  // Full untruncated tool results, in arrival order. ToolCard clips
+  // output at 400 chars for display; `/tool N` reads from this ref to
+  // show the real thing. Not persisted — a
   // resumed session replays the log (which has the same content in
   // `tool` messages) but we don't repopulate this ref on resume
   // because the user wouldn't expect `/tool` to reach back across
@@ -791,10 +695,6 @@ export function App({
   // sync with the TUI. The Set is keyed by the subscriber function
   // itself; subscribeEvents returns an unsubscribe closure.
   const eventSubscribersRef = useRef<Set<(ev: DashboardEvent) => void>>(new Set());
-  // Mirror of `historical` so /api/messages can snapshot synchronously
-  // without hopping through the React render scheduler. Update happens
-  // in a useEffect right after every state change.
-  const historicalRef = useRef<DisplayEvent[]>([]);
   // Structured steps captured from the most recent `submit_plan` call.
   // Populated only when the model supplied `steps`; used by the
   // `mark_step_complete` handler to look up the step title and compute
@@ -897,10 +797,11 @@ export function App({
     if (tools && !tools.has("run_skill")) {
       registerSkillTools(tools, {
         projectRoot: codeMode?.rootDir,
-        subagentRunner: async (skill, task) => {
+        subagentRunner: async (skill, task, signal) => {
           const result = await spawnSubagent({
             client,
             parentRegistry: tools,
+            parentSignal: signal,
             // Skill body is the subagent's persona/playbook; the user-
             // supplied task is what to actually do inside it.
             system: skill.body,
@@ -916,16 +817,6 @@ export function App({
           return formatSubagentResult(result);
         },
       });
-    }
-    // `change_workspace` — model-callable workspace switching, gated
-    // on a confirmation modal driven by App.tsx (see pendingWorkspace
-    // state below). Tool fn validates the path and throws
-    // WorkspaceConfirmationError; the actual swap happens when the
-    // user approves. Registered here (not in code.tsx) so chat-mode
-    // sessions also expose it — `setCwd` works in chat mode too,
-    // just doesn't have a tool sandbox to re-register.
-    if (tools && !tools.has("change_workspace")) {
-      registerWorkspaceTool(tools);
     }
     const prefix = new ImmutablePrefix({
       system,
@@ -958,77 +849,6 @@ export function App({
     loop.hooks = hookList;
   }, [loop, hookList]);
 
-  // Shared cwd-switch implementation — drives BOTH the `/cwd` slash
-  // command and the `change_workspace` tool's confirmation handler.
-  // Returns a multi-line info string the caller can surface to the
-  // user (slash) or fold into a synthetic message (tool). Idempotent
-  // on the same path.
-  const applyCwdChange = useCallback(
-    (newRoot: string): string => {
-      // Update the React state — every memoized derivation that reads
-      // `currentRootDir` (memoryRoot, hookCwd via useEffect,
-      // applyEditBlocks paths, mention root, run_command cwd) picks
-      // up the new path on the next render.
-      setCurrentRootDir(newRoot);
-      // Reload hooks against the new project (different
-      // .reasonix/settings.json may exist there).
-      const fresh = loadHooks({ projectRoot: codeMode ? newRoot : undefined });
-      setHookList(fresh);
-      // Re-register every rootDir-dependent native tool so file
-      // reads/writes and shell calls land in the new sandbox. Only
-      // available in code mode (chat mode has no rootDir-bound tools
-      // beyond memory, which we re-register inline below).
-      const codeRebound = codeMode?.reregisterTools !== undefined;
-      if (codeMode?.reregisterTools) {
-        codeMode.reregisterTools(newRoot);
-      }
-      // Keep `run_skill`'s closured projectRoot in sync too. It's
-      // owned by App.tsx (the subagent runner needs in-process refs),
-      // so the codeMode reregister hook above doesn't touch it. Safe
-      // to re-register: the registry overwrites by tool name, the
-      // spec is identical, prefix cache stays.
-      if (tools) {
-        registerSkillTools(tools, {
-          projectRoot: codeMode ? newRoot : undefined,
-          subagentRunner: async (skill, task) => {
-            const result = await spawnSubagent({
-              client: loop.client,
-              parentRegistry: tools,
-              system: skill.body,
-              task,
-              model: skill.model,
-              sink: subagentSinkRef.current,
-              skillName: skill.name,
-            });
-            return formatSubagentResult(result);
-          },
-        });
-      }
-      const lines = [`▸ cwd → ${newRoot}`, `  hooks reloaded (${fresh.length} active)`];
-      if (codeMode) {
-        lines.push(
-          codeRebound
-            ? "  filesystem / shell / memory tools rebound to new root"
-            : "  warning: reregisterTools callback missing — tool sandbox unchanged",
-        );
-        lines.push(
-          "  note: system prompt context (gitignore, REASONIX.md stack) was",
-          "        baked at session start and still references the original root.",
-        );
-      }
-      return lines.join("\n");
-    },
-    [codeMode, loop, tools, subagentSinkRef],
-  );
-
-  // Mirror `currentRootDir` into the loop's mutable `hookCwd` so
-  // `/cwd` switches the path threaded into every hook's stdin
-  // envelope without reconstructing the loop. Same shape as the
-  // hookList sync above — the loop holds a parallel mutable copy.
-  useEffect(() => {
-    loop.hookCwd = currentRootDir;
-  }, [loop, currentRootDir]);
-
   // Ambient session info (balance, model catalog, latest published
   // version) — three independent mount-time fetches behind one hook
   // so the refresh callbacks can be wired into handleSubmit's finally
@@ -1054,17 +874,6 @@ export function App({
     currentRootDirRef.current = currentRootDir;
   }, [currentRootDir]);
 
-  const toggleCtxFooter = useCallback(
-    (force?: boolean): boolean => {
-      let next = false;
-      setCtxFooterVisible((prev) => {
-        next = force === undefined ? !prev : force;
-        return next;
-      });
-      return force === undefined ? !ctxFooterVisible : force;
-    },
-    [ctxFooterVisible],
-  );
   useEffect(() => {
     latestVersionRef.current = latestVersion ?? null;
   }, [latestVersion]);
@@ -1074,10 +883,10 @@ export function App({
   const balanceRef = useRef<typeof balance>(null);
   useEffect(() => {
     balanceRef.current = balance;
-  }, [balance]);
-  useEffect(() => {
-    historicalRef.current = historical;
-  }, [historical]);
+    if (balance) {
+      agentStore.dispatch({ type: "session.update", patch: { balance: balance.total } });
+    }
+  }, [balance, agentStore]);
 
   // Fan out a DashboardEvent to every web subscriber. No-op when
   // nothing is connected, so the cost of the bridge in the common
@@ -1181,17 +990,6 @@ export function App({
   }, [pendingEditReview, broadcastDashboardEvent]);
 
   useEffect(() => {
-    if (!pendingWorkspace) return;
-    broadcastDashboardEvent({
-      kind: "modal-up",
-      modal: { kind: "workspace", path: pendingWorkspace.path },
-    });
-    return () => {
-      broadcastDashboardEvent({ kind: "modal-down", modalKind: "workspace" });
-    };
-  }, [pendingWorkspace, broadcastDashboardEvent]);
-
-  useEffect(() => {
     if (!pendingCheckpoint) return;
     broadcastDashboardEvent({
       kind: "modal-up",
@@ -1283,32 +1081,15 @@ export function App({
     if (sessionBannerShown.current) return;
     sessionBannerShown.current = true;
     if (!session) {
-      setHistorical((prev) => [
-        ...prev,
-        {
-          id: `sys-session-${Date.now()}`,
-          role: "info",
-          text: "▸ ephemeral chat (no session persistence) — drop --no-session to enable",
-        },
-      ]);
+      log.pushInfo("▸ ephemeral chat (no session persistence) — drop --no-session to enable");
     } else if (loop.resumedMessageCount > 0) {
-      setHistorical((prev) => [
-        ...prev,
-        {
-          id: `sys-resume-${Date.now()}`,
-          role: "info",
-          text: `▸ resumed session "${session}" with ${loop.resumedMessageCount} prior messages · /forget to start over · /sessions to list`,
-        },
-      ]);
+      log.pushInfo(
+        `▸ resumed session "${session}" with ${loop.resumedMessageCount} prior messages · /forget to start over · /sessions to list`,
+      );
     } else {
-      setHistorical((prev) => [
-        ...prev,
-        {
-          id: `sys-newsession-${Date.now()}`,
-          role: "info",
-          text: `▸ session "${session}" (new) — auto-saved as you chat · /forget to delete · /sessions to list`,
-        },
-      ]);
+      log.pushInfo(
+        `▸ session "${session}" (new) — auto-saved as you chat · /forget to delete · /sessions to list`,
+      );
     }
     // Restore any pending edit queue from a prior run that was
     // interrupted before /apply or /discard. The checkpoint file sits
@@ -1319,14 +1100,9 @@ export function App({
       if (restored && restored.length > 0) {
         pendingEdits.current = restored;
         syncPendingCount();
-        setHistorical((prev) => [
-          ...prev,
-          {
-            id: `sys-pending-${Date.now()}`,
-            role: "info",
-            text: `▸ restored ${restored.length} pending edit block(s) from an interrupted prior run — /apply to commit or /discard to drop.`,
-          },
-        ]);
+        log.pushInfo(
+          `▸ restored ${restored.length} pending edit block(s) from an interrupted prior run — /apply to commit or /discard to drop.`,
+        );
       }
     }
     // Restore structured plan state from a prior run. plan.json sits
@@ -1346,20 +1122,17 @@ export function App({
         planBodyRef.current = restoredPlan.body ?? null;
         planSummaryRef.current = restoredPlan.summary ?? null;
         const when = relativeTime(restoredPlan.updatedAt);
-        setHistorical((prev) => [
-          ...prev,
-          {
-            id: `sys-plan-${Date.now()}`,
-            role: "plan-resumed",
-            text: "",
-            resumedPlan: {
-              steps: restoredPlan.steps,
-              completedStepIds: restoredPlan.completedStepIds,
-              relativeTime: when,
-              summary: restoredPlan.summary,
-            },
-          },
-        ]);
+        const done = new Set(restoredPlan.completedStepIds);
+        const summary = restoredPlan.summary ? ` — ${restoredPlan.summary}` : "";
+        log.showPlan({
+          title: `Resumed plan · ${when}${summary}`,
+          steps: restoredPlan.steps.map((s) => ({
+            id: s.id,
+            title: s.title,
+            status: done.has(s.id) ? "done" : "queued",
+          })),
+          variant: "resumed",
+        });
       }
     }
     // One-time onboarding tip for the edit-gate keybindings. New users
@@ -1368,23 +1141,17 @@ export function App({
     // per install; the config flag suppresses re-display on every
     // relaunch. Skips chat mode — those shortcuts don't apply there.
     if (codeMode && !editModeHintShown()) {
-      setHistorical((prev) => [
-        ...prev,
-        {
-          id: `sys-edittip-${Date.now()}`,
-          role: "info",
-          text:
-            "▸ TIP: edit-gate keybindings\n" +
-            "    y / n       accept or drop pending edits\n" +
-            "    Shift+Tab   switch review ↔ AUTO (persisted; AUTO applies instantly)\n" +
-            "    u           undo the last auto-applied batch (within the 5s banner)\n" +
-            "  Current mode is shown in the bottom status bar. Run /keys anytime for the full list.\n" +
-            "  (This tip shows once — suppressed after.)",
-        },
-      ]);
+      log.pushInfo(
+        "▸ TIP: edit-gate keybindings\n" +
+          "    y / n       accept or drop pending edits\n" +
+          "    Shift+Tab   switch review ↔ AUTO (persisted; AUTO applies instantly)\n" +
+          "    u           undo the last auto-applied batch (within the 5s banner)\n" +
+          "  Current mode is shown in the bottom status bar. Run /keys anytime for the full list.\n" +
+          "  (This tip shows once — suppressed after.)",
+      );
       markEditModeHintShown();
     }
-  }, [session, loop, codeMode, syncPendingCount]);
+  }, [session, loop, codeMode, syncPendingCount, log]);
 
   // Ctrl+C exits, period. SIGINT (cooked-mode terminals + Node's
   // Windows console handler) and \x03 byte (raw-mode stdin) both
@@ -1399,79 +1166,6 @@ export function App({
     process.exit(0);
   }, []);
 
-  const stopAutoScroll = useCallback(() => {
-    if (autoScrollTimerRef.current) {
-      clearInterval(autoScrollTimerRef.current);
-      autoScrollTimerRef.current = null;
-    }
-    autoScrollDirRef.current = 0;
-  }, []);
-
-  const mouseToAbsRow = useCallback((mouseRow: number): number | null => {
-    const { contentTopRow, contentBottomRow, firstRowAbs, visibleRows } = logGeomRef.current;
-    if (visibleRows <= 0) return null;
-    const clamped = Math.max(contentTopRow, Math.min(contentBottomRow, mouseRow));
-    return firstRowAbs + (clamped - contentTopRow);
-  }, []);
-
-  const startAutoScroll = useCallback(
-    (dir: -1 | 1) => {
-      if (autoScrollDirRef.current === dir) return;
-      stopAutoScroll();
-      autoScrollDirRef.current = dir;
-      autoScrollTimerRef.current = setInterval(() => {
-        const max = scrollMaxRowsRef.current;
-        const cur = scrollTargetRef.current;
-        const next = dir > 0 ? Math.max(0, cur - 1) : Math.min(max, cur + 1);
-        if (next === cur) return;
-        scrollTargetRef.current = next;
-        scrollDisplayedRef.current = next;
-        setLogScrollOffset(next);
-        const anchor = dragAnchorRef.current;
-        if (anchor) {
-          const { firstRowAbs, visibleRows } = logGeomRef.current;
-          const focusRow = dir > 0 ? firstRowAbs + visibleRows - 1 : firstRowAbs;
-          setLogSelection({
-            startRow: anchor.row,
-            startCol: anchor.col,
-            endRow: focusRow,
-            endCol: lastDragColRef.current,
-          });
-        }
-      }, 60);
-    },
-    [stopAutoScroll],
-  );
-
-  const finishSelection = useCallback(() => {
-    stopAutoScroll();
-    const sel = logSelection;
-    dragAnchorRef.current = null;
-    if (!sel) return;
-    if (sel.startRow === sel.endRow && sel.startCol === sel.endCol) {
-      setLogSelection(null);
-      return;
-    }
-    const cols = stdout?.columns ?? 80;
-    const atoms = eventsToAtoms(historical, currentRootDir, cols);
-    const text = extractSelection(atoms, sel);
-    if (!text.trim()) {
-      setLogSelection(null);
-      return;
-    }
-    const result = writeClipboard(text);
-    const noun = result.osc52 ? "copied" : "saved";
-    const fileNote = result.filePath ? ` · ${result.filePath}` : "";
-    setHistorical((prev) => [
-      ...prev,
-      {
-        id: `clip-${Date.now()}`,
-        role: "info",
-        text: `▸ ${noun} ${result.size} char${result.size === 1 ? "" : "s"}${fileNote}`,
-      },
-    ]);
-    setLogSelection(null);
-  }, [historical, logSelection, stdout?.columns, currentRootDir, stopAutoScroll]);
   useEffect(() => {
     process.on("SIGINT", quitProcess);
     return () => {
@@ -1501,101 +1195,6 @@ export function App({
       // hotkey logic over it (a `\n` in paste shouldn't fire submit).
       return;
     }
-    // Log-scroll keys + mouse wheel — fire ahead of any PromptInput
-    // consumption so the user can read history while the input is
-    // focused. Scroll unit is ROWS (lines), not events: a single tall
-    // entry — long assistant reply, big diff — can be wheeled through
-    // one piece at a time. Step sizes match OS conventions:
-    //   · wheel tick    →  3 rows  (matches Linux/Mac line-step)
-    //   · PgUp / PgDn   →  ~viewport, leaving a 2-row overlap so the
-    //                       reader doesn't lose context across a jump
-    //   · Home / End    →  oldest / newest
-    // `maxScrollRows` is set by the slicer on every render and lives
-    // in a ref so this handler doesn't have to recompute heights.
-    const maxOffset = scrollMaxRowsRef.current;
-    const viewportRows = Math.max(8, (stdout?.rows ?? 30) - 10);
-    if (ev.mouseScrollUp) {
-      if (maxOffset === 0) return;
-      animateScrollTo((prev) => Math.min(maxOffset, prev + 3));
-      return;
-    }
-    if (ev.mouseScrollDown) {
-      if (maxOffset === 0) return;
-      animateScrollTo((prev) => Math.max(0, prev - 3));
-      return;
-    }
-    if (ev.mouseClick && ev.mouseRow !== undefined && ev.mouseCol !== undefined) {
-      const { contentTopRow, contentBottomRow } = logGeomRef.current;
-      if (ev.mouseRow < contentTopRow || ev.mouseRow > contentBottomRow) {
-        if (logSelection) setLogSelection(null);
-        dragAnchorRef.current = null;
-        return;
-      }
-      const absRow = mouseToAbsRow(ev.mouseRow);
-      if (absRow === null) return;
-      const col = Math.max(0, ev.mouseCol - 1);
-      dragAnchorRef.current = { row: absRow, col };
-      lastDragColRef.current = col;
-      setLogSelection({ startRow: absRow, startCol: col, endRow: absRow, endCol: col });
-      return;
-    }
-    if (ev.mouseDrag && ev.mouseRow !== undefined && ev.mouseCol !== undefined) {
-      const anchor = dragAnchorRef.current;
-      if (!anchor) return;
-      const { contentTopRow, contentBottomRow } = logGeomRef.current;
-      const col = Math.max(0, ev.mouseCol - 1);
-      lastDragColRef.current = col;
-      if (ev.mouseRow <= contentTopRow) {
-        startAutoScroll(-1);
-      } else if (ev.mouseRow >= contentBottomRow) {
-        startAutoScroll(1);
-      } else {
-        stopAutoScroll();
-      }
-      const absRow = mouseToAbsRow(ev.mouseRow);
-      if (absRow === null) return;
-      setLogSelection({
-        startRow: anchor.row,
-        startCol: anchor.col,
-        endRow: absRow,
-        endCol: col,
-      });
-      return;
-    }
-    if (ev.mouseRelease) {
-      finishSelection();
-      return;
-    }
-    if (ev.pageUp) {
-      if (maxOffset === 0) return;
-      animateScrollTo((prev) => Math.min(maxOffset, prev + (viewportRows - 2)));
-      return;
-    }
-    if (ev.pageDown) {
-      if (maxOffset === 0) return;
-      animateScrollTo((prev) => Math.max(0, prev - (viewportRows - 2)));
-      return;
-    }
-    if (ev.home) {
-      if (maxOffset === 0) return;
-      animateScrollTo(() => maxOffset);
-      return;
-    }
-    if (ev.end) {
-      if (maxOffset === 0) return;
-      animateScrollTo(() => 0);
-      return;
-    }
-    // Mouse click events are intentionally ignored — having the app
-    // intercept clicks fights the user's text-selection workflow
-    // (which most terminals route through the same mouse-tracking
-    // channel). Wheel events still work for scrolling. To copy
-    // text, hold Shift while dragging — that bypasses the mouse-
-    // tracking layer in iTerm2 / Windows Terminal / WezTerm /
-    // gnome-terminal / VS Code's integrated terminal. End / Home
-    // keys cover the "jump to latest" UX without the click hazard.
-    // Ctrl+C → exit. Always. Same target as the SIGINT path above —
-    // whichever route delivers Ctrl+C on the user's terminal wins.
     if (key.ctrl && key.input === "c") {
       quitProcess();
       return;
@@ -1627,23 +1226,24 @@ export function App({
       stopLoop();
       return;
     }
+    // Esc dismisses any composer-level picker (slash / @ / slash-arg)
+    // by clearing the prefix that triggered it. Picker footers advertise
+    // "esc cancel" — this binds it.
+    if (key.escape && !busy && (slashMatches || atMatches || slashArgContext)) {
+      setInput("");
+      return;
+    }
     // Esc inside a /walk session exits the walk WITHOUT applying or
     // discarding the current block — remaining edits stay queued so
     // the user can resume via /walk or commit via /apply later.
     if (key.escape && walkthroughActive) {
       setWalkthroughActive(false);
       const remaining = pendingEdits.current.length;
-      setHistorical((prev) => [
-        ...prev,
-        {
-          id: `walk-esc-${Date.now()}`,
-          role: "info",
-          text:
-            remaining > 0
-              ? `▸ walk cancelled — ${remaining} block(s) still pending.`
-              : "▸ walk cancelled.",
-        },
-      ]);
+      log.pushInfo(
+        remaining > 0
+          ? `▸ walk cancelled — ${remaining} block(s) still pending.`
+          : "▸ walk cancelled.",
+      );
       return;
     }
     // Edit-mode cycle: Shift+Tab flips review ↔ auto. Available any
@@ -1655,8 +1255,9 @@ export function App({
       key.shift &&
       key.tab &&
       !pendingShell &&
-      !pendingWorkspace &&
       !pendingPlan &&
+      !pendingReviseEditor &&
+      !pendingSessionsPicker &&
       !stagedInput &&
       !pendingEditReview &&
       !walkthroughActive &&
@@ -1666,24 +1267,18 @@ export function App({
       !stagedChoiceCustom &&
       !pendingRevision
     ) {
-      setEditMode((m) => {
-        // Three-stop cycle: review → auto → yolo → review. yolo also
-        // disables shell confirmations (read live by registerShellTools'
-        // allowAll getter), so users who want true zero-prompt iteration
-        // can hit Shift+Tab twice from the default.
-        const next: EditMode = m === "review" ? "auto" : m === "auto" ? "yolo" : "review";
-        const message =
-          next === "yolo"
-            ? "▸ edit mode: YOLO — edits AND shell commands auto-run. /undo still rolls back edits. Use carefully."
-            : next === "auto"
-              ? "▸ edit mode: AUTO — edits apply immediately; press u within 5s to undo. Shell commands still ask."
-              : "▸ edit mode: review — edits queue for /apply (or y) / /discard (or n)";
-        setHistorical((prev) => [
-          ...prev,
-          { id: `mode-${Date.now()}`, role: "info", text: message },
-        ]);
-        return next;
-      });
+      // Three-stop cycle: review → auto → yolo → review. yolo also
+      // disables shell confirmations so true zero-prompt iteration takes two Shift+Tabs from default.
+      const cur = editModeRef.current;
+      const next: EditMode = cur === "review" ? "auto" : cur === "auto" ? "yolo" : "review";
+      setEditMode(next);
+      const message =
+        next === "yolo"
+          ? "▸ edit mode: YOLO — edits AND shell commands auto-run. /undo still rolls back edits. Use carefully."
+          : next === "auto"
+            ? "▸ edit mode: AUTO — edits apply immediately; press u within 5s to undo. Shell commands still ask."
+            : "▸ edit mode: review — edits queue for /apply (or y) / /discard (or n)";
+      log.pushInfo(message);
       return;
     }
     // Undo banner keybind: `u` rolls back the last auto-apply. Gated
@@ -1695,8 +1290,9 @@ export function App({
       input.length === 0 &&
       (chKey === "u" || chKey === "U") &&
       !pendingShell &&
-      !pendingWorkspace &&
       !pendingPlan &&
+      !pendingReviseEditor &&
+      !pendingSessionsPicker &&
       !stagedInput &&
       !pendingEditReview &&
       !walkthroughActive &&
@@ -1711,7 +1307,7 @@ export function App({
       (undoBanner || hasUndoable())
     ) {
       const out = codeUndo([]);
-      setHistorical((prev) => [...prev, { id: `undo-${Date.now()}`, role: "info", text: out }]);
+      log.pushInfo(out);
       return;
     }
     if (busy) return;
@@ -1865,13 +1461,10 @@ export function App({
       // of the review modal so we don't duplicate the snapshot /
       // apply / banner logic.
       //
-      // Does NOT push an info row to scrollback: the caller is inside
-      // a tool-dispatch frame, so the returned string becomes the
-      // tool result AND the loop yields a `tool` event right after —
-      // which EventLog renders as a `▣ edit_file → …` block
-      // containing the same text. Pushing an info row here produced
-      // the "result shown twice" bug reported in 0.6 (one dim info
-      // row, then a nearly identical tool row directly below).
+      // Does NOT push an info row to scrollback: the returned string
+      // becomes the tool result AND the loop yields a `tool` event right
+      // after — ToolCard renders that with the same text. Pushing here
+      // would produce "result shown twice".
       const applyNow = (): string => {
         const snaps = snapshotBeforeEdits([block], rootForEdit);
         const results = applyEditBlocks([block], rootForEdit);
@@ -1906,38 +1499,17 @@ export function App({
 
       if (choice === "reject") {
         const context = denyContext ? ` because: ${denyContext}` : "";
-        setHistorical((prev) => [
-          ...prev,
-          {
-            id: `er-${Date.now()}-${Math.random()}`,
-            role: "info",
-            text: `▸ rejected edit to ${block.path}${context}`,
-          },
-        ]);
+        log.pushInfo(`▸ rejected edit to ${block.path}${context}`);
         return `User rejected this edit to ${block.path}${context}. Don't retry the same SEARCH/REPLACE — either try a different approach or ask the user what they want instead.`;
       }
       if (choice === "apply-rest-of-turn") {
         turnEditPolicyRef.current = "apply-all";
-        setHistorical((prev) => [
-          ...prev,
-          {
-            id: `er-${Date.now()}-${Math.random()}`,
-            role: "info",
-            text: "▸ auto-approving remaining edits for this turn",
-          },
-        ]);
+        log.pushInfo("▸ auto-approving remaining edits for this turn");
         return applyNow();
       }
       if (choice === "flip-to-auto") {
         setEditMode("auto");
-        setHistorical((prev) => [
-          ...prev,
-          {
-            id: `er-${Date.now()}-${Math.random()}`,
-            role: "info",
-            text: "▸ flipped to AUTO mode for the rest of the session (persisted)",
-          },
-        ]);
+        log.pushInfo("▸ flipped to AUTO mode for the rest of the session (persisted)");
         return applyNow();
       }
       // "apply"
@@ -2056,22 +1628,11 @@ export function App({
       clearTimeout(loopTimerRef.current);
       loopTimerRef.current = null;
     }
-    setActiveLoop((cur) => {
-      if (!cur) return cur;
-      // Inform the user — the cancel may not have come from /loop stop
-      // (could be Esc, /new, or just typing). Better one extra info row
-      // than a silent disappearance.
-      setHistorical((prev) => [
-        ...prev,
-        {
-          id: `loop-stop-${Date.now()}`,
-          role: "info",
-          text: `▸ loop stopped (after ${cur.iter} iter${cur.iter === 1 ? "" : "s"}).`,
-        },
-      ]);
-      return null;
-    });
-  }, []);
+    const cur = activeLoopRef.current;
+    if (!cur) return;
+    setActiveLoop(null);
+    log.pushInfo(`▸ loop stopped (after ${cur.iter} iter${cur.iter === 1 ? "" : "s"}).`);
+  }, [log]);
 
   /**
    * Start a new /loop. Replaces any prior loop. The actual timer is
@@ -2153,32 +1714,8 @@ export function App({
           loop.configure({ reasoningEffort: effort });
         },
         // ---------- Chat bridge ----------
-        getMessages: (): DashboardMessage[] => {
-          // Filter to roles the SPA cares about; map to the wire shape.
-          const out: DashboardMessage[] = [];
-          for (const ev of historicalRef.current) {
-            if (
-              ev.role === "user" ||
-              ev.role === "assistant" ||
-              ev.role === "info" ||
-              ev.role === "warning"
-            ) {
-              const msg: DashboardMessage = { id: ev.id, role: ev.role, text: ev.text };
-              if (ev.reasoning) msg.reasoning = ev.reasoning;
-              out.push(msg);
-            } else if (ev.role === "tool") {
-              const msg: DashboardMessage = {
-                id: ev.id,
-                role: "tool",
-                text: ev.text,
-                toolName: ev.toolName,
-              };
-              if (ev.toolArgs) msg.toolArgs = ev.toolArgs;
-              out.push(msg);
-            }
-          }
-          return out;
-        },
+        getMessages: (): DashboardMessage[] =>
+          cardsToDashboardMessages(agentStore.getState().cards),
         subscribeEvents: (handler) => {
           eventSubscribersRef.current.add(handler);
           return () => {
@@ -2267,9 +1804,6 @@ export function App({
               remaining: pendingEdits.current.length,
             };
           }
-          if (pendingWorkspace) {
-            return { kind: "workspace", path: pendingWorkspace.path };
-          }
           if (pendingCheckpoint) {
             return {
               kind: "checkpoint",
@@ -2324,9 +1858,6 @@ export function App({
             resolve({ choice, denyContext: undefined });
           }
         },
-        resolveWorkspaceConfirm: (choice) => {
-          handleWorkspaceConfirmRef.current(choice).catch(() => undefined);
-        },
         resolveCheckpointConfirm: (choice, text) => {
           // Web's "revise" path sends feedback in one shot; we hand the
           // current pending checkpoint to the submit handler directly,
@@ -2374,9 +1905,9 @@ export function App({
     pendingShell,
     pendingChoice,
     pendingEditReview,
-    pendingWorkspace,
     pendingCheckpoint,
     pendingRevision,
+    agentStore,
   ]);
 
   const stopDashboard = useCallback(async (): Promise<void> => {
@@ -2389,11 +1920,8 @@ export function App({
     } catch {
       /* swallow — server going down is best-effort */
     }
-    setHistorical((prev) => [
-      ...prev,
-      { id: `dash-stop-${Date.now()}`, role: "info", text: "▸ dashboard stopped." },
-    ]);
-  }, []);
+    log.pushInfo("▸ dashboard stopped.");
+  }, [log]);
 
   const getDashboardUrl = useCallback((): string | null => {
     return dashboardRef.current?.url ?? null;
@@ -2421,16 +1949,11 @@ export function App({
       // web UI is unreachable — port already in use, permission
       // denied, etc. Don't block the TUI; everything else keeps working.
       const reason = err instanceof Error ? err.message : String(err);
-      setHistorical((prev) => [
-        ...prev,
-        {
-          id: `dash-fail-${Date.now()}`,
-          role: "info",
-          text: `▲ dashboard auto-start failed (${reason}) — try /dashboard, or pass --no-dashboard to silence`,
-        },
-      ]);
+      log.pushInfo(
+        `▲ dashboard auto-start failed (${reason}) — try /dashboard, or pass --no-dashboard to silence`,
+      );
     });
-  }, [noDashboard, startDashboard]);
+  }, [noDashboard, startDashboard, log]);
 
   // Tear the dashboard down on unmount so the port doesn't leak when
   // the TUI exits via /exit, Ctrl+C, etc.
@@ -2453,17 +1976,14 @@ export function App({
   const handleWalkChoice = useCallback(
     (choice: EditReviewChoice) => {
       if (choice === "apply") {
-        const out = codeApply([1]);
-        setHistorical((prev) => [...prev, { id: `walk-${Date.now()}`, role: "info", text: out }]);
+        log.pushInfo(codeApply([1]));
       } else if (choice === "reject") {
-        const out = codeDiscard([1]);
-        setHistorical((prev) => [...prev, { id: `walk-${Date.now()}`, role: "info", text: out }]);
+        log.pushInfo(codeDiscard([1]));
       } else if (choice === "apply-rest-of-turn") {
         // "apply rest" inside a walkthrough = commit every remaining
         // block at once, then exit. Same end state as if the user had
         // typed `/apply` outside the walk.
-        const out = codeApply();
-        setHistorical((prev) => [...prev, { id: `walk-${Date.now()}`, role: "info", text: out }]);
+        log.pushInfo(codeApply());
         setWalkthroughActive(false);
         return;
       } else if (choice === "flip-to-auto") {
@@ -2472,16 +1992,8 @@ export function App({
         // walking via /walk again or commit them with /apply.
         setEditMode("auto");
         saveEditMode("auto");
-        const out = codeApply([1]);
-        setHistorical((prev) => [
-          ...prev,
-          { id: `walk-${Date.now()}`, role: "info", text: out },
-          {
-            id: `walk-flip-${Date.now()}`,
-            role: "info",
-            text: "▸ flipped to AUTO mode — future edits will apply immediately. Walk exited.",
-          },
-        ]);
+        log.pushInfo(codeApply([1]));
+        log.pushInfo("▸ flipped to AUTO mode — future edits will apply immediately. Walk exited.");
         setWalkthroughActive(false);
         return;
       }
@@ -2491,7 +2003,7 @@ export function App({
       // the new first block thanks to pendingTick.
       if (pendingEdits.current.length === 0) setWalkthroughActive(false);
     },
-    [codeApply, codeDiscard],
+    [codeApply, codeDiscard, log],
   );
 
   /** Snapshot for the `/loop` (no-arg) status branch. */
@@ -2573,8 +2085,7 @@ export function App({
       // ARE pending edits, so "y" as a normal message still works
       // when nothing's waiting.
       if (codeMode && pendingEdits.current.length > 0 && (text === "y" || text === "n")) {
-        const out = text === "y" ? codeApply() : codeDiscard();
-        setHistorical((prev) => [...prev, { id: `sys-${Date.now()}`, role: "info", text: out }]);
+        log.pushInfo(text === "y" ? codeApply() : codeDiscard());
         promptHistory.current.push(text);
         return;
       }
@@ -2595,23 +2106,9 @@ export function App({
             : appendProjectMemory(memRoot, hashParse.note);
           const verb = result.created ? "created" : "appended to";
           const scopeTag = isGlobal ? "global" : "project";
-          setHistorical((prev) => [
-            ...prev,
-            {
-              id: `hash-${Date.now()}`,
-              role: "info",
-              text: `▸ noted (${scopeTag}) — ${verb} ${result.path}`,
-            },
-          ]);
+          log.pushInfo(`▸ noted (${scopeTag}) — ${verb} ${result.path}`);
         } catch (err) {
-          setHistorical((prev) => [
-            ...prev,
-            {
-              id: `hash-e-${Date.now()}`,
-              role: "warning",
-              text: `# memory write failed: ${(err as Error).message}`,
-            },
-          ]);
+          log.pushWarning("# memory write failed", (err as Error).message);
         }
         return;
       }
@@ -2632,15 +2129,7 @@ export function App({
       if (bangCmd !== null) {
         const bangRoot = currentRootDir;
         promptHistory.current.push(text);
-        setHistorical((prev) => [
-          ...prev,
-          {
-            id: `bang-u-${Date.now()}`,
-            role: "user",
-            text,
-            leadSeparator: prev.length > 0,
-          },
-        ]);
+        log.pushUser(text);
         setBusy(true);
         try {
           const result = await runCommand(bangCmd, {
@@ -2649,23 +2138,13 @@ export function App({
             maxOutputChars: 32_000,
           });
           const formatted = formatCommandResult(bangCmd, result);
-          setHistorical((prev) => [
-            ...prev,
-            { id: `bang-o-${Date.now()}`, role: "info", text: formatted },
-          ]);
+          log.pushInfo(formatted);
           loop.appendAndPersist({
             role: "user",
             content: formatBangUserMessage(bangCmd, formatted),
           });
         } catch (err) {
-          setHistorical((prev) => [
-            ...prev,
-            {
-              id: `bang-e-${Date.now()}`,
-              role: "warning",
-              text: `! command failed: ${(err as Error).message}`,
-            },
-          ]);
+          log.pushWarning("! command failed", (err as Error).message);
         } finally {
           setBusy(false);
         }
@@ -2682,11 +2161,8 @@ export function App({
         const kind = mcpBrowseMatch[1] as "resource" | "prompt";
         const arg = mcpBrowseMatch[2]?.trim() ?? "";
         promptHistory.current.push(text);
-        setHistorical((prev) => [
-          ...prev,
-          { id: `mcp-u-${Date.now()}`, role: "user", text, leadSeparator: prev.length > 0 },
-        ]);
-        await handleMcpBrowseSlash(kind, arg, mcpServers ?? [], setHistorical);
+        log.pushUser(text);
+        await handleMcpBrowseSlash(kind, arg, mcpServers ?? [], log);
         return;
       }
 
@@ -2736,129 +2212,41 @@ export function App({
           stopDashboard,
           getDashboardUrl,
           jobs: codeMode?.jobs,
-          postInfo: (text: string) =>
-            setHistorical((prev) => [
-              ...prev,
-              { id: `sys-late-${Date.now()}-${Math.random()}`, role: "info", text },
-            ]),
+          postInfo: (text: string) => log.pushInfo(text),
+          postDoctor: (checks) => log.showDoctor(checks),
+          postUsage: (args) => log.showUsageVerbose(args),
           reloadHooks: () => {
             const fresh = loadHooks({ projectRoot: codeMode ? currentRootDir : undefined });
             setHookList(fresh);
             return fresh.length;
           },
-          setCwd: (newRoot: string) => applyCwdChange(newRoot),
-          toggleCtxFooter,
           latestVersion,
           refreshLatestVersion,
           models,
           refreshModels,
         });
-        if (result.exit) {
-          // Tear down any active /loop before quitting so the timer
-          // doesn't try to fire after the process is on its way out.
-          // Use quitProcess (process.exit) rather than Ink's exit():
-          // the singleton stdin reader keeps a `data` listener attached,
-          // so exit() unmounts React but leaves the event loop alive
-          // and the terminal hangs. Same reasoning as the SIGINT path.
-          if (activeLoopRef.current) stopLoop();
-          quitProcess();
-          return;
-        }
-        if (result.clear && result.info) {
-          // Clear + message: nuke terminal viewport AND scrollback
-          // (2J = visible, 3J = scrollback buffer, H = cursor home),
-          // then seed React state with the explanatory info line.
-          // Ink's next render paints the TUI on the fresh screen.
-          stdout?.write("\x1b[2J\x1b[3J\x1b[H");
-          setHistorical([
-            {
-              id: `sys-${Date.now()}`,
-              role: "info",
-              text: result.info,
-            },
-          ]);
-          // /new wipes conversation; any pending edits from the prior
-          // assistant turn are stale (the user no longer sees the
-          // preview). Drop them so a later /apply doesn't surprise.
-          if (codeMode) {
-            pendingEdits.current = [];
-            clearPendingEdits(session ?? null);
-            syncPendingCount();
-          }
-          // /new also kills any active /loop: continuing to autofire
-          // a prompt against a freshly-wiped context would be confusing.
-          if (activeLoopRef.current) stopLoop();
-          return;
-        }
-        if (result.clear) {
-          stdout?.write("\x1b[2J\x1b[3J\x1b[H");
-          setHistorical([]);
-          if (codeMode) {
-            pendingEdits.current = [];
-            clearPendingEdits(session ?? null);
-            syncPendingCount();
-          }
-          if (activeLoopRef.current) stopLoop();
-          return;
-        }
-        if (result.info) {
-          // /context returns a structured ctxBreakdown payload; push as
-          // a ctx-breakdown DisplayEvent so EventLog renders the
-          // 4-color stacked char-bar. Other slashes fall through to
-          // the plain "info" path.
-          if (result.ctxBreakdown) {
-            setHistorical((prev) => [
-              ...prev,
-              {
-                id: `ctx-${Date.now()}`,
-                role: "ctx-breakdown",
-                text: result.info!,
-                ctxBreakdown: result.ctxBreakdown,
-              },
-            ]);
-          } else {
-            setHistorical((prev) => [
-              ...prev,
-              {
-                id: `sys-${Date.now()}`,
-                role: "info",
-                text: result.info!,
-              },
-            ]);
-          }
-        }
-        // /replay returns a structured archive snapshot. Push it as a
-        // plan-replay DisplayEvent so EventLog renders the same step
-        // list the active plan uses, just dim/locked. Does NOT touch
-        // planStepsRef — replay is read-only.
-        if (result.replayPlan) {
-          const rp = result.replayPlan;
-          setHistorical((prev) => [
-            ...prev,
-            {
-              id: `replay-${Date.now()}-${Math.random()}`,
-              role: "plan-replay",
-              text: "",
-              replayPlan: {
-                summary: rp.summary,
-                body: rp.body,
-                steps: rp.steps,
-                completedStepIds: rp.completedStepIds,
-                relativeTime: rp.relativeTime,
-                archiveBasename: rp.archiveBasename,
-                index: rp.index,
-                total: rp.total,
-              },
-            },
-          ]);
-        }
-        // `/retry` (and anything else that requests a resubmit) falls
-        // through to the normal user-message flow with the provided
-        // text instead of returning.
-        if (result.resubmit) {
-          text = result.resubmit;
-        } else {
+        if (result.openSessionsPicker) {
+          setSessionsPickerList(listSessionsForWorkspace(currentRootDir));
+          setPendingSessionsPicker(true);
           promptHistory.current.push(text);
+          return;
+        }
+        const outcome = applySlashResult(result, {
+          log,
+          stdoutWrite: (chunk) => stdout?.write(chunk),
+          pendingEdits,
+          syncPendingCount,
+          session: session ?? null,
+          codeModeOn: !!codeMode,
+          activeLoopRef,
+          stopLoop,
+          quitProcess,
+          promptHistory,
+          text,
+        });
+        if (outcome.kind === "resubmit") {
+          text = outcome.text;
+        } else {
           return;
         }
       }
@@ -2874,49 +2262,35 @@ export function App({
           hooks: hookList,
           payload: { event: "UserPromptSubmit", cwd: currentRootDir, prompt: text },
         });
-        if (promptReport.outcomes.length > 0) {
-          setHistorical((prev) => [
-            ...prev,
-            ...promptReport.outcomes
-              .filter((o) => o.decision !== "pass")
-              .map((o) => ({
-                id: `hp-${Date.now()}-${Math.random()}`,
-                role: "warning" as const,
-                text: formatHookOutcomeMessage(o),
-              })),
-          ]);
+        for (const o of promptReport.outcomes) {
+          if (o.decision === "pass") continue;
+          log.pushWarning("UserPromptSubmit hook", formatHookOutcomeMessage(o));
         }
         if (promptReport.blocked) return;
       }
 
-      // User message is immutable — push to Static immediately.
       // Large pastes (stack traces, log dumps, file contents) get a
-      // collapsed preview in Historical so scrollback stays navigable;
-      // the MODEL still receives the full text below via modelInput.
+      // collapsed preview in scrollback; the model still receives the full
+      // text below via modelInput.
       promptHistory.current.push(text);
       const pasteDisplay = formatLongPaste(text);
-      setHistorical((prev) => [
-        ...prev,
-        // `leadSeparator`: thin rule above this user turn when history
-        // isn't empty — visual pacing for multi-turn sessions. First
-        // user message leaves it off so the UI doesn't open with a
-        // dangling divider.
-        {
-          id: `u-${Date.now()}`,
-          role: "user",
-          text: pasteDisplay.displayText,
-          leadSeparator: prev.length > 0,
-        },
-      ]);
-      const userId = `u-${Date.now()}`;
+      const userId = log.pushUser(pasteDisplay.displayText);
       broadcastDashboardEvent({ kind: "user", id: userId, text });
+      if (session) {
+        const existing = loadSessionMeta(session);
+        const patch: Parameters<typeof patchSessionMeta>[1] = {};
+        if (!existing.summary) patch.summary = text.replace(/\s+/g, " ").slice(0, 80);
+        if (!existing.branch) patch.branch = detectGitBranch(currentRootDir);
+        if (!existing.workspace) patch.workspace = currentRootDir;
+        if (Object.keys(patch).length > 0) patchSessionMeta(session, patch);
+      }
 
       const assistantId = `a-${Date.now()}`;
-      // Refs are the source of truth for accumulated streaming text; the React
-      // state copy below is only for rendering and gets updated on flush.
       const streamRef: StreamingState = { id: assistantId, text: "", reasoning: "" };
       const contentBuf = { current: "" };
       const reasoningBuf = { current: "" };
+      const translator = new TurnTranslator(log);
+      let branchCardId: string | null = null;
       // Coalesces tool_call_delta events into one re-render per flush tick.
       const toolCallBuildBuf: {
         current: {
@@ -2929,7 +2303,6 @@ export function App({
         current: null,
       };
 
-      setStreaming({ id: assistantId, role: "assistant", text: "", streaming: true });
       setBusy(true);
       abortedThisTurn.current = false;
       // Seal the in-progress history entry so this turn's edits open
@@ -2954,6 +2327,7 @@ export function App({
 
       const flush = () => {
         if (!contentBuf.current && !reasoningBuf.current && !toolCallBuildBuf.current) return;
+        translator.flushBuffers(reasoningBuf.current, contentBuf.current);
         streamRef.text += contentBuf.current;
         streamRef.reasoning += reasoningBuf.current;
         if (toolCallBuildBuf.current) {
@@ -2962,14 +2336,6 @@ export function App({
         contentBuf.current = "";
         reasoningBuf.current = "";
         toolCallBuildBuf.current = null;
-        setStreaming({
-          id: assistantId,
-          role: "assistant",
-          text: streamRef.text,
-          reasoning: streamRef.reasoning || undefined,
-          toolCallBuild: streamRef.toolCallBuild,
-          streaming: true,
-        });
       };
       // In PLAIN mode the streaming row is suppressed, so flushing into
       // streamRef does no visible work — skip the interval entirely.
@@ -2993,12 +2359,7 @@ export function App({
           const parts: string[] = [];
           if (inlined.length > 0) parts.push(`inlined ${inlined.join(", ")}`);
           if (skipped.length > 0) parts.push(`skipped ${skipped.join(", ")}`);
-          if (parts.length > 0) {
-            setHistorical((prev) => [
-              ...prev,
-              { id: `at-${Date.now()}`, role: "info", text: `▸ @mentions: ${parts.join("; ")}` },
-            ]);
-          }
+          if (parts.length > 0) log.pushInfo(`▸ @mentions: ${parts.join("; ")}`);
         }
       }
       // Expand `@http(s)://...` URL mentions. Available in any mode (chat
@@ -3027,28 +2388,12 @@ export function App({
             const parts: string[] = [];
             if (inlined.length > 0) parts.push(`inlined ${inlined.join("; ")}`);
             if (skipped.length > 0) parts.push(`skipped ${skipped.join("; ")}`);
-            if (parts.length > 0) {
-              setHistorical((prev) => [
-                ...prev,
-                {
-                  id: `aturl-${Date.now()}`,
-                  role: "info",
-                  text: `▸ @url: ${parts.join("; ")}`,
-                },
-              ]);
-            }
+            if (parts.length > 0) log.pushInfo(`▸ @url: ${parts.join("; ")}`);
           }
         } catch (err) {
           // expandAtUrls itself only throws on misconfiguration (no
           // fetcher). Per-URL failures are surfaced via the skip path.
-          setHistorical((prev) => [
-            ...prev,
-            {
-              id: `aturl-e-${Date.now()}`,
-              role: "warning",
-              text: `@url expansion failed: ${(err as Error).message}`,
-            },
-          ]);
+          log.pushWarning("@url expansion failed", (err as Error).message);
         }
       }
 
@@ -3073,46 +2418,9 @@ export function App({
               for (const out of eventizer.consume(ev, ctx)) sink.append(out);
             }
           }
-          // Mirror to dashboard SSE subscribers. Done at the top of
-          // the iteration so the web sees the same sequence the TUI
-          // about to render — keeps the two surfaces in lockstep.
-          // Only the role values the web understands; transient ones
-          // (status, branch_*, tool_call_delta) are skipped to keep
-          // the wire chatter low.
           if (eventSubscribersRef.current.size > 0) {
-            const id = `${assistantId}-${ev.role}-${Date.now()}`;
-            if (ev.role === "assistant_delta") {
-              broadcastDashboardEvent({
-                kind: "assistant_delta",
-                id: assistantId,
-                contentDelta: ev.content || undefined,
-                reasoningDelta: ev.reasoningDelta,
-              });
-            } else if (ev.role === "tool_start" && ev.toolName) {
-              broadcastDashboardEvent({
-                kind: "tool_start",
-                id,
-                toolName: ev.toolName,
-                args: ev.toolArgs,
-              });
-            } else if (ev.role === "tool" && ev.toolName) {
-              broadcastDashboardEvent({
-                kind: "tool",
-                id,
-                toolName: ev.toolName,
-                content: ev.content,
-                args: ev.toolArgs,
-              });
-            } else if (ev.role === "warning") {
-              broadcastDashboardEvent({ kind: "warning", id, text: ev.content });
-            } else if (ev.role === "error") {
-              broadcastDashboardEvent({ kind: "error", id, text: ev.content });
-            } else if (ev.role === "status") {
-              // Transient hints (between tool result and next iter,
-              // pre-harvest) — surfaces the same "what's happening
-              // right now" context the TUI's status line shows.
-              broadcastDashboardEvent({ kind: "status", text: ev.content });
-            }
+            const dashMsg = loopEventToDashboard(ev, { assistantId });
+            if (dashMsg) broadcastDashboardEvent(dashMsg);
           }
           // Status lines are transient — any primary event (streaming
           // starts, a tool fires, etc.) means whatever we were waiting
@@ -3137,449 +2445,83 @@ export function App({
               };
             }
           } else if (ev.role === "branch_start") {
-            setStreaming({
-              id: assistantId,
-              role: "assistant",
-              text: "",
-              streaming: true,
-              branchProgress: ev.branchProgress,
-            });
-          } else if (ev.role === "branch_progress") {
-            // Live-update the streaming slot with per-sample completion info.
-            setStreaming({
-              id: assistantId,
-              role: "assistant",
-              text: "",
-              streaming: true,
-              branchProgress: ev.branchProgress,
-            });
-          } else if (ev.role === "branch_done") {
-            // Intermediate: branching finished but assistant_final not yet emitted.
-            // Keep streaming state alive; actual render happens on assistant_final.
-          } else if (ev.role === "assistant_final") {
-            flush();
-            const repairNote = ev.repair ? describeRepair(ev.repair) : "";
-            setStreaming(null);
-            // Broadcast the final to web subscribers. flush() already
-            // moved contentBuf → streamRef.text and emptied contentBuf,
-            // so we read from streamRef (mirrors what the TUI's own
-            // historical-push uses below: `ev.content || streamRef.text`).
-            broadcastDashboardEvent({
-              kind: "assistant_final",
-              id: assistantId,
-              text: ev.content || streamRef.text,
-              reasoning: streamRef.reasoning || undefined,
-            });
-            // Update the live stats panel every assistant_final — this is
-            // where the loop already recorded per-iter usage. Without
-            // this, cost/ctx/cache/hit stay at the PRIOR turn's numbers
-            // until the whole step resolves, which is especially
-            // confusing in multi-iter tool-call chains.
-            setSummary(loop.stats.summary());
-            // Persist a compact per-turn record to ~/.reasonix/usage.jsonl
-            // so `reasonix stats` (no arg) can aggregate across every
-            // session the user has ever run. Best-effort: a disk error
-            // inside appendUsage is swallowed and won't break the turn.
-            if (ev.stats?.usage) {
-              appendUsage({
-                session: session ?? null,
-                model: ev.stats.model,
-                usage: ev.stats.usage,
-              });
+            if (ev.branchProgress) {
+              branchCardId = log.startBranch(ev.branchProgress.total);
             }
-            const finalText = ev.content || streamRef.text;
-            const iterReasoning = streamRef.reasoning || undefined;
-            const iterId = `${assistantId}-i${assistantIterCounter.current++}`;
-            setHistorical((prev) => [
-              ...prev,
-              {
-                id: iterId,
-                role: "assistant",
-                text: finalText,
-                reasoning: iterReasoning,
-                planState: ev.planState,
-                branch: ev.branch,
-                stats: ev.stats,
-                repair: repairNote || undefined,
-                streaming: false,
-              },
-            ]);
-            // streamRef is scoped to the whole handleSubmit call but each
-            // iteration's deltas must not bleed into the next.
-            streamRef.text = "";
-            streamRef.reasoning = "";
-            streamRef.toolCallBuild = undefined;
-            contentBuf.current = "";
-            reasoningBuf.current = "";
-            toolCallBuildBuf.current = null;
-            if (codeMode && finalText && !ev.forcedSummary) {
-              // Parse SEARCH/REPLACE blocks from assistant text. What
-              // happens next depends on the edit mode: `review` queues
-              // them for user confirmation; `auto` snapshots + applies
-              // immediately, arming the undo banner.
-              //
-              // `ev.forcedSummary` gates us out entirely: if the loop
-              // had to force a summary (budget / aborted / context-
-              // guard), its text is a wrap-up, not a plan to execute.
-              // Blocks dropped in a forced summary are display-only.
-              const blocks = parseEditBlocks(finalText);
-              if (blocks.length > 0) {
-                if (editModeRef.current === "auto" || editModeRef.current === "yolo") {
-                  const snaps = snapshotBeforeEdits(blocks, currentRootDir);
-                  const results = applyEditBlocks(blocks, currentRootDir);
-                  const good = results.some(
-                    (r) => r.status === "applied" || r.status === "created",
-                  );
-                  if (good) {
-                    recordEdit("auto-text", blocks, results, snaps);
-                    armUndoBanner(results);
-                  }
-                  setHistorical((prev) => [
-                    ...prev,
-                    {
-                      id: `applied-${Date.now()}`,
-                      role: "info",
-                      text: formatEditResults(results),
-                    },
-                  ]);
-                } else {
-                  // Append rather than replace — tool-call edits from
-                  // earlier in the same turn may already be queued via
-                  // the registry interceptor.
-                  pendingEdits.current = [...pendingEdits.current, ...blocks];
-                  // Checkpoint the queue so a crash / Ctrl+C between
-                  // "blocks parsed" and "user /apply" doesn't lose the
-                  // edits. On next launch App.tsx's restore effect reads
-                  // this file. /apply + /discard clear it explicitly.
-                  savePendingEdits(session ?? null, pendingEdits.current);
-                  syncPendingCount();
-                  setHistorical((prev) => [
-                    ...prev,
-                    {
-                      id: `pending-${Date.now()}`,
-                      role: "info",
-                      text: formatPendingPreview(pendingEdits.current),
-                    },
-                  ]);
-                }
-              }
+          } else if (ev.role === "branch_progress") {
+            if (branchCardId && ev.branchProgress) {
+              log.updateBranch(branchCardId, ev.branchProgress);
+            }
+          } else if (ev.role === "branch_done") {
+            if (branchCardId) {
+              log.endBranch(branchCardId);
+              branchCardId = null;
+            }
+          } else if (ev.role === "assistant_final") {
+            handleAssistantFinal(ev, {
+              flush,
+              translator,
+              streamRef,
+              contentBuf,
+              reasoningBuf,
+              toolCallBuildBuf,
+              assistantId,
+              setSummary,
+              log,
+              broadcastDashboardEvent,
+              getSessionSummary: () => loop.stats.summary(),
+              session: session ?? null,
+              assistantIterCounter,
+              codeModeOn: !!codeMode,
+              currentRootDir,
+              editModeRef,
+              recordEdit,
+              armUndoBanner,
+              pendingEdits,
+              syncPendingCount,
+              ctxMax: DEEPSEEK_CONTEXT_TOKENS[loop.model] ?? DEFAULT_CONTEXT_TOKENS,
+            });
+            if (session) {
+              const m = loadSessionMeta(session);
+              const cost = (m.totalCostUsd ?? 0) + (ev.stats?.cost ?? 0);
+              const turn = (m.turnCount ?? 0) + 1;
+              patchSessionMeta(session, { totalCostUsd: cost, turnCount: turn });
             }
           } else if (ev.role === "tool_start") {
-            // Kick off the visual indicator. Cleared when `tool`
-            // (result) or `error` arrives, or on the finally below.
-            // Also reset any lingering progress from a prior call so
-            // the new spinner starts clean.
-            setOngoingTool({ name: ev.toolName ?? "?", args: ev.toolArgs });
-            setToolProgress(null);
-            toolStartedAtRef.current = Date.now();
-            // Feed the `@` picker's recency LRU from tool args — any
-            // path-shaped field (`path`, `file_path`, `file`) under a
-            // filesystem tool call means the user/model is actively
-            // working on that file. Picker surfaces it next time `@`
-            // is typed, even if the file's mtime is stale.
-            if (codeMode && ev.toolArgs) {
-              try {
-                const parsed = JSON.parse(ev.toolArgs) as {
-                  path?: unknown;
-                  file_path?: unknown;
-                  file?: unknown;
-                };
-                for (const k of ["path", "file_path", "file"] as const) {
-                  const v = parsed[k];
-                  if (typeof v === "string" && v.trim()) {
-                    recordRecentFile(v.trim());
-                    break;
-                  }
-                }
-              } catch {
-                /* malformed args — skip recency tracking */
-              }
-            }
+            handleToolStart(ev, {
+              setOngoingTool,
+              setToolProgress,
+              toolStartedAtRef,
+              translator,
+              codeModeOn: !!codeMode,
+              recordRecentFile,
+            });
           } else if (ev.role === "tool") {
-            flush();
-            setOngoingTool(null);
-            setToolProgress(null);
-            // `mark_step_complete` gets its own pretty scrollback row
-            // below — suppressing the raw tool row here keeps the log
-            // from showing the same JSON blob twice.
-            const isStepProgressTool = ev.toolName === "mark_step_complete";
-            const startedAt = toolStartedAtRef.current;
-            const durationMs = startedAt !== null ? Date.now() - startedAt : undefined;
-            toolStartedAtRef.current = null;
-            if (!isStepProgressTool) {
-              toolHistoryRef.current.push({
-                toolName: ev.toolName ?? "?",
-                text: ev.content,
-              });
-              const toolIndex = toolHistoryRef.current.length;
-              setHistorical((prev) => [
-                ...prev,
-                {
-                  id: `t-${Date.now()}-${Math.random()}`,
-                  role: "tool",
-                  text: ev.content,
-                  toolName: ev.toolName,
-                  toolArgs: ev.toolArgs,
-                  toolIndex,
-                  durationMs,
-                },
-              ]);
-            }
-            // run_command rejected because the command isn't on the
-            // auto-allow list. Stash it so the y/n fast-path can run
-            // it after user confirmation. Only the latest such request
-            // is tracked — a second rejection overwrites the first.
-            if (
-              codeMode &&
-              (ev.toolName === "run_command" || ev.toolName === "run_background") &&
-              ev.content.includes('"NeedsConfirmationError:') &&
-              ev.toolArgs
-            ) {
-              try {
-                const parsed = JSON.parse(ev.toolArgs) as { command?: unknown };
-                if (typeof parsed.command === "string" && parsed.command.trim()) {
-                  setPendingShell({
-                    command: parsed.command.trim(),
-                    kind: ev.toolName as "run_command" | "run_background",
-                  });
-                }
-              } catch {
-                /* malformed args — skip the prompt */
-              }
-            }
-            // change_workspace surfaced its WorkspaceConfirmationError —
-            // the resolved absolute path is on the error message between
-            // the `"` markers (`switching to "/abs/path" needs ...`). We
-            // re-derive it from the args rather than parsing the message
-            // so a future error-text rewording doesn't break the modal.
-            if (
-              ev.toolName === "change_workspace" &&
-              ev.content.includes('"WorkspaceConfirmationError:') &&
-              ev.toolArgs
-            ) {
-              try {
-                const parsed = JSON.parse(ev.toolArgs) as { path?: unknown };
-                if (typeof parsed.path === "string" && parsed.path.trim()) {
-                  // Re-resolve the same way the tool fn did so the modal
-                  // shows the canonical destination even when the model
-                  // passed a relative or `~`-prefixed path.
-                  const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
-                  const expanded =
-                    parsed.path.startsWith("~") && home
-                      ? pathMod.join(home, parsed.path.slice(1))
-                      : parsed.path;
-                  const abs = pathMod.resolve(expanded);
-                  setPendingWorkspace({ path: abs });
-                }
-              } catch {
-                /* malformed args — skip the prompt */
-              }
-            }
-            // submit_plan fired while plan mode was on — the registry
-            // serialized `{ error, plan, steps? }` via PlanProposedError's
-            // toToolResult(). Extract the plan and mount PlanConfirm.
-            // Only the latest submission is tracked; a second overrides.
-            if (
-              codeMode &&
-              ev.toolName === "submit_plan" &&
-              ev.content.includes('"PlanProposedError:')
-            ) {
-              try {
-                const parsed = JSON.parse(ev.content) as {
-                  plan?: unknown;
-                  steps?: unknown;
-                  summary?: unknown;
-                };
-                if (typeof parsed.plan === "string" && parsed.plan.trim()) {
-                  const planText = parsed.plan.trim();
-                  setPendingPlan(planText);
-                  // Structured steps are optional. When present, stash
-                  // them so mark_step_complete can look up titles and
-                  // compute N/M. A fresh submission always resets the
-                  // completed set — a revised plan shouldn't inherit
-                  // stale checkmarks from the previous proposal.
-                  const steps = Array.isArray(parsed.steps) ? (parsed.steps as PlanStep[]) : null;
-                  planStepsRef.current = steps;
-                  completedStepIdsRef.current = new Set();
-                  planBodyRef.current = planText;
-                  planSummaryRef.current =
-                    typeof parsed.summary === "string" && parsed.summary.trim()
-                      ? parsed.summary.trim()
-                      : null;
-                  persistPlanState();
-                  setHistorical((prev) => [
-                    ...prev,
-                    {
-                      id: `plan-${Date.now()}-${Math.random()}`,
-                      role: "plan",
-                      text: planText,
-                    },
-                  ]);
-                }
-              } catch {
-                /* malformed payload — skip the picker */
-              }
-            }
-            // revise_plan fires with PlanRevisionProposedError. The
-            // registry serialized {error, reason, remainingSteps,
-            // summary?} via toToolResult; we mount the diff picker.
-            if (
-              ev.toolName === "revise_plan" &&
-              ev.content.includes('"PlanRevisionProposedError:')
-            ) {
-              try {
-                const parsed = JSON.parse(ev.content) as {
-                  reason?: unknown;
-                  remainingSteps?: unknown;
-                  summary?: unknown;
-                };
-                const reason = typeof parsed.reason === "string" ? parsed.reason.trim() : "";
-                const remainingSteps = Array.isArray(parsed.remainingSteps)
-                  ? (parsed.remainingSteps as PlanStep[]).filter(
-                      (s) =>
-                        s &&
-                        typeof s.id === "string" &&
-                        s.id.trim() &&
-                        typeof s.title === "string" &&
-                        s.title.trim() &&
-                        typeof s.action === "string" &&
-                        s.action.trim(),
-                    )
-                  : [];
-                if (reason && remainingSteps.length > 0) {
-                  const summary =
-                    typeof parsed.summary === "string"
-                      ? parsed.summary.trim() || undefined
-                      : undefined;
-                  setPendingRevision({ reason, remainingSteps, summary });
-                }
-              } catch {
-                /* malformed payload — skip the picker */
-              }
-            }
-            // ask_choice fires with ChoiceRequestedError. We parse the
-            // structured payload, mount ChoiceConfirm, and let the
-            // user drive the next step. Same toToolResult protocol as
-            // PlanProposedError / PlanCheckpointError — just a
-            // different error tag and payload shape.
-            if (ev.toolName === "ask_choice" && ev.content.includes('"ChoiceRequestedError:')) {
-              try {
-                const parsed = JSON.parse(ev.content) as {
-                  question?: unknown;
-                  options?: unknown;
-                  allowCustom?: unknown;
-                };
-                const question = typeof parsed.question === "string" ? parsed.question.trim() : "";
-                const options = Array.isArray(parsed.options)
-                  ? (parsed.options as ChoiceOption[]).filter(
-                      (o) =>
-                        o &&
-                        typeof o.id === "string" &&
-                        o.id.trim() &&
-                        typeof o.title === "string" &&
-                        o.title.trim(),
-                    )
-                  : [];
-                if (question && options.length >= 2) {
-                  setPendingChoice({
-                    question,
-                    options,
-                    allowCustom: parsed.allowCustom === true,
-                  });
-                }
-              } catch {
-                /* malformed payload — skip the picker */
-              }
-            }
-            // mark_step_complete fires during plan execution and throws
-            // PlanCheckpointError so the loop pauses. The registry
-            // serialized `{error, kind, stepId, title?, result, notes?}`
-            // via toToolResult(); we extract the step info, push a ✓
-            // scrollback row, and mount the checkpoint picker. Silent
-            // failure on parse errors — a malformed payload just means
-            // no progress row.
-            if (ev.toolName === "mark_step_complete") {
-              try {
-                const parsed = JSON.parse(ev.content) as Partial<StepCompletion> & {
-                  error?: string;
-                };
-                const stepId = parsed.stepId;
-                if (parsed.kind === "step_completed" && typeof stepId === "string") {
-                  completedStepIdsRef.current.add(stepId);
-                  persistPlanState();
-                  const total = planStepsRef.current?.length ?? 0;
-                  const completed = completedStepIdsRef.current.size;
-                  const stepFromPlan = planStepsRef.current?.find((s) => s.id === stepId);
-                  const title = parsed.title ?? stepFromPlan?.title;
-                  const result = typeof parsed.result === "string" ? parsed.result : "";
-                  const notes = parsed.notes;
-                  setHistorical((prev) => [
-                    ...prev,
-                    {
-                      id: `step-${stepId}-${Date.now()}-${Math.random()}`,
-                      role: "step-progress",
-                      text: result,
-                      stepProgress: {
-                        stepId,
-                        title,
-                        completed,
-                        total,
-                        notes,
-                      },
-                    },
-                  ]);
-                  // Auto-archive when every step in the plan is now
-                  // done. Renaming the active plan.json to a timestamped
-                  // .done.json keeps it as a historical artifact while
-                  // freeing the active slot so the next session starts
-                  // fresh. The completed in-memory state stays put for
-                  // the rest of THIS session in case the model wants
-                  // to reference it (e.g. summary on Stop).
-                  if (session && total > 0 && completed >= total) {
-                    const archive = archivePlanState(session);
-                    if (archive) {
-                      setHistorical((prev) => [
-                        ...prev,
-                        {
-                          id: `plan-archived-${Date.now()}`,
-                          role: "info",
-                          text: `▸ plan complete — all ${total} step${total === 1 ? "" : "s"} done · archived`,
-                        },
-                      ]);
-                    }
-                  }
-                  // The error-tagged payload means the tool threw
-                  // PlanCheckpointError — loop has paused. Mount the
-                  // picker so the user drives what happens next.
-                  // Plain success payloads (legacy / test harnesses)
-                  // just update progress without pausing.
-                  if (
-                    typeof parsed.error === "string" &&
-                    parsed.error.startsWith("PlanCheckpointError:")
-                  ) {
-                    setPendingCheckpoint({ stepId, title, completed, total });
-                  }
-                }
-              } catch {
-                /* malformed payload — skip the progress row */
-              }
-            }
+            handleToolEvent(ev, {
+              flush,
+              translator,
+              setOngoingTool,
+              setToolProgress,
+              toolStartedAtRef,
+              toolHistoryRef,
+              setPendingShell,
+              setPendingPlan,
+              setPendingRevision,
+              setPendingChoice,
+              setPendingCheckpoint,
+              planStepsRef,
+              completedStepIdsRef,
+              planBodyRef,
+              planSummaryRef,
+              persistPlanState,
+              log,
+              session: session ?? null,
+              codeModeOn: !!codeMode,
+            });
           } else if (ev.role === "error") {
-            setHistorical((prev) => [
-              ...prev,
-              { id: `e-${Date.now()}`, role: "error", text: ev.error ?? ev.content },
-            ]);
+            handleErrorEvent(ev, { log });
           } else if (ev.role === "warning") {
-            setHistorical((prev) => [
-              ...prev,
-              { id: `w-${Date.now()}-${Math.random()}`, role: "warning", text: ev.content },
-            ]);
-            // The loop emits warnings starting with "⇧" whenever this
-            // turn is (or just became) running on pro — either the
-            // /pro armed state was consumed at turn start, or the
-            // failure threshold tripped mid-turn. Flip the badge so
-            // the user sees the escalation in the header.
-            if (ev.content?.startsWith("⇧ ")) setTurnOnPro(true);
+            handleWarningEvent(ev, { log, setTurnOnPro });
           }
         }
         flush();
@@ -3600,19 +2542,21 @@ export function App({
           });
           for (const o of stopReport.outcomes) {
             if (o.decision === "pass") continue;
-            setHistorical((prev) => [
-              ...prev,
-              {
-                id: `hs-${Date.now()}-${Math.random()}`,
-                role: "warning",
-                text: formatHookOutcomeMessage(o),
-              },
-            ]);
+            log.pushWarning("Stop hook", formatHookOutcomeMessage(o));
           }
         }
       } finally {
         if (timer) clearInterval(timer);
-        setStreaming(null);
+        // Esc aborted the turn — close any in-flight cards (streaming /
+        // reasoning / tool / branch) so they leave the live region. Without
+        // this, stranded done=false cards stick in CardStream's live tail.
+        if (abortedThisTurn.current) {
+          translator.abort();
+          if (branchCardId) {
+            log.endBranch(branchCardId, true);
+            branchCardId = null;
+          }
+        }
         setOngoingTool(null);
         setToolProgress(null);
         setStatusLine(null);
@@ -3675,11 +2619,10 @@ export function App({
       stopDashboard,
       getDashboardUrl,
       broadcastDashboardEvent,
-      applyCwdChange,
       touchedPaths,
-      toggleCtxFooter,
       model,
       prefixHash,
+      log,
     ],
   );
 
@@ -3716,14 +2659,7 @@ export function App({
       setActiveLoop((c) =>
         c ? { ...c, iter: nextIter, nextFireAt: Date.now() + cur.intervalMs } : c,
       );
-      setHistorical((prev) => [
-        ...prev,
-        {
-          id: `loop-fire-${Date.now()}`,
-          role: "info",
-          text: `▸ /loop iter ${nextIter} → ${cur.prompt}`,
-        },
-      ]);
+      log.pushInfo(`▸ /loop iter ${nextIter} → ${cur.prompt}`);
       loopFiringRef.current = true;
       try {
         await handleSubmitRef.current?.(cur.prompt);
@@ -3738,7 +2674,15 @@ export function App({
     }, delay);
     loopTimerRef.current = timer;
     return () => clearTimeout(timer);
-  }, [activeLoop, stopLoop]);
+  }, [activeLoop, stopLoop, log]);
+
+  const syntheticSubmit = useSyntheticSubmit({
+    log,
+    busy,
+    loop,
+    setQueuedSubmit,
+    handleSubmit,
+  });
 
   /**
    * ShellConfirm callback. Three outcomes, all of them ending with a
@@ -3760,66 +2704,37 @@ export function App({
       let synthetic: string;
       if (choice === "deny") {
         const context = denyContext ? ` because: ${denyContext}` : "";
-        setHistorical((prev) => [
-          ...prev,
-          { id: `sh-deny-${Date.now()}`, role: "info", text: `▸ denied: ${cmd}${context}` },
-        ]);
+        log.pushInfo(`▸ denied: ${cmd}${context}`);
         synthetic = `I denied running \`${cmd}\`${context}. Please continue without running it.`;
       } else {
         if (choice === "always_allow") {
           const prefix = derivePrefix(cmd);
           addProjectShellAllowed(currentRootDir, prefix);
-          setHistorical((prev) => [
-            ...prev,
-            {
-              id: `sh-allow-${Date.now()}`,
-              role: "info",
-              text: `▸ always allowed "${prefix}" for ${currentRootDir}`,
-            },
-          ]);
+          log.pushInfo(`▸ always allowed "${prefix}" for ${currentRootDir}`);
         }
-        setHistorical((prev) => [
-          ...prev,
-          {
-            id: `sh-run-${Date.now()}`,
-            role: "info",
-            text:
-              kind === "run_background" ? `▸ starting (background): ${cmd}` : `▸ running: ${cmd}`,
-          },
-        ]);
+        log.pushInfo(
+          kind === "run_background" ? `▸ starting (background): ${cmd}` : `▸ running: ${cmd}`,
+        );
         if (kind === "run_background" && codeMode.jobs) {
-          // Spawn through the JobRegistry so the process keeps running
-          // after this handler resolves; the synthetic message tells the
-          // model the job id so it can call job_output / stop_job next.
-          let startedOk = false;
-          let jobId: number | null = null;
-          let preview = "";
+          // JobRegistry spawn keeps the process running after this handler
+          // resolves; the synthetic tells the model the job id for job_output
+          // / stop_job follow-ups.
           try {
             const res = await codeMode.jobs.start(cmd, { cwd: currentRootDir });
-            startedOk = true;
-            jobId = res.jobId;
-            preview = res.preview;
+            const preview = res.preview;
             const header = res.stillRunning
               ? `[job ${res.jobId} started · pid ${res.pid ?? "?"} · ${res.readyMatched ? "READY signal matched" : "running"}]`
               : res.exitCode !== null
                 ? `[job ${res.jobId} exited during startup · exit ${res.exitCode}]`
                 : `[job ${res.jobId} failed to start]`;
             const body = preview ? `${header}\n${preview}` : header;
-            setHistorical((prev) => [
-              ...prev,
-              { id: `sh-out-${Date.now()}`, role: "info", text: body },
-            ]);
+            log.pushInfo(body);
             synthetic = `I approved the background spawn. ${header}\n\nStartup preview:\n\n${preview || "(no output yet)"}\n\nThe process is still running — use job_output to read newer logs, stop_job to halt it.`;
           } catch (err) {
             const msg = `$ ${cmd}\n[failed to start] ${(err as Error).message}`;
-            setHistorical((prev) => [
-              ...prev,
-              { id: `sh-out-${Date.now()}`, role: "info", text: msg },
-            ]);
+            log.pushInfo(msg);
             synthetic = `I approved the background spawn but it failed to start:\n\n${msg}`;
           }
-          void startedOk; // appease "assigned but never used" — retained for future hook
-          void jobId;
         } else {
           // Foreground (run_command) — synchronous; waits for exit.
           let body: string;
@@ -3829,26 +2744,14 @@ export function App({
           } catch (err) {
             body = `$ ${cmd}\n[failed to spawn] ${(err as Error).message}`;
           }
-          setHistorical((prev) => [
-            ...prev,
-            { id: `sh-out-${Date.now()}`, role: "info", text: body },
-          ]);
+          log.pushInfo(body);
           synthetic = `I ran the command you requested. Output:\n\n${body}`;
         }
       }
 
-      // If the prior turn is still streaming ("please confirm" chatter),
-      // handleSubmit would early-return on busy=true. Abort the in-flight
-      // turn and queue the synthetic for the effect below, which fires
-      // once busy clears. Otherwise submit directly.
-      if (busy) {
-        loop.abort();
-        setQueuedSubmit(synthetic);
-      } else {
-        await handleSubmit(synthetic);
-      }
+      await syntheticSubmit.submit(synthetic);
     },
-    [pendingShell, codeMode, currentRootDir, handleSubmit, busy, loop],
+    [pendingShell, codeMode, currentRootDir, syntheticSubmit, log],
   );
 
   // Drain the shell-confirm queue after the in-flight turn tears down.
@@ -3861,57 +2764,6 @@ export function App({
       void handleSubmit(text);
     }
   }, [busy, queuedSubmit, handleSubmit]);
-
-  /**
-   * WorkspaceConfirm callback. Two outcomes, both ending with a
-   * synthetic user message so the model sees what happened on its
-   * next turn:
-   *   - deny → tell the model the user refused, continue without it.
-   *   - switch → call applyCwdChange (same path as `/cwd`), surface
-   *     the cwd-change info row to scrollback, hand the model a
-   *     short confirmation so it can resume the user's request
-   *     against the new sandbox.
-   */
-  const handleWorkspaceConfirm = useCallback(
-    async (choice: WorkspaceConfirmChoice, denyContext?: string) => {
-      const pending = pendingWorkspace;
-      if (!pending) return;
-      const target = pending.path;
-      setPendingWorkspace(null);
-
-      let synthetic: string;
-      if (choice === "deny") {
-        const context = denyContext ? ` because: ${denyContext}` : "";
-        setHistorical((prev) => [
-          ...prev,
-          {
-            id: `ws-deny-${Date.now()}`,
-            role: "info",
-            text: `▸ denied workspace switch: ${target}${context}`,
-          },
-        ]);
-        synthetic = `I denied switching the workspace to \`${target}\`${context}. Please continue without changing directories.`;
-      } else {
-        const info = applyCwdChange(target);
-        setHistorical((prev) => [
-          ...prev,
-          { id: `ws-switch-${Date.now()}`, role: "info", text: info },
-        ]);
-        synthetic = `I approved the workspace switch. The session is now rooted at \`${target}\` — your filesystem / shell / memory tools resolve against that path on every subsequent call. Continue with my original request from this new root.`;
-      }
-
-      // Same race protection as handleShellConfirm: if the prior
-      // turn is still streaming, abort it and queue the synthetic
-      // for the busy=false edge detector below.
-      if (busy) {
-        loop.abort();
-        setQueuedSubmit(synthetic);
-      } else {
-        await handleSubmit(synthetic);
-      }
-    },
-    [pendingWorkspace, applyCwdChange, busy, loop, handleSubmit],
-  );
 
   /**
    * PlanConfirm callback. Three outcomes, all ending with a synthetic
@@ -3938,17 +2790,19 @@ export function App({
       }
 
       if (choice === "refine" || choice === "approve") {
-        // Two-step: stash the plan + the intent, show the input, wait
-        // for user feedback before pushing anything. Approve collects
-        // "last instructions / answers to open questions" (blank is
-        // fine, user can just hit Enter). Refine collects required
-        // feedback so the model has concrete guidance to revise.
         if (pendingPlan) {
           setStagedInput({ plan: pendingPlan, mode: choice });
           setPendingPlan(null);
         } else if (choice === "approve") {
-          // /apply-plan fallback path — no pending plan, just approve.
           setStagedInput({ plan: "", mode: "approve" });
+        }
+        return;
+      }
+
+      if (choice === "revise") {
+        if (pendingPlan) {
+          setPendingReviseEditor(pendingPlan);
+          setPendingPlan(null);
         }
         return;
       }
@@ -3963,21 +2817,13 @@ export function App({
       planSummaryRef.current = null;
       persistPlanState();
       togglePlanMode(false);
-      const marker = "▸ plan cancelled";
-      const synthetic =
-        "The plan was cancelled. Drop it entirely. Ask me what I actually want before proposing another plan or making any changes.";
-      setHistorical((prev) => [
-        ...prev,
-        { id: `plan-${choice}-${Date.now()}`, role: "info", text: marker },
-      ]);
-      if (busy) {
-        loop.abort();
-        setQueuedSubmit(synthetic);
-      } else {
-        await handleSubmit(synthetic);
-      }
+      await syntheticSubmit.post({
+        marker: "▸ plan cancelled",
+        synthetic:
+          "The plan was cancelled. Drop it entirely. Ask me what I actually want before proposing another plan or making any changes.",
+      });
     },
-    [pendingPlan, togglePlanMode, busy, loop, handleSubmit, persistPlanState],
+    [pendingPlan, togglePlanMode, syntheticSubmit, persistPlanState],
   );
 
   // Ref-wrapped stable alias. `handlePlanConfirm` has deps that churn
@@ -4044,18 +2890,9 @@ export function App({
         }
       }
 
-      setHistorical((prev) => [
-        ...prev,
-        { id: `plan-${staged.mode}-${Date.now()}`, role: "info", text: marker },
-      ]);
-      if (busy) {
-        loop.abort();
-        setQueuedSubmit(synthetic);
-      } else {
-        await handleSubmit(synthetic);
-      }
+      await syntheticSubmit.post({ marker, synthetic });
     },
-    [stagedInput, togglePlanMode, busy, loop, handleSubmit],
+    [stagedInput, togglePlanMode, syntheticSubmit],
   );
   // Ref-mirror so startDashboard's resolvePlanConfirm closure can call
   // the latest function — handleStagedInputSubmit's deps churn on every
@@ -4085,6 +2922,26 @@ export function App({
         setStagedCheckpointRevise(snap);
         return;
       }
+      // Auto file-snapshot per plan step so /restore can rewind to before this step ran.
+      if (codeMode && choice === "continue") {
+        const paths = touchedPaths();
+        if (paths.length > 0) {
+          try {
+            const cpName = snap.title ? `${snap.stepId} · ${snap.title}` : snap.stepId;
+            const meta = createCheckpoint({
+              rootDir: codeMode.rootDir,
+              name: cpName.slice(0, 60),
+              paths,
+              source: "auto-pre-restore",
+            });
+            log.pushInfo(
+              `⛁ checkpoint saved · ${meta.id} · ${meta.fileCount} file${meta.fileCount === 1 ? "" : "s"} · /restore ${meta.id} to roll back this step`,
+            );
+          } catch {
+            /* checkpoint failure is best-effort — don't block the step */
+          }
+        }
+      }
       const label = snap.title ? `${snap.stepId} · ${snap.title}` : snap.stepId;
       const counter = snap.total > 0 ? ` (${snap.completed}/${snap.total})` : "";
       const { marker, synthetic } =
@@ -4097,18 +2954,9 @@ export function App({
               marker: `▸ plan stopped at ${label}${counter}`,
               synthetic: `The user stopped the plan after step ${label}. Do not run any more steps and do not call any tools. Write a short summary of what was completed across all finished steps and what's left unfinished.`,
             };
-      setHistorical((prev) => [
-        ...prev,
-        { id: `cp-${choice}-${Date.now()}`, role: "info", text: marker },
-      ]);
-      if (busy) {
-        loop.abort();
-        setQueuedSubmit(synthetic);
-      } else {
-        await handleSubmit(synthetic);
-      }
+      await syntheticSubmit.post({ marker, synthetic });
     },
-    [pendingCheckpoint, busy, loop, handleSubmit],
+    [pendingCheckpoint, syntheticSubmit, codeMode, touchedPaths, log],
   );
 
   // Same ref-wrap pattern as handlePlanConfirm — keeps the memo'd
@@ -4144,18 +2992,9 @@ export function App({
       const marker = trimmed
         ? `▸ revising after ${label} — ${trimmed.length > 50 ? `${trimmed.slice(0, 50)}…` : trimmed}`
         : `▸ continuing after ${label}`;
-      setHistorical((prev) => [
-        ...prev,
-        { id: `cp-revise-${Date.now()}`, role: "info", text: marker },
-      ]);
-      if (busy) {
-        loop.abort();
-        setQueuedSubmit(synthetic);
-      } else {
-        await handleSubmit(synthetic);
-      }
+      await syntheticSubmit.post({ marker, synthetic });
     },
-    [stagedCheckpointRevise, busy, loop, handleSubmit],
+    [stagedCheckpointRevise, syntheticSubmit],
   );
 
   /** Esc on the revise input — restore the checkpoint picker. */
@@ -4180,35 +3019,21 @@ export function App({
         return;
       }
       if (choice.kind === "cancel") {
-        const synthetic =
-          "The user cancelled the choice. Don't act on any of the options you presented. Ask what they actually want before doing anything else.";
-        setHistorical((prev) => [
-          ...prev,
-          { id: `choice-cancel-${Date.now()}`, role: "info", text: "▸ choice cancelled" },
-        ]);
-        if (busy) {
-          loop.abort();
-          setQueuedSubmit(synthetic);
-        } else {
-          await handleSubmit(synthetic);
-        }
+        await syntheticSubmit.post({
+          marker: "▸ choice cancelled",
+          synthetic:
+            "The user cancelled the choice. Don't act on any of the options you presented. Ask what they actually want before doing anything else.",
+        });
         return;
       }
       const picked = snap.options.find((o) => o.id === choice.optionId);
       const label = picked ? `${picked.id} · ${picked.title}` : choice.optionId;
-      const synthetic = `The user picked option ${choice.optionId}${picked ? ` ("${picked.title}")` : ""}. Proceed with that branch. Do not re-ask the same question.`;
-      setHistorical((prev) => [
-        ...prev,
-        { id: `choice-pick-${Date.now()}`, role: "info", text: `▸ chose ${label}` },
-      ]);
-      if (busy) {
-        loop.abort();
-        setQueuedSubmit(synthetic);
-      } else {
-        await handleSubmit(synthetic);
-      }
+      await syntheticSubmit.post({
+        marker: `▸ chose ${label}`,
+        synthetic: `The user picked option ${choice.optionId}${picked ? ` ("${picked.title}")` : ""}. Proceed with that branch. Do not re-ask the same question.`,
+      });
     },
-    [pendingChoice, busy, loop, handleSubmit],
+    [pendingChoice, syntheticSubmit],
   );
 
   // Ref-wrap to keep ChoiceConfirm's React.memo from re-rendering on
@@ -4238,10 +3063,6 @@ export function App({
   );
   // Ref-mirrors so the web's resolveXxx callbacks (registered in
   // startDashboard, frozen at boot) keep calling the latest handler.
-  const handleWorkspaceConfirmRef = useRef(handleWorkspaceConfirm);
-  useEffect(() => {
-    handleWorkspaceConfirmRef.current = handleWorkspaceConfirm;
-  }, [handleWorkspaceConfirm]);
   const handleCheckpointReviseSubmitRef = useRef(handleCheckpointReviseSubmit);
   useEffect(() => {
     handleCheckpointReviseSubmitRef.current = handleCheckpointReviseSubmit;
@@ -4258,18 +3079,9 @@ export function App({
       const marker = trimmed
         ? `▸ custom answer — ${trimmed.length > 50 ? `${trimmed.slice(0, 50)}…` : trimmed}`
         : "▸ custom answer — (blank)";
-      setHistorical((prev) => [
-        ...prev,
-        { id: `choice-custom-${Date.now()}`, role: "info", text: marker },
-      ]);
-      if (busy) {
-        loop.abort();
-        setQueuedSubmit(synthetic);
-      } else {
-        await handleSubmit(synthetic);
-      }
+      await syntheticSubmit.post({ marker, synthetic });
     },
-    [busy, loop, handleSubmit],
+    [syntheticSubmit],
   );
 
   /** Esc on the custom input — restore the choice picker. */
@@ -4290,18 +3102,11 @@ export function App({
       if (!snap) return;
       setPendingRevision(null);
       if (choice === "reject") {
-        const synthetic =
-          "The user rejected the proposed plan revision. Don't apply it. Continue executing the original plan from the next pending step. If you genuinely cannot proceed without the change, stop and explain in plain text why.";
-        setHistorical((prev) => [
-          ...prev,
-          { id: `revise-reject-${Date.now()}`, role: "info", text: "▸ revision rejected" },
-        ]);
-        if (busy) {
-          loop.abort();
-          setQueuedSubmit(synthetic);
-        } else {
-          await handleSubmit(synthetic);
-        }
+        await syntheticSubmit.post({
+          marker: "▸ revision rejected",
+          synthetic:
+            "The user rejected the proposed plan revision. Don't apply it. Continue executing the original plan from the next pending step. If you genuinely cannot proceed without the change, stop and explain in plain text why.",
+        });
         return;
       }
       // Accept: keep the done-step prefix from the existing plan, replace
@@ -4324,23 +3129,14 @@ export function App({
         (s) => !oldSteps.some((o) => o.id === s.id),
       ).length;
       const marker = `▸ revision accepted — −${removedCount} +${addedCount}: ${snap.reason}`;
-      setHistorical((prev) => [
-        ...prev,
-        { id: `revise-accept-${Date.now()}`, role: "info", text: marker },
-      ]);
       const synthetic = `Revision accepted. The remaining plan is now:\n${snap.remainingSteps
         .map((s, i) => `  ${i + 1}. ${s.id} · ${s.title} — ${s.action}`)
         .join(
           "\n",
         )}\n\nContinue executing from the next pending step. Call mark_step_complete after each one as before.`;
-      if (busy) {
-        loop.abort();
-        setQueuedSubmit(synthetic);
-      } else {
-        await handleSubmit(synthetic);
-      }
+      await syntheticSubmit.post({ marker, synthetic });
     },
-    [pendingRevision, busy, loop, handleSubmit, persistPlanState],
+    [pendingRevision, syntheticSubmit, persistPlanState],
   );
 
   // Ref-wrap to keep PlanReviseConfirm's React.memo from re-rendering.
@@ -4360,8 +3156,9 @@ export function App({
           PLAIN_UI ||
           isResizing ||
           !!pendingPlan ||
+          !!pendingReviseEditor ||
+          pendingSessionsPicker ||
           !!pendingShell ||
-          !!pendingWorkspace ||
           !!pendingEditReview ||
           walkthroughActive ||
           !!pendingCheckpoint ||
@@ -4377,199 +3174,81 @@ export function App({
           // ticker paused, an idle TUI is byte-stable and shift-drag /
           // click-drag selections survive until something actually
           // changes (incoming stream, key press, modal popup).
-          (!busy && !streaming)
+          (!busy && !isStreaming)
         }
       >
-        <Box
-          flexDirection="column"
-          height={stdout?.rows ?? 30}
-          width={stdout?.columns ?? 80}
-          overflow="hidden"
-        >
-          <ChromeBar
-            summary={summary}
-            planMode={planMode}
-            preset={preset}
-            balance={balance}
-            updateAvailable={updateAvailable}
-            proArmed={proArmed}
-            escalated={turnOnPro}
-            budgetUsd={loop.budgetUsd}
-            rootDir={codeMode ? currentRootDir : undefined}
-            sessionName={session ?? null}
-            scrollRatio={
-              scrollMaxRowsRef.current > 0 ? logScrollOffset / scrollMaxRowsRef.current : 0
-            }
-          />
-
-          {/* SCROLLABLE LOG REGION — historical events render inline
-              (no Static, since alt-screen kills scrollback anyway).
-              EXPLICIT height instead of `flexGrow={1}` so the height
-              is deterministic and doesn't depend on the row-estimator
-              being correct. `overflow="hidden"` clips overflowing
-              children so the StatsPanel + prompt block above and
-              below stay anchored.
-              Height shrinks toward 0 when a modal is active — the
-              modal needs the screen real estate; conversation context
-              behind a confirm dialog is rarely useful, and rendering
-              both fights for the same vertical space. */}
-          <Box
-            flexDirection="column"
-            flexGrow={1}
-            height={
-              pendingShell ||
-              pendingWorkspace ||
-              pendingPlan ||
-              pendingEditReview ||
-              pendingCheckpoint ||
-              stagedCheckpointRevise ||
-              stagedInput ||
-              stagedChoiceCustom ||
-              pendingChoice ||
-              pendingRevision ||
-              walkthroughActive
-                ? 0
-                : Math.max(5, (stdout?.rows ?? 30) - 9)
-            }
-            overflow="hidden"
-          >
-            <Box flexDirection="column" flexGrow={1} overflow="hidden">
-              <Box
-                flexDirection="column"
-                flexGrow={1}
-                // At offset=0 we want the LATEST event's bottom flush with
-                // the bottom of the viewport so a tall final entry shows
-                // its END (the most-recent rows the model just produced),
-                // with overflow="hidden" naturally clipping the top above
-                // the viewport. When the user has scrolled up (offset>0)
-                // we revert to top-anchored so the start of the slice
-                // aligns with the top of the viewport — that's the natural
-                // "reading older content" mode.
-                justifyContent={logScrollOffset === 0 ? "flex-end" : "flex-start"}
-                overflow="hidden"
-              >
-                {(() => {
-                  // Single source of truth for "rows the log can render".
-                  // Matches the parent flex container's height (set below
-                  // and by ScrollBar). When BottomHint is visible we
-                  // shrink by 1 so the slicer doesn't claim a row that's
-                  // actually taken by the hint.
-                  const logHeight = Math.max(5, (stdout?.rows ?? 30) - 9);
-                  const available = Math.max(4, logHeight - (logScrollOffset > 0 ? 1 : 0));
-                  const cols = stdout?.columns ?? 80;
-                  // Build atom list across all events, slice by row range.
-                  // Migrated roles produce `frame` atoms (row-precise clip
-                  // via topSkip / bottomSkip); unmigrated roles produce
-                  // `ink` atoms (snap to atom boundaries — wheel briefly
-                  // sticks at their edges until those roles are migrated).
-                  const atoms = eventsToAtoms(historical, currentRootDir, cols);
-                  const v = viewportLog(atoms, logScrollOffset, available);
-                  scrollMaxRowsRef.current = v.maxScrollRows;
-                  lastTotalRowsRef.current = v.totalRows;
-                  // ChromeBar = 2 rows (content + ChromeRule). Log box starts
-                  // at row 3, runs for `logHeight`. BottomHint takes the last
-                  // log row when scrolled. Content is bottom-anchored at
-                  // offset=0, top-anchored otherwise.
-                  const logTopRow = 3;
-                  const logBottomRow = logTopRow + logHeight - 1;
-                  const isScrolled = logScrollOffset > 0;
-                  const contentBoxBottom = logBottomRow - (isScrolled ? 1 : 0);
-                  const renderedRows = Math.min(available, v.totalRows);
-                  const contentTopRow = isScrolled
-                    ? logTopRow
-                    : Math.max(logTopRow, contentBoxBottom - renderedRows + 1);
-                  const contentBottomRow = isScrolled
-                    ? logTopRow + renderedRows - 1
-                    : contentBoxBottom;
-                  logGeomRef.current = {
-                    contentTopRow,
-                    contentBottomRow,
-                    firstRowAbs: v.firstRowAbs,
-                    visibleRows: renderedRows,
-                    cols,
-                  };
-                  return renderViewport(v, logSelection);
-                })()}
-                {/*
+        <Box flexDirection="column">
+          <Box flexDirection="column">
+            <CardStream excludeId={activePlanCard?.id} />
+            {/*
           Welcome card on the empty state. Visible only when nothing
           has happened yet (no past events, nothing in flight, no
           modal up). Removes the "what do I type?" friction without
           surviving past the first turn.
         */}
-                {!historical.some((e) => e.role === "user" || e.role === "assistant") &&
-                !busy &&
-                !streaming ? (
-                  <WelcomeBanner inCodeMode={!!codeMode} dashboardUrl={dashboardUrl} />
-                ) : null}
-                {/*
+            {!hasConversation && !busy && !isStreaming ? (
+              <WelcomeBanner inCodeMode={!!codeMode} dashboardUrl={dashboardUrl} />
+            ) : null}
+            {/*
           Live rows are hidden while the ShellConfirm modal is up — the
           model's concurrent "please confirm" stream is noise the user
           doesn't need, and the picker shouldn't fight it for visual
           attention. They come back naturally once the user chooses and
           the next turn begins.
         */}
-                {!PLAIN_UI &&
-                !pendingShell &&
-                !pendingWorkspace &&
-                !pendingPlan &&
-                !stagedInput &&
-                !pendingEditReview &&
-                !pendingCheckpoint &&
-                !stagedCheckpointRevise &&
-                streaming ? (
-                  <Box marginY={1}>
-                    <EventRow event={streaming} projectRoot={currentRootDir} />
-                  </Box>
-                ) : null}
-                {!PLAIN_UI &&
-                !pendingShell &&
-                !pendingWorkspace &&
-                !pendingPlan &&
-                !stagedInput &&
-                !pendingEditReview &&
-                !pendingCheckpoint &&
-                !stagedCheckpointRevise &&
-                ongoingTool ? (
-                  <OngoingToolRow tool={ongoingTool} progress={toolProgress} />
-                ) : null}
-                {!PLAIN_UI &&
-                !pendingShell &&
-                !pendingWorkspace &&
-                !pendingPlan &&
-                !stagedInput &&
-                !pendingEditReview &&
-                !pendingCheckpoint &&
-                !stagedCheckpointRevise &&
-                subagentActivity ? (
-                  <SubagentRow activity={subagentActivity} />
-                ) : null}
-                {!PLAIN_UI &&
-                !pendingShell &&
-                !pendingWorkspace &&
-                !pendingPlan &&
-                !stagedInput &&
-                !pendingEditReview &&
-                !pendingCheckpoint &&
-                !stagedCheckpointRevise &&
-                !ongoingTool &&
-                statusLine ? (
-                  <StatusRow text={statusLine} />
-                ) : null}
-                {!PLAIN_UI &&
-                undoBanner &&
-                !pendingShell &&
-                !pendingWorkspace &&
-                !pendingPlan &&
-                !stagedInput &&
-                !pendingEditReview &&
-                !pendingCheckpoint &&
-                !stagedCheckpointRevise &&
-                !pendingChoice &&
-                !stagedChoiceCustom &&
-                !pendingRevision ? (
-                  <UndoBanner banner={undoBanner} />
-                ) : null}
-                {/*
+            {!PLAIN_UI &&
+            !pendingShell &&
+            !pendingPlan &&
+            !pendingReviseEditor &&
+            !pendingSessionsPicker &&
+            !stagedInput &&
+            !pendingEditReview &&
+            !pendingCheckpoint &&
+            !stagedCheckpointRevise &&
+            ongoingTool ? (
+              <OngoingToolRow tool={ongoingTool} progress={toolProgress} />
+            ) : null}
+            {!PLAIN_UI &&
+            !pendingShell &&
+            !pendingPlan &&
+            !pendingReviseEditor &&
+            !pendingSessionsPicker &&
+            !stagedInput &&
+            !pendingEditReview &&
+            !pendingCheckpoint &&
+            !stagedCheckpointRevise &&
+            subagentActivity ? (
+              <SubagentRow activity={subagentActivity} />
+            ) : null}
+            {!PLAIN_UI &&
+            !pendingShell &&
+            !pendingPlan &&
+            !pendingReviseEditor &&
+            !pendingSessionsPicker &&
+            !stagedInput &&
+            !pendingEditReview &&
+            !pendingCheckpoint &&
+            !stagedCheckpointRevise &&
+            !ongoingTool &&
+            statusLine ? (
+              <ThinkingRow text={statusLine} />
+            ) : null}
+            {!PLAIN_UI &&
+            undoBanner &&
+            !pendingShell &&
+            !pendingPlan &&
+            !pendingReviseEditor &&
+            !pendingSessionsPicker &&
+            !stagedInput &&
+            !pendingEditReview &&
+            !pendingCheckpoint &&
+            !stagedCheckpointRevise &&
+            !pendingChoice &&
+            !stagedChoiceCustom &&
+            !pendingRevision ? (
+              <UndoBanner banner={undoBanner} />
+            ) : null}
+            {/*
           Belt-and-suspenders fallback: if we're busy but NONE of the
           specific indicators (streaming, ongoingTool, statusLine) is
           visible, something is still happening — show a generic
@@ -4577,38 +3256,28 @@ export function App({
           without a label. Catches micro-gaps between events that the
           targeted status lines don't cover.
         */}
-                {!PLAIN_UI &&
-                !pendingShell &&
-                !pendingWorkspace &&
-                !pendingPlan &&
-                !stagedInput &&
-                !pendingEditReview &&
-                !pendingCheckpoint &&
-                !stagedCheckpointRevise &&
-                busy &&
-                !streaming &&
-                !ongoingTool &&
-                !statusLine ? (
-                  <StatusRow text="processing…" />
-                ) : null}
-              </Box>
-              {/* Sticky bottom-of-viewport hint when the user has scrolled
-                up — points to how many rows of newer content they're
-                missing and how to jump back. Hidden at offset=0 since
-                there's nothing below to point to. */}
-              <BottomHint
-                rowsBelow={logScrollOffset}
-                totalRows={lastTotalRowsRef.current}
-                viewportRows={Math.max(
-                  4,
-                  Math.max(5, (stdout?.rows ?? 30) - 9) - (logScrollOffset > 0 ? 1 : 0),
-                )}
-              />
-            </Box>
+            {!PLAIN_UI &&
+            !pendingShell &&
+            !pendingPlan &&
+            !pendingReviseEditor &&
+            !pendingSessionsPicker &&
+            !stagedInput &&
+            !pendingEditReview &&
+            !pendingCheckpoint &&
+            !stagedCheckpointRevise &&
+            busy &&
+            !isStreaming &&
+            !ongoingTool &&
+            !statusLine ? (
+              <ThinkingRow text="processing…" />
+            ) : null}
+            <ToastRail />
           </Box>
-          {/* STICKY BOTTOM — either an active modal (replaces prompt
-              for the duration of the confirm) or the input + suggestion
-              area. Always pinned to the last rows of the viewport. */}
+          {!PLAIN_UI && activePlanCard ? (
+            <Box flexDirection="column" marginY={1}>
+              <PlanCard card={activePlanCard} />
+            </Box>
+          ) : null}
           {stagedInput ? (
             <PlanRefineInput
               mode={stagedInput.mode}
@@ -4654,6 +3323,48 @@ export function App({
               completedStepIds={completedStepIdsRef.current}
               onChoose={stableHandleCheckpointConfirm}
             />
+          ) : pendingSessionsPicker ? (
+            <SessionPicker
+              sessions={sessionsPickerList}
+              workspace={currentRootDir}
+              onChoose={(outcome) => {
+                if (outcome.kind === "open") {
+                  setPendingSessionsPicker(false);
+                  if (onSwitchSession) {
+                    onSwitchSession(outcome.name);
+                  } else {
+                    log.pushInfo(
+                      `▸ to switch to "${outcome.name}", quit and run: reasonix chat --session ${outcome.name}`,
+                    );
+                  }
+                  return;
+                }
+                if (outcome.kind === "new") {
+                  setPendingSessionsPicker(false);
+                  if (onSwitchSession) {
+                    onSwitchSession(undefined);
+                  } else {
+                    log.pushInfo(
+                      "▸ to start a fresh session, quit and run: reasonix chat (no --session flag)",
+                    );
+                  }
+                  return;
+                }
+                if (outcome.kind === "delete") {
+                  deleteSession(outcome.name);
+                  setSessionsPickerList(listSessionsForWorkspace(currentRootDir));
+                  return;
+                }
+                if (outcome.kind === "rename") {
+                  renameSession(outcome.name, outcome.newName);
+                  setSessionsPickerList(listSessionsForWorkspace(currentRootDir));
+                  return;
+                }
+                if (outcome.kind === "quit") {
+                  setPendingSessionsPicker(false);
+                }
+              }}
+            />
           ) : pendingPlan ? (
             <PlanConfirm
               plan={pendingPlan}
@@ -4662,19 +3373,30 @@ export function App({
               onChoose={stableHandlePlanConfirm}
               projectRoot={currentRootDir}
             />
+          ) : pendingReviseEditor ? (
+            <PlanReviseEditor
+              steps={planStepsRef.current ?? []}
+              completedStepIds={completedStepIdsRef.current}
+              onAccept={(revised, skippedIds) => {
+                planStepsRef.current = revised;
+                for (const id of skippedIds) completedStepIdsRef.current.add(id);
+                persistPlanState();
+                const planText = pendingReviseEditor;
+                setPendingReviseEditor(null);
+                setPendingPlan(planText);
+              }}
+              onCancel={() => {
+                const planText = pendingReviseEditor;
+                setPendingReviseEditor(null);
+                setPendingPlan(planText);
+              }}
+            />
           ) : pendingShell ? (
             <ShellConfirm
               command={pendingShell.command}
               allowPrefix={derivePrefix(pendingShell.command)}
               kind={pendingShell.kind}
               onChoose={handleShellConfirm}
-            />
-          ) : pendingWorkspace ? (
-            <WorkspaceConfirm
-              path={pendingWorkspace.path}
-              currentRoot={currentRootDir}
-              mcpServerCount={mcpServers?.length ?? 0}
-              onChoose={handleWorkspaceConfirm}
             />
           ) : pendingEditReview ? (
             <EditConfirm
@@ -4710,6 +3432,7 @@ export function App({
                 />
               ) : null}
               {activeLoop ? <LoopStatusRow loop={activeLoop} /> : null}
+              <StatusRow />
               <PromptInput
                 value={input}
                 onChange={setInput}
@@ -4718,12 +3441,16 @@ export function App({
                 onHistoryPrev={recallPrev}
                 onHistoryNext={recallNext}
               />
-              <SlashSuggestions matches={slashMatches} selectedIndex={slashSelected} />
-              <AtMentionSuggestions
-                matches={atMatches}
-                selectedIndex={atSelected}
-                query={atPicker?.query ?? ""}
-              />
+              {slashMatches !== null ? (
+                <SlashSuggestions matches={slashMatches} selectedIndex={slashSelected} />
+              ) : null}
+              {atMatches !== null ? (
+                <AtMentionSuggestions
+                  matches={atMatches}
+                  selectedIndex={atSelected}
+                  query={atPicker?.query ?? ""}
+                />
+              ) : null}
               {slashArgContext ? (
                 <SlashArgPicker
                   matches={slashArgMatches}
@@ -4733,7 +3460,7 @@ export function App({
                   partial={slashArgContext.partial}
                 />
               ) : null}
-              {ctxFooterVisible ? <CtxFooter loop={loop} summary={summary} /> : null}
+              {/* CtxFooter retired — UsageCard auto-emits per turn covers the same data */}
             </>
           )}
         </Box>

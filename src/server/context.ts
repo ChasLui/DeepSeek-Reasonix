@@ -53,7 +53,6 @@ export interface DashboardContext {
   resolveChoiceConfirm?: (choice: ChoiceResolution) => void;
   resolvePlanConfirm?: (choice: "approve" | "refine" | "cancel", text?: string) => void;
   resolveEditReview?: (choice: "apply" | "reject" | "apply-rest-of-turn" | "flip-to-auto") => void;
-  resolveWorkspaceConfirm?: (choice: "switch" | "deny") => void;
   resolveCheckpointConfirm?: (choice: "continue" | "revise" | "stop", text?: string) => void;
   resolveReviseConfirm?: (choice: "accept" | "reject") => void;
 
@@ -122,11 +121,6 @@ export type ActiveModal =
       preview: string;
       total: number;
       remaining: number;
-    }
-  | {
-      kind: "workspace";
-      /** Absolute, expanded destination path the model wants to switch to. */
-      path: string;
     }
   | {
       kind: "checkpoint";
