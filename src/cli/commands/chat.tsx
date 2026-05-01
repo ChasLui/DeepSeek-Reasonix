@@ -161,6 +161,8 @@ function Root({
   return (
     <KeystrokeProvider>
       <App
+        // key forces a full remount (and fresh transcript / scrollback / cards) on switch.
+        key={activeSession ?? "__new__"}
         model={appProps.model}
         system={appProps.system}
         transcript={appProps.transcript}
@@ -174,6 +176,7 @@ function Root({
         progressSink={progressSink}
         codeMode={appProps.codeMode}
         noDashboard={appProps.noDashboard}
+        onSwitchSession={setActiveSession}
       />
     </KeystrokeProvider>
   );
@@ -342,9 +345,9 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
       {...opts}
       session={resolvedSession}
     />,
-    // patchConsole:false — we never log to console during the TUI, and the
-    // patch is a known redraw-glitch source on winpty/MINTTY terminals.
-    { exitOnCtrlC: true, patchConsole: false },
+    // patchConsole:false — winpty/MINTTY redraw-glitch source.
+    // debug:true forces full-frame writes; log-update's diff drops frames on Windows ConPTY.
+    { exitOnCtrlC: true, patchConsole: false, debug: true },
   );
   try {
     await waitUntilExit();

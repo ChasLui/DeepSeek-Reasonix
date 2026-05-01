@@ -1,0 +1,98 @@
+import { describe, expect, it } from "vitest";
+import { hydrateCardsFromMessages } from "../src/cli/ui/state/hydrate.js";
+import type { ChatMessage } from "../src/types.js";
+
+describe("hydrateCardsFromMessages", () => {
+  it("returns [] for empty input", () => {
+    expect(hydrateCardsFromMessages([])).toEqual([]);
+  });
+
+  it("skips system messages", () => {
+    const msgs: ChatMessage[] = [{ role: "system", content: "you are helpful" }];
+    expect(hydrateCardsFromMessages(msgs)).toEqual([]);
+  });
+
+  it("turns user + assistant text into UserCard + StreamingCard", () => {
+    const msgs: ChatMessage[] = [
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "hello there" },
+    ];
+    const cards = hydrateCardsFromMessages(msgs);
+    expect(cards.map((c) => c.kind)).toEqual(["user", "streaming"]);
+    expect(cards[0]).toMatchObject({ kind: "user", text: "hi" });
+    expect(cards[1]).toMatchObject({ kind: "streaming", text: "hello there", done: true });
+  });
+
+  it("emits a ReasoningCard before the StreamingCard when reasoning_content is present", () => {
+    const msgs: ChatMessage[] = [
+      {
+        role: "assistant",
+        content: "answer",
+        reasoning_content: "step 1\n\nstep 2",
+      },
+    ];
+    const cards = hydrateCardsFromMessages(msgs);
+    expect(cards.map((c) => c.kind)).toEqual(["reasoning", "streaming"]);
+    expect(cards[0]).toMatchObject({
+      kind: "reasoning",
+      text: "step 1\n\nstep 2",
+      streaming: false,
+      paragraphs: 2,
+    });
+  });
+
+  it("matches a tool result back to the originating tool_call by id", () => {
+    const msgs: ChatMessage[] = [
+      {
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          {
+            id: "call-1",
+            type: "function",
+            function: { name: "shell", arguments: '{"cmd":"ls"}' },
+          },
+        ],
+      },
+      { role: "tool", tool_call_id: "call-1", content: "a.txt\nb.txt" },
+    ];
+    const cards = hydrateCardsFromMessages(msgs);
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({
+      kind: "tool",
+      name: "shell",
+      args: { cmd: "ls" },
+      output: "a.txt\nb.txt",
+      done: true,
+    });
+  });
+
+  it("keeps raw string args when the tool_call arguments aren't valid JSON", () => {
+    const msgs: ChatMessage[] = [
+      {
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          {
+            id: "call-x",
+            type: "function",
+            function: { name: "noisy", arguments: "not-json" },
+          },
+        ],
+      },
+    ];
+    const cards = hydrateCardsFromMessages(msgs);
+    expect(cards[0]).toMatchObject({ kind: "tool", args: "not-json", done: false });
+  });
+
+  it("produces unique card ids across the hydrated batch", () => {
+    const msgs: ChatMessage[] = [
+      { role: "user", content: "one" },
+      { role: "assistant", content: "two" },
+      { role: "user", content: "three" },
+      { role: "assistant", content: "four" },
+    ];
+    const ids = hydrateCardsFromMessages(msgs).map((c) => c.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});

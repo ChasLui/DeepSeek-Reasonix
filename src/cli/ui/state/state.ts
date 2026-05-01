@@ -50,10 +50,10 @@ export interface AgentState {
   readonly turnInProgress: boolean;
 }
 
-export function initialState(session: SessionInfo): AgentState {
+export function initialState(session: SessionInfo, cards: ReadonlyArray<Card> = []): AgentState {
   return {
     session,
-    cards: [],
+    cards,
     composer: {
       value: "",
       cursor: 0,

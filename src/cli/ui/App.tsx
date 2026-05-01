@@ -45,6 +45,7 @@ import {
   detectGitBranch,
   type listSessions,
   listSessionsForWorkspace,
+  loadSessionMessages,
   loadSessionMeta,
   patchSessionMeta,
   renameSession,
@@ -120,6 +121,7 @@ import { resolvePreset } from "./presets.js";
 import { type McpServerSummary, handleSlash, parseSlash, suggestSlashCommands } from "./slash.js";
 import { TurnTranslator } from "./state/TurnTranslator.js";
 import { cardsToDashboardMessages } from "./state/cards-to-messages.js";
+import { hydrateCardsFromMessages } from "./state/hydrate.js";
 import { AgentStoreProvider, useAgentState, useAgentStore } from "./state/provider.js";
 import { COLOR } from "./theme.js";
 import { TickerProvider } from "./ticker.js";
@@ -188,6 +190,8 @@ export interface AppProps {
    * who don't want a localhost listener.
    */
   noDashboard?: boolean;
+  /** Mid-chat session swap — Root remounts App with the new session via key. */
+  onSwitchSession?: (name: string | undefined) => void;
 }
 
 /**
@@ -251,8 +255,12 @@ export function App(props: AppProps): React.ReactElement {
     model: props.model,
     workspace: props.codeMode?.rootDir ?? process.cwd(),
   });
+  const initialCards = React.useMemo(
+    () => (props.session ? hydrateCardsFromMessages(loadSessionMessages(props.session)) : []),
+    [props.session],
+  );
   return (
-    <AgentStoreProvider session={session}>
+    <AgentStoreProvider session={session} initialCards={initialCards}>
       <AppInner {...props} />
     </AgentStoreProvider>
   );
@@ -272,6 +280,7 @@ function AppInner({
   progressSink,
   codeMode,
   noDashboard,
+  onSwitchSession,
 }: AppProps) {
   const log = useScrollback();
   const agentStore = useAgentStore();
@@ -1215,6 +1224,13 @@ function AppInner({
     // gesture. No-op when no loop is active.
     if (key.escape && !busy && activeLoopRef.current) {
       stopLoop();
+      return;
+    }
+    // Esc dismisses any composer-level picker (slash / @ / slash-arg)
+    // by clearing the prefix that triggered it. Picker footers advertise
+    // "esc cancel" — this binds it.
+    if (key.escape && !busy && (slashMatches || atMatches || slashArgContext)) {
+      setInput("");
       return;
     }
     // Esc inside a /walk session exits the walk WITHOUT applying or
@@ -3314,16 +3330,24 @@ function AppInner({
               onChoose={(outcome) => {
                 if (outcome.kind === "open") {
                   setPendingSessionsPicker(false);
-                  log.pushInfo(
-                    `▸ to switch to "${outcome.name}", quit and run: reasonix chat --session ${outcome.name}`,
-                  );
+                  if (onSwitchSession) {
+                    onSwitchSession(outcome.name);
+                  } else {
+                    log.pushInfo(
+                      `▸ to switch to "${outcome.name}", quit and run: reasonix chat --session ${outcome.name}`,
+                    );
+                  }
                   return;
                 }
                 if (outcome.kind === "new") {
                   setPendingSessionsPicker(false);
-                  log.pushInfo(
-                    "▸ to start a fresh session, quit and run: reasonix chat (no --session flag)",
-                  );
+                  if (onSwitchSession) {
+                    onSwitchSession(undefined);
+                  } else {
+                    log.pushInfo(
+                      "▸ to start a fresh session, quit and run: reasonix chat (no --session flag)",
+                    );
+                  }
                   return;
                 }
                 if (outcome.kind === "delete") {
@@ -3417,12 +3441,16 @@ function AppInner({
                 onHistoryPrev={recallPrev}
                 onHistoryNext={recallNext}
               />
-              <SlashSuggestions matches={slashMatches} selectedIndex={slashSelected} />
-              <AtMentionSuggestions
-                matches={atMatches}
-                selectedIndex={atSelected}
-                query={atPicker?.query ?? ""}
-              />
+              {slashMatches !== null ? (
+                <SlashSuggestions matches={slashMatches} selectedIndex={slashSelected} />
+              ) : null}
+              {atMatches !== null ? (
+                <AtMentionSuggestions
+                  matches={atMatches}
+                  selectedIndex={atSelected}
+                  query={atPicker?.query ?? ""}
+                />
+              ) : null}
               {slashArgContext ? (
                 <SlashArgPicker
                   matches={slashArgMatches}

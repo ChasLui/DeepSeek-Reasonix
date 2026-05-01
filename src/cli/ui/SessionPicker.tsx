@@ -72,7 +72,7 @@ export function SessionPicker({
     const target = sessions[focus];
     if (!target) return;
     if (ev.input === "d") return onChoose({ kind: "delete", name: target.name });
-    if (ev.input === "r") return setRenaming({ from: target.name, buf: target.name });
+    if (ev.input === "r") return setRenaming({ from: target.name, buf: "" });
   });
 
   const start = Math.max(

@@ -1,4 +1,5 @@
 import React from "react";
+import type { Card } from "./cards.js";
 import type { AgentEvent } from "./events.js";
 import type { AgentState, SessionInfo } from "./state.js";
 import { type AgentStore, createStore } from "./store.js";
@@ -7,12 +8,16 @@ const StoreCtx = React.createContext<AgentStore | null>(null);
 
 export function AgentStoreProvider({
   session,
+  initialCards,
   children,
 }: {
   session: SessionInfo;
+  initialCards?: ReadonlyArray<Card>;
   children: React.ReactNode;
 }): React.ReactElement {
-  const store = React.useMemo(() => createStore(session), [session]);
+  // initialCards captured at first mount — parent uses `key=session` to force a fresh provider on switch.
+  const initialCardsRef = React.useRef(initialCards);
+  const store = React.useMemo(() => createStore(session, initialCardsRef.current), [session]);
   return <StoreCtx.Provider value={store}>{children}</StoreCtx.Provider>;
 }
 

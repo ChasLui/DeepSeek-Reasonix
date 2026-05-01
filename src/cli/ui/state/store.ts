@@ -1,3 +1,4 @@
+import type { Card } from "./cards.js";
 import type { AgentEvent } from "./events.js";
 import { reduce } from "./reducer.js";
 import { type AgentState, type SessionInfo, initialState } from "./state.js";
@@ -12,8 +13,8 @@ export interface AgentStore {
   onEvent(listener: EventListener): () => void;
 }
 
-export function createStore(session: SessionInfo): AgentStore {
-  let state = initialState(session);
+export function createStore(session: SessionInfo, initialCards?: ReadonlyArray<Card>): AgentStore {
+  let state = initialState(session, initialCards);
   const stateListeners = new Set<StateListener>();
   const eventListeners = new Set<EventListener>();
 

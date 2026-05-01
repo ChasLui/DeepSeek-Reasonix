@@ -80,7 +80,6 @@ export function PromptInput({
     if (disabled) return;
     if (ev.paste) {
       // Bracketed-paste content delivered by the stdin reader.
-      // Insert as one sentinel regardless of length.
       if (ev.input.length > 0) registerPaste(ev.input);
       return;
     }
@@ -136,9 +135,11 @@ export function PromptInput({
   const prefixCells = promptPrefix.length;
   const visibleCells = Math.max(8, cols - prefixCells - 3);
 
+  // Hint avoids literal `/` and `@` glyphs — they render in the same row as
+  // a just-cleared buffer and read as residual typed input on dim-poor terminals.
   const effectivePlaceholder = disabled
     ? (placeholder ?? "…waiting for response…")
-    : (placeholder ?? "type a message · / for commands · @ to attach a file");
+    : (placeholder ?? "type a message · slash for commands · at-sign for files");
 
   const lines = value.length > 0 ? value.split("\n") : [""];
   const accentColor = disabled ? FG.faint : TONE.brand;
