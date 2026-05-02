@@ -3,22 +3,26 @@
 </p>
 
 <p align="center">
-  <em>Cache-first agent loop for DeepSeek V4 — terminal-native, MCP first-class, no LangChain.</em>
-</p>
-
-<p align="center">
   <strong>English</strong> · <a href="./README.zh-CN.md">简体中文</a> · <a href="https://esengine.github.io/reasonix/">Website</a>
 </p>
 
-# Reasonix
+<p align="center">
+  <a href="https://www.npmjs.com/package/reasonix"><img src="https://img.shields.io/npm/v/reasonix.svg" alt="npm version"/></a>
+  <a href="https://github.com/esengine/reasonix/actions/workflows/ci.yml"><img src="https://github.com/esengine/reasonix/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/npm/l/reasonix.svg" alt="license"/></a>
+  <a href="https://www.npmjs.com/package/reasonix"><img src="https://img.shields.io/npm/dm/reasonix.svg" alt="downloads"/></a>
+  <a href="./package.json"><img src="https://img.shields.io/node/v/reasonix.svg" alt="node"/></a>
+  <a href="https://github.com/esengine/reasonix/stargazers"><img src="https://img.shields.io/github/stars/esengine/reasonix.svg?style=flat&logo=github&label=stars" alt="GitHub stars"/></a>
+  <a href="https://github.com/esengine/reasonix/discussions"><img src="https://img.shields.io/github/discussions/esengine/reasonix.svg?logo=github&label=discussions" alt="Discussions"/></a>
+</p>
 
-[![npm version](https://img.shields.io/npm/v/reasonix.svg)](https://www.npmjs.com/package/reasonix)
-[![CI](https://github.com/esengine/reasonix/actions/workflows/ci.yml/badge.svg)](https://github.com/esengine/reasonix/actions/workflows/ci.yml)
-[![license](https://img.shields.io/npm/l/reasonix.svg)](./LICENSE)
-[![downloads](https://img.shields.io/npm/dm/reasonix.svg)](https://www.npmjs.com/package/reasonix)
-[![node](https://img.shields.io/node/v/reasonix.svg)](./package.json)
+<p align="center">
+  <strong>A DeepSeek-native AI coding agent for your terminal.</strong> Engineered around DeepSeek's prefix-cache, so the savings are real and the loop stays cheap enough to leave on.
+</p>
 
-**A DeepSeek-native AI coding agent for your terminal.** ~30× cheaper per task than Claude Code, engineered around DeepSeek's prefix-cache so the savings are real (94% live cache hit, not theoretical). MIT-licensed, no IDE lock-in, MCP first-class.
+<p align="center">
+  <img src="docs/assets/hero-stats.svg" alt="94% live prefix-cache hit · ~30× cheaper per task vs Claude Code · MIT terminal-native" width="860"/>
+</p>
 
 ---
 
@@ -26,62 +30,29 @@
 
 ```bash
 cd my-project
-npx reasonix code
+npx reasonix code   # paste a DeepSeek API key on first run; persists after
 ```
 
-First run: paste a [DeepSeek API key](https://platform.deepseek.com/api_keys), pick a preset, optionally select MCP servers. Every run after drops you straight in.
+<p align="center">
+  <img src="docs/assets/hero-terminal.svg" alt="Reasonix code mode — assistant proposes a SEARCH/REPLACE edit; nothing on disk until /apply" width="860"/>
+</p>
 
-```
-reasonix code › fix the case-sensitivity bug in findByEmail
-
-assistant
-  ▸ tool<search_files> → src/users.ts, src/users.test.ts
-  ▸ tool<read_file>    → src/users.ts (412 chars)
-
-src/users.ts
-<<<<<<< SEARCH
-  return users.find(u => u.email === email);
-=======
-  const needle = email.toLowerCase();
-  return users.find(u => u.email.toLowerCase() === needle);
->>>>>>> REPLACE
-
-▸ 1 pending edit · /apply to write, /discard to drop
-```
-
-Edits stay in memory until you type `/apply` — nothing hits disk by default. Requires Node ≥ 22. Tested on macOS, Linux, and Windows (PowerShell, Git Bash, Windows Terminal).
-
-### Appending code-mode system instructions
-
-`reasonix code` supports append-only system prompt customization for users who want to layer personal workflow rules on top of the default Reasonix Code prompt.
-
-```sh
-reasonix code --system-append "Always inspect relevant files before editing."
-reasonix code --system-append-file ./agent-instructions.md
-```
-
-Both options may be used together. When both are provided, the inline `--system-append` text is added first, followed by the `--system-append-file` contents, under a `# User System Append` heading at the end of the generated system prompt.
-
-These options do not replace the default code prompt. They append additional instructions after Reasonix Code's built-in tool-use and edit-protocol instructions. There is no `--system` override for `reasonix code`.
+Requires Node ≥ 22. Tested on macOS, Linux, and Windows (PowerShell, Git Bash, Windows Terminal). Get a [DeepSeek API key →](https://platform.deepseek.com/api_keys) · `reasonix code --help` for flags.
 
 ---
+
 ## How it compares
 
-|                                  | Reasonix         | Claude Code     | Cursor             | Aider            |
-|----------------------------------|------------------|-----------------|--------------------|------------------|
-| Backend                          | DeepSeek V4      | Anthropic       | OpenAI / Anthropic | any (OpenRouter) |
-| **Cost / typical task**          | **~¥0.01–0.04**  | ~¥0.40–4        | ¥150/mo + usage    | varies           |
-| Surface                          | terminal         | terminal + IDE  | IDE (Electron)     | terminal         |
-| License                          | **MIT**          | closed          | closed             | Apache 2         |
-| **DeepSeek prefix-cache hit**    | **94%** (live)   | n/a             | n/a                | ~33% (baseline)  |
-| Plan mode (read-only audit gate) | yes              | yes             | —                  | yes              |
-| Edit review (`/apply`, no auto-write) | yes         | yes             | partial            | yes              |
-| MCP servers                      | first-class      | first-class     | —                  | —                |
-| User-authored skills             | yes              | yes             | —                  | —                |
-| Embedded web dashboard           | yes              | —               | n/a (IDE)          | —                |
-| Hooks (`PreToolUse`, etc.)       | yes              | yes             | —                  | —                |
-| Sandbox boundary                 | strict           | yes             | partial            | yes              |
-| Persistent per-workspace sessions | yes             | partial         | n/a                | —                |
+|                                   | Reasonix         | Claude Code     | Cursor             | Aider            |
+|-----------------------------------|------------------|-----------------|--------------------|------------------|
+| Backend                           | DeepSeek V4      | Anthropic       | OpenAI / Anthropic | any (OpenRouter) |
+| **Cost / typical task**           | **~¥0.01–0.04**  | ~¥0.40–4        | ¥150/mo + usage    | varies           |
+| License                           | **MIT**          | closed          | closed             | Apache 2         |
+| **DeepSeek prefix-cache hit**     | **94%** (live)   | n/a             | n/a                | ~33% (baseline)  |
+| Embedded web dashboard            | yes              | —               | n/a (IDE)          | —                |
+| Persistent per-workspace sessions | yes              | partial         | n/a                | —                |
+
+Plan mode, edit review, MCP, skills, hooks, and sandboxing are all `yes` for Reasonix and most peers — see the feature grid below for what they actually do here.
 
 Numbers from `benchmarks/tau-bench-lite` (8 multi-turn tasks × 3 repeats, live `deepseek-chat`). [Committed transcripts →](./benchmarks/)
 
@@ -111,31 +82,11 @@ Cache stability isn't a feature you turn on; it's an invariant the loop is desig
 
 ## What's in the box
 
-### Cache-first agent loop
-Loop preserves prefix stability across tool dispatches. R1-style reasoning supported, with a scavenge pass that pulls escaped tool calls back out of `<think>` blocks. Tool-call repair handles malformed args before they hit dispatch. `/effort` lets you step reasoning depth down for cheap turns.
+<p align="center">
+  <img src="docs/assets/feature-grid.svg" alt="Feature grid — cache-first loop, plan mode, MCP first-class, sessions and dashboard, hooks, memory and skills" width="860"/>
+</p>
 
-### Tool registry
-Native: `read_file`, `write_file`, `edit_file` (SEARCH/REPLACE), `list_directory`, `search_files`, `grep_files`, `run_command`, `run_background`, `web_search`, `web_fetch`. All sandboxed to the launch directory. **MCP first-class** — `--mcp 'name=cmd args'` adds external servers (stdio / Streamable HTTP / SSE), tools merge into the registry under a prefix.
-
-### Plan mode + edit review
-`/plan` enters a read-only audit gate where the model can't dispatch edits until you approve a written plan. Edits emerge as SEARCH/REPLACE blocks; nothing hits disk until `/apply`. `/walk` steps through pending edits one at a time. `/discard` drops them all.
-
-### Sessions, scoped per workspace
-Sessions persist in `~/.reasonix/sessions/` and are filtered by launch directory. `--new` preserves the previous session under a timestamped name; `--resume` finds the latest. `/sessions` switches mid-chat without quitting.
-
-### Embedded web dashboard
-`/dashboard` opens a localhost SPA mirroring the running TUI — chat (with full composer fallback when the TUI's renderer breaks down on legacy PowerShell), editor (file tree + CodeMirror), Sessions / Plans / Usage / Tools / MCP / Memory / Hooks / Settings. Token-gated, CSRF-checked, ephemeral. [Design mockup →](./design/agent-dashboard.html)
-
-### Hooks
-Configurable shell scripts that fire on `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`, `Notification`, `SessionEnd`. Lives in `.reasonix/settings.json` (per-project) or `~/.reasonix/settings.json` (per-user). The harness executes them — not the model.
-
-### Memory + skills
-Two layers: project-scoped `REASONIX.md` (committed, repo conventions) and user-scoped `~/.reasonix/memory/` (per-user, the model can write to it via the `remember` tool). Skills are user-authored prompt packs with optional sub-agent execution.
-
-### Permissions
-`allow` / `ask` / `deny` patterns on commands and tools. `npm publish` defaults to `ask`; `rm -rf *` and `git push --force *` default to `deny`. Approved-once decisions can be remembered for a prefix.
-
-[Full feature docs on the website →](https://esengine.github.io/reasonix/) · [Architecture →](./docs/ARCHITECTURE.md) · [TUI design mockup →](./design/agent-tui-terminal.html)
+Permissions (`allow` / `ask` / `deny`), tool-call repair (flatten · scavenge · truncation · storm), and `/effort` for cheap turns round out the loop. [Architecture →](./docs/ARCHITECTURE.md) · [Dashboard mockup →](https://esengine.github.io/reasonix/design/agent-dashboard.html) · [TUI mockup →](https://esengine.github.io/reasonix/design/agent-tui-terminal.html) · [Website →](https://esengine.github.io/reasonix/)
 
 ---
 
@@ -145,18 +96,16 @@ Reasonix is solo-maintained but designed to grow. Scoped starter tickets — eac
 
 **Open Discussions** — opinions wanted:
 - [#20 · CLI / TUI design](https://github.com/esengine/reasonix/discussions/20) — what's broken, what's missing, what would you change?
-- [#21 · Dashboard design](https://github.com/esengine/reasonix/discussions/21) — react against the [proposed mockup](./design/agent-dashboard.html)
+- [#21 · Dashboard design](https://github.com/esengine/reasonix/discussions/21) — react against the [proposed mockup](https://esengine.github.io/reasonix/design/agent-dashboard.html)
 - [#22 · Future feature wishlist](https://github.com/esengine/reasonix/discussions/22) — what would you build into Reasonix next?
 
-**Before your first PR**: read [`CONTRIBUTING.md`](./CONTRIBUTING.md). Short, strict project rules (comments, errors, libraries-over-hand-rolled); `tests/comment-policy.test.ts` enforces the comment ones and `npm run verify` is the pre-push gate.
+**Before your first PR**: read [`CONTRIBUTING.md`](./CONTRIBUTING.md) — short, strict project rules (comments, errors, libraries-over-hand-rolled). `tests/comment-policy.test.ts` enforces the comment ones; `npm run verify` is the pre-push gate. By participating you agree to the [Code of Conduct](./CODE_OF_CONDUCT.md). Security issues → [SECURITY.md](./SECURITY.md).
 
-```bash
-git clone https://github.com/esengine/reasonix.git
-cd reasonix
-npm install
-npm run dev code        # run from source via tsx
-npm run verify          # lint + typecheck + 1665 tests
-```
+### Contributors
+
+<a href="https://github.com/esengine/reasonix/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=esengine/reasonix" alt="Contributors to esengine/reasonix"/>
+</a>
 
 ---
 
@@ -165,7 +114,7 @@ npm run verify          # lint + typecheck + 1665 tests
 - **Multi-provider flexibility.** DeepSeek-only on purpose — every layer is tuned around DeepSeek's specific cache mechanic and pricing. Coupling to one backend is the feature.
 - **IDE integration.** Terminal-first; the diff lives in `git diff`, the file tree in `ls`. The dashboard is a companion, not a Cursor replacement.
 - **Hardest-leaderboard reasoning.** Claude Opus still wins some benchmarks. DeepSeek V4 is competitive on coding; if your work is "solve this PhD proof" rather than "fix this auth bug," start with Claude.
-- **Air-gapped / fully-free.** DeepSeek's API has free credit on signup but isn't free forever. For air-gapped, see Aider + Ollama or [Continue](https://continue.dev).
+- **Air-gapped / fully-free.** Reasonix needs a paid DeepSeek API key. For air-gapped or zero-cost runs see Aider + Ollama or [Continue](https://continue.dev).
 
 ---
 
