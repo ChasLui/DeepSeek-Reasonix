@@ -46,6 +46,13 @@ export function mount(element: ReactNode, opts: MountOptions): Handle {
       if (destroyed) return;
       const layout = collectRootLayout(root.children);
       const screen = renderToScreen(layout, viewportWidth, opts.pools);
+      const isFirstPaint = frame.screen.height === 0 && screen.height > 0;
+      if (isFirstPaint) {
+        const reserve = Math.min(screen.height, Math.max(0, viewportHeight - 1));
+        let prelude = "\r";
+        if (reserve > 0) prelude += `${"\n".repeat(reserve)}\x1b[${reserve}A`;
+        opts.write(prelude);
+      }
       const next: Frame = {
         screen,
         viewportWidth,
