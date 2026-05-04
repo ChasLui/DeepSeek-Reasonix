@@ -141,7 +141,7 @@ describe("Box padding — combined", () => {
 });
 
 describe("Box padding — degenerate cases", () => {
-  it("padding consuming all width yields no content rows but keeps top/bottom", () => {
+  it("padding consuming all width still reserves an inner row for the text (yoga measures height=1 even when width=0)", () => {
     const p = pools();
     const s = render(
       <Box paddingX={3} paddingY={1}>
@@ -149,8 +149,7 @@ describe("Box padding — degenerate cases", () => {
       </Box>,
       { width: 6, pools: p },
     );
-    // inner width = 6 - 6 = 0 → text is dropped; only padding rows remain
-    expect(read(s, p)).toEqual(["", ""]);
+    expect(read(s, p)).toEqual(["", "", ""]);
   });
 
   it("negative or NaN padding clamps to 0", () => {

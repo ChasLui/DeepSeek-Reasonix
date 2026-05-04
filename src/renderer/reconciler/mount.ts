@@ -218,21 +218,30 @@ export function mount(element: ReactNode, opts: MountOptions): Handle {
     null,
   );
 
+  // Fires from Static's useEffect (mid-commit). queueMicrotask defers the
+  // re-entrant updateContainer until the live commit fully drains —
+  // otherwise root.children stays empty when renderToBytes reads it.
   const emitStatic = (node: ReactNode): void => {
     if (destroyed) return;
-    const bytes = renderToBytes(node, viewportWidth, opts.pools);
-    if (bytes.length === 0) return;
-    // Single atomic write — see commitScrollback for the reasoning.
-    let out = "";
-    if (frame.screen.height > 0) {
-      out += `\r\x1b[${frame.screen.height}A\x1b[J`;
-    } else {
-      out += "\r\x1b[J";
-    }
-    out += bytes;
-    opts.write(out);
-    frame = emptyFrame(viewportWidth, viewportHeight);
-    root.onCommit();
+    queueMicrotask(() => {
+      if (destroyed) return;
+      const bytes = renderToBytes(node, viewportWidth, opts.pools);
+      if (bytes.length === 0) return;
+      let out = "";
+      if (frame.screen.height > 0) {
+        out += `\r\x1b[${frame.screen.height}A\x1b[J`;
+      } else {
+        out += "\r\x1b[J";
+      }
+      out += bytes;
+      opts.write(out);
+      // Static bytes consumed the previously-reserved live rows — drop the
+      // reservation so the next commit re-grows it from the cursor's new
+      // position, otherwise live paints onto rows now in scrollback.
+      frame = emptyFrame(viewportWidth, viewportHeight);
+      reservedRows = 0;
+      root.onCommit();
+    });
   };
 
   const bridge = { emitStatic };

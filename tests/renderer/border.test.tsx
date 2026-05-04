@@ -160,7 +160,7 @@ describe("Box border — degenerate cases", () => {
     expect(read(s, p)).toEqual(["x"]);
   });
 
-  it("border on a width-1 box collapses inner area to 0 but still renders edges if both sides set", () => {
+  it("border on a width-2 box leaves zero content cells but yoga keeps one inner row for the text", () => {
     const p = pools();
     const s = render(
       <Box borderStyle="single">
@@ -168,6 +168,6 @@ describe("Box border — degenerate cases", () => {
       </Box>,
       { width: 2, pools: p },
     );
-    expect(read(s, p)).toEqual(["┌┐", "└┘"]);
+    expect(read(s, p)).toEqual(["┌┐", "││", "└┘"]);
   });
 });
