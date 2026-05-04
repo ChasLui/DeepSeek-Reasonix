@@ -119,6 +119,33 @@ describe("markdownToLines — inline detail", () => {
   });
 });
 
+describe("markdownToLines — raw chars survive marked tokenization", () => {
+  it('paragraph text keeps < > " & literal', () => {
+    const lines = markdownToLines('use "quotes" & <tag> and AT&T');
+    if (lines[0]?.kind !== "paragraph") throw new Error("expected paragraph");
+    expect(spansText(lines[0].spans)).toBe('use "quotes" & <tag> and AT&T');
+  });
+
+  it("codespan keeps < > literal", () => {
+    const lines = markdownToLines("`a > b && c`");
+    if (lines[0]?.kind !== "paragraph") throw new Error("expected paragraph");
+    const cs = lines[0].spans.find((s) => s.code);
+    expect(cs?.text).toBe("a > b && c");
+  });
+
+  it('blockquote keeps < > " & literal', () => {
+    const lines = markdownToLines('> "quoted" & quoted');
+    const bq = lines.find((l) => l.kind === "blockquote");
+    if (bq?.kind !== "blockquote") throw new Error("expected blockquote");
+    expect(spansText(bq.spans)).toBe('"quoted" & quoted');
+  });
+
+  it("fenced code block keeps content verbatim", () => {
+    const lines = markdownToLines('```\nif (a > b && c < d) "ok"\n```');
+    expect(lines[0]).toMatchObject({ kind: "code", text: 'if (a > b && c < d) "ok"' });
+  });
+});
+
 describe("markdownToLines — streaming-friendliness", () => {
   it("partial text without a closing backtick still parses", () => {
     const lines = markdownToLines("partial `code");
