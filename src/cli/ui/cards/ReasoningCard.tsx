@@ -2,7 +2,7 @@ import { Box, Text, useStdout } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
 import { clipToCells, wrapToCells } from "../../../frame/width.js";
-import { CursorBlock } from "../primitives/BarRow.js";
+import { CursorBlock } from "../primitives/CursorBlock.js";
 import { Spinner } from "../primitives/Spinner.js";
 import type { ReasoningCard as ReasoningCardData } from "../state/cards.js";
 import { FG, TONE } from "../theme/tokens.js";

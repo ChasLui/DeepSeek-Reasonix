@@ -390,38 +390,12 @@ program
   });
 
 program
-  .command("chat-v2")
-  .description("experimental — chat App tree mounted on the cell-diff renderer (Esc to exit)")
-  .option("--model <name>", "DeepSeek model id", "deepseek-chat")
-  .option("--system <prompt>", "system prompt override")
-  .option("--session <name>", "session name to persist to / resume from")
-  .option("--new", "with --session: force a fresh timestamped suffix")
-  .option("--resume", "with --session: resume the latest matching prefix")
-  .action(
-    async (cliOpts: {
-      model?: string;
-      system?: string;
-      session?: string;
-      new?: boolean;
-      resume?: boolean;
-    }) => {
-      const { runChatV2 } = await import("./commands/chat-v2.js");
-      await runChatV2({
-        model: cliOpts.model,
-        system: cliOpts.system,
-        session: cliOpts.session,
-        forceNew: cliOpts.new,
-        forceResume: cliOpts.resume,
-      });
-    },
-  );
-
-program
-  .command("input-demo")
-  .description("experimental — single-line PromptInput on the cell-diff renderer")
-  .action(async () => {
-    const { runInputDemo } = await import("./commands/input-demo.js");
-    await runInputDemo();
+  .command("flicker-demo")
+  .description("experimental — reproduces the streaming + modal flicker scenario for testing")
+  .option("--real-modal", "use real ApprovalCard + useReserveRows (mirror live chat path)")
+  .action(async (cliOpts: { realModal?: boolean }) => {
+    const { runFlickerDemo } = await import("./commands/flicker-demo.js");
+    await runFlickerDemo({ realModal: cliOpts.realModal });
   });
 
 program
