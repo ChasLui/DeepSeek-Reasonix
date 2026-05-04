@@ -2,6 +2,7 @@ import { Static } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
 import { CardRenderer } from "../cards/CardRenderer.js";
+import { ActiveCardContext } from "../primitives/Card.js";
 import type { Card } from "../state/cards.js";
 import { useAgentState } from "../state/provider.js";
 
@@ -35,10 +36,14 @@ export function CardStream(): React.ReactElement {
   const live = cards.slice(cutoff);
   return (
     <>
-      <Static items={committed}>{(card) => <CardRenderer key={card.id} card={card} />}</Static>
-      {live.map((card) => (
-        <CardRenderer key={card.id} card={card} />
-      ))}
+      <ActiveCardContext.Provider value={false}>
+        <Static items={committed}>{(card) => <CardRenderer key={card.id} card={card} />}</Static>
+      </ActiveCardContext.Provider>
+      <ActiveCardContext.Provider value={true}>
+        {live.map((card) => (
+          <CardRenderer key={card.id} card={card} />
+        ))}
+      </ActiveCardContext.Provider>
     </>
   );
 }
