@@ -1,45 +1,48 @@
 import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
-import { BarRow } from "../primitives/BarRow.js";
 import type { SearchCard as SearchCardData, SearchHit } from "../state/cards.js";
-import { FG } from "../theme/tokens.js";
-import { CardHeader } from "./CardHeader.js";
+import { FG, TONE } from "../theme/tokens.js";
 
 export function SearchCard({ card }: { card: SearchCardData }): React.ReactElement {
   const fileCount = new Set(card.hits.map((h) => h.file)).size;
-  const meta = `${card.hits.length} hit${card.hits.length === 1 ? "" : "s"} in ${fileCount} file${
+  const elapsed = `${(card.elapsedMs / 1000).toFixed(2)}s`;
+  const stats = `${card.hits.length} hit${card.hits.length === 1 ? "" : "s"} · ${fileCount} file${
     fileCount === 1 ? "" : "s"
-  } · ${(card.elapsedMs / 1000).toFixed(2)}s`;
+  }`;
+
+  const grouped = groupByFile(card.hits.slice(0, 10));
 
   return (
-    <Box flexDirection="column">
-      <CardHeader tone="search" glyph="⊙" title="Search" subtitle={`"${card.query}"`} meta={meta} />
-      {card.hits.length > 0 && (
-        <>
-          <BarRow tone="search" indent={0} />
-          {groupByFile(card.hits.slice(0, 10)).map(([file, hits]) => (
-            <Box key={file} flexDirection="column">
-              <BarRow tone="search">
-                <Text bold color={FG.strong}>
-                  {file}
-                </Text>
-              </BarRow>
-              {hits.map((h, i) => (
-                <BarRow key={`${file}:${h.line}:${i}`} tone="search">
-                  <Text color={FG.faint}>{`${h.line.toString().padStart(4)} │ `}</Text>
-                  <HighlightedLine text={h.preview} start={h.matchStart} end={h.matchEnd} />
-                </BarRow>
-              ))}
+    <Box flexDirection="column" marginTop={1}>
+      <Box flexDirection="row" gap={1}>
+        <Text color={TONE.info}>⊙</Text>
+        <Text color={TONE.info} bold>
+          search
+        </Text>
+        <Text color={FG.body}>{`"${card.query}"`}</Text>
+        <Text color={FG.faint}>{`· ${stats} · ${elapsed}`}</Text>
+      </Box>
+      {grouped.map(([file, hits]) => (
+        <Box key={file} flexDirection="column">
+          <Box paddingLeft={2}>
+            <Text bold color={FG.strong}>
+              {file}
+            </Text>
+          </Box>
+          {hits.map((h, i) => (
+            <Box key={`${file}:${h.line}:${i}`} paddingLeft={2} flexDirection="row" gap={1}>
+              <Text color={FG.faint}>{`${h.line.toString().padStart(4)} │`}</Text>
+              <HighlightedLine text={h.preview} start={h.matchStart} end={h.matchEnd} />
             </Box>
           ))}
-          {card.hits.length > 10 && (
-            <BarRow tone="search">
-              <Text color={FG.faint}>{`⋮ +${card.hits.length - 10} more hits`}</Text>
-            </BarRow>
-          )}
-        </>
-      )}
+        </Box>
+      ))}
+      {card.hits.length > 10 ? (
+        <Box paddingLeft={2}>
+          <Text color={FG.faint}>{`⋮ +${card.hits.length - 10} more hits`}</Text>
+        </Box>
+      ) : null}
     </Box>
   );
 }

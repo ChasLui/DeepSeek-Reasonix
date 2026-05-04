@@ -31,8 +31,7 @@ export function LiveCard({ card }: { card: LiveCardData }): React.ReactElement {
   const color = TONE_TO_COLOR[card.tone];
   const glyph = VARIANT_GLYPH[card.variant];
   return (
-    <Box flexDirection="row">
-      <Text>{"  "}</Text>
+    <Box paddingLeft={2} flexDirection="row" gap={1}>
       {card.variant === "thinking" ? (
         <Spinner kind="circle" color={color} bold />
       ) : (
@@ -40,8 +39,8 @@ export function LiveCard({ card }: { card: LiveCardData }): React.ReactElement {
           {glyph}
         </Text>
       )}
-      <Text color={FG.body}>{` ${card.text}`}</Text>
-      {card.meta !== undefined && <Text color={FG.faint}>{`   ${card.meta}`}</Text>}
+      <Text color={FG.body}>{card.text}</Text>
+      {card.meta !== undefined ? <Text color={FG.faint}>{`· ${card.meta}`}</Text> : null}
     </Box>
   );
 }
