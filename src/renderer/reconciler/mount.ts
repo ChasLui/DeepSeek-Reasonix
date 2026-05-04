@@ -309,11 +309,15 @@ export function mount(element: ReactNode, opts: MountOptions): Handle {
     },
     resize(width: number, height: number): void {
       if (destroyed) return;
+      // Same-dim events fire 2-3× per drag on most terminals; skip duplicates.
+      if (width === viewportWidth && height === viewportHeight) return;
       viewportWidth = width;
       viewportHeight = height;
       frame = emptyFrame(width, height);
       reservedRows = 0;
-      promotedRows = 0;
+      // Keep `promotedRows` as-is: those rows are already in scrollback. Resetting
+      // would make the next commit re-promote everything and stack a duplicate
+      // copy of every overflowed row.
       scrollOffset = 0;
       stickyBottom = true;
       lastTotalRows = 0;
