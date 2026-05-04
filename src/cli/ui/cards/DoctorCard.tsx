@@ -13,7 +13,7 @@ const LEVEL_COLOR: Record<DoctorCheckEntry["level"], string> = {
 const LEVEL_GLYPH: Record<DoctorCheckEntry["level"], string> = {
   ok: "✓",
   warn: "⚠",
-  fail: "✗",
+  fail: "✖",
 };
 
 const LEVEL_TAG: Record<DoctorCheckEntry["level"], string> = {

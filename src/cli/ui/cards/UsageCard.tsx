@@ -34,8 +34,8 @@ export function UsageCard({ card }: { card: UsageCardData }): React.ReactElement
   return (
     <Box flexDirection="column" marginTop={1}>
       <Box flexDirection="row" gap={1}>
-        <Text color={TONE.brand}>Σ</Text>
-        <Text color={TONE.brand} bold>
+        <Text color={FG.meta}>Σ</Text>
+        <Text color={FG.meta} bold>
           usage
         </Text>
         <Text color={FG.faint}>{`turn ${card.turn}`}</Text>
@@ -87,7 +87,7 @@ function CompactUsageRow({ card }: { card: UsageCardData }): React.ReactElement 
   const elapsed = card.elapsedMs !== undefined ? ` · ${(card.elapsedMs / 1000).toFixed(1)}s` : "";
   return (
     <Box flexDirection="row" gap={1} marginTop={1}>
-      <Text color={TONE.brand}>Σ</Text>
+      <Text color={FG.meta}>Σ</Text>
       <Text color={FG.faint}>{`turn ${card.turn}`}</Text>
       <Text color={FG.meta}>
         {`· ${compactNum(card.tokens.prompt)} prompt · ${compactNum(card.tokens.output)} out`}

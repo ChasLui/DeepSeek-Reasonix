@@ -42,7 +42,7 @@ export function StreamingCard({ card }: { card: StreamingCardData }): React.Reac
   const visible = visualLines.slice(-STREAMING_PREVIEW_LINES);
   const aborted = !!card.aborted;
   const headColor = aborted ? TONE.err : TONE.brand;
-  const glyph = aborted ? "‹" : "▸";
+  const glyph = aborted ? "‹" : "◈";
   const headLabel = aborted ? "aborted" : "writing…";
 
   return (

@@ -67,7 +67,7 @@ function ChildSummary({ card }: { card: Card }): React.ReactElement {
     case "streaming":
       return (
         <>
-          <Text color={CARD.streaming.color}>▶</Text>
+          <Text color={CARD.streaming.color}>◈</Text>
           <Text color={card.done ? FG.sub : TONE.brand}>
             {card.done ? "response" : "streaming response …"}
           </Text>

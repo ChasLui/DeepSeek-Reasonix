@@ -13,13 +13,13 @@ const STEP_GLYPH: Record<TaskStep["status"], string> = {
 
 const STEP_COLOR: Record<TaskStep["status"], string> = {
   queued: FG.faint,
-  running: TONE.brand,
+  running: TONE.warn,
   done: TONE.ok,
   failed: TONE.err,
 };
 
 const TASK_COLOR: Record<TaskCardData["status"], string> = {
-  running: TONE.brand,
+  running: TONE.warn,
   done: TONE.ok,
   failed: TONE.err,
 };

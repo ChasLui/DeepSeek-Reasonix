@@ -26,18 +26,21 @@ export const SURFACE = {
 export const CARD = {
   user: { color: FG.meta, glyph: "◇" },
   reasoning: { color: TONE.accent, glyph: "◆" },
-  streaming: { color: TONE.brand, glyph: "▶" },
-  task: { color: TONE.brand, glyph: "▶" },
+  streaming: { color: TONE.brand, glyph: "◈" },
+  task: { color: TONE.warn, glyph: "▶" },
   tool: { color: TONE.info, glyph: "▣" },
   plan: { color: TONE.accent, glyph: "⊞" },
   diff: { color: TONE.ok, glyph: "±" },
   error: { color: TONE.err, glyph: "✖" },
   warn: { color: TONE.warn, glyph: "⚠" },
-  usage: { color: TONE.brand, glyph: "Σ" },
+  usage: { color: FG.meta, glyph: "Σ" },
   subagent: { color: TONE.violet, glyph: "⌬" },
   approval: { color: TONE.warn, glyph: "?" },
   search: { color: TONE.info, glyph: "⊙" },
   memory: { color: FG.meta, glyph: "⌑" },
+  ctx: { color: TONE.brand, glyph: "◔" },
+  doctor: { color: FG.meta, glyph: "⚕" },
+  branch: { color: TONE.violet, glyph: "⎇" },
 } as const;
 
 export type CardTone = keyof typeof CARD;

@@ -9,7 +9,7 @@ const BAR_CELLS = 28;
 export function BranchCard({ card }: { card: BranchCardData }): React.ReactElement {
   const ratio = card.total > 0 ? card.completed / card.total : 0;
   const filled = Math.max(0, Math.min(BAR_CELLS, Math.round(ratio * BAR_CELLS)));
-  const tone = card.done ? TONE.ok : CARD.streaming.color;
+  const tone = card.done ? TONE.ok : CARD.branch.color;
   return (
     <Box flexDirection="column" marginTop={1}>
       <Box flexDirection="row" gap={1}>
