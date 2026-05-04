@@ -1,9 +1,8 @@
-/** Empty-session welcome card — sharp ASCII box + tagline + 4 starter slash commands. */
+/** Empty-session welcome card — REASONIX × 🐋 DeepSeek brand row + tagline + starter slash commands. */
 
-import { Box, Text, useStdout } from "ink";
+import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
-import { stringWidth } from "../../frame/width.js";
 import { t } from "../../i18n/index.js";
 import { FG, TONE } from "./theme/tokens.js";
 
@@ -17,77 +16,65 @@ export interface WelcomeBannerProps {
 }
 
 const HINTS = ["/help", "/init", "/memory", "/cost"] as const;
-const BOX_INNER_WIDTH = 35;
 
 export function WelcomeBanner({
   inCodeMode,
   dashboardUrl,
 }: WelcomeBannerProps): React.ReactElement {
-  const { stdout } = useStdout();
-  const cols = stdout?.columns ?? 80;
   const tagline = inCodeMode ? t("ui.taglineCode") : t("ui.taglineChat");
   const taglineSub = t("ui.taglineSub");
-  const boxWidth = BOX_INNER_WIDTH + 2;
-  const boxIndent = Math.max(2, Math.floor((cols - boxWidth) / 2));
-  const pad = " ".repeat(boxIndent);
-
-  const emptyRow = `║${" ".repeat(BOX_INNER_WIDTH)}║`;
-  const rows: Array<{ text: string; color?: string; bold?: boolean }> = [
-    { text: `╔${"═".repeat(BOX_INNER_WIDTH)}╗`, color: TONE.brand },
-    { text: emptyRow, color: TONE.brand },
-    { text: `║${centerInside("◈  REASONIX", BOX_INNER_WIDTH)}║`, color: TONE.brand, bold: true },
-    { text: emptyRow, color: TONE.brand },
-    { text: `║${centerInside(tagline, BOX_INNER_WIDTH)}║`, color: TONE.brand },
-    { text: `║${centerInside(taglineSub, BOX_INNER_WIDTH)}║`, color: TONE.brand },
-    { text: emptyRow, color: TONE.brand },
-    { text: `╚${"═".repeat(BOX_INNER_WIDTH)}╝`, color: TONE.brand },
-  ];
-
-  const hintsRow = HINTS.join("   ·   ");
-  const hintsIndent = Math.max(2, Math.floor((cols - stringWidth(hintsRow)) / 2));
   const startTextRaw = t("ui.startSessionHint");
-  const startIndent = Math.max(2, Math.floor((cols - stringWidth(startTextRaw)) / 2));
 
   return (
-    <Box flexDirection="column" marginY={1}>
-      {rows.map((row, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: static list, never reordered
-        <Text key={i} color={row.color} bold={row.bold}>
-          {`${pad}${row.text}`}
-        </Text>
-      ))}
+    <Box flexDirection="column" alignItems="center" marginY={1}>
+      <Box
+        flexDirection="column"
+        alignItems="center"
+        borderStyle="round"
+        borderColor={TONE.brand}
+        paddingX={4}
+        paddingY={1}
+      >
+        <Box flexDirection="row" gap={2}>
+          <Text color={TONE.brand} bold>
+            {"REASONIX"}
+          </Text>
+          <Text color={FG.faint}>{"×"}</Text>
+          <Box flexDirection="row" gap={1}>
+            <Text>{"🐋"}</Text>
+            <Text color={TONE.accent} bold>
+              {"DeepSeek"}
+            </Text>
+          </Box>
+        </Box>
 
-      <Text color={FG.sub}>
-        {" ".repeat(startIndent)}
-        {startTextRaw}
-      </Text>
+        <Box marginTop={1} flexDirection="column" alignItems="center">
+          <Text color={FG.body}>{tagline}</Text>
+          <Text color={FG.meta}>{taglineSub}</Text>
+        </Box>
+      </Box>
 
       <Box marginTop={1}>
-        <Text>{" ".repeat(hintsIndent)}</Text>
-        {HINTS.map((cmd, i) => (
-          <React.Fragment key={cmd}>
-            <Text color={FG.meta}>{cmd}</Text>
-            {i < HINTS.length - 1 && <Text color={FG.faint}>{"   ·   "}</Text>}
-          </React.Fragment>
+        <Text color={FG.sub}>{startTextRaw}</Text>
+      </Box>
+
+      <Box marginTop={1} flexDirection="row" gap={3}>
+        {HINTS.map((cmd) => (
+          <Text key={cmd} color={FG.meta}>
+            {cmd}
+          </Text>
         ))}
       </Box>
 
       {dashboardUrl ? (
-        <Box marginTop={1} flexDirection="row" justifyContent="center">
+        <Box marginTop={1} flexDirection="row" gap={1}>
           <Text color={TONE.brand} bold>
-            {"▸ web · "}
+            {"▸ web"}
           </Text>
+          <Text color={FG.faint}>{"·"}</Text>
           <Text color={TONE.accent}>{dashboardUrl}</Text>
         </Box>
       ) : null}
     </Box>
   );
-}
-
-function centerInside(text: string, pad: number): string {
-  const w = stringWidth(text);
-  if (w >= pad) return text;
-  const left = Math.floor((pad - w) / 2);
-  const right = pad - w - left;
-  return `${" ".repeat(left)}${text}${" ".repeat(right)}`;
 }

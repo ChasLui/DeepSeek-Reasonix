@@ -9,7 +9,6 @@ import {
 import { type AtUrlExpansion, expandAtMentions, expandAtUrls } from "../../at-mentions.js";
 import { createCheckpoint } from "../../code/checkpoints.js";
 import {
-  type ApplyResult,
   type EditBlock,
   applyEditBlocks,
   snapshotBeforeEdits,
@@ -17,7 +16,6 @@ import {
 } from "../../code/edit-blocks.js";
 import { clearPendingEdits, loadPendingEdits, savePendingEdits } from "../../code/pending-edits.js";
 import {
-  archivePlanState,
   clearPlanState,
   loadPlanState,
   relativeTime,
@@ -26,7 +24,6 @@ import {
 import {
   type EditMode,
   type PresetName,
-  type ReasoningEffort,
   addProjectShellAllowed,
   defaultConfigPath,
   editModeHintShown,
@@ -34,7 +31,6 @@ import {
   loadReasoningEffort,
   markEditModeHintShown,
   saveEditMode,
-  saveReasoningEffort,
 } from "../../config.js";
 import { Eventizer } from "../../core/eventize.js";
 import { type ResolvedHook, formatHookOutcomeMessage, loadHooks, runHooks } from "../../hooks.js";
@@ -88,10 +84,8 @@ import { SlashArgPicker } from "./SlashArgPicker.js";
 import { SlashSuggestions } from "./SlashSuggestions.js";
 import { WelcomeBanner } from "./WelcomeBanner.js";
 import { detectBangCommand, formatBangUserMessage } from "./bang.js";
-import { writeClipboard } from "./clipboard.js";
 import { formatEditResults, partitionEdits } from "./edit-history.js";
 import { loopEventToDashboard } from "./effects/loop-to-dashboard.js";
-import { renderFrame } from "./frame-render.js";
 import { appendGlobalMemory, appendProjectMemory, detectHashMemory } from "./hash-memory.js";
 import { applySlashResult } from "./hooks/apply-slash-result.js";
 import { handleAssistantFinal } from "./hooks/handle-assistant-final.js";
@@ -126,7 +120,6 @@ import { TurnTranslator } from "./state/TurnTranslator.js";
 import { cardsToDashboardMessages } from "./state/cards-to-messages.js";
 import { hydrateCardsFromMessages } from "./state/hydrate.js";
 import { AgentStoreProvider, useAgentState, useAgentStore } from "./state/provider.js";
-import { COLOR } from "./theme.js";
 import { TickerProvider } from "./ticker.js";
 import { useCompletionPickers } from "./useCompletionPickers.js";
 import { useEditHistory } from "./useEditHistory.js";
@@ -402,9 +395,9 @@ function AppInner({
   // the workspace mid-session; the prop `codeMode.rootDir` stays as
   // the original launch root so it can't accidentally drift (it's
   // used purely for "is this a code-mode session?" checks now).
-  const [currentRootDir, setCurrentRootDir] = useState<string>(
-    () => codeMode?.rootDir ?? process.cwd(),
-  );
+  // Initial-only — no setter exists, so this is effectively a const captured
+  // at first mount. Kept as state for future `/cwd` mid-session retargeting.
+  const [currentRootDir] = useState<string>(() => codeMode?.rootDir ?? process.cwd());
   // Loaded user hooks (project + global settings.json). Stays mutable
   // so `/hooks reload` and `/cwd` can rescan disk without
   // reconstructing the loop. The loop holds a parallel reference for
@@ -548,7 +541,7 @@ function AppInner({
   // to answer them" hole.
   const [stagedInput, setStagedInput] = useState<{
     plan: string;
-    mode: "refine" | "approve";
+    mode: "refine" | "approve" | "reject";
   } | null>(null);
   // Mid-execution pause from `mark_step_complete` — the model finished
   // a step and the loop is now waiting for the user to pick Continue /
@@ -847,15 +840,8 @@ function AppInner({
   // version) — three independent mount-time fetches behind one hook
   // so the refresh callbacks can be wired into handleSubmit's finally
   // (balance) and the slash context (/models, /update).
-  const {
-    balance,
-    models,
-    latestVersion,
-    updateAvailable,
-    refreshBalance,
-    refreshModels,
-    refreshLatestVersion,
-  } = useSessionInfo(loop);
+  const { balance, models, latestVersion, refreshBalance, refreshModels, refreshLatestVersion } =
+    useSessionInfo(loop);
 
   // Keep the dashboard-server ref-mirrors in sync with their state.
   // These four are the load-bearing live reads for the attached
@@ -2815,24 +2801,15 @@ function AppInner({
         return;
       }
 
-      // Cancel — no input needed, fire immediately.
-      setPendingPlan(null);
-      // Drop any structured plan state on disk too — the user explicitly
-      // said this isn't the path they want, no point holding onto it.
-      planStepsRef.current = null;
-      completedStepIdsRef.current = new Set();
-      planBodyRef.current = null;
-      planSummaryRef.current = null;
-      persistPlanState();
-      togglePlanMode(false);
-      agentStore.dispatch({ type: "plan.drop" });
-      await syntheticSubmit.post({
-        marker: "▸ plan cancelled",
-        synthetic:
-          "The plan was cancelled. Drop it entirely. Ask me what I actually want before proposing another plan or making any changes.",
-      });
+      // Cancel ("reject"). Open the same staged input as approve/refine so
+      // the user can tell the model *why* — symmetric with the deny-tool
+      // "press Tab to add reason" pattern. Empty Enter still cancels cleanly.
+      if (pendingPlan) {
+        setStagedInput({ plan: pendingPlan, mode: "reject" });
+        setPendingPlan(null);
+      }
     },
-    [pendingPlan, togglePlanMode, syntheticSubmit, persistPlanState, agentStore],
+    [pendingPlan],
   );
 
   // Ref-wrapped stable alias. `handlePlanConfirm` has deps that churn
@@ -2860,7 +2837,10 @@ function AppInner({
    * included verbatim.
    */
   const handleStagedInputSubmit = useCallback(
-    async (feedback: string, override?: { plan: string; mode: "refine" | "approve" }) => {
+    async (
+      feedback: string,
+      override?: { plan: string; mode: "refine" | "approve" | "reject" },
+    ) => {
       // `override` lets the web `/dashboard` chat-bridge drive the same
       // dispatch path without first having to setStagedInput() (which
       // is async and would race the read below). When the override is
@@ -2887,6 +2867,24 @@ function AppInner({
             "The plan above has been approved. Implement it now. You are out of plan mode — use edit_file / write_file / run_command as needed. If the plan listed open questions and I didn't answer them, default to the safest interpretation and call them out in your first reply. Don't fabricate preferences — if a question is truly unanswerable without me, stop and ask.";
           marker = "▸ plan approved — implementing";
         }
+      } else if (staged.mode === "reject") {
+        // Drop the structured plan state — the user said this path is wrong,
+        // no point keeping it around for resume.
+        planStepsRef.current = null;
+        completedStepIdsRef.current = new Set();
+        planBodyRef.current = null;
+        planSummaryRef.current = null;
+        persistPlanState();
+        togglePlanMode(false);
+        agentStore.dispatch({ type: "plan.drop" });
+        if (trimmed) {
+          synthetic = `The plan was rejected. User's reason / what they actually want:\n\n${trimmed}\n\nDrop the proposed plan entirely. Use this guidance to understand what the user is after — ask follow-up questions if anything is still unclear, otherwise propose a different plan that addresses it.`;
+          marker = `▸ plan rejected — ${trimmed.length > 50 ? `${trimmed.slice(0, 50)}…` : trimmed}`;
+        } else {
+          synthetic =
+            "The plan was cancelled. Drop it entirely. Ask me what I actually want before proposing another plan or making any changes.";
+          marker = "▸ plan cancelled";
+        }
       } else {
         // refine
         if (trimmed) {
@@ -2901,7 +2899,7 @@ function AppInner({
 
       await syntheticSubmit.post({ marker, synthetic });
     },
-    [stagedInput, togglePlanMode, syntheticSubmit],
+    [stagedInput, togglePlanMode, syntheticSubmit, persistPlanState, agentStore],
   );
   // Ref-mirror so startDashboard's resolvePlanConfirm closure can call
   // the latest function — handleStagedInputSubmit's deps churn on every

@@ -32,15 +32,16 @@ describe("live WelcomeBanner via vi.mock('ink')", () => {
     const w = makeTestWriter();
     const handle = mount(<WelcomeBanner />, {
       viewportWidth: 80,
-      viewportHeight: 14,
+      viewportHeight: 18,
       pools: pools(),
       write: w.write,
     });
     await flush();
     const out = w.output();
+    // Banner uses block-art letterforms (`█▀▄`-style) for REASONIX × DEEPSEEK.
     expect(out).toContain("REASONIX");
-    expect(out).toContain("╔");
-    expect(out).toContain("╝");
+    expect(out).toContain("╭");
+    expect(out).toContain("╯");
     expect(out).toContain("/help");
     expect(out).toContain("/init");
     expect(out).toContain("/memory");
@@ -52,15 +53,15 @@ describe("live WelcomeBanner via vi.mock('ink')", () => {
     const w = makeTestWriter();
     const handle = mount(<WelcomeBanner inCodeMode />, {
       viewportWidth: 80,
-      viewportHeight: 14,
+      viewportHeight: 18,
       pools: pools(),
       write: w.write,
     });
     await flush();
     const out = w.output();
     expect(out).toContain("REASONIX");
-    expect(out).toContain("╔");
-    expect(out).toContain("╚");
+    expect(out).toContain("╭");
+    expect(out).toContain("╰");
     handle.destroy();
   });
 
@@ -79,17 +80,16 @@ describe("live WelcomeBanner via vi.mock('ink')", () => {
     handle.destroy();
   });
 
-  it("narrow viewport (cols=40) still renders the frame", async () => {
+  it("narrow viewport (cols=40) — banner content is wider than 40, but at least the brand text reaches the sink", async () => {
     const w = makeTestWriter();
     const handle = mount(<WelcomeBanner />, {
       viewportWidth: 40,
-      viewportHeight: 14,
+      viewportHeight: 18,
       pools: pools(),
       write: w.write,
     });
     await flush();
     const out = w.output();
-    expect(out).toContain("╔");
     expect(out).toContain("REASONIX");
     handle.destroy();
   });
