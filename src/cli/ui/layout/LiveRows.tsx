@@ -5,6 +5,9 @@ import type { ApplyResult } from "../../../code/edit-blocks.js";
 import type { EditMode } from "../../../config.js";
 import type { JobRegistry } from "../../../tools/jobs.js";
 import { CharBar } from "../char-bar.js";
+import { Card } from "../primitives/Card.js";
+import { CardHeader } from "../primitives/CardHeader.js";
+import { PILL_MODEL, PILL_SECTION, Pill, modelBadgeFor } from "../primitives/Pill.js";
 import { Spinner } from "../primitives/Spinner.js";
 import { CARD, FG, TONE } from "../theme/tokens.js";
 import { useElapsedSeconds, useSlowTick, useTick } from "../ticker.js";
@@ -156,7 +159,7 @@ function subagentTitle(skillName: string | undefined, task: string): string {
   return `Sub-agent · ${short || "anonymous"}`;
 }
 
-/** Live block for a running subagent. Fixed row count — never grows as inner events arrive, so the screen doesn't jump. */
+/** Live block for a running subagent — Card-styled, fixed row count for flicker-safety. */
 export function SubagentRow({
   activity,
 }: {
@@ -170,49 +173,37 @@ export function SubagentRow({
     lastInner: { glyph: string; color: string; label: string; meta?: string } | null;
   };
 }) {
-  const tick = useTick();
+  useTick();
   const seconds = (activity.elapsedMs / 1000).toFixed(1);
   const phase = subagentPhaseLabel(activity.phase, activity.iter, activity.elapsedMs);
   const last = activity.lastInner;
+  const subtitle = activity.skillName ?? truncate(activity.task, 48);
+  const modelBadge = activity.model ? modelBadgeFor(activity.model) : null;
   return (
-    <Box flexDirection="column" marginY={1}>
-      <Box>
-        <Text>{"  "}</Text>
-        <Text color={CARD.subagent.color}>{"▎ "}</Text>
-        <Text bold color={CARD.subagent.color}>
-          {`⌬ ${subagentTitle(activity.skillName, activity.task)}`}
-        </Text>
-        <Box flexGrow={1} />
-        <Text color={CARD.subagent.color}>{`iter ${activity.iter} · ${seconds}s`}</Text>
-        <Text>{"  "}</Text>
-        <Text color={CARD.subagent.color} bold>
-          {SPINNER_FRAMES[tick % SPINNER_FRAMES.length]}
-        </Text>
-      </Box>
-      <Box>
-        <Text>{"  "}</Text>
-        <Text color={CARD.subagent.color}>{"▎"}</Text>
-      </Box>
-      <Box>
-        <Text>{"  "}</Text>
-        <Text color={CARD.subagent.color}>{"▎   "}</Text>
-        <Text color={FG.faint}>{"Task   "}</Text>
+    <Card tone={CARD.subagent.color}>
+      <CardHeader
+        glyph="⌬"
+        tone={CARD.subagent.color}
+        title="subagent"
+        titleColor={PILL_SECTION.plan.fg}
+        titleBg={PILL_SECTION.plan.bg}
+        subtitle={subtitle}
+        meta={[`iter ${activity.iter}`, `${seconds}s`]}
+        right={
+          <>
+            {modelBadge ? (
+              <Pill label={modelBadge.label} {...PILL_MODEL[modelBadge.kind]} bold={false} />
+            ) : null}
+            <Spinner kind="braille" color={CARD.subagent.color} />
+          </>
+        }
+      />
+      <Text color={FG.faint}>
+        {"task  "}
         <Text color={FG.sub}>{activity.task}</Text>
-      </Box>
-      <Box>
-        <Text>{"  "}</Text>
-        <Text color={CARD.subagent.color}>{"▎   "}</Text>
-        <Text color={FG.faint}>{"Model  "}</Text>
-        <Text color={FG.sub}>{activity.model ?? "—"}</Text>
-      </Box>
-      <Box>
-        <Text>{"  "}</Text>
-        <Text color={CARD.subagent.color}>{"▎"}</Text>
-      </Box>
-      <Box>
-        <Text>{"  "}</Text>
-        <Text color={CARD.subagent.color}>{"▎   "}</Text>
-        <Text color={FG.faint}>{"Last   "}</Text>
+      </Text>
+      <Text color={FG.faint}>
+        {"last  "}
         {last ? (
           <>
             <Text color={last.color}>{`${last.glyph} `}</Text>
@@ -220,23 +211,19 @@ export function SubagentRow({
             {last.meta ? <Text color={FG.faint}>{`   ${last.meta}`}</Text> : null}
           </>
         ) : (
-          <Text color={FG.faint}>{"queued…"}</Text>
+          <Text color={FG.faint}>queued…</Text>
         )}
-      </Box>
-      <Box>
-        <Text>{"  "}</Text>
-        <Text color={CARD.subagent.color}>{"▎"}</Text>
-      </Box>
-      <Box>
-        <Text>{"  "}</Text>
-        <Text color={CARD.subagent.color}>{"▎   "}</Text>
-        <Text bold color={TONE.brand}>
-          {"▶ "}
-        </Text>
-        <Text color={TONE.brand}>{phase}</Text>
-      </Box>
-    </Box>
+      </Text>
+      <Text color={TONE.brand}>
+        {"▶  "}
+        {phase}
+      </Text>
+    </Card>
   );
+}
+
+function truncate(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
 /** Live spinner + arg summary while a tool call is in flight; absorbs MCP progress frames. */

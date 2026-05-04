@@ -22,11 +22,9 @@ import { UserCard } from "./UserCard.js";
 import { WarnCard } from "./WarnCard.js";
 
 export function CardRenderer({ card }: { card: Card }): React.ReactElement {
-  return (
-    <Box flexDirection="column" marginTop={1}>
-      {renderCard(card)}
-    </Box>
-  );
+  // No marginTop here — Card primitive owns inter-card spacing. Doubling it
+  // bakes 2 blank rows into every static-emitted block of bytes.
+  return <Box flexDirection="column">{renderCard(card)}</Box>;
 }
 
 function renderCard(card: Card): React.ReactElement {
