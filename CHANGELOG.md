@@ -3,6 +3,33 @@
 All notable changes to Reasonix. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.1] — 2026-05-04
+
+**Headline:** Two TUI fixes on top of the 0.24.0 cell-diff renderer.
+Frame writes are now wrapped in DEC 2026 synchronized-output markers so
+supporting terminals can't paint a half-cleared intermediate state, and
+`marked` is bumped to v15 to stop pre-escaping inline text into HTML
+entities — which both displayed wrong and miscalculated wrap widths.
+
+**Renderer:**
+
+- fix(renderer): wrap commit writes in DEC 2026 sync to suppress
+  flicker. The commit / static / resize paths buffered bytes into a
+  single write but the terminal could still paint the cleared-then-
+  repainted intermediate state. Each frame now goes out wrapped in
+  `\x1b[?2026h…l`; supporting terminals (Windows Terminal ≥1.18,
+  iTerm2, Kitty, Wezterm, alacritty, foot) swap frames atomically,
+  others ignore the unknown CSI. Resize's screen clear is also folded
+  into the next commit so clear+repaint is one sync block. Closes #225.
+
+**Markdown:**
+
+- fix(deps): bump `marked` to v15 — v12 pre-escaped inline text to HTML
+  entities (`<` → `&lt;`, `"` → `&quot;`), which displayed wrong in the
+  TUI and miscalculated cell widths so content past the wrap edge could
+  be clipped. v15 keeps `token.text` literal and only escapes at the
+  HTML renderer layer, which matches our actual rendering path.
+
 ## [0.23.1] — 2026-05-02
 
 **Headline:** Two follow-up fixes to 0.23.0 — the `ReasoningCard` and
