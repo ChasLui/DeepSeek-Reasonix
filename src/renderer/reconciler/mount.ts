@@ -43,6 +43,10 @@ const CLOSE_HYPERLINK = "\x1b]8;;\x1b\\";
 // alt-screen + button-event mouse + SGR coords. Shift+drag bypasses for native selection.
 const ENTER_VIRTUAL = "\x1b[?1049h\x1b[2J\x1b[H\x1b[?1002h\x1b[?1006h";
 const LEAVE_VIRTUAL = "\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[?1049l";
+// DEC 2026 synchronized output — defers paint until ESU so half-arrived diffs don't flash.
+const BSU = "\x1b[?2026h";
+const ESU = "\x1b[?2026l";
+const ERASE_SCREEN = "\x1b[2J\x1b[H";
 
 export function mount(element: ReactNode, opts: MountOptions): Handle {
   const scrollMode: ScrollMode = opts.scroll ?? "scrollback";
@@ -56,6 +60,16 @@ export function mount(element: ReactNode, opts: MountOptions): Handle {
   let lastTotalRows = 0;
   let destroyed = false;
   let lastElement: ReactNode = element;
+  // Set by resize() so the clear is folded into the next commit's sync block.
+  let pendingClear = false;
+
+  // Empty input is dropped — bare BSU+ESU can briefly flash on some terminals.
+  const flushFrame = (out: string): void => {
+    const buffer = pendingClear ? ERASE_SCREEN + out : out;
+    pendingClear = false;
+    if (buffer.length === 0) return;
+    opts.write(BSU + buffer + ESU);
+  };
 
   const reader = opts.stdin ? new KeystrokeReader({ source: opts.stdin }) : null;
 
@@ -157,7 +171,7 @@ export function mount(element: ReactNode, opts: MountOptions): Handle {
     };
     const patches = diffFrames(frame, next, opts.pools);
     if (patches.length > 0) out += serializePatches(patches);
-    if (out.length > 0) opts.write(out);
+    flushFrame(out);
     frame = next;
   };
 
@@ -188,7 +202,7 @@ export function mount(element: ReactNode, opts: MountOptions): Handle {
     };
     const patches = diffFrames(frame, next, opts.pools);
     if (patches.length > 0) out += serializePatches(patches);
-    if (out.length > 0) opts.write(out);
+    flushFrame(out);
     frame = next;
   };
 
@@ -234,7 +248,7 @@ export function mount(element: ReactNode, opts: MountOptions): Handle {
         out += "\r\x1b[J";
       }
       out += bytes;
-      opts.write(out);
+      flushFrame(out);
       // Static bytes consumed the previously-reserved live rows — drop the
       // reservation so the next commit re-grows it from the cursor's new
       // position, otherwise live paints onto rows now in scrollback.
@@ -303,7 +317,8 @@ export function mount(element: ReactNode, opts: MountOptions): Handle {
       scrollOffset = 0;
       stickyBottom = true;
       lastTotalRows = 0;
-      opts.write("\x1b[2J\x1b[H");
+      // Folded into the next commit so clear+repaint is one atomic block.
+      pendingClear = true;
       reconciler.updateContainer(wrap(lastElement), container, null, () => {
         /* committed */
       });

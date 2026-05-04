@@ -13,6 +13,9 @@ export interface RendererOptions {
 
 const RESET_SGR = "\x1b[0m";
 const CLOSE_HYPERLINK = "\x1b]8;;\x1b\\";
+// DEC 2026 synchronized output — defers paint until ESU so half-arrived diffs don't flash.
+const BSU = "\x1b[?2026h";
+const ESU = "\x1b[?2026l";
 
 export class Renderer {
   private viewportWidth: number;
@@ -40,7 +43,7 @@ export class Renderer {
     };
     const patches = diffFrames(this.frame, next, this.opts.pools);
     if (patches.length > 0) {
-      this.opts.write(serializePatches(patches));
+      this.opts.write(BSU + serializePatches(patches) + ESU);
     }
     this.frame = next;
   }
