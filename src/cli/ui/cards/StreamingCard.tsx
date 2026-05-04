@@ -6,6 +6,7 @@ import { useReserveRows } from "../layout/viewport-budget.js";
 import { Markdown } from "../markdown.js";
 import { Card } from "../primitives/Card.js";
 import { CardHeader } from "../primitives/CardHeader.js";
+import { PILL_MODEL, Pill, modelBadgeFor } from "../primitives/Pill.js";
 import { Spinner } from "../primitives/Spinner.js";
 import type { StreamingCard as StreamingCardData } from "../state/cards.js";
 import { FG, TONE } from "../theme/tokens.js";
@@ -21,10 +22,15 @@ export function StreamingCard({ card }: { card: StreamingCardData }): React.Reac
     max: STREAMING_PREVIEW_LINES + 2,
   });
 
+  const modelBadge = card.model ? modelBadgeFor(card.model) : null;
+  const modelPill = modelBadge ? (
+    <Pill label={modelBadge.label} {...PILL_MODEL[modelBadge.kind]} bold={false} />
+  ) : null;
+
   if (card.done && !card.aborted) {
     return (
       <Card tone={TONE.ok}>
-        <CardHeader glyph="‹" tone={TONE.ok} title="reply" />
+        <CardHeader glyph="‹" tone={TONE.ok} title="reply" right={modelPill} />
         <Markdown text={card.text} />
       </Card>
     );
@@ -45,7 +51,12 @@ export function StreamingCard({ card }: { card: StreamingCardData }): React.Reac
         glyph={glyph}
         tone={headColor}
         title={headLabel}
-        right={aborted ? undefined : <Spinner kind="braille" color={TONE.brand} />}
+        right={
+          <>
+            {aborted ? null : <Spinner kind="braille" color={TONE.brand} />}
+            {modelPill}
+          </>
+        }
       />
       {visible.map((line, i) => (
         <Box key={`${card.id}:${allLines.length - visible.length + i}`} flexDirection="row">

@@ -5,6 +5,7 @@ import { clipToCells, wrapToCells } from "../../../frame/width.js";
 import { Card } from "../primitives/Card.js";
 import { CardHeader, type MetaItem } from "../primitives/CardHeader.js";
 import { CursorBlock } from "../primitives/CursorBlock.js";
+import { PILL_MODEL, PILL_SECTION, Pill, modelBadgeFor } from "../primitives/Pill.js";
 import { Spinner } from "../primitives/Spinner.js";
 import type { ReasoningCard as ReasoningCardData } from "../state/cards.js";
 import { FG, TONE } from "../theme/tokens.js";
@@ -52,13 +53,23 @@ function ReasoningHeader({ card }: { card: ReasoningCardData }): React.ReactElem
   if (m) meta.push(m);
   const duration = headerDuration(card);
   if (duration) meta.push(duration);
+  const modelBadge = card.model ? modelBadgeFor(card.model) : null;
   return (
     <CardHeader
       glyph={glyph}
       tone={headColor}
       title={title}
+      titleColor={PILL_SECTION.reason.fg}
+      titleBg={PILL_SECTION.reason.bg}
       meta={meta.length > 0 ? meta : undefined}
-      right={streamingActive ? <Spinner kind="braille" color={TONE.accent} /> : undefined}
+      right={
+        <>
+          {streamingActive ? <Spinner kind="braille" color={TONE.accent} /> : null}
+          {modelBadge ? (
+            <Pill label={modelBadge.label} {...PILL_MODEL[modelBadge.kind]} bold={false} />
+          ) : null}
+        </>
+      }
     />
   );
 }

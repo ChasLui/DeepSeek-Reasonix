@@ -11,6 +11,8 @@ export interface CardHeaderProps {
   title: string;
   /** Override the default tone-colored bold title (e.g. demoted cards use FG.sub). */
   titleColor?: string;
+  /** When set, render the title as a backgrounded pill (e.g. `▎ ◆  reasoning  ` with a tinted block). */
+  titleBg?: string;
   /** Body-tone text after the title, separated by a space (no `·`). */
   subtitle?: string;
   /** Faint trailing fields, prefixed with ` · ` and joined by ` · `. */
@@ -24,6 +26,7 @@ export function CardHeader({
   tone,
   title,
   titleColor,
+  titleBg,
   subtitle,
   meta,
   right,
@@ -31,9 +34,15 @@ export function CardHeader({
   return (
     <Box flexDirection="row" gap={1}>
       <Text color={tone}>{glyph}</Text>
-      <Text bold color={titleColor ?? tone}>
-        {title}
-      </Text>
+      {titleBg ? (
+        <Text backgroundColor={titleBg} color={titleColor ?? tone} bold>
+          {` ${title} `}
+        </Text>
+      ) : (
+        <Text bold color={titleColor ?? tone}>
+          {title}
+        </Text>
+      )}
       {subtitle ? <Text color={FG.body}>{subtitle}</Text> : null}
       {meta?.map((item, i) => {
         const isStr = typeof item === "string";
