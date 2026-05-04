@@ -126,13 +126,17 @@ export function mount(element: ReactNode, opts: MountOptions): Handle {
     const maxHeight = Math.max(1, viewportHeight - 1);
     const split = renderViewport(layout, viewportWidth, opts.pools, maxHeight);
     const newPromote = Math.max(0, split.skipped - promotedRows);
+    // Buffer every byte for this frame into ONE string so the terminal can't
+    // flush between sub-steps. Multiple writes was visible flicker (modal
+    // mount + streaming chunks each hitting reserve-grow + patches separately).
+    let out = "";
     if (newPromote > 0) {
       if (frame.screen.height > 0) {
-        opts.write(`\r\x1b[${frame.screen.height}A\x1b[J`);
+        out += `\r\x1b[${frame.screen.height}A\x1b[J`;
       } else if (reservedRows === 0) {
-        opts.write("\r\x1b[J");
+        out += "\r\x1b[J";
       }
-      opts.write(split.serializePromoted(promotedRows, split.skipped));
+      out += split.serializePromoted(promotedRows, split.skipped);
       promotedRows = split.skipped;
       frame = emptyFrame(viewportWidth, viewportHeight);
       reservedRows = 0;
@@ -141,10 +145,8 @@ export function mount(element: ReactNode, opts: MountOptions): Handle {
     const targetReserve = Math.min(screen.height, Math.max(0, viewportHeight - 1));
     if (targetReserve > reservedRows) {
       const delta = targetReserve - reservedRows;
-      let prelude = "";
-      if (reservedRows === 0) prelude += "\r";
-      prelude += `${"\n".repeat(delta)}\x1b[${delta}A`;
-      opts.write(prelude);
+      if (reservedRows === 0) out += "\r";
+      out += `${"\n".repeat(delta)}\x1b[${delta}A`;
       reservedRows = targetReserve;
     }
     const next: Frame = {
@@ -154,7 +156,8 @@ export function mount(element: ReactNode, opts: MountOptions): Handle {
       cursor: computeCursor(screen.height),
     };
     const patches = diffFrames(frame, next, opts.pools);
-    if (patches.length > 0) opts.write(serializePatches(patches));
+    if (patches.length > 0) out += serializePatches(patches);
+    if (out.length > 0) opts.write(out);
     frame = next;
   };
 
@@ -170,12 +173,11 @@ export function mount(element: ReactNode, opts: MountOptions): Handle {
     lastTotalRows = virt.totalRows;
     const screen = virt.windowAt(scrollOffset, window);
     const targetReserve = Math.min(window, Math.max(0, viewportHeight - 1));
+    let out = "";
     if (targetReserve > reservedRows) {
       const delta = targetReserve - reservedRows;
-      let prelude = "";
-      if (reservedRows === 0) prelude += "\r";
-      prelude += `${"\n".repeat(delta)}\x1b[${delta}A`;
-      opts.write(prelude);
+      if (reservedRows === 0) out += "\r";
+      out += `${"\n".repeat(delta)}\x1b[${delta}A`;
       reservedRows = targetReserve;
     }
     const next: Frame = {
@@ -185,7 +187,8 @@ export function mount(element: ReactNode, opts: MountOptions): Handle {
       cursor: computeCursor(screen.height),
     };
     const patches = diffFrames(frame, next, opts.pools);
-    if (patches.length > 0) opts.write(serializePatches(patches));
+    if (patches.length > 0) out += serializePatches(patches);
+    if (out.length > 0) opts.write(out);
     frame = next;
   };
 
@@ -219,12 +222,15 @@ export function mount(element: ReactNode, opts: MountOptions): Handle {
     if (destroyed) return;
     const bytes = renderToBytes(node, viewportWidth, opts.pools);
     if (bytes.length === 0) return;
+    // Single atomic write — see commitScrollback for the reasoning.
+    let out = "";
     if (frame.screen.height > 0) {
-      opts.write(`\r\x1b[${frame.screen.height}A\x1b[J`);
+      out += `\r\x1b[${frame.screen.height}A\x1b[J`;
     } else {
-      opts.write("\r\x1b[J");
+      out += "\r\x1b[J";
     }
-    opts.write(bytes);
+    out += bytes;
+    opts.write(out);
     frame = emptyFrame(viewportWidth, viewportHeight);
     root.onCommit();
   };
