@@ -4,7 +4,7 @@ import { type Cursor, type Frame, emptyFrame } from "../diff/frame.js";
 import { serializePatches } from "../diff/serialize.js";
 import { RendererBridgeContext } from "../ink-compat/renderer-bridge.js";
 import { AppContext } from "../ink-compat/use-app.js";
-import { ViewportContext } from "../ink-compat/viewport.js";
+import { StdoutContext, ViewportContext } from "../ink-compat/viewport.js";
 import { KeystrokeContext, KeystrokeReader, type KeystrokeSource } from "../input/index.js";
 import { renderViewport, renderVirtual } from "../layout/layout.js";
 import type { LayoutNode } from "../layout/node.js";
@@ -25,6 +25,10 @@ export interface MountOptions {
   /** "scrollback" (default): rows that overflow viewport go to scrollback, frozen.
    *  "virtual": full layout stays live in memory; PgUp/PgDown/Home/End scroll within. */
   readonly scroll?: ScrollMode;
+  /** Real stdout stream — exposed to consumers via `inkCompat.useStdout()` so
+   *  components that need `.on("resize", …)` / `.isTTY` etc. get the actual
+   *  WriteStream rather than a `{columns,rows}` fake. Defaults to process.stdout. */
+  readonly stdout?: NodeJS.WriteStream;
 }
 
 export interface Handle {
@@ -246,10 +250,16 @@ export function mount(element: ReactNode, opts: MountOptions): Handle {
       { value: { columns: viewportWidth, rows: viewportHeight } },
       withBridge,
     );
+    const stdoutForCtx =
+      opts.stdout ??
+      (typeof process !== "undefined" ? (process.stdout as NodeJS.WriteStream) : undefined);
+    const withStdout: ReactNode = stdoutForCtx
+      ? createElement(StdoutContext.Provider, { value: stdoutForCtx }, withViewport)
+      : withViewport;
     const withCursor: ReactNode = createElement(
       CursorContext.Provider,
       { value: setCursorTarget },
-      withViewport,
+      withStdout,
     );
     return reader
       ? createElement(KeystrokeContext.Provider, { value: reader }, withCursor)
