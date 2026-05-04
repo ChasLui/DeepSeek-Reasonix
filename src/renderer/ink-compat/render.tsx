@@ -66,6 +66,7 @@ export function render(element: ReactNode, opts: InkLikeRenderOptions = {}): Ink
     pools,
     write: (bytes) => stdout.write(bytes),
     stdin,
+    stdout,
     onExit: (err) => {
       if (destroyed) return;
       if (err) exitError = err;

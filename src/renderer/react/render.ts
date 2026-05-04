@@ -36,23 +36,7 @@ function elementToLayoutNode(element: ReactElement): LayoutNode | null {
   if (type === HOST_BOX) {
     const boxProps = element.props as BoxProps;
     const children = childrenToLayoutNodes(props.children);
-    const padding = resolvePadding(boxProps);
-    const flex: {
-      flexDirection?: "column" | "row";
-      flexGrow?: number;
-      justifyContent?: BoxProps["justifyContent"];
-      width?: number;
-      height?: number;
-      gap?: number;
-    } = {};
-    if (boxProps.flexDirection !== undefined) flex.flexDirection = boxProps.flexDirection;
-    if (boxProps.flexGrow !== undefined) flex.flexGrow = boxProps.flexGrow;
-    if (boxProps.justifyContent !== undefined) flex.justifyContent = boxProps.justifyContent;
-    if (boxProps.width !== undefined) flex.width = boxProps.width;
-    if (boxProps.height !== undefined) flex.height = boxProps.height;
-    if (boxProps.gap !== undefined) flex.gap = boxProps.gap;
-    const border = resolveBorder(boxProps);
-    return { kind: "box", children, ...flex, ...padding, ...border } satisfies BoxNode;
+    return assignAllBoxProps({ kind: "box", children }, boxProps);
   }
 
   if (type === HOST_TEXT) {
@@ -105,55 +89,52 @@ function emptyBox(): BoxNode {
   return { kind: "box", children: [] };
 }
 
-interface ResolvedPadding {
-  paddingTop?: number;
-  paddingBottom?: number;
-  paddingLeft?: number;
-  paddingRight?: number;
-}
-
-interface ResolvedBorder {
-  borderStyle?: BoxProps["borderStyle"];
-  borderTop?: boolean;
-  borderBottom?: boolean;
-  borderLeft?: boolean;
-  borderRight?: boolean;
-  borderColor?: BoxProps["borderColor"];
-  borderTopColor?: BoxProps["borderTopColor"];
-  borderBottomColor?: BoxProps["borderBottomColor"];
-  borderLeftColor?: BoxProps["borderLeftColor"];
-  borderRightColor?: BoxProps["borderRightColor"];
-}
-
-function resolveBorder(props: BoxProps): ResolvedBorder {
-  const out: ResolvedBorder = {};
-  if (props.borderStyle !== undefined) out.borderStyle = props.borderStyle;
-  if (props.borderTop !== undefined) out.borderTop = props.borderTop;
-  if (props.borderBottom !== undefined) out.borderBottom = props.borderBottom;
-  if (props.borderLeft !== undefined) out.borderLeft = props.borderLeft;
-  if (props.borderRight !== undefined) out.borderRight = props.borderRight;
-  if (props.borderColor !== undefined) out.borderColor = props.borderColor;
-  if (props.borderTopColor !== undefined) out.borderTopColor = props.borderTopColor;
-  if (props.borderBottomColor !== undefined) out.borderBottomColor = props.borderBottomColor;
-  if (props.borderLeftColor !== undefined) out.borderLeftColor = props.borderLeftColor;
-  if (props.borderRightColor !== undefined) out.borderRightColor = props.borderRightColor;
-  return out;
-}
-
-function resolvePadding(props: BoxProps): ResolvedPadding {
-  const all = props.padding;
-  const x = props.paddingX ?? all;
-  const y = props.paddingY ?? all;
-  const top = props.paddingTop ?? y;
-  const bottom = props.paddingBottom ?? y;
-  const left = props.paddingLeft ?? x;
-  const right = props.paddingRight ?? x;
-  const out: ResolvedPadding = {};
-  if (top !== undefined) out.paddingTop = top;
-  if (bottom !== undefined) out.paddingBottom = bottom;
-  if (left !== undefined) out.paddingLeft = left;
-  if (right !== undefined) out.paddingRight = right;
-  return out;
+function assignAllBoxProps(node: BoxNode, props: BoxProps): BoxNode {
+  const r: { -readonly [K in keyof BoxNode]: BoxNode[K] } = { ...node };
+  const padAll = props.padding;
+  const padX = props.paddingX ?? padAll;
+  const padY = props.paddingY ?? padAll;
+  if ((props.paddingTop ?? padY) !== undefined) r.paddingTop = props.paddingTop ?? padY;
+  if ((props.paddingBottom ?? padY) !== undefined) r.paddingBottom = props.paddingBottom ?? padY;
+  if ((props.paddingLeft ?? padX) !== undefined) r.paddingLeft = props.paddingLeft ?? padX;
+  if ((props.paddingRight ?? padX) !== undefined) r.paddingRight = props.paddingRight ?? padX;
+  const marginAll = props.margin;
+  const marginX = props.marginX ?? marginAll;
+  const marginY = props.marginY ?? marginAll;
+  if ((props.marginTop ?? marginY) !== undefined) r.marginTop = props.marginTop ?? marginY;
+  if ((props.marginBottom ?? marginY) !== undefined) r.marginBottom = props.marginBottom ?? marginY;
+  if ((props.marginLeft ?? marginX) !== undefined) r.marginLeft = props.marginLeft ?? marginX;
+  if ((props.marginRight ?? marginX) !== undefined) r.marginRight = props.marginRight ?? marginX;
+  if (props.flexDirection !== undefined) r.flexDirection = props.flexDirection;
+  if (props.flexGrow !== undefined) r.flexGrow = props.flexGrow;
+  if (props.flexShrink !== undefined) r.flexShrink = props.flexShrink;
+  if (props.flexBasis !== undefined) r.flexBasis = props.flexBasis;
+  if (props.flexWrap !== undefined) r.flexWrap = props.flexWrap;
+  if (props.justifyContent !== undefined) r.justifyContent = props.justifyContent;
+  if (props.alignItems !== undefined) r.alignItems = props.alignItems;
+  if (props.alignSelf !== undefined) r.alignSelf = props.alignSelf;
+  if (props.alignContent !== undefined) r.alignContent = props.alignContent;
+  if (props.width !== undefined) r.width = props.width;
+  if (props.height !== undefined) r.height = props.height;
+  if (props.minWidth !== undefined) r.minWidth = props.minWidth;
+  if (props.minHeight !== undefined) r.minHeight = props.minHeight;
+  if (props.maxWidth !== undefined) r.maxWidth = props.maxWidth;
+  if (props.maxHeight !== undefined) r.maxHeight = props.maxHeight;
+  if (props.gap !== undefined) r.gap = props.gap;
+  if (props.columnGap !== undefined) r.columnGap = props.columnGap;
+  if (props.rowGap !== undefined) r.rowGap = props.rowGap;
+  if (props.display !== undefined) r.display = props.display;
+  if (props.borderStyle !== undefined) r.borderStyle = props.borderStyle;
+  if (props.borderTop !== undefined) r.borderTop = props.borderTop;
+  if (props.borderBottom !== undefined) r.borderBottom = props.borderBottom;
+  if (props.borderLeft !== undefined) r.borderLeft = props.borderLeft;
+  if (props.borderRight !== undefined) r.borderRight = props.borderRight;
+  if (props.borderColor !== undefined) r.borderColor = props.borderColor;
+  if (props.borderTopColor !== undefined) r.borderTopColor = props.borderTopColor;
+  if (props.borderBottomColor !== undefined) r.borderBottomColor = props.borderBottomColor;
+  if (props.borderLeftColor !== undefined) r.borderLeftColor = props.borderLeftColor;
+  if (props.borderRightColor !== undefined) r.borderRightColor = props.borderRightColor;
+  return r;
 }
 
 function notNull<T>(v: T | null): v is T {

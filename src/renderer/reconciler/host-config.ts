@@ -45,7 +45,11 @@ const hostConfig: ReactReconciler.HostConfig<
   supportsMutation: true,
   supportsPersistence: false,
   supportsHydration: false,
-  isPrimaryRenderer: false,
+  // We're the only React renderer in this process. `false` would put us on
+  // React's shared non-primary context-stack — re-entrant updateContainer
+  // (the Static / emitStatic path) crashed against that. `true` gives us our
+  // own context state, no shared-stack collisions.
+  isPrimaryRenderer: true,
   noTimeout: -1,
 
   createInstance(type, props) {

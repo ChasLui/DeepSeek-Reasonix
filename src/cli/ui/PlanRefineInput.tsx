@@ -6,7 +6,7 @@ import { CARD, FG } from "./theme/tokens.js";
 import { useTick } from "./ticker.js";
 
 export interface PlanRefineInputProps {
-  mode: "approve" | "refine" | "checkpoint-revise" | "choice-custom";
+  mode: "approve" | "refine" | "reject" | "checkpoint-revise" | "choice-custom";
   onSubmit: (feedback: string) => void;
   onCancel: () => void;
 }
@@ -36,6 +36,15 @@ const MODES: Record<PlanRefineInputProps["mode"], ModeMeta> = {
     cursorColor: CARD.warn.color,
     hint: "Describe what's wrong or missing, or answer questions the plan raised.",
     blankHint: " (Enter with blank = ask the model to list concrete questions.)",
+  },
+  reject: {
+    title: "rejecting — tell the model why (optional)",
+    glyph: "✗",
+    tone: "error",
+    cursorColor: CARD.error.color,
+    hint: "Say what the model got wrong about your goal, or what you actually want instead.",
+    blankHint:
+      " (Enter with blank = cancel without explanation; the model will ask what you want.)",
   },
   "checkpoint-revise": {
     title: "revising — what should change before the next step?",

@@ -1,6 +1,7 @@
 import { Box, Text, useStdout } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React as a runtime value (classic transform compiles JSX to React.createElement)
 import React, { useRef, useState } from "react";
+import { useCursor } from "../../renderer/index.js";
 import { useKeystroke } from "./keystroke-context.js";
 import { useReserveRows } from "./layout/viewport-budget.js";
 import { type MultilineKey, lineAndColumn, processMultilineKey } from "./multiline-keys.js";
@@ -152,6 +153,8 @@ export function PromptInput({
   const accentColor = disabled ? FG.faint : TONE.brand;
   const cursorVisible = true;
   const { line: cursorLine, col: cursorCol } = lineAndColumn(value, cursor);
+  // PromptInput paints its own cursor (`▌` / inverse char) — hide the real terminal cursor so it doesn't double up at the bottom of the screen.
+  useCursor({ col: 0, rowFromBottom: 0, visible: false });
 
   const renderItems = collapseLinesForDisplay(lines, cursorLine);
   const showHugeBufferHints = lines.length > 20;
