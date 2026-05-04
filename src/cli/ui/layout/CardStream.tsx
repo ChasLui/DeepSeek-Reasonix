@@ -34,16 +34,22 @@ export function CardStream(): React.ReactElement {
   }
   const committed = cards.slice(0, cutoff);
   const live = cards.slice(cutoff);
+  // Static items are emitted via bridge.emitStatic, which renders them in an
+  // off-tree React reconciler — context from the live tree does NOT propagate.
+  // The ActiveCardContext.Provider must therefore live inside the children
+  // function so it travels with the rendered subtree.
   return (
     <>
-      <ActiveCardContext.Provider value={false}>
-        <Static items={committed}>{(card) => <CardRenderer key={card.id} card={card} />}</Static>
-      </ActiveCardContext.Provider>
-      <ActiveCardContext.Provider value={true}>
-        {live.map((card) => (
-          <CardRenderer key={card.id} card={card} />
-        ))}
-      </ActiveCardContext.Provider>
+      <Static items={committed}>
+        {(card) => (
+          <ActiveCardContext.Provider value={false} key={card.id}>
+            <CardRenderer card={card} />
+          </ActiveCardContext.Provider>
+        )}
+      </Static>
+      {live.map((card) => (
+        <CardRenderer key={card.id} card={card} />
+      ))}
     </>
   );
 }
