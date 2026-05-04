@@ -14,7 +14,7 @@ export function Card({ tone, children }: CardProps): React.ReactElement {
   const active = useContext(ActiveCardContext);
   if (!active) {
     return (
-      <Box flexDirection="column" marginTop={1} flexShrink={0}>
+      <Box flexDirection="column" marginTop={1}>
         {children}
       </Box>
     );
@@ -27,7 +27,6 @@ export function Card({ tone, children }: CardProps): React.ReactElement {
       paddingX={1}
       marginTop={1}
       width="100%"
-      flexShrink={0}
     >
       {children}
     </Box>
