@@ -11,15 +11,16 @@ import { useElapsedSeconds, useSlowTick, useTick } from "../ticker.js";
 
 export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-/** "Thinking" row — circle spinner per design (model wait, not tool call). */
+/** "Thinking" row — soft pulse + italic label (model wait, not tool call). */
 export function ThinkingRow({ text }: { text: string }) {
   const elapsed = useElapsedSeconds();
   return (
-    <Box marginY={1} paddingX={1}>
-      <Spinner kind="circle" color={TONE.brand} bold />
-      <Text>{"  "}</Text>
-      <Text color={TONE.brand}>{text}</Text>
-      <Text color={FG.faint}>{`  ·  ${elapsed}s`}</Text>
+    <Box marginY={1} paddingX={1} gap={1}>
+      <Spinner kind="circle" color={TONE.accent} />
+      <Text italic color={FG.sub}>
+        {text}
+      </Text>
+      <Text color={FG.faint}>{`${elapsed}s`}</Text>
     </Box>
   );
 }
