@@ -14,7 +14,7 @@ export function Card({ tone, children }: CardProps): React.ReactElement {
   const active = useContext(ActiveCardContext);
   if (!active) {
     return (
-      <Box flexDirection="column" marginTop={1} paddingLeft={2}>
+      <Box flexDirection="column" marginTop={1}>
         {children}
       </Box>
     );
