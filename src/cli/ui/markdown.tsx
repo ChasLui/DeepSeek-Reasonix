@@ -8,7 +8,7 @@ import stringWidth from "string-width";
 import { wrapToCells } from "../../frame/width.js";
 import { FG, SURFACE, TONE } from "./theme/tokens.js";
 
-/** Left margin consumed by CardBox (marginLeft=2 + borderLeft=1) + body paddingLeft. */
+/** Left margin consumed by card outer marginLeft + body paddingLeft + safety. */
 const BODY_LEFT_CELLS = 7;
 
 const MarkdownWidthCtx = React.createContext<number | undefined>(undefined);

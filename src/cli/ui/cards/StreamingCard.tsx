@@ -4,6 +4,7 @@ import React from "react";
 import { clipToCells, wrapToCells } from "../../../frame/width.js";
 import { useReserveRows } from "../layout/viewport-budget.js";
 import { Markdown } from "../markdown.js";
+import { CardHeader } from "../primitives/CardHeader.js";
 import { Spinner } from "../primitives/Spinner.js";
 import type { StreamingCard as StreamingCardData } from "../state/cards.js";
 import { FG, TONE } from "../theme/tokens.js";
@@ -23,12 +24,7 @@ export function StreamingCard({ card }: { card: StreamingCardData }): React.Reac
   if (card.done && !card.aborted) {
     return (
       <Box flexDirection="column" marginTop={1}>
-        <Box flexDirection="row" gap={1}>
-          <Text color={TONE.ok}>‹</Text>
-          <Text color={TONE.ok} bold>
-            reply
-          </Text>
-        </Box>
+        <CardHeader glyph="‹" tone={TONE.ok} title="reply" />
         <Box paddingLeft={BODY_PAD} flexDirection="column">
           <Markdown text={card.text} />
         </Box>
@@ -47,17 +43,13 @@ export function StreamingCard({ card }: { card: StreamingCardData }): React.Reac
 
   return (
     <Box flexDirection="column" marginTop={1}>
-      <Box flexDirection="row" gap={1}>
-        <Text color={headColor}>{glyph}</Text>
-        <Text color={headColor} bold>
-          {headLabel}
-        </Text>
-        {aborted ? null : (
-          <Box flexDirection="row">
-            <Spinner kind="braille" color={TONE.brand} />
-          </Box>
-        )}
-      </Box>
+      <CardHeader
+        glyph={glyph}
+        tone={headColor}
+        title={headLabel}
+        right={aborted ? undefined : <Spinner kind="braille" color={TONE.brand} />}
+      />
+
       {visible.map((line, i) => (
         <Box
           key={`${card.id}:${allLines.length - visible.length + i}`}

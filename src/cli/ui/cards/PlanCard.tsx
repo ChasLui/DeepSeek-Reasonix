@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
+import { CardHeader } from "../primitives/CardHeader.js";
 import type { PlanCard as PlanCardData, PlanStep } from "../state/cards.js";
 import { FG, TONE } from "../theme/tokens.js";
 
@@ -30,13 +31,7 @@ export function PlanCard({ card }: { card: PlanCardData }): React.ReactElement {
 
   return (
     <Box flexDirection="column" marginTop={1}>
-      <Box flexDirection="row" gap={1}>
-        <Text color={TONE.accent}>⊞</Text>
-        <Text color={TONE.accent} bold>
-          {card.title}
-        </Text>
-        <Text color={FG.faint}>{`· ${progress}`}</Text>
-      </Box>
+      <CardHeader glyph="⊞" tone={TONE.accent} title={card.title} meta={[progress]} />
       {card.steps.map((step, i) => {
         const isActive = step.status === "running";
         const titleColor = isActive ? FG.strong : FG.sub;

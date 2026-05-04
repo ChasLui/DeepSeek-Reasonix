@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
+import { CardHeader } from "../primitives/CardHeader.js";
 import type { TaskCard as TaskCardData, TaskStep } from "../state/cards.js";
 import { FG, TONE } from "../theme/tokens.js";
 
@@ -34,14 +35,13 @@ export function TaskCard({ card }: { card: TaskCardData }): React.ReactElement {
   const elapsed = `${(card.elapsedMs / 1000).toFixed(1)}s`;
   return (
     <Box flexDirection="column" marginTop={1}>
-      <Box flexDirection="row" gap={1}>
-        <Text color={TASK_COLOR[card.status]}>{TASK_GLYPH[card.status]}</Text>
-        <Text color={TASK_COLOR[card.status]} bold>
-          {`step ${card.index}/${card.total}`}
-        </Text>
-        <Text color={FG.body}>{card.title}</Text>
-        <Text color={FG.faint}>{`· ${elapsed} · ${card.status}`}</Text>
-      </Box>
+      <CardHeader
+        glyph={TASK_GLYPH[card.status]}
+        tone={TASK_COLOR[card.status]}
+        title={`step ${card.index}/${card.total}`}
+        subtitle={card.title}
+        meta={[elapsed, card.status]}
+      />
       {card.steps.map((step) => (
         <Box key={step.id} paddingLeft={2} flexDirection="row" gap={1}>
           <Text color={STEP_COLOR[step.status]}>{STEP_GLYPH[step.status]}</Text>

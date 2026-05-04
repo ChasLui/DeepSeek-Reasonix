@@ -2,6 +2,7 @@ import { Box, Text, useStdout } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
 import { clipToCells, wrapToCells } from "../../../frame/width.js";
+import { CardHeader, type MetaItem } from "../primitives/CardHeader.js";
 import { CursorBlock } from "../primitives/CursorBlock.js";
 import { Spinner } from "../primitives/Spinner.js";
 import type { ReasoningCard as ReasoningCardData } from "../state/cards.js";
@@ -42,24 +43,22 @@ export function ReasoningCard({
 
 function ReasoningHeader({ card }: { card: ReasoningCardData }): React.ReactElement {
   const streamingActive = card.streaming && !card.aborted;
-  const headColor = card.aborted ? TONE.err : streamingActive ? TONE.accent : TONE.accent;
+  const headColor = card.aborted ? TONE.err : TONE.accent;
   const glyph = streamingActive ? "◇" : "◆";
-  const meta = headerMeta(card);
+  const title = streamingActive ? "reasoning…" : card.aborted ? "reasoning (aborted)" : "reasoning";
+  const meta: MetaItem[] = [];
+  const m = headerMeta(card);
+  if (m) meta.push(m);
   const duration = headerDuration(card);
+  if (duration) meta.push(duration);
   return (
-    <Box flexDirection="row" gap={1}>
-      <Text color={headColor}>{glyph}</Text>
-      <Text color={headColor} bold>
-        {streamingActive ? "reasoning…" : card.aborted ? "reasoning (aborted)" : "reasoning"}
-      </Text>
-      {meta ? <Text color={FG.faint}>{`· ${meta}`}</Text> : null}
-      {duration ? <Text color={FG.faint}>{`· ${duration}`}</Text> : null}
-      {streamingActive ? (
-        <Box flexDirection="row">
-          <Spinner kind="braille" color={TONE.accent} />
-        </Box>
-      ) : null}
-    </Box>
+    <CardHeader
+      glyph={glyph}
+      tone={headColor}
+      title={title}
+      meta={meta.length > 0 ? meta : undefined}
+      right={streamingActive ? <Spinner kind="braille" color={TONE.accent} /> : undefined}
+    />
   );
 }
 

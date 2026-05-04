@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
+import { CardHeader } from "../primitives/CardHeader.js";
 import type { SearchCard as SearchCardData, SearchHit } from "../state/cards.js";
 import { FG, TONE } from "../theme/tokens.js";
 
@@ -15,14 +16,13 @@ export function SearchCard({ card }: { card: SearchCardData }): React.ReactEleme
 
   return (
     <Box flexDirection="column" marginTop={1}>
-      <Box flexDirection="row" gap={1}>
-        <Text color={TONE.info}>⊙</Text>
-        <Text color={TONE.info} bold>
-          search
-        </Text>
-        <Text color={FG.body}>{`"${card.query}"`}</Text>
-        <Text color={FG.faint}>{`· ${stats} · ${elapsed}`}</Text>
-      </Box>
+      <CardHeader
+        glyph="⊙"
+        tone={TONE.info}
+        title="search"
+        subtitle={`"${card.query}"`}
+        meta={[stats, elapsed]}
+      />
       {grouped.map(([file, hits]) => (
         <Box key={file} flexDirection="column">
           <Box paddingLeft={2}>

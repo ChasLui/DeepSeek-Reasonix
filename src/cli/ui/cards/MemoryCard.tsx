@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
+import { CardHeader } from "../primitives/CardHeader.js";
 import type { MemoryCard as MemoryCardData, MemoryEntry } from "../state/cards.js";
 import { FG, TONE } from "../theme/tokens.js";
 
@@ -41,14 +42,13 @@ export function MemoryCard({ card }: { card: MemoryCardData }): React.ReactEleme
     card.tokens > 1024 ? `~${(card.tokens / 1024).toFixed(1)}K tok` : `~${card.tokens} tok`;
   return (
     <Box flexDirection="column" marginTop={1}>
-      <Box flexDirection="row" gap={1}>
-        <Text color={FG.meta}>⌑</Text>
-        <Text bold color={FG.sub}>
-          context
-        </Text>
-        {summary ? <Text color={FG.faint}>{`· ${summary}`}</Text> : null}
-        <Text color={FG.faint}>{`· ${tokens}`}</Text>
-      </Box>
+      <CardHeader
+        glyph="⌑"
+        tone={FG.meta}
+        title="context"
+        titleColor={FG.sub}
+        meta={summary ? [summary, tokens] : [tokens]}
+      />
       {CATEGORY_ORDER.filter((c) => counts[c] > 0).map((category) => {
         const all = card.entries.filter((e) => e.category === category);
         const shown = all.slice(0, 5);

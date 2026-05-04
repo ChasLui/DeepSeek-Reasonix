@@ -2,6 +2,7 @@ import { Box, Text, useStdout } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
 import { clipToCells } from "../../../frame/width.js";
+import { CardHeader, type MetaItem } from "../primitives/CardHeader.js";
 import { Spinner } from "../primitives/Spinner.js";
 import type { ToolCard as ToolCardData } from "../state/cards.js";
 import { FG, TONE } from "../theme/tokens.js";
@@ -36,29 +37,27 @@ export function ToolCard({ card }: { card: ToolCardData }): React.ReactElement {
   // is already conveyed by the badge, so dropping the body keeps the card tight.
   const showBody = !card.rejected && visible.length > 0;
 
+  const meta: MetaItem[] = [];
+  if (card.retry) {
+    meta.push({ text: `↻ ${card.retry.attempt}/${card.retry.max}`, color: TONE.warn });
+  }
+  if (card.rejected) {
+    meta.push({ text: "rejected", color: TONE.err });
+  }
+  for (const part of metaTrail(card)) meta.push(part);
+
   return (
     <Box flexDirection="column" marginTop={1}>
-      <Box flexDirection="row" gap={1}>
-        <Text color={headColor}>{statusGlyph(status)}</Text>
-        <Text color={headColor} bold>
-          {card.name}
-        </Text>
-        {argsLabel ? <Text color={FG.faint}>{argsLabel}</Text> : null}
-        {card.retry ? (
-          <Text color={TONE.warn} bold>{`↻ ${card.retry.attempt}/${card.retry.max}`}</Text>
-        ) : null}
-        {card.rejected ? (
-          <Text color={TONE.err} bold>
-            rejected
-          </Text>
-        ) : null}
-        <Text color={FG.faint}>{metaTrail(card)}</Text>
-        {status === "running" ? (
-          <Box flexDirection="row">
-            <Spinner kind="braille" color={TONE.brand} bold />
-          </Box>
-        ) : null}
-      </Box>
+      <CardHeader
+        glyph={statusGlyph(status)}
+        tone={headColor}
+        title={card.name}
+        subtitle={argsLabel || undefined}
+        meta={meta.length > 0 ? meta : undefined}
+        right={
+          status === "running" ? <Spinner kind="braille" color={TONE.brand} bold /> : undefined
+        }
+      />
       {showBody && (
         <>
           {hidden > 0 ? (
@@ -119,7 +118,7 @@ function headerColorFor(s: ToolStatus): string {
   }
 }
 
-function metaTrail(card: ToolCardData): string {
+function metaTrail(card: ToolCardData): string[] {
   const parts: string[] = [];
   const inputBytes = largestStringInputBytes(card.args);
   if (inputBytes !== null) parts.push(`${formatBytes(inputBytes)} in`);
@@ -133,7 +132,7 @@ function metaTrail(card: ToolCardData): string {
   ) {
     parts.push(`exit ${card.exitCode}`);
   }
-  return parts.length > 0 ? `· ${parts.join(" · ")}` : "";
+  return parts;
 }
 
 function formatArgsSummary(args: unknown): string {

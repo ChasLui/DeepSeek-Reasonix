@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
+import { CardHeader } from "../primitives/CardHeader.js";
 import type { DiffCard as DiffCardData } from "../state/cards.js";
 import { FG, TONE } from "../theme/tokens.js";
 
@@ -22,12 +23,16 @@ export function DiffCard({ card }: { card: DiffCardData }): React.ReactElement {
   const showFooter = card.hunks.length > 0;
   return (
     <Box flexDirection="column" marginTop={1}>
-      <Box flexDirection="row" gap={1}>
-        <Text color={TONE.warn}>±</Text>
-        <Text bold>{card.file}</Text>
-        <Text color={TONE.ok}>{`+${card.stats.add}`}</Text>
-        <Text color={TONE.err}>{`-${card.stats.del}`}</Text>
-      </Box>
+      <CardHeader
+        glyph="±"
+        tone={TONE.warn}
+        title={card.file}
+        titleColor={FG.body}
+        meta={[
+          { text: `+${card.stats.add}`, color: TONE.ok },
+          { text: `-${card.stats.del}`, color: TONE.err },
+        ]}
+      />
       {card.hunks.map((hunk) => (
         <Box key={`${card.id}:${hunk.header}`} flexDirection="column">
           <Box paddingLeft={2}>

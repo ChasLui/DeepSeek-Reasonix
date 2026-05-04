@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
+import { CardHeader } from "../primitives/CardHeader.js";
 import type { UsageCard as UsageCardData } from "../state/cards.js";
 import { FG, TONE, formatCNY } from "../theme/tokens.js";
 
@@ -29,19 +30,12 @@ export function UsageCard({ card }: { card: UsageCardData }): React.ReactElement
   const promptRatio = card.tokens.prompt / cap;
   const reasonRatio = card.tokens.reason / cap;
   const outputRatio = card.tokens.output / cap;
-  const elapsed = card.elapsedMs !== undefined ? `· ${(card.elapsedMs / 1000).toFixed(1)}s` : "";
 
+  const headerMeta: string[] = [`turn ${card.turn}`, formatCNY(card.cost)];
+  if (card.elapsedMs !== undefined) headerMeta.push(`${(card.elapsedMs / 1000).toFixed(1)}s`);
   return (
     <Box flexDirection="column" marginTop={1}>
-      <Box flexDirection="row" gap={1}>
-        <Text color={FG.meta}>Σ</Text>
-        <Text color={FG.meta} bold>
-          usage
-        </Text>
-        <Text color={FG.faint}>{`turn ${card.turn}`}</Text>
-        <Text color={FG.faint}>{`· ${formatCNY(card.cost)}`}</Text>
-        {elapsed ? <Text color={FG.faint}>{elapsed}</Text> : null}
-      </Box>
+      <CardHeader glyph="Σ" tone={FG.meta} title="usage" meta={headerMeta} />
       <Box paddingLeft={2} flexDirection="row" gap={1}>
         <Text color={FG.sub}>prompt</Text>
         {bar(promptRatio, TONE.brand)}

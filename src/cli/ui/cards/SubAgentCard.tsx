@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
+import { CardHeader } from "../primitives/CardHeader.js";
 import type { Card, SubAgentCard as SubAgentCardData } from "../state/cards.js";
 import { CARD, FG, TONE } from "../theme/tokens.js";
 
@@ -15,14 +16,14 @@ export function SubAgentCard({ card }: { card: SubAgentCardData }): React.ReactE
   const headGlyph = card.status === "failed" ? "✖" : "⌬";
   return (
     <Box flexDirection="column" marginTop={1}>
-      <Box flexDirection="row" gap={1}>
-        <Text color={headColor}>{headGlyph}</Text>
-        <Text color={TONE.violet} bold>
-          subagent
-        </Text>
-        <Text>{card.name}</Text>
-        <Text color={headColor}>{`· ${card.status}`}</Text>
-      </Box>
+      <CardHeader
+        glyph={headGlyph}
+        tone={headColor}
+        title="subagent"
+        titleColor={TONE.violet}
+        subtitle={card.name}
+        meta={[{ text: card.status, color: headColor }]}
+      />
       <Box paddingLeft={2}>
         <Text color={FG.sub}>{card.task}</Text>
       </Box>
