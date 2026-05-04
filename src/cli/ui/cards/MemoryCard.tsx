@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
+import { Card } from "../primitives/Card.js";
 import { CardHeader } from "../primitives/CardHeader.js";
 import type { MemoryCard as MemoryCardData, MemoryEntry } from "../state/cards.js";
 import { FG, TONE } from "../theme/tokens.js";
@@ -41,7 +42,7 @@ export function MemoryCard({ card }: { card: MemoryCardData }): React.ReactEleme
   const tokens =
     card.tokens > 1024 ? `~${(card.tokens / 1024).toFixed(1)}K tok` : `~${card.tokens} tok`;
   return (
-    <Box flexDirection="column" marginTop={1}>
+    <Card tone={FG.meta}>
       <CardHeader
         glyph="⌑"
         tone={FG.meta}
@@ -55,24 +56,18 @@ export function MemoryCard({ card }: { card: MemoryCardData }): React.ReactEleme
         const remaining = all.length - shown.length;
         return (
           <Box key={category} flexDirection="column">
-            <Box paddingLeft={2}>
-              <Text color={FG.faint}>{`${CATEGORY_LABEL[category]} (${counts[category]})`}</Text>
-            </Box>
+            <Text color={FG.faint}>{`${CATEGORY_LABEL[category]} (${counts[category]})`}</Text>
             {shown.map((entry) => (
-              <Box key={`${category}:${entry.summary}`} paddingLeft={2} flexDirection="row" gap={1}>
+              <Box key={`${category}:${entry.summary}`} flexDirection="row" gap={1}>
                 <Text color={CATEGORY_GLYPH_COLOR[category]}>{CATEGORY_GLYPH[category]}</Text>
                 <Text color={FG.sub}>{entry.summary}</Text>
               </Box>
             ))}
-            {remaining > 0 ? (
-              <Box paddingLeft={2}>
-                <Text color={FG.faint}>{`⋮ +${remaining} more`}</Text>
-              </Box>
-            ) : null}
+            {remaining > 0 ? <Text color={FG.faint}>{`⋮ +${remaining} more`}</Text> : null}
           </Box>
         );
       })}
-    </Box>
+    </Card>
   );
 }
 

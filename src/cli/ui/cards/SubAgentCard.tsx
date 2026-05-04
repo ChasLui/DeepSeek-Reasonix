@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
+import { Card as CardWrap } from "../primitives/Card.js";
 import { CardHeader } from "../primitives/CardHeader.js";
 import type { Card, SubAgentCard as SubAgentCardData } from "../state/cards.js";
 import { CARD, FG, TONE } from "../theme/tokens.js";
@@ -15,7 +16,7 @@ export function SubAgentCard({ card }: { card: SubAgentCardData }): React.ReactE
   const headColor = STATUS_COLOR[card.status];
   const headGlyph = card.status === "failed" ? "✖" : "⌬";
   return (
-    <Box flexDirection="column" marginTop={1}>
+    <CardWrap tone={headColor}>
       <CardHeader
         glyph={headGlyph}
         tone={headColor}
@@ -24,21 +25,17 @@ export function SubAgentCard({ card }: { card: SubAgentCardData }): React.ReactE
         subtitle={card.name}
         meta={[{ text: card.status, color: headColor }]}
       />
-      <Box paddingLeft={2}>
-        <Text color={FG.sub}>{card.task}</Text>
-      </Box>
+      <Text color={FG.sub}>{card.task}</Text>
       {card.tools && card.tools.length > 0 && (
-        <Box paddingLeft={2}>
-          <Text color={FG.faint}>{`tools · ${card.tools.join(", ")}`}</Text>
-        </Box>
+        <Text color={FG.faint}>{`tools · ${card.tools.join(", ")}`}</Text>
       )}
       {card.children.map((child) => (
-        <Box key={child.id} paddingLeft={2} flexDirection="row" gap={1}>
+        <Box key={child.id} flexDirection="row" gap={1}>
           <Text color={TONE.violet}>▎</Text>
           <ChildSummary card={child} />
         </Box>
       ))}
-    </Box>
+    </CardWrap>
   );
 }
 

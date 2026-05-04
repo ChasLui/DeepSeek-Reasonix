@@ -1,6 +1,8 @@
 import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
+import { Card } from "../primitives/Card.js";
+import { CardHeader } from "../primitives/CardHeader.js";
 import type { DoctorCard as DoctorCardData, DoctorCheckEntry } from "../state/cards.js";
 import { CARD, FG, TONE } from "../theme/tokens.js";
 
@@ -30,16 +32,10 @@ export function DoctorCard({ card }: { card: DoctorCardData }): React.ReactEleme
   const summary = `${card.checks.length} checks · ${ok} passed${warn > 0 ? ` · ${warn} warn` : ""}${fail > 0 ? ` · ${fail} fail` : ""}`;
 
   return (
-    <Box flexDirection="column" marginTop={1}>
-      <Box flexDirection="row" gap={1}>
-        <Text color={CARD.tool.color}>⚕</Text>
-        <Text color={CARD.tool.color} bold>
-          doctor
-        </Text>
-        <Text color={FG.faint}>{`· ${summary}`}</Text>
-      </Box>
+    <Card tone={CARD.tool.color}>
+      <CardHeader glyph="⚕" tone={CARD.tool.color} title="doctor" meta={[summary]} />
       {card.checks.map((c) => (
-        <Box key={c.label} paddingLeft={2} flexDirection="row" gap={1}>
+        <Box key={c.label} flexDirection="row" gap={1}>
           <Text color={LEVEL_COLOR[c.level]}>{LEVEL_GLYPH[c.level]}</Text>
           <Text bold color={FG.body}>
             {c.label.padEnd(labelWidth + 1)}
@@ -48,6 +44,6 @@ export function DoctorCard({ card }: { card: DoctorCardData }): React.ReactEleme
           <Text color={LEVEL_COLOR[c.level]}>{LEVEL_TAG[c.level]}</Text>
         </Box>
       ))}
-    </Box>
+    </Card>
   );
 }

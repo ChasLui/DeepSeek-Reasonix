@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
+import { Card } from "../primitives/Card.js";
 import { CardHeader } from "../primitives/CardHeader.js";
 import type { SearchCard as SearchCardData, SearchHit } from "../state/cards.js";
 import { FG, TONE } from "../theme/tokens.js";
@@ -15,7 +16,7 @@ export function SearchCard({ card }: { card: SearchCardData }): React.ReactEleme
   const grouped = groupByFile(card.hits.slice(0, 10));
 
   return (
-    <Box flexDirection="column" marginTop={1}>
+    <Card tone={TONE.info}>
       <CardHeader
         glyph="⊙"
         tone={TONE.info}
@@ -25,13 +26,11 @@ export function SearchCard({ card }: { card: SearchCardData }): React.ReactEleme
       />
       {grouped.map(([file, hits]) => (
         <Box key={file} flexDirection="column">
-          <Box paddingLeft={2}>
-            <Text bold color={FG.strong}>
-              {file}
-            </Text>
-          </Box>
+          <Text bold color={FG.strong}>
+            {file}
+          </Text>
           {hits.map((h, i) => (
-            <Box key={`${file}:${h.line}:${i}`} paddingLeft={2} flexDirection="row" gap={1}>
+            <Box key={`${file}:${h.line}:${i}`} flexDirection="row" gap={1}>
               <Text color={FG.faint}>{`${h.line.toString().padStart(4)} │`}</Text>
               <HighlightedLine text={h.preview} start={h.matchStart} end={h.matchEnd} />
             </Box>
@@ -39,11 +38,9 @@ export function SearchCard({ card }: { card: SearchCardData }): React.ReactEleme
         </Box>
       ))}
       {card.hits.length > 10 ? (
-        <Box paddingLeft={2}>
-          <Text color={FG.faint}>{`⋮ +${card.hits.length - 10} more hits`}</Text>
-        </Box>
+        <Text color={FG.faint}>{`⋮ +${card.hits.length - 10} more hits`}</Text>
       ) : null}
-    </Box>
+    </Card>
   );
 }
 

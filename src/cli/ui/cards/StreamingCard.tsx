@@ -4,12 +4,12 @@ import React from "react";
 import { clipToCells, wrapToCells } from "../../../frame/width.js";
 import { useReserveRows } from "../layout/viewport-budget.js";
 import { Markdown } from "../markdown.js";
+import { Card } from "../primitives/Card.js";
 import { CardHeader } from "../primitives/CardHeader.js";
 import { Spinner } from "../primitives/Spinner.js";
 import type { StreamingCard as StreamingCardData } from "../state/cards.js";
 import { FG, TONE } from "../theme/tokens.js";
 
-const BODY_PAD = 2;
 /** Streaming preview tail length — bounded live region so chunks don't thrash whole-card layout. */
 const STREAMING_PREVIEW_LINES = 4;
 
@@ -23,16 +23,14 @@ export function StreamingCard({ card }: { card: StreamingCardData }): React.Reac
 
   if (card.done && !card.aborted) {
     return (
-      <Box flexDirection="column" marginTop={1}>
+      <Card tone={TONE.ok}>
         <CardHeader glyph="‹" tone={TONE.ok} title="reply" />
-        <Box paddingLeft={BODY_PAD} flexDirection="column">
-          <Markdown text={card.text} />
-        </Box>
-      </Box>
+        <Markdown text={card.text} />
+      </Card>
     );
   }
 
-  const lineCells = Math.max(20, cols - BODY_PAD - 4);
+  const lineCells = Math.max(20, cols - 4);
   const allLines = card.text.length > 0 ? card.text.split("\n") : [""];
   const visualLines = allLines.flatMap((l) => wrapToCells(l, lineCells));
   const visible = visualLines.slice(-STREAMING_PREVIEW_LINES);
@@ -42,28 +40,19 @@ export function StreamingCard({ card }: { card: StreamingCardData }): React.Reac
   const headLabel = aborted ? "aborted" : "writing…";
 
   return (
-    <Box flexDirection="column" marginTop={1}>
+    <Card tone={headColor}>
       <CardHeader
         glyph={glyph}
         tone={headColor}
         title={headLabel}
         right={aborted ? undefined : <Spinner kind="braille" color={TONE.brand} />}
       />
-
       {visible.map((line, i) => (
-        <Box
-          key={`${card.id}:${allLines.length - visible.length + i}`}
-          paddingLeft={BODY_PAD}
-          flexDirection="row"
-        >
+        <Box key={`${card.id}:${allLines.length - visible.length + i}`} flexDirection="row">
           <Text color={aborted ? FG.meta : FG.body}>{clipToCells(line, lineCells)}</Text>
         </Box>
       ))}
-      {aborted ? (
-        <Box paddingLeft={BODY_PAD}>
-          <Text color={FG.faint}>[truncated by esc]</Text>
-        </Box>
-      ) : null}
-    </Box>
+      {aborted ? <Text color={FG.faint}>[truncated by esc]</Text> : null}
+    </Card>
   );
 }

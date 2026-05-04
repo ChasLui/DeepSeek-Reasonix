@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
+import { Card } from "../primitives/Card.js";
 import { CardHeader } from "../primitives/CardHeader.js";
 import type { TaskCard as TaskCardData, TaskStep } from "../state/cards.js";
 import { FG, TONE } from "../theme/tokens.js";
@@ -34,7 +35,7 @@ const TASK_GLYPH: Record<TaskCardData["status"], string> = {
 export function TaskCard({ card }: { card: TaskCardData }): React.ReactElement {
   const elapsed = `${(card.elapsedMs / 1000).toFixed(1)}s`;
   return (
-    <Box flexDirection="column" marginTop={1}>
+    <Card tone={TASK_COLOR[card.status]}>
       <CardHeader
         glyph={TASK_GLYPH[card.status]}
         tone={TASK_COLOR[card.status]}
@@ -43,7 +44,7 @@ export function TaskCard({ card }: { card: TaskCardData }): React.ReactElement {
         meta={[elapsed, card.status]}
       />
       {card.steps.map((step) => (
-        <Box key={step.id} paddingLeft={2} flexDirection="row" gap={1}>
+        <Box key={step.id} flexDirection="row" gap={1}>
           <Text color={STEP_COLOR[step.status]}>{STEP_GLYPH[step.status]}</Text>
           <Text bold color={FG.body}>
             {(step.toolName ?? "step").padEnd(7)}
@@ -55,6 +56,6 @@ export function TaskCard({ card }: { card: TaskCardData }): React.ReactElement {
           ) : null}
         </Box>
       ))}
-    </Box>
+    </Card>
   );
 }

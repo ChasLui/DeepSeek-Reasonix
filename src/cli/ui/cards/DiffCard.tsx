@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
+import { Card } from "../primitives/Card.js";
 import { CardHeader } from "../primitives/CardHeader.js";
 import type { DiffCard as DiffCardData } from "../state/cards.js";
 import { FG, TONE } from "../theme/tokens.js";
@@ -22,7 +23,7 @@ const LINE_GLYPH = {
 export function DiffCard({ card }: { card: DiffCardData }): React.ReactElement {
   const showFooter = card.hunks.length > 0;
   return (
-    <Box flexDirection="column" marginTop={1}>
+    <Card tone={TONE.warn}>
       <CardHeader
         glyph="±"
         tone={TONE.warn}
@@ -35,18 +36,11 @@ export function DiffCard({ card }: { card: DiffCardData }): React.ReactElement {
       />
       {card.hunks.map((hunk) => (
         <Box key={`${card.id}:${hunk.header}`} flexDirection="column">
-          <Box paddingLeft={2}>
-            <Text italic color={FG.faint}>
-              {hunk.header}
-            </Text>
-          </Box>
+          <Text italic color={FG.faint}>
+            {hunk.header}
+          </Text>
           {hunk.lines.map((line, li) => (
-            <Box
-              key={`${card.id}:${hunk.header}:${li}`}
-              paddingLeft={2}
-              flexDirection="row"
-              gap={1}
-            >
+            <Box key={`${card.id}:${hunk.header}:${li}`} flexDirection="row" gap={1}>
               <Text color={LINE_COLOR[line.kind]}>{LINE_GLYPH[line.kind]}</Text>
               <Text color={LINE_COLOR[line.kind]} dimColor={line.kind === "ctx"}>
                 {line.text}
@@ -56,7 +50,7 @@ export function DiffCard({ card }: { card: DiffCardData }): React.ReactElement {
         </Box>
       ))}
       {showFooter && (
-        <Box paddingLeft={2} flexDirection="row" gap={2}>
+        <Box flexDirection="row" gap={2}>
           <Text bold color={TONE.ok}>
             [a] apply
           </Text>
@@ -66,6 +60,6 @@ export function DiffCard({ card }: { card: DiffCardData }): React.ReactElement {
           </Text>
         </Box>
       )}
-    </Box>
+    </Card>
   );
 }

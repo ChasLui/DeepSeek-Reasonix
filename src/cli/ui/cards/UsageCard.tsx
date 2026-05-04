@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
+import { Card } from "../primitives/Card.js";
 import { CardHeader } from "../primitives/CardHeader.js";
 import type { UsageCard as UsageCardData } from "../state/cards.js";
 import { FG, TONE, formatCNY } from "../theme/tokens.js";
@@ -34,9 +35,9 @@ export function UsageCard({ card }: { card: UsageCardData }): React.ReactElement
   const headerMeta: string[] = [`turn ${card.turn}`, formatCNY(card.cost)];
   if (card.elapsedMs !== undefined) headerMeta.push(`${(card.elapsedMs / 1000).toFixed(1)}s`);
   return (
-    <Box flexDirection="column" marginTop={1}>
+    <Card tone={FG.meta}>
       <CardHeader glyph="Σ" tone={FG.meta} title="usage" meta={headerMeta} />
-      <Box paddingLeft={2} flexDirection="row" gap={1}>
+      <Box flexDirection="row" gap={1}>
         <Text color={FG.sub}>prompt</Text>
         {bar(promptRatio, TONE.brand)}
         <Text bold color={FG.body}>
@@ -44,26 +45,26 @@ export function UsageCard({ card }: { card: UsageCardData }): React.ReactElement
         </Text>
         <Text color={FG.faint}>{`/ 1M · ${(promptRatio * 100).toFixed(1)}%`}</Text>
       </Box>
-      <Box paddingLeft={2} flexDirection="row" gap={1}>
+      <Box flexDirection="row" gap={1}>
         <Text color={FG.sub}>reason</Text>
         {bar(reasonRatio, TONE.accent)}
         <Text bold color={FG.body}>
           {card.tokens.reason.toLocaleString()}
         </Text>
       </Box>
-      <Box paddingLeft={2} flexDirection="row" gap={1}>
+      <Box flexDirection="row" gap={1}>
         <Text color={FG.sub}>output</Text>
         {bar(outputRatio, TONE.brand)}
         <Text bold color={FG.body}>
           {card.tokens.output.toLocaleString()}
         </Text>
       </Box>
-      <Box paddingLeft={2} flexDirection="row" gap={1}>
+      <Box flexDirection="row" gap={1}>
         <Text color={FG.sub}>cache </Text>
         {bar(card.cacheHit, TONE.ok)}
         <Text bold color={TONE.ok}>{`${(card.cacheHit * 100).toFixed(1)}%`}</Text>
       </Box>
-      <Box paddingLeft={2} flexDirection="row" gap={1}>
+      <Box flexDirection="row" gap={1}>
         <Text color={FG.faint}>session</Text>
         <Text bold color={FG.body}>{`⛁ ${formatCNY(card.sessionCost, 3)}`}</Text>
         {card.balance !== undefined ? (
@@ -73,7 +74,7 @@ export function UsageCard({ card }: { card: UsageCardData }): React.ReactElement
           </>
         ) : null}
       </Box>
-    </Box>
+    </Card>
   );
 }
 

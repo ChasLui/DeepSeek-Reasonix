@@ -2,6 +2,7 @@ import { Box, Text, useStdout } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
 import { clipToCells, wrapToCells } from "../../../frame/width.js";
+import { Card } from "../primitives/Card.js";
 import { CardHeader, type MetaItem } from "../primitives/CardHeader.js";
 import { CursorBlock } from "../primitives/CursorBlock.js";
 import { Spinner } from "../primitives/Spinner.js";
@@ -12,7 +13,6 @@ import { FG, TONE } from "../theme/tokens.js";
 const STREAMING_PREVIEW_LINES = 4;
 /** Once settled, only the conclusion is actionable; the rest is in `/reasoning last`. */
 const SETTLED_TAIL_LINES = 2;
-const BODY_PAD = 2;
 
 export function ReasoningCard({
   card,
@@ -23,13 +23,14 @@ export function ReasoningCard({
 }): React.ReactElement {
   const { stdout } = useStdout();
   const cols = stdout?.columns ?? 80;
-  const lineCells = Math.max(20, cols - BODY_PAD - 4);
+  const lineCells = Math.max(20, cols - 4);
 
   const allLines = card.text.length > 0 ? card.text.split("\n") : [];
   const showBody = expanded && (allLines.length > 0 || card.streaming);
+  const tone = card.aborted ? TONE.err : TONE.accent;
 
   return (
-    <Box flexDirection="column" marginTop={1}>
+    <Card tone={tone}>
       <ReasoningHeader card={card} />
       {showBody &&
         (card.streaming ? (
@@ -37,7 +38,7 @@ export function ReasoningCard({
         ) : (
           <SettledPreview card={card} allLines={allLines} lineCells={lineCells} />
         ))}
-    </Box>
+    </Card>
   );
 }
 
@@ -122,7 +123,7 @@ function BodyLines({
       {lines.map((line, i) => {
         const isLast = i === lines.length - 1;
         return (
-          <Box key={`${card.id}:b:${indexOffset + i}`} paddingLeft={BODY_PAD} flexDirection="row">
+          <Box key={`${card.id}:b:${indexOffset + i}`} flexDirection="row">
             <Text italic color={FG.meta}>
               {clipToCells(line, lineCells)}
             </Text>
@@ -148,9 +149,5 @@ function ElisionHint({
     parts.push(`${droppedLines} line${droppedLines === 1 ? "" : "s"}`);
   }
   if (card.tokens > 0) parts.push(`${card.tokens.toLocaleString()} tok`);
-  return (
-    <Box paddingLeft={BODY_PAD}>
-      <Text color={FG.faint}>{`⋯ ${parts.join(" · ")} above · /reasoning last`}</Text>
-    </Box>
-  );
+  return <Text color={FG.faint}>{`⋯ ${parts.join(" · ")} above · /reasoning last`}</Text>;
 }
