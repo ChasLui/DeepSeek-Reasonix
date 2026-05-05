@@ -3,6 +3,41 @@
 All notable changes to Reasonix. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.1] — 2026-05-05
+
+**Headline:** `run_command` learns the four common shell chain
+operators (`|`, `||`, `&&`, `;`) and the seven file redirect
+operators (`>`, `>>`, `<`, `2>`, `2>>`, `2>&1`, `&>`). Parsed and
+spawned natively — no shell is invoked, so semantics are identical
+on Windows / macOS / Linux; PowerShell 5.1's `&&` parse error and
+the object-vs-bytes pipe gap are sidestepped. Each chain segment is
+allowlist-checked independently, so `git status | grep main` now
+auto-runs when both halves are individually allowed. Driven by
+discussion #231.
+
+**Shell:**
+
+- feat(shell): support `|`, `||`, `&&`, `;` chain operators in
+  `run_command` via split-and-spawn. The chain is segmented at
+  whitespace-bounded operators (preserves embedded `&` / `|` inside
+  arg values like `--flag=1&2`), each segment runs through the
+  existing lenient tokenizer, and segments are executed with proper
+  short-circuit semantics for `&&` / `||`. Each segment hits the
+  allowlist independently — `git status | grep main` runs when both
+  halves are allowed individually. (#233, #234)
+- feat(shell): support file redirects in `run_command` — `>` (truncate),
+  `>>` (append), `<` (stdin from file), `2>` (stderr truncate), `2>>`
+  (stderr append), `2>&1` (merge stderr into wherever stdout points),
+  `&>` (both → file). Targets resolve relative to the project root.
+  Mid-pipe `2>&1` correctly merges stderr into the next segment's
+  stdin without truncating on stdout-end. (#235)
+- fix(shell): chain parser stays consistent with the project's
+  long-standing lenient tokenizer — `cargo run -- --flag=1&2` and
+  similar embedded-operator args stay literal instead of getting
+  POSIX-strict-rejected. shell-quote dependency dropped;
+  `splitOnChainOps` is whitespace-bounded like the existing
+  `detectShellOperator`. (#234)
+
 ## [0.24.1] — 2026-05-04
 
 **Headline:** Two TUI fixes on top of the 0.24.0 cell-diff renderer.
