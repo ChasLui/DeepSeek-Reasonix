@@ -118,6 +118,8 @@ Scoped starter tickets — each with background, code pointers, acceptance crite
 - [#21 · Dashboard design](https://github.com/esengine/reasonix/discussions/21) — react against the [proposed mockup](https://esengine.github.io/reasonix/design/agent-dashboard.html)
 - [#22 · Future feature wishlist](https://github.com/esengine/reasonix/discussions/22) — what would you build into Reasonix next?
 
+**Already using Reasonix and willing to help others discover it?** You're welcome to publish blog posts, articles, screenshots, talks, or videos to [**Show and tell**](https://github.com/esengine/reasonix/discussions/categories/show-and-tell). The project has no marketing budget — community word of mouth is how new users find it. Sustained advocates will be recognized with a Reasonix Advocate badge alongside the contributors wall.
+
 **Before your first PR**: read [`CONTRIBUTING.md`](./CONTRIBUTING.md) — short, strict rules (comments, errors, libraries-over-hand-rolled). `tests/comment-policy.test.ts` enforces the comment ones; `npm run verify` is the pre-push gate. By participating you agree to the [Code of Conduct](./CODE_OF_CONDUCT.md). Security issues → [SECURITY.md](./SECURITY.md).
 
 <p align="center">

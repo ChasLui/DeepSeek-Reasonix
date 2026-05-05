@@ -118,6 +118,8 @@ npx reasonix code   # 首次运行粘贴 DeepSeek API Key，之后会记住
 - [#21 · Dashboard 设计](https://github.com/esengine/reasonix/discussions/21) —— 对着[设计稿](https://esengine.github.io/reasonix/design/agent-dashboard.html)拍砖
 - [#22 · 未来功能愿望单](https://github.com/esengine/reasonix/discussions/22) —— 你希望 Reasonix 长出什么功能？
 
+**正在使用 Reasonix，愿意让更多人了解它？** 欢迎将相关博客、文章、截图、演讲或视频发布到 [**Show and tell**](https://github.com/esengine/reasonix/discussions/categories/show-and-tell)。项目没有营销预算，新用户主要通过社区口碑找到这里。对持续参与传播的用户，我们会在贡献者墙旁附上一枚 Reasonix Advocate 徽章以示感谢。
+
 **第一次提 PR 之前**：先读 [`CONTRIBUTING.md`](./CONTRIBUTING.md) —— 短小、严格的项目规则（注释、错误处理、用现成库不手写）。`tests/comment-policy.test.ts` 静态强制执行注释那部分，`npm run verify` 是 push 前的闸。参与本项目即同意 [行为准则](./CODE_OF_CONDUCT.md)。安全相关问题请走 [SECURITY.md](./SECURITY.md)。
 
 <p align="center">
