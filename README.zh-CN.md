@@ -140,6 +140,20 @@ npx reasonix code   # 首次运行粘贴 DeepSeek API Key，之后会记住
 
 <br/>
 
+## Star 趋势
+
+<p align="center">
+  <a href="https://star-history.com/#esengine/reasonix&Date">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=esengine/reasonix&type=Date&theme=dark"/>
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=esengine/reasonix&type=Date"/>
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=esengine/reasonix&type=Date" width="860"/>
+    </picture>
+  </a>
+</p>
+
+<br/>
+
 ---
 
 <p align="center">
