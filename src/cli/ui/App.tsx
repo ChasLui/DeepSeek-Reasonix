@@ -24,7 +24,6 @@ import {
 import {
   type EditMode,
   type PresetName,
-  addProjectShellAllowed,
   defaultConfigPath,
   editModeHintShown,
   loadEditMode,
@@ -33,6 +32,7 @@ import {
   saveEditMode,
 } from "../../config.js";
 import { Eventizer } from "../../core/eventize.js";
+import { pauseGate } from "../../core/pause-gate.js";
 import { type ResolvedHook, formatHookOutcomeMessage, loadHooks, runHooks } from "../../hooks.js";
 import { onLanguageChange } from "../../i18n/index.js";
 import { CacheFirstLoop, DeepSeekClient, ImmutablePrefix } from "../../index.js";
@@ -72,6 +72,7 @@ import { AtMentionSuggestions } from "./AtMentionSuggestions.js";
 import { ChoiceConfirm, type ChoiceConfirmChoice } from "./ChoiceConfirm.js";
 import { EditConfirm, type EditReviewChoice } from "./EditConfirm.js";
 import { McpBrowser } from "./McpBrowser.js";
+import { PlanCheckpointConfirm } from "./PlanCheckpointConfirm.js";
 import { PlanConfirm, type PlanConfirmChoice } from "./PlanConfirm.js";
 import { PlanRefineInput } from "./PlanRefineInput.js";
 import { PlanReviseConfirm, type ReviseChoice } from "./PlanReviseConfirm.js";
@@ -96,7 +97,6 @@ import {
 import { handleToolEvent } from "./hooks/handle-tool-event.js";
 import { useAgentSession } from "./hooks/useAgentSession.js";
 import { useScrollback } from "./hooks/useScrollback.js";
-import { useSyntheticSubmit } from "./hooks/useSyntheticSubmit.js";
 import { useKeystroke } from "./keystroke-context.js";
 import { CardStream } from "./layout/CardStream.js";
 import {
@@ -514,13 +514,8 @@ function AppInner({
   // project / Deny and we feed the result back as a synthetic user
   // message so the model sees what happened.
   const [pendingShell, setPendingShell] = useState<{
+    id: number;
     command: string;
-    /**
-     * Which tool surfaced the NeedsConfirmationError. Drives post-
-     * approval dispatch: `run_command` uses the synchronous runCommand
-     * (waits for exit); `run_background` spawns via JobRegistry and
-     * returns after a ready-signal / waitSec window.
-     */
     kind: "run_command" | "run_background";
   } | null>(null);
   // Plan text the model submitted via `submit_plan` while plan mode
@@ -546,6 +541,21 @@ function AppInner({
   const [stagedInput, setStagedInput] = useState<{
     plan: string;
     mode: "refine" | "approve" | "reject";
+  } | null>(null);
+  // Mid-execution pause from mark_step_complete — model finished a step
+  // and the loop waits for user to pick Continue / Revise / Stop.
+  const [pendingCheckpoint, setPendingCheckpoint] = useState<{
+    stepId: string;
+    title?: string;
+    completed: number;
+    total: number;
+  } | null>(null);
+  // Staged entry for the Revise feedback input at a checkpoint.
+  const [stagedCheckpointRevise, setStagedCheckpointRevise] = useState<{
+    stepId: string;
+    title?: string;
+    completed: number;
+    total: number;
   } | null>(null);
   // Plan revision proposal from `revise_plan`. Non-null mounts the
   // PlanReviseConfirm picker showing a step-level diff. Accept replaces
@@ -1763,7 +1773,7 @@ function AppInner({
         },
         resolveShellConfirm: (choice) => {
           const fn = handleShellConfirmRef.current;
-          if (fn) fn(choice).catch(() => undefined);
+          if (fn) Promise.resolve(fn(choice)).catch(() => undefined);
         },
         resolveChoiceConfirm: (choice) => {
           const fn = handleChoiceConfirmRef.current;
@@ -1791,8 +1801,24 @@ function AppInner({
             resolve({ choice, denyContext: undefined });
           }
         },
+        resolveCheckpointConfirm: (choice, text) => {
+          // Web's "revise" path sends feedback in one shot; we hand the
+          // current pending checkpoint to the submit handler directly,
+          // skipping the TUI's staged-input two-step. continue/stop fall
+          // through to the regular picker handler.
+          if (choice === "revise" && typeof text === "string") {
+            const snap = pendingCheckpoint;
+            setPendingCheckpoint(null);
+            if (!snap) return;
+            Promise.resolve(handleCheckpointReviseSubmitRef.current(text, snap)).catch(
+              () => undefined,
+            );
+            return;
+          }
+          Promise.resolve(handleCheckpointConfirmRef.current(choice)).catch(() => undefined);
+        },
         resolveReviseConfirm: (choice) => {
-          handleReviseConfirmRef.current(choice).catch(() => undefined);
+          Promise.resolve(handleReviseConfirmRef.current(choice)).catch(() => undefined);
         },
         // ---------- v0.14 mutation surface ----------
         reloadHooks: () => {
@@ -1823,6 +1849,7 @@ function AppInner({
     togglePlanMode,
     pendingShell,
     pendingChoice,
+    pendingCheckpoint,
     pendingEditReview,
     pendingRevision,
     agentStore,
@@ -2605,83 +2632,39 @@ function AppInner({
     return () => clearTimeout(timer);
   }, [activeLoop, stopLoop, log]);
 
-  const syntheticSubmit = useSyntheticSubmit({
-    log,
-    busy,
-    loop,
-    setQueuedSubmit,
-    handleSubmit,
-  });
-
   /**
-   * ShellConfirm callback. Three outcomes, all of them ending with a
-   * synthetic user message fed back into the loop so the model sees
-   * what happened next turn:
-   *   - deny → "I denied running X." and we move on.
-   *   - run_once / always_allow → run the command inside the sandbox
-   *     root, attach the formatted output as the user turn. In the
-   *     always_allow case we also persist the derived prefix to
-   *     config so next invocation auto-runs.
+   * ShellConfirm callback. Resolves the PauseGate so the
+   * blocked tool function can proceed. The tool handles running the
+   * command (or throwing on deny) — no synthetic user message needed.
    */
   const handleShellConfirm = useCallback(
-    async (choice: ShellConfirmChoice, denyContext?: string) => {
+    (choice: ShellConfirmChoice, denyContext?: string) => {
       const pending = pendingShell;
       if (!pending || !codeMode) return;
-      const { command: cmd, kind } = pending;
+      const { id, command: cmd, kind } = pending;
       setPendingShell(null);
 
-      let synthetic: string;
       if (choice === "deny") {
         const context = denyContext ? ` because: ${denyContext}` : "";
         log.pushInfo(`▸ denied: ${cmd}${context}`);
-        synthetic = `I denied running \`${cmd}\`${context}. Please continue without running it.`;
+        pauseGate.resolve(id, { type: "deny", denyContext });
+      } else if (choice === "always_allow") {
+        const prefix = derivePrefix(cmd);
+        log.pushInfo(`▸ always allowed "${prefix}" for ${currentRootDir}`);
+        pauseGate.resolve(id, { type: "always_allow", prefix });
       } else {
-        if (choice === "always_allow") {
-          const prefix = derivePrefix(cmd);
-          addProjectShellAllowed(currentRootDir, prefix);
-          log.pushInfo(`▸ always allowed "${prefix}" for ${currentRootDir}`);
-        }
         log.pushInfo(
           kind === "run_background" ? `▸ starting (background): ${cmd}` : `▸ running: ${cmd}`,
         );
-        if (kind === "run_background" && codeMode.jobs) {
-          // JobRegistry spawn keeps the process running after this handler
-          // resolves; the synthetic tells the model the job id for job_output
-          // / stop_job follow-ups.
-          try {
-            const res = await codeMode.jobs.start(cmd, { cwd: currentRootDir });
-            const preview = res.preview;
-            const header = res.stillRunning
-              ? `[job ${res.jobId} started · pid ${res.pid ?? "?"} · ${res.readyMatched ? "READY signal matched" : "running"}]`
-              : res.exitCode !== null
-                ? `[job ${res.jobId} exited during startup · exit ${res.exitCode}]`
-                : `[job ${res.jobId} failed to start]`;
-            const body = preview ? `${header}\n${preview}` : header;
-            log.pushInfo(body);
-            synthetic = `I approved the background spawn. ${header}\n\nStartup preview:\n\n${preview || "(no output yet)"}\n\nThe process is still running — use job_output to read newer logs, stop_job to halt it.`;
-          } catch (err) {
-            const msg = `$ ${cmd}\n[failed to start] ${(err as Error).message}`;
-            log.pushInfo(msg);
-            synthetic = `I approved the background spawn but it failed to start:\n\n${msg}`;
-          }
-        } else {
-          // Foreground (run_command) — synchronous; waits for exit.
-          let body: string;
-          try {
-            const res = await runCommand(cmd, { cwd: currentRootDir });
-            body = formatCommandResult(cmd, res);
-          } catch (err) {
-            body = `$ ${cmd}\n[failed to spawn] ${(err as Error).message}`;
-          }
-          log.pushInfo(body);
-          synthetic = `I ran the command you requested. Output:\n\n${body}`;
-        }
+        pauseGate.resolve(id, { type: "run_once" });
       }
-
-      await syntheticSubmit.submit(synthetic);
     },
-    [pendingShell, codeMode, currentRootDir, syntheticSubmit, log],
+    [pendingShell, codeMode, currentRootDir, log],
   );
+
+  /** Holds the PauseGate request id for the current modal so
+   *  handlePlanConfirm / handleCheckpointResponse / etc. can resolve it. */
+  const pendingGateIdRef = useRef<number | null>(null);
 
   // Drain the shell-confirm queue after the in-flight turn tears down.
   // React closure staleness means handleShellConfirm can't just await
@@ -2832,9 +2815,20 @@ function AppInner({
         }
       }
 
-      await syntheticSubmit.post({ marker, synthetic });
+      // Resolve the PauseGate so the blocked submit_plan tool function
+      // can return and the model sees the verdict without a synthetic message.
+      const gateId = pendingGateIdRef.current;
+      if (gateId !== null) {
+        if (staged.mode === "approve") {
+          pauseGate.resolve(gateId, { type: "approve" });
+        } else if (staged.mode === "reject") {
+          pauseGate.resolve(gateId, { type: "cancel" });
+        } else {
+          pauseGate.resolve(gateId, { type: "refine" });
+        }
+      }
     },
-    [stagedInput, togglePlanMode, syntheticSubmit, persistPlanState, agentStore],
+    [stagedInput, togglePlanMode, persistPlanState, agentStore],
   );
   // Ref-mirror so startDashboard's resolvePlanConfirm closure can call
   // the latest function — handleStagedInputSubmit's deps churn on every
@@ -2864,22 +2858,17 @@ function AppInner({
         setStagedChoiceCustom(snap);
         return;
       }
+      const gateId = pendingGateIdRef.current;
       if (choice.kind === "cancel") {
-        await syntheticSubmit.post({
-          marker: "▸ choice cancelled",
-          synthetic:
-            "The user cancelled the choice. Don't act on any of the options you presented. Ask what they actually want before doing anything else.",
-        });
+        if (gateId !== null) pauseGate.resolve(gateId, { type: "cancel" });
         return;
       }
       const picked = snap.options.find((o) => o.id === choice.optionId);
-      const label = picked ? `${picked.id} · ${picked.title}` : choice.optionId;
-      await syntheticSubmit.post({
-        marker: `▸ chose ${label}`,
-        synthetic: `The user picked option ${choice.optionId}${picked ? ` ("${picked.title}")` : ""}. Proceed with that branch. Do not re-ask the same question.`,
-      });
+      if (gateId !== null) {
+        pauseGate.resolve(gateId, { type: "pick", optionId: choice.optionId });
+      }
     },
-    [pendingChoice, syntheticSubmit],
+    [pendingChoice],
   );
 
   // Ref-wrap to keep ChoiceConfirm's React.memo from re-rendering on
@@ -2892,6 +2881,74 @@ function AppInner({
   useEffect(() => {
     handleShellConfirmRef.current = handleShellConfirm;
   }, [handleShellConfirm]);
+  // Listen for pause requests from tool functions (via PauseGate).
+  // Dispatches to the correct modal based on request.kind.
+  // Note: stable deps (none) — codeMode changes don't re-trigger,
+  // the listener checks nothing from closure except setState setters.
+  useEffect(() => {
+    return pauseGate.on((request) => {
+      const payload = request.payload as Record<string, unknown>;
+      pendingGateIdRef.current = request.id;
+
+      switch (request.kind) {
+        case "run_command":
+        case "run_background":
+          setPendingShell({
+            id: request.id,
+            command: (payload as { command: string }).command,
+            kind: request.kind,
+          });
+          break;
+        case "plan_proposed":
+          setPendingPlan((payload as { plan: string }).plan);
+          break;
+        case "plan_checkpoint": {
+          const p = payload as {
+            stepId: string;
+            title?: string;
+            result: string;
+            notes?: string;
+          };
+          // completed/total come from planStepsRef — don't have them via gate
+          const completed = completedStepIdsRef.current.size;
+          const total = planStepsRef.current?.length ?? 0;
+          setPendingCheckpoint({
+            stepId: p.stepId,
+            title: p.title,
+            completed,
+            total,
+          });
+          break;
+        }
+        case "plan_revision": {
+          const p = payload as {
+            reason: string;
+            remainingSteps: PlanStep[];
+            summary?: string;
+          };
+          setPendingRevision({
+            reason: p.reason,
+            remainingSteps: p.remainingSteps,
+            summary: p.summary,
+          });
+          break;
+        }
+        case "choice": {
+          const p = payload as {
+            question: string;
+            options: unknown[];
+            allowCustom: boolean;
+          };
+          setPendingChoice({
+            question: p.question,
+            options: p.options as ChoiceOption[],
+            allowCustom: p.allowCustom,
+          });
+          break;
+        }
+      }
+    });
+  }, []);
   // Ref-mirror of pendingPlan so the web's resolvePlanConfirm callback
   // (registered in startDashboard, frozen at boot) can read the live
   // body when the web resolves an approve/refine.
@@ -2907,21 +2964,113 @@ function AppInner({
     async (choice: ChoiceConfirmChoice) => handleChoiceConfirmRef.current(choice),
     [],
   );
-  /** Custom free-form answer submitted — ship it as a synthetic message. */
-  const handleChoiceCustomSubmit = useCallback(
-    async (answer: string) => {
-      setStagedChoiceCustom(null);
-      const trimmed = answer.trim();
-      const synthetic = trimmed
-        ? `The user answered with a custom reply (none of the pre-defined options fit):\n\n${trimmed}\n\nRead it carefully and proceed — don't snap back to the options you listed unless the user's reply clearly maps to one.`
-        : "The user pressed Enter without typing anything. Ask what they actually want.";
-      const marker = trimmed
-        ? `▸ custom answer — ${trimmed.length > 50 ? `${trimmed.slice(0, 50)}…` : trimmed}`
-        : "▸ custom answer — (blank)";
-      await syntheticSubmit.post({ marker, synthetic });
+
+  /**
+   * Checkpoint picker callback. Resolves the PauseGate so the blocked
+   * mark_step_complete tool function can return (or throw).
+   */
+  const handleCheckpointConfirm = useCallback(
+    (choice: "continue" | "revise" | "stop") => {
+      const snap = pendingCheckpoint;
+      if (!snap) return;
+      setPendingCheckpoint(null);
+      const gid = pendingGateIdRef.current;
+      if (choice === "revise") {
+        // Don't resolve the gate yet — wait for the staged feedback input
+        // and let handleCheckpointReviseSubmit resolve with the feedback text.
+        setStagedCheckpointRevise(snap);
+        return;
+      }
+      // Auto file-snapshot per plan step
+      if (codeMode && choice === "continue") {
+        const paths = touchedPaths();
+        if (paths.length > 0) {
+          try {
+            const cpName = snap.title ? `${snap.stepId} · ${snap.title}` : snap.stepId;
+            const meta = createCheckpoint({
+              rootDir: codeMode.rootDir,
+              name: cpName.slice(0, 60),
+              paths,
+              source: "auto-pre-restore",
+            });
+            log.pushInfo(
+              `⛁ checkpoint saved · ${meta.id} · ${meta.fileCount} file${meta.fileCount === 1 ? "" : "s"} · /restore ${meta.id} to roll back this step`,
+            );
+          } catch {
+            /* best-effort */
+          }
+        }
+      }
+      if (gid !== null) {
+        pauseGate.resolve(gid, {
+          type: choice === "continue" ? "continue" : "stop",
+        });
+      }
+      const label = snap.title ? `${snap.stepId} · ${snap.title}` : snap.stepId;
+      const counter = snap.total > 0 ? ` (${snap.completed}/${snap.total})` : "";
+      log.pushInfo(
+        choice === "continue"
+          ? `▸ continuing after ${label}${counter}`
+          : `▸ plan stopped at ${label}${counter}`,
+      );
     },
-    [syntheticSubmit],
+    [pendingCheckpoint, codeMode, touchedPaths, log],
   );
+
+  const handleCheckpointConfirmRef = useRef(handleCheckpointConfirm);
+  useEffect(() => {
+    handleCheckpointConfirmRef.current = handleCheckpointConfirm;
+  }, [handleCheckpointConfirm]);
+  const stableHandleCheckpointConfirm = useCallback(
+    (choice: "continue" | "revise" | "stop") => handleCheckpointConfirmRef.current(choice),
+    [],
+  );
+
+  /** Revise feedback submitted — resolves the gate with feedback. */
+  const handleCheckpointReviseSubmit = useCallback(
+    (feedback: string, snapOverride?: { stepId: string; title?: string }) => {
+      const snap = snapOverride;
+      setStagedCheckpointRevise(null);
+      if (!snap) return;
+      const label = snap.title ? `${snap.stepId} · ${snap.title}` : snap.stepId;
+      const trimmed = feedback.trim();
+      const gid = pendingGateIdRef.current;
+      if (gid !== null) {
+        pauseGate.resolve(
+          gid,
+          trimmed ? { type: "revise", feedback: trimmed } : { type: "revise" },
+        );
+      }
+      const marker = trimmed
+        ? `▸ revising after ${label} — ${trimmed.length > 50 ? `${trimmed.slice(0, 50)}…` : trimmed}`
+        : `▸ continuing after ${label}`;
+      log.pushInfo(marker);
+    },
+    [log],
+  );
+
+  const handleCheckpointReviseCancel = useCallback(() => {
+    const snap = stagedCheckpointRevise;
+    setStagedCheckpointRevise(null);
+    if (snap) setPendingCheckpoint(snap);
+  }, [stagedCheckpointRevise]);
+
+  // Ref-mirrors so the web's resolveXxx callbacks (registered in
+  // startDashboard, frozen at boot) keep calling the latest handler.
+  const handleCheckpointReviseSubmitRef = useRef(handleCheckpointReviseSubmit);
+  useEffect(() => {
+    handleCheckpointReviseSubmitRef.current = handleCheckpointReviseSubmit;
+  }, [handleCheckpointReviseSubmit]);
+
+  /** Custom free-form answer submitted — resolves the PauseGate with the typed text. */
+  const handleChoiceCustomSubmit = useCallback((answer: string) => {
+    setStagedChoiceCustom(null);
+    const trimmed = answer.trim();
+    const gateId = pendingGateIdRef.current;
+    if (gateId !== null) {
+      pauseGate.resolve(gateId, { type: "text", text: trimmed || "" });
+    }
+  }, []);
 
   /** Esc on the custom input — restore the choice picker. */
   const handleChoiceCustomCancel = useCallback(() => {
@@ -2936,16 +3085,13 @@ function AppInner({
    * proposal and tells the model to stick with the original plan.
    */
   const handleReviseConfirm = useCallback(
-    async (choice: ReviseChoice) => {
+    (choice: ReviseChoice) => {
       const snap = pendingRevision;
       if (!snap) return;
       setPendingRevision(null);
+      const gateId = pendingGateIdRef.current;
       if (choice === "reject") {
-        await syntheticSubmit.post({
-          marker: "▸ revision rejected",
-          synthetic:
-            "The user rejected the proposed plan revision. Don't apply it. Continue executing the original plan from the next pending step. If you genuinely cannot proceed without the change, stop and explain in plain text why.",
-        });
+        if (gateId !== null) pauseGate.resolve(gateId, { type: "rejected" });
         return;
       }
       // Accept: keep the done-step prefix from the existing plan, replace
@@ -2961,21 +3107,9 @@ function AppInner({
       }
       planStepsRef.current = merged;
       persistPlanState();
-      const removedCount = oldSteps.filter(
-        (s) => !completed.has(s.id) && !snap.remainingSteps.some((n) => n.id === s.id),
-      ).length;
-      const addedCount = snap.remainingSteps.filter(
-        (s) => !oldSteps.some((o) => o.id === s.id),
-      ).length;
-      const marker = `▸ revision accepted — −${removedCount} +${addedCount}: ${snap.reason}`;
-      const synthetic = `Revision accepted. The remaining plan is now:\n${snap.remainingSteps
-        .map((s, i) => `  ${i + 1}. ${s.id} · ${s.title} — ${s.action}`)
-        .join(
-          "\n",
-        )}\n\nContinue executing from the next pending step. Call mark_step_complete after each one as before.`;
-      await syntheticSubmit.post({ marker, synthetic });
+      if (gateId !== null) pauseGate.resolve(gateId, { type: "accepted" });
     },
-    [pendingRevision, syntheticSubmit, persistPlanState],
+    [pendingRevision, persistPlanState],
   );
 
   // Ref-wrap to keep PlanReviseConfirm's React.memo from re-rendering.
@@ -3004,6 +3138,8 @@ function AppInner({
           !!pendingChoice ||
           !!stagedChoiceCustom ||
           !!pendingRevision ||
+          !!stagedCheckpointRevise ||
+          !!pendingCheckpoint ||
           // Idle gate: when nothing is actively happening, suspend the
           // 8Hz/1Hz heartbeats. The cursor blink, gradient pulse, and
           // spinner glyphs are pure cosmetics — running them at idle
@@ -3085,7 +3221,9 @@ function AppInner({
                 !pendingEditReview &&
                 !pendingChoice &&
                 !stagedChoiceCustom &&
-                !pendingRevision ? (
+                !pendingRevision &&
+                !stagedCheckpointRevise &&
+                !pendingCheckpoint ? (
                   <UndoBanner banner={undoBanner} />
                 ) : null}
                 {/*
@@ -3134,6 +3272,12 @@ function AppInner({
                   onSubmit={handleChoiceCustomSubmit}
                   onCancel={handleChoiceCustomCancel}
                 />
+              ) : stagedCheckpointRevise ? (
+                <PlanRefineInput
+                  mode="checkpoint-revise"
+                  onSubmit={(text) => handleCheckpointReviseSubmit(text, stagedCheckpointRevise)}
+                  onCancel={handleCheckpointReviseCancel}
+                />
               ) : pendingChoice ? (
                 <ChoiceConfirm
                   question={pendingChoice.question}
@@ -3150,6 +3294,16 @@ function AppInner({
                   newRemaining={pendingRevision.remainingSteps}
                   summary={pendingRevision.summary}
                   onChoose={stableHandleReviseConfirm}
+                />
+              ) : pendingCheckpoint ? (
+                <PlanCheckpointConfirm
+                  stepId={pendingCheckpoint.stepId}
+                  title={pendingCheckpoint.title}
+                  completed={pendingCheckpoint.completed}
+                  total={pendingCheckpoint.total}
+                  steps={planStepsRef.current ?? undefined}
+                  completedStepIds={completedStepIdsRef.current}
+                  onChoose={stableHandleCheckpointConfirm}
                 />
               ) : pendingSessionsPicker ? (
                 <SessionPicker
