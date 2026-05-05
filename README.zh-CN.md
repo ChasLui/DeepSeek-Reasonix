@@ -58,147 +58,23 @@ npx reasonix code   # 首次运行粘贴 DeepSeek API Key，之后会记住
 
 整个循环围绕四根支柱组织。每一根解决的都是通用 agent 框架根本看不见的问题 —— 因为它们是为另一种缓存机制设计的。
 
-<table>
-<tr>
-<td width="50%" valign="top">
+<p align="center">
+  <a href="./docs/ARCHITECTURE.md"><img src="docs/assets/pillars.zh-CN.svg" alt="Reasonix 四大支柱 — 缓存优先循环、R1 思维提取、工具调用修复、成本控制" width="880"/></a>
+</p>
 
-### 01 / 缓存优先循环
+<sub align="center">
 
-只追加历史，不就地修改，不依赖标记的 compaction。字节前缀跨过每一次工具调用都活着，DeepSeek 的前缀缓存一轮一轮持续命中。
+各支柱完整说明 → [Pillar 1](./docs/ARCHITECTURE.md#pillar-1--cache-first-loop) · [Pillar 2](./docs/ARCHITECTURE.md#pillar-2--r1-thought-harvesting-opt-in) · [Pillar 3](./docs/ARCHITECTURE.md#pillar-3--tool-call-repair) · [Pillar 4](./docs/ARCHITECTURE.md#pillar-4--cost-control-v06)
 
-[详细说明 →](./docs/ARCHITECTURE.md#pillar-1--cache-first-loop)
-
-</td>
-<td width="50%" valign="top">
-
-### 02 / R1 思维提取
-
-R1 会吐出大量 `reasoning_content`。大多数框架展示完就丢。Reasonix 把它蒸馏成结构化 plan state —— 子目标、假设、不确定性、被否决的路径。
-
-[详细说明 →](./docs/ARCHITECTURE.md#pillar-2--r1-thought-harvesting-opt-in)
-
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top">
-
-### 03 / 工具调用修复
-
-Schema 扁平化、JSON 修复、`<think>` 内 scavenge、截断处理。四种策略对付 DeepSeek 专属怪癖 —— 通用循环会把这些当模型错误。
-
-[详细说明 →](./docs/ARCHITECTURE.md#pillar-3--tool-call-repair)
-
-</td>
-<td width="50%" valign="top">
-
-### 04 / 成本控制
-
-缓存安全的 fold、激进 fold 层、退出时摘要、模型感知的预算。循环管理上下文规模时不破坏前缀稳定。
-
-[详细说明 →](./docs/ARCHITECTURE.md#pillar-4--cost-control-v06)
-
-</td>
-</tr>
-</table>
+</sub>
 
 <br/>
 
 ## 能力一览
 
-<table>
-<tr>
-<td width="33%" valign="top">
-
-#### 自研单元格 diff 渲染器
-
-基于 Yoga 的自研 TUI 运行时，不依赖 Ink。处理宽字符、emoji、bracketed paste、resize 不留鬼影。
-
-</td>
-<td width="33%" valign="top">
-
-#### MCP 一等公民
-
-stdio 与 Streamable HTTP 双传输。tools / resources / prompts 全支持。内置浏览器查看任意服务器的接口。
-
-</td>
-<td width="33%" valign="top">
-
-#### 计划模式
-
-修改在落盘前先过 review。批准、调整、拒绝。Plan checkpoint 跨运行持久化。
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-#### 权限系统
-
-每个工具 `allow` · `ask` · `deny`。shell 命令粒度规则。交互式提示，可以教它。
-
-</td>
-<td valign="top">
-
-#### 内嵌仪表盘
-
-`localhost` 的伴生 web 面板。实时缓存命中率、成本计数、会话时间线、MCP 健康状态。
-
-</td>
-<td valign="top">
-
-#### 持久化会话
-
-按工作区组织，命名、可恢复。`--resume` 完全还原 —— 系统提示、历史、plan state。
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-#### Hooks · Skills · Memory
-
-生命周期事件触发 shell。drop-in 的 skill 包。每回合自动读入的项目级持久 memory。
-
-</td>
-<td valign="top">
-
-#### 语义检索
-
-`reasonix index` 构建 embedding 索引供 agent 查询。本地 Ollama 或 DeepSeek 托管两选一。
-
-</td>
-<td valign="top">
-
-#### 自动 checkpoint
-
-Cursor 风格的会话级 AI 编辑回滚。不污染 git 历史；checkpoint 栈完全是你自己的。
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-#### `/effort` 旋钮
-
-每回合切换 reasoning 深度。难活 `max`、日常 `low`。斜杠命令 + CLI flag 双入口。
-
-</td>
-<td valign="top">
-
-#### Transcript 重放
-
-`reasonix replay` 把录制好的会话用渲染器重放一遍。bug 复现、演示都好用。
-
-</td>
-<td valign="top">
-
-#### 事件日志
-
-`events.jsonl` 旁路日志，附带 reducer 和 `reasonix events` CLI。自己搭仪表盘、审计、分析都行。
-
-</td>
-</tr>
-</table>
+<p align="center">
+  <img src="docs/assets/feature-grid.zh-CN.svg" alt="Reasonix 能力一览 — cell-diff 渲染器、MCP、计划模式、权限、仪表盘、持久化会话、Hooks/Skills/Memory、语义检索、自动 checkpoint、/effort 旋钮、transcript 重放、事件日志" width="880"/>
+</p>
 
 <br/>
 

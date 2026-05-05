@@ -58,147 +58,23 @@ Requires Node ≥ 22. Tested on macOS · Linux · Windows (PowerShell · Git Bas
 
 The loop is organized around four pillars. Each one solves a problem generic agent frameworks don't even see — because they were designed for a different cache mechanic.
 
-<table>
-<tr>
-<td width="50%" valign="top">
+<p align="center">
+  <a href="./docs/ARCHITECTURE.md"><img src="docs/assets/pillars.svg" alt="Reasonix four pillars — Cache-first loop, R1 thought harvesting, Tool-call repair, Cost control" width="880"/></a>
+</p>
 
-### 01 / Cache-first loop
+<sub align="center">
 
-Append-only history, no in-place mutation, no marker-based compaction. The byte prefix survives every tool call, so DeepSeek's prefix-cache keeps hitting turn after turn.
+Click any card to read the full architecture writeup → [Pillar 1](./docs/ARCHITECTURE.md#pillar-1--cache-first-loop) · [Pillar 2](./docs/ARCHITECTURE.md#pillar-2--r1-thought-harvesting-opt-in) · [Pillar 3](./docs/ARCHITECTURE.md#pillar-3--tool-call-repair) · [Pillar 4](./docs/ARCHITECTURE.md#pillar-4--cost-control-v06)
 
-[Read more →](./docs/ARCHITECTURE.md#pillar-1--cache-first-loop)
-
-</td>
-<td width="50%" valign="top">
-
-### 02 / R1 thought harvesting
-
-R1 emits extensive `reasoning_content`. Most frameworks display and discard it. Reasonix distills it into a typed plan state — subgoals, hypotheses, uncertainties, rejected paths.
-
-[Read more →](./docs/ARCHITECTURE.md#pillar-2--r1-thought-harvesting-opt-in)
-
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top">
-
-### 03 / Tool-call repair
-
-Schema flatten, JSON repair, scavenge from `<think>`, truncation. Four strategies that handle DeepSeek-specific quirks generic loops mistake for model errors.
-
-[Read more →](./docs/ARCHITECTURE.md#pillar-3--tool-call-repair)
-
-</td>
-<td width="50%" valign="top">
-
-### 04 / Cost control
-
-Cache-safe folding, aggressive-fold tier, summary-on-exit, model-aware budgets. The loop manages context size without breaking prefix stability.
-
-[Read more →](./docs/ARCHITECTURE.md#pillar-4--cost-control-v06)
-
-</td>
-</tr>
-</table>
+</sub>
 
 <br/>
 
 ## Capabilities
 
-<table>
-<tr>
-<td width="33%" valign="top">
-
-#### Cell-diff renderer
-
-Custom TUI runtime built on Yoga. No Ink dependency. Handles wide chars, emoji, bracketed paste, and resize without ghosts.
-
-</td>
-<td width="33%" valign="top">
-
-#### MCP — first class
-
-stdio and Streamable HTTP transports. Tools, resources, and prompts. In-app browser to inspect any server's surface.
-
-</td>
-<td width="33%" valign="top">
-
-#### Plan mode
-
-Review proposed edits before they touch disk. Approve, refine, or reject. Plan checkpoints persist across runs.
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-#### Permissions
-
-`allow` · `ask` · `deny` per-tool. Granular shell command rules. Interactive prompts you can teach.
-
-</td>
-<td valign="top">
-
-#### Embedded dashboard
-
-Companion web view at `localhost`. Live cache hit rate, cost ticker, session timeline, MCP health.
-
-</td>
-<td valign="top">
-
-#### Persistent sessions
-
-Per-workspace, named, resumable. `--resume` picks up exactly where you left off — system prompt, history, plan state.
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-#### Hooks · skills · memory
-
-Run shell on lifecycle events. Drop in skill packs. Persistent project memory the agent reads on every turn.
-
-</td>
-<td valign="top">
-
-#### Semantic search
-
-`reasonix index` builds an embedding index your agent can query. Local Ollama or DeepSeek-hosted.
-
-</td>
-<td valign="top">
-
-#### Auto-checkpoints
-
-Cursor-style session-scoped rollback for AI edits. Never pollutes git history; a checkpoint stack is yours alone.
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-#### `/effort` knob
-
-Switch reasoning depth per turn. `max` for the gnarly, `low` for the routine. Slash command and CLI flag.
-
-</td>
-<td valign="top">
-
-#### Transcript replay
-
-`reasonix replay` plays a recorded session back through the renderer. Useful for bug reports and demos.
-
-</td>
-<td valign="top">
-
-#### Event log
-
-`events.jsonl` sidecar with reducers and a `reasonix events` CLI. Build dashboards, audits, or your own analytics.
-
-</td>
-</tr>
-</table>
+<p align="center">
+  <img src="docs/assets/feature-grid.svg" alt="Reasonix capabilities — cell-diff renderer, MCP, plan mode, permissions, dashboard, persistent sessions, hooks/skills/memory, semantic search, auto-checkpoints, /effort knob, transcript replay, event log" width="880"/>
+</p>
 
 <br/>
 
