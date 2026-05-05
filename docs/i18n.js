@@ -11,23 +11,27 @@
 
   const translations = {
     en: {
+      "nav.why": "Why",
       "nav.features": "Features",
       "nav.quickstart": "Quick start",
-      "nav.benchmarks": "Benchmarks",
+      "nav.community": "Community",
       "nav.github": "GitHub",
 
-      "hero.badge": "v{version} · DeepSeek V4 · cache-first",
+      "hero.badge": "v{version} · DeepSeek · cache-first · MIT",
       "hero.title.line1": "DeepSeek-native",
       "hero.title.line2": "AI coding agent in your terminal",
       "hero.sub":
-        "Cache-first agent loop for DeepSeek V4 (flash + pro). Edits files as reviewable SEARCH/REPLACE blocks. Ink TUI. MCP first-class. No LangChain.",
+        "Engineered around DeepSeek's prefix-cache so token costs stay low across long sessions. Custom cell-diff renderer. MCP first-class. Open source.",
       "hero.copy": "Copy",
       "hero.copy.done": "Copied",
       "hero.cta.start": "Get started →",
       "hero.cta.star": "Star on GitHub",
-      "hero.stat.cache": "prefix cache hit rate",
-      "hero.stat.cost": "cheaper vs Claude Sonnet 4.6",
-      "hero.stat.pass": "τ-bench-lite pass rate",
+      "hero.stat.cache.num": "Cache-engineered",
+      "hero.stat.cache": "Byte-stable prefix loop",
+      "hero.stat.lic.num": "Open source",
+      "hero.stat.lic": "MIT, community-developed",
+      "hero.stat.tui.num": "Terminal-native",
+      "hero.stat.tui": "Plus embedded dashboard",
 
       "term.user":
         "users.ts findByEmail is case-sensitive — login fails for users with uppercase emails",
@@ -37,25 +41,25 @@
 
       "why.title": "Why Reasonix",
       "why.sub":
-        "Every abstraction earns its weight against a DeepSeek-specific property — dirt-cheap tokens, R1 traces, automatic prefix caching, JSON mode. Generic wrappers leave these on the table.",
+        "The loop is organized around four architectural pillars. Each one solves a problem generic agent frameworks don't even see — because they were designed for a different cache mechanic.",
       "why.cache.title": "Cache-first loop",
       "why.cache.body":
-        "Append-only conversation log keeps the prompt prefix byte-stable across turns, so DeepSeek's automatic cache hits 85–95% — not 40%.",
-      "why.cost.title": "Cost is a pillar",
+        "Append-only history. No in-place mutation, no marker-based compaction. The byte prefix survives every tool call — DeepSeek's prefix-cache keeps hitting turn after turn.",
+      "why.r1.title": "R1 thought harvesting",
+      "why.r1.body":
+        "Distills <code>reasoning_content</code> into a typed plan state — subgoals, hypotheses, uncertainties, rejected paths. Signal kept, noise dropped.",
+      "why.repair.title": "Tool-call repair",
+      "why.repair.body":
+        "Schema flatten · JSON repair · scavenge from <code>&lt;think&gt;</code> · truncation. Four strategies that handle DeepSeek-specific quirks generic loops mistake for model errors.",
+      "why.cost.title": "Cost control",
       "why.cost.body":
-        "Flash-first defaults, turn-end auto-compaction, model self-escalation when (and only when) needed. Per-turn cost badge in the TUI.",
-      "why.tui.title": "Ink TUI, no web",
-      "why.tui.body":
-        "Lives in your terminal. Streaming preview, slash commands, plan picker, edit-confirm modal. Plain mode for stubborn Windows shells.",
-      "why.mcp.title": "MCP first-class",
-      "why.mcp.body":
-        "Stdio + HTTP+SSE transports. Live progress notifications. Same cache-safety + repair plumbing as native tools.",
-      "why.safe.title": "Reviewable edits",
-      "why.safe.body":
-        "Edits arrive as SEARCH/REPLACE blocks; nothing hits disk until /apply. Per-file diff confirm modal, undo history, sandboxed paths.",
-      "why.ctx.title": "1M-token aware",
-      "why.ctx.body":
-        "Context gauge with proactive compaction, oversized tool-result repair, forced-summary fallback near the window edge.",
+        "Cache-safe folding · aggressive-fold tier · summary-on-exit · model-aware budgets. The loop manages context size without breaking prefix stability.",
+      "why.deepseek.title": "DeepSeek-only by design",
+      "why.deepseek.body":
+        "Every layer is tuned around DeepSeek's specific cache mechanic and pricing. Coupling to one backend is the feature, not a limitation.",
+      "why.oss.title": "Open community",
+      "why.oss.body":
+        "MIT licensed and community-developed. Scoped <code>good first issue</code> tickets with code pointers and acceptance criteria. Real PRs from real contributors.",
 
       "qs.title": "Quick start (60 seconds)",
       "qs.step1.title": "Get a DeepSeek API key",
@@ -64,63 +68,91 @@
       "qs.step2.title": "Point it at a project",
       "qs.step2.body": "No install needed.",
       "qs.step2.note":
-        "First run walks you through a 30-second wizard (paste API key → pick preset → pick MCP servers).",
-      "qs.step3.title": "Ask it to edit",
+        "First run walks you through a short wizard — paste API key, pick a preset, optionally attach MCP servers.",
+      "qs.step3.title": "Review and apply",
       "qs.step3.body":
-        "The model proposes edits as SEARCH/REPLACE blocks — nothing hits disk until you <code>/apply</code>.",
+        "The agent proposes edits as reviewable blocks — nothing hits disk until you <code>/apply</code>. Plan mode lets you stage multi-file changes before committing any.",
       "qs.req":
-        "Requires Node ≥ 22. macOS, Linux, Windows (PowerShell · Git Bash · Windows Terminal). Press <kbd>Esc</kbd> anytime to abort; <code>/help</code> for the full command list.",
+        "Requires Node ≥ 22. macOS, Linux, Windows (PowerShell · Git Bash · Windows Terminal). Press <kbd>Esc</kbd> anytime to abort; <code>/help</code> for the full slash-command list.",
 
       "feat.title": "In the box",
-      "feat.code.title": "Pair programmer mode",
-      "feat.code.body":
-        "<code>read_file</code> · <code>write_file</code> · <code>edit_file</code> · <code>search_files</code> · <code>directory_tree</code> · <code>run_command</code> with read-only allowlist. Sandboxed to the launch root — no path escapes. Plan mode and per-edit review modal.",
-      "feat.memory.title": "Two-layer memory",
-      "feat.memory.body":
-        "Committable <code>REASONIX.md</code> for team conventions plus a private per-user <code>~/.reasonix/memory/</code> with global and per-project scopes. The model can write to it via the <code>remember</code> tool.",
-      "feat.skills.title": "User-authored prompt packs",
-      "feat.skills.body":
-        "Drop <code>SKILL.md</code> files anywhere. Names + descriptions are pinned in the prefix; the model picks them autonomously, or you trigger with <code>/skill name</code>.",
-      "feat.hooks.title": "Lifecycle hooks",
-      "feat.hooks.body":
-        "Shell commands fire at <code>PreToolUse</code> · <code>PostToolUse</code> · <code>UserPromptSubmit</code> · <code>Stop</code>. Exit code drives pass / block / warn.",
-      "feat.mcp.title": "Bring your own tools",
+      "feat.sub":
+        "Twelve concrete capabilities. The loop is the foundation; everything below is what you get on top of it.",
+      "feat.renderer.title": "Cell-diff renderer",
+      "feat.renderer.body":
+        "Custom TUI runtime built on Yoga. No Ink dependency. Wide-char, emoji, bracketed paste, and resize handled cleanly across platforms.",
+      "feat.mcp.title": "MCP first-class",
       "feat.mcp.body":
-        'Wizard catalog, or <code>--mcp "name=cmd"</code> to attach stdio / HTTP+SSE servers on the fly. Live progress bars on long calls.',
-      "feat.web.title": "Web search built-in",
-      "feat.web.body":
-        "<code>web_search</code> + <code>web_fetch</code> via Mojeek — no key, no signup, off-by-flag for offline / CI. Bring-your-own provider via the <code>WebSearchProvider</code> interface.",
+        'Stdio and Streamable HTTP transports. Tools, resources, and prompts. In-app browser to inspect any server\'s surface, plus <code>--mcp "name=cmd"</code> on the fly.',
+      "feat.plan.title": "Plan mode",
+      "feat.plan.body":
+        "Review proposed edits before they touch disk. Approve, refine, or reject. Plan checkpoints persist across runs so you can resume mid-review.",
+      "feat.perm.title": "Permissions",
+      "feat.perm.body":
+        "<code>allow</code> · <code>ask</code> · <code>deny</code> per-tool. Granular shell command rules. Interactive prompts you can teach.",
+      "feat.dash.title": "Embedded dashboard",
+      "feat.dash.body":
+        "Companion web view at <code>localhost</code>. Live cache hit rate, cost ticker, session timeline, MCP health — all in one place.",
+      "feat.sess.title": "Persistent sessions",
+      "feat.sess.body":
+        "Per-workspace, named, resumable. <code>--resume</code> picks up exactly where you left off — system prompt, history, plan state.",
+      "feat.hooks.title": "Hooks · skills · memory",
+      "feat.hooks.body":
+        "Shell commands fire on lifecycle events. Drop-in skill packs spawn sub-agents. Project memory the agent reads on every turn.",
+      "feat.search.title": "Semantic search",
+      "feat.search.body":
+        "<code>reasonix index</code> builds an embedding index your agent can query. Local Ollama or DeepSeek-hosted embeddings.",
+      "feat.ckpt.title": "Auto-checkpoints",
+      "feat.ckpt.body":
+        "Cursor-style session-scoped rollback for AI edits. Never pollutes git history; the checkpoint stack is yours alone.",
+      "feat.effort.title": "<code>/effort</code> knob",
+      "feat.effort.body":
+        "Switch reasoning depth per turn. <code>max</code> for the gnarly, <code>low</code> for routine. Slash command and CLI flag.",
+      "feat.replay.title": "Transcript replay",
+      "feat.replay.body":
+        "<code>reasonix replay</code> plays a recorded session back through the renderer — useful for bug reports, demos, and audits.",
+      "feat.events.title": "Event log",
+      "feat.events.body":
+        "<code>events.jsonl</code> sidecar with reducers and a <code>reasonix events</code> CLI. Build dashboards, audits, or your own analytics.",
 
       "bench.title": "Verify the cache claim yourself",
       "bench.sub":
-        "On the same τ-bench-lite workload (8 multi-turn tool-use tasks × 3 repeats = 48 runs per side), live DeepSeek <code>deepseek-chat</code>, sole variable prefix stability:",
-      "bench.col.metric": "metric",
-      "bench.col.baseline": "baseline (cache-hostile)",
-      "bench.col.reasonix": "Reasonix",
-      "bench.col.delta": "delta",
-      "bench.row.cache": "cache hit",
-      "bench.row.cost": "cost / task",
-      "bench.row.pass": "pass rate",
-      "bench.repro.intro": "Reproduce without spending an API credit:",
+        "We don't ship benchmark numbers in marketing copy — they move with model pricing and harness changes, so they live with the harness instead of the README. Reproduce on your own machine:",
       "bench.repro.note":
-        "The committed JSONL transcripts carry per-turn <code>usage</code>, <code>cost</code>, and <code>prefixHash</code>. Reasonix's prefix hash stays byte-stable across every model call.",
+        "Each committed JSONL transcript carries per-turn <code>usage</code>, <code>cost</code>, and <code>prefixHash</code>. Reasonix's prefix hash stays byte-stable across every model call — that's the whole game.",
+      "bench.link": "Read the τ-bench-lite harness →",
 
       "cli.title": "CLI at a glance",
       "cli.code": "coding mode scoped to path",
-      "cli.chat": "chat (uses saved config)",
-      "cli.setup": "reconfigure the wizard",
+      "cli.chat": "interactive chat (saved config)",
       "cli.run": "one-shot, streams to stdout",
-      "cli.stats": "cross-session cost dashboard",
-      "cli.mcp": "probe a single MCP server",
+      "cli.doctor": "environment health check",
+      "cli.replay": "re-render a recorded session",
+      "cli.diff": "compare two transcripts",
+      "cli.events": "query the event log",
+      "cli.stats": "cross-session usage",
+      "cli.index": "build semantic embedding index",
+      "cli.mcp": "probe one MCP server",
+      "cli.mcplist": "list configured MCP servers",
+      "cli.prune": "clean up old sessions",
       "cli.flags.intro": "Common flags:",
-      "cli.f.preset": "model + harvest + branch bundle",
+      "cli.f.effort": "reasoning depth for the run",
       "cli.f.model": "explicit DeepSeek model id",
       "cli.f.mcp": "attach an MCP server (repeatable)",
       "cli.f.session": "named session",
+      "cli.f.resume": "pick up the latest session for this workspace",
+      "cli.f.new": "force a fresh session, preserve old",
       "cli.f.noconf": "ignore ~/.reasonix/config.json (CI)",
 
+      "comm.title": "Built by the community",
+      "comm.sub":
+        "Reasonix is open source and community-developed. Every avatar on the wall below is a real PR that shipped — not a sponsorship slot.",
+      "comm.gfi": "good first issue →",
+      "comm.disc": "Discussions",
+      "comm.contrib": "Contributing guide",
+
       "ctab.title": "Ready to try?",
-      "ctab.sub": "One <code>npx</code> away. Sandboxed. Reviewable. 98% cheaper.",
+      "ctab.sub": "One <code>npx</code> away. Sandboxed. Reviewable. Open source.",
       "ctab.gh": "GitHub repository →",
       "ctab.npm": "npm package",
 
@@ -128,33 +160,39 @@
       "foot.col.project": "Project",
       "foot.col.docs": "Docs",
       "foot.col.community": "Community",
-      "foot.changelog": "Changelog",
+      "foot.releases": "Releases",
       "foot.readme": "README",
       "foot.readme.zh": "中文 README",
       "foot.arch": "Architecture",
+      "foot.bench": "Benchmarks",
       "foot.issues": "Issues",
       "foot.discuss": "Discussions",
+      "foot.contributors": "Contributors",
       "foot.copyright": "© 2026 Reasonix · MIT License",
     },
 
     zh: {
+      "nav.why": "为什么",
       "nav.features": "特性",
       "nav.quickstart": "快速上手",
-      "nav.benchmarks": "性能对比",
+      "nav.community": "社区",
       "nav.github": "GitHub",
 
-      "hero.badge": "v{version} · DeepSeek V4 · 缓存优先",
+      "hero.badge": "v{version} · DeepSeek · 缓存优先 · MIT",
       "hero.title.line1": "DeepSeek 原生",
       "hero.title.line2": "终端里的 AI 编程代理",
       "hero.sub":
-        "为 DeepSeek V4（flash + pro）打造的缓存优先 agent 循环。编辑以可审查的 SEARCH/REPLACE 块呈现，落盘前必须确认。Ink TUI、原生支持 MCP，不依赖 LangChain。",
+        "围绕 DeepSeek 前缀缓存设计，长会话下 token 成本始终维持在低位。自研 cell-diff 渲染器，MCP 一等公民，完全开源。",
       "hero.copy": "复制",
       "hero.copy.done": "已复制",
       "hero.cta.start": "开始使用 →",
       "hero.cta.star": "在 GitHub 加星",
-      "hero.stat.cache": "前缀缓存命中率",
-      "hero.stat.cost": "相比 Claude Sonnet 4.6 节省",
-      "hero.stat.pass": "τ-bench-lite 通过率",
+      "hero.stat.cache.num": "缓存工程化",
+      "hero.stat.cache": "字节稳定的前缀循环",
+      "hero.stat.lic.num": "开源",
+      "hero.stat.lic": "MIT 协议，社区共建",
+      "hero.stat.tui.num": "终端原生",
+      "hero.stat.tui": "外加内嵌仪表盘",
 
       "term.user":
         "users.ts 里 findByEmail 对大小写敏感导致登录失败，帮我改",
@@ -164,25 +202,25 @@
 
       "why.title": "为什么选 Reasonix",
       "why.sub":
-        "每个抽象都对应 DeepSeek 的一个具体特性——极低 token 价、R1 推理轨迹、自动前缀缓存、JSON 模式。通用框架把这些机会全留在桌上。",
-      "why.cache.title": "缓存优先的循环",
+        "整个循环围绕四根架构支柱组织。每一根解决的都是通用 agent 框架根本看不见的问题——因为它们是为另一种缓存机制设计的。",
+      "why.cache.title": "缓存优先循环",
       "why.cache.body":
-        "对话日志只追加不重写，前缀字节级稳定，DeepSeek 的自动前缀缓存命中能稳定打到 85–95%，而不是 40%。",
-      "why.cost.title": "成本是头等公民",
+        "只追加历史。不就地修改，不依赖标记的 compaction。字节前缀跨过每一次工具调用都活着——DeepSeek 的前缀缓存一轮一轮持续命中。",
+      "why.r1.title": "R1 思维提取",
+      "why.r1.body":
+        "把 <code>reasoning_content</code> 蒸馏成结构化 plan state——子目标、假设、不确定性、被否决的路径。留信号，去噪声。",
+      "why.repair.title": "工具调用修复",
+      "why.repair.body":
+        "Schema 扁平化 · JSON 修复 · <code>&lt;think&gt;</code> 内 scavenge · 截断处理。四种策略对付 DeepSeek 专属怪癖——通用循环会把这些当模型错误。",
+      "why.cost.title": "成本控制",
       "why.cost.body":
-        "默认 flash 优先、turn 末尾自动压缩、必要时模型自我升级到 pro。TUI 有实时单轮成本徽章。",
-      "why.tui.title": "Ink TUI，不靠浏览器",
-      "why.tui.body":
-        "完全在终端里。流式预览、斜杠命令、计划审阅、编辑确认弹窗。Windows 顽固终端可启用 plain 模式。",
-      "why.mcp.title": "原生 MCP",
-      "why.mcp.body":
-        "stdio + HTTP+SSE 双传输。长任务有实时进度条。和原生工具一样走缓存安全 + 自动修复管线。",
-      "why.safe.title": "编辑可审阅",
-      "why.safe.body":
-        "编辑以 SEARCH/REPLACE 块呈现，/apply 之前不动磁盘。逐文件 diff 确认、撤销历史、路径沙箱。",
-      "why.ctx.title": "百万 token 感知",
-      "why.ctx.body":
-        "上下文仪表 + 主动压缩、超大工具结果自动修复、贴近上限自动总结兜底。",
+        "缓存安全 fold · 激进 fold 层 · 退出时摘要 · 模型感知预算。循环管理上下文规模时不破坏前缀稳定。",
+      "why.deepseek.title": "故意只做 DeepSeek",
+      "why.deepseek.body":
+        "每一层都为 DeepSeek 特定的缓存机制和定价调过。绑死一个后端是 feature，不是限制。",
+      "why.oss.title": "开放社区",
+      "why.oss.body":
+        "MIT 协议，社区共建。<code>good first issue</code> 入门 issue 都带代码定位和验收标准。真实贡献者的真实 PR。",
 
       "qs.title": "60 秒快速上手",
       "qs.step1.title": "获取 DeepSeek API Key",
@@ -191,63 +229,91 @@
       "qs.step2.title": "切到项目目录运行",
       "qs.step2.body": "无需安装。",
       "qs.step2.note":
-        "首次运行会走 30 秒向导：粘贴 API key → 选预设 → 勾选 MCP 服务器。",
-      "qs.step3.title": "让它改代码",
+        "首次运行会走一个短向导：粘贴 API key、选预设、可选挂载 MCP 服务器。",
+      "qs.step3.title": "审阅再应用",
       "qs.step3.body":
-        "模型会以 SEARCH/REPLACE 块的形式提出编辑——你不 <code>/apply</code>，磁盘不会被改。",
+        "代理会把改动以可审阅的块呈现——你不 <code>/apply</code>，磁盘不会被改。Plan 模式可以让你先把多文件改动整理好，再统一落盘。",
       "qs.req":
-        "需要 Node ≥ 22。支持 macOS、Linux、Windows（PowerShell · Git Bash · Windows Terminal）。任何时候按 <kbd>Esc</kbd> 中断；<code>/help</code> 查看完整命令。",
+        "需要 Node ≥ 22。支持 macOS、Linux、Windows（PowerShell · Git Bash · Windows Terminal）。任何时候按 <kbd>Esc</kbd> 中断；<code>/help</code> 查看完整斜杠命令。",
 
       "feat.title": "开箱即用",
-      "feat.code.title": "结对编程模式",
-      "feat.code.body":
-        "<code>read_file</code> · <code>write_file</code> · <code>edit_file</code> · <code>search_files</code> · <code>directory_tree</code> · 带只读白名单的 <code>run_command</code>。沙箱限定在启动目录——路径逃逸一律拒绝。支持 plan 模式与逐次编辑确认弹窗。",
-      "feat.memory.title": "两层记忆系统",
-      "feat.memory.body":
-        "可提交的 <code>REASONIX.md</code> 承载团队约定，私人 <code>~/.reasonix/memory/</code> 分全局与按项目两个作用域。模型可通过 <code>remember</code> 工具自行写入。",
-      "feat.skills.title": "用户定义的 prompt 包",
-      "feat.skills.body":
-        "把 <code>SKILL.md</code> 丢进任意位置。名字 + 描述会被钉在前缀里，模型可自动调用，或你用 <code>/skill name</code> 手动触发。",
-      "feat.hooks.title": "生命周期钩子",
-      "feat.hooks.body":
-        "在 <code>PreToolUse</code> · <code>PostToolUse</code> · <code>UserPromptSubmit</code> · <code>Stop</code> 四个点触发 shell 命令，退出码决定放行 / 阻断 / 警告。",
-      "feat.mcp.title": "自带工具进来",
+      "feat.sub":
+        "12 个具体能力。循环是地基，下面是地基之上你能直接拿来用的东西。",
+      "feat.renderer.title": "自研 cell-diff 渲染器",
+      "feat.renderer.body":
+        "基于 Yoga 的 TUI 运行时，不依赖 Ink。宽字符、emoji、bracketed paste、resize 跨平台都干净。",
+      "feat.mcp.title": "MCP 一等公民",
       "feat.mcp.body":
-        '向导内置目录，或用 <code>--mcp "name=cmd"</code> 直接挂 stdio / HTTP+SSE 服务器。长任务渲染实时进度条。',
-      "feat.web.title": "内置联网搜索",
-      "feat.web.body":
-        "<code>web_search</code> + <code>web_fetch</code>，背靠 Mojeek——无需 key、无需注册，离线 / CI 可关闭。可通过 <code>WebSearchProvider</code> 接口接入自家搜索。",
+        'stdio 与 Streamable HTTP 双传输。工具、资源、提示词全套。内置浏览器查看任意服务器的接口，也能用 <code>--mcp "name=cmd"</code> 现挂。',
+      "feat.plan.title": "计划模式",
+      "feat.plan.body":
+        "改动落盘前先 review。批准、调整、拒绝。Plan checkpoint 跨运行持久化，中途中断也能续。",
+      "feat.perm.title": "权限系统",
+      "feat.perm.body":
+        "每个工具 <code>allow</code> · <code>ask</code> · <code>deny</code>。shell 命令粒度规则。交互式提示，可以教它。",
+      "feat.dash.title": "内嵌仪表盘",
+      "feat.dash.body":
+        "<code>localhost</code> 的伴生 web 面板。实时缓存命中、成本计数、会话时间线、MCP 健康，一处看全。",
+      "feat.sess.title": "持久化会话",
+      "feat.sess.body":
+        "按工作区组织，命名、可恢复。<code>--resume</code> 完全还原——系统提示、历史、plan state。",
+      "feat.hooks.title": "Hooks · Skills · Memory",
+      "feat.hooks.body":
+        "生命周期事件触发 shell 命令。drop-in 的 skill 包能拉子代理。每回合自动读入的项目级 memory。",
+      "feat.search.title": "语义检索",
+      "feat.search.body":
+        "<code>reasonix index</code> 构建 embedding 索引供 agent 查询。本地 Ollama 或 DeepSeek 托管 embedding 任选。",
+      "feat.ckpt.title": "自动 checkpoint",
+      "feat.ckpt.body":
+        "Cursor 风格的会话级 AI 编辑回滚。不污染 git 历史；checkpoint 栈完全是你自己的。",
+      "feat.effort.title": "<code>/effort</code> 旋钮",
+      "feat.effort.body":
+        "每回合切换 reasoning 深度。难活 <code>max</code>、日常 <code>low</code>。斜杠命令 + CLI flag 双入口。",
+      "feat.replay.title": "Transcript 重放",
+      "feat.replay.body":
+        "<code>reasonix replay</code> 把录制好的会话用渲染器重放一遍——bug 复现、演示、审计都好用。",
+      "feat.events.title": "事件日志",
+      "feat.events.body":
+        "<code>events.jsonl</code> 旁路日志，附带 reducer 和 <code>reasonix events</code> CLI。自己搭仪表盘、审计、分析都行。",
 
-      "bench.title": "缓存命中率自己也能验证",
+      "bench.title": "缓存命中自己也能验证",
       "bench.sub":
-        "同一 τ-bench-lite 负载（8 个多轮工具调用任务 × 3 次重复 = 每边 48 次运行），实测 DeepSeek <code>deepseek-chat</code>，唯一变量是前缀稳定性：",
-      "bench.col.metric": "指标",
-      "bench.col.baseline": "基线（缓存敌对）",
-      "bench.col.reasonix": "Reasonix",
-      "bench.col.delta": "差值",
-      "bench.row.cache": "缓存命中",
-      "bench.row.cost": "单任务成本",
-      "bench.row.pass": "通过率",
-      "bench.repro.intro": "无需消耗 API 额度即可复现：",
+        "营销文案里我们不放具体 benchmark 数字——这些数会随模型定价和测试集变化，所以归在 harness 里，不进 README。在自己机器上复现：",
       "bench.repro.note":
-        "提交进仓库的 JSONL 文件每轮带 <code>usage</code>、<code>cost</code>、<code>prefixHash</code>。Reasonix 的前缀哈希在每次模型调用时都字节稳定。",
+        "提交进仓库的每个 JSONL transcript 都带逐轮 <code>usage</code>、<code>cost</code> 和 <code>prefixHash</code>。Reasonix 的前缀哈希在每次模型调用中都字节稳定——这就是全部把戏。",
+      "bench.link": "查看 τ-bench-lite harness →",
 
       "cli.title": "CLI 速览",
       "cli.code": "针对指定路径的编程模式",
-      "cli.chat": "聊天模式（读取已保存配置）",
-      "cli.setup": "重新跑配置向导",
+      "cli.chat": "交互式聊天（读取已保存配置）",
       "cli.run": "一次性运行，结果流到 stdout",
-      "cli.stats": "跨会话的成本仪表盘",
+      "cli.doctor": "环境健康检查",
+      "cli.replay": "重渲染一段录制的会话",
+      "cli.diff": "比较两段 transcript",
+      "cli.events": "查询事件日志",
+      "cli.stats": "跨会话用量统计",
+      "cli.index": "构建语义 embedding 索引",
       "cli.mcp": "探测单个 MCP 服务器",
+      "cli.mcplist": "列出已配置的 MCP 服务器",
+      "cli.prune": "清理旧会话",
       "cli.flags.intro": "常用 flag：",
-      "cli.f.preset": "模型 + harvest + 分支并行 一键组合",
+      "cli.f.effort": "本次运行的 reasoning 深度",
       "cli.f.model": "显式指定 DeepSeek 模型 ID",
       "cli.f.mcp": "挂载 MCP 服务器（可重复）",
       "cli.f.session": "命名会话",
+      "cli.f.resume": "恢复本工作区的最近一个会话",
+      "cli.f.new": "强制开新会话，旧会话保留",
       "cli.f.noconf": "忽略 ~/.reasonix/config.json（CI 友好）",
 
+      "comm.title": "由社区共建",
+      "comm.sub":
+        "Reasonix 是开源、社区共建的项目。下面墙上每一个头像都对应一次真实合并的 PR——不是赞助位。",
+      "comm.gfi": "good first issue →",
+      "comm.disc": "Discussions",
+      "comm.contrib": "贡献指南",
+
       "ctab.title": "准备好了吗？",
-      "ctab.sub": "一条 <code>npx</code> 即可开始。沙箱、可审阅、便宜 98%。",
+      "ctab.sub": "一条 <code>npx</code> 即可开始。沙箱、可审阅、完全开源。",
       "ctab.gh": "GitHub 仓库 →",
       "ctab.npm": "npm 包",
 
@@ -255,12 +321,14 @@
       "foot.col.project": "项目",
       "foot.col.docs": "文档",
       "foot.col.community": "社区",
-      "foot.changelog": "更新日志",
+      "foot.releases": "Releases",
       "foot.readme": "英文 README",
       "foot.readme.zh": "中文 README",
       "foot.arch": "架构文档",
+      "foot.bench": "Benchmarks",
       "foot.issues": "问题反馈",
       "foot.discuss": "讨论区",
+      "foot.contributors": "贡献者",
       "foot.copyright": "© 2026 Reasonix · MIT 协议",
     },
   };
@@ -312,7 +380,7 @@
   // visits the site for the first time. Bumping it occasionally on
   // major version cuts is fine; the npm fetch handles everything else.
   const VERSION_STORAGE_KEY = "reasonix.version";
-  const VERSION_FALLBACK = "0.16";
+  const VERSION_FALLBACK = "0.26";
   const versionListeners = [];
   let currentVersion = VERSION_FALLBACK;
 

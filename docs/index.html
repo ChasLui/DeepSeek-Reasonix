@@ -6,14 +6,14 @@
     <title>Reasonix — DeepSeek-native AI coding agent</title>
     <meta
       name="description"
-      content="Cache-first agent loop for DeepSeek V4. Ink TUI. MCP first-class. 90%+ prefix cache hit, ~98% cheaper than Claude on the same workload. No LangChain."
+      content="Open-source AI coding agent for your terminal, engineered around DeepSeek's prefix-cache so token costs stay low across long sessions. MCP first-class · plan mode · custom cell-diff renderer."
     />
     <meta name="theme-color" content="#0b0f17" />
 
     <meta property="og:title" content="Reasonix — DeepSeek-native AI coding agent" />
     <meta
       property="og:description"
-      content="Cache-first agent loop for DeepSeek V4 (flash + pro). Ink TUI. MCP first-class. No LangChain."
+      content="Open-source AI coding agent for your terminal. Engineered around DeepSeek's prefix-cache. MCP first-class · plan mode · embedded dashboard · MIT."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://esengine.github.io/reasonix/" />
@@ -44,9 +44,10 @@
       </a>
 
       <nav class="nav-links">
+        <a href="#why" data-i18n="nav.why">Why</a>
         <a href="#features" data-i18n="nav.features">Features</a>
         <a href="#quickstart" data-i18n="nav.quickstart">Quick start</a>
-        <a href="#benchmarks" data-i18n="nav.benchmarks">Benchmarks</a>
+        <a href="#community" data-i18n="nav.community">Community</a>
         <a
           href="https://github.com/esengine/reasonix"
           target="_blank"
@@ -67,15 +68,15 @@
     <main id="top">
       <section class="hero">
         <div class="hero-inner">
-          <div class="badge" data-i18n="hero.badge">v0.16 · DeepSeek V4 · cache-first</div>
+          <div class="badge" data-i18n="hero.badge">v{version} · DeepSeek · cache-first · MIT</div>
           <h1 class="hero-title">
             <span class="grad-text" data-i18n="hero.title.line1">DeepSeek-native</span>
             <br />
             <span data-i18n="hero.title.line2">AI coding agent in your terminal</span>
           </h1>
           <p class="hero-sub" data-i18n="hero.sub">
-            Cache-first agent loop for DeepSeek V4 (flash + pro). Edits files as
-            reviewable SEARCH/REPLACE blocks. Ink TUI. MCP first-class. No LangChain.
+            Engineered around DeepSeek's prefix-cache so token costs stay low across long
+            sessions. Custom cell-diff renderer. MCP first-class. Open source.
           </p>
 
           <div class="hero-install">
@@ -103,16 +104,16 @@
 
           <div class="hero-stats">
             <div class="stat">
-              <div class="stat-num grad-text">90.2%</div>
-              <div class="stat-label" data-i18n="hero.stat.cache">prefix cache hit rate</div>
+              <div class="stat-num grad-text" data-i18n="hero.stat.cache.num">Cache-engineered</div>
+              <div class="stat-label" data-i18n="hero.stat.cache">Byte-stable prefix loop</div>
             </div>
             <div class="stat">
-              <div class="stat-num grad-text">~98%</div>
-              <div class="stat-label" data-i18n="hero.stat.cost">cheaper vs Claude Sonnet 4.6</div>
+              <div class="stat-num grad-text" data-i18n="hero.stat.lic.num">Open source</div>
+              <div class="stat-label" data-i18n="hero.stat.lic">MIT, community-developed</div>
             </div>
             <div class="stat">
-              <div class="stat-num grad-text">100%</div>
-              <div class="stat-label" data-i18n="hero.stat.pass">τ-bench-lite pass rate</div>
+              <div class="stat-num grad-text" data-i18n="hero.stat.tui.num">Terminal-native</div>
+              <div class="stat-label" data-i18n="hero.stat.tui">Plus embedded dashboard</div>
             </div>
           </div>
         </div>
@@ -127,13 +128,13 @@
         </div>
       </section>
 
-      <section class="why">
+      <section id="why" class="why">
         <div class="container">
           <h2 class="section-title" data-i18n="why.title">Why Reasonix</h2>
           <p class="section-sub" data-i18n="why.sub">
-            Every abstraction earns its weight against a DeepSeek-specific property —
-            dirt-cheap tokens, R1 traces, automatic prefix caching, JSON mode. Generic
-            wrappers leave these on the table.
+            The loop is organized around four architectural pillars. Each one solves a
+            problem generic agent frameworks don't even see — because they were designed
+            for a different cache mechanic.
           </p>
 
           <div class="why-grid">
@@ -141,48 +142,51 @@
               <div class="why-icon">◈</div>
               <h3 data-i18n="why.cache.title">Cache-first loop</h3>
               <p data-i18n="why.cache.body">
-                Append-only conversation log keeps the prompt prefix byte-stable across
-                turns, so DeepSeek's automatic cache hits 85–95% — not 40%.
+                Append-only history. No in-place mutation, no marker-based compaction.
+                The byte prefix survives every tool call — DeepSeek's prefix-cache keeps
+                hitting turn after turn.
+              </p>
+            </article>
+            <article class="why-card">
+              <div class="why-icon">⌥</div>
+              <h3 data-i18n="why.r1.title">R1 thought harvesting</h3>
+              <p data-i18n="why.r1.body">
+                Distills <code>reasoning_content</code> into a typed plan state — subgoals,
+                hypotheses, uncertainties, rejected paths. Signal kept, noise dropped.
+              </p>
+            </article>
+            <article class="why-card">
+              <div class="why-icon">⚒</div>
+              <h3 data-i18n="why.repair.title">Tool-call repair</h3>
+              <p data-i18n="why.repair.body">
+                Schema flatten · JSON repair · scavenge from <code>&lt;think&gt;</code> ·
+                truncation. Four strategies that handle DeepSeek-specific quirks generic
+                loops mistake for model errors.
               </p>
             </article>
             <article class="why-card">
               <div class="why-icon">¥</div>
-              <h3 data-i18n="why.cost.title">Cost is a pillar</h3>
+              <h3 data-i18n="why.cost.title">Cost control</h3>
               <p data-i18n="why.cost.body">
-                Flash-first defaults, turn-end auto-compaction, model self-escalation
-                when (and only when) needed. Per-turn cost badge in the TUI.
+                Cache-safe folding · aggressive-fold tier · summary-on-exit · model-aware
+                budgets. The loop manages context size without breaking prefix stability.
               </p>
             </article>
             <article class="why-card">
-              <div class="why-icon">⌨</div>
-              <h3 data-i18n="why.tui.title">Ink TUI, no web</h3>
-              <p data-i18n="why.tui.body">
-                Lives in your terminal. Streaming preview, slash commands, plan picker,
-                edit-confirm modal. Plain mode for stubborn Windows shells.
+              <div class="why-icon">∂</div>
+              <h3 data-i18n="why.deepseek.title">DeepSeek-only by design</h3>
+              <p data-i18n="why.deepseek.body">
+                Every layer is tuned around DeepSeek's specific cache mechanic and pricing.
+                Coupling to one backend is the feature, not a limitation.
               </p>
             </article>
             <article class="why-card">
-              <div class="why-icon">⊕</div>
-              <h3 data-i18n="why.mcp.title">MCP first-class</h3>
-              <p data-i18n="why.mcp.body">
-                Stdio + HTTP+SSE transports. Live progress notifications. Same
-                cache-safety + repair plumbing as native tools.
-              </p>
-            </article>
-            <article class="why-card">
-              <div class="why-icon">↶</div>
-              <h3 data-i18n="why.safe.title">Reviewable edits</h3>
-              <p data-i18n="why.safe.body">
-                Edits arrive as SEARCH/REPLACE blocks; nothing hits disk until /apply.
-                Per-file diff confirm modal, undo history, sandboxed paths.
-              </p>
-            </article>
-            <article class="why-card">
-              <div class="why-icon">∞</div>
-              <h3 data-i18n="why.ctx.title">1M-token aware</h3>
-              <p data-i18n="why.ctx.body">
-                Context gauge with proactive compaction, oversized tool-result repair,
-                forced-summary fallback near the window edge.
+              <div class="why-icon">⊜</div>
+              <h3 data-i18n="why.oss.title">Open community</h3>
+              <p data-i18n="why.oss.body">
+                MIT licensed and community-developed. Scoped <code>good first issue</code>
+                tickets with code pointers and acceptance criteria. Real PRs from real
+                contributors.
               </p>
             </article>
           </div>
@@ -209,15 +213,16 @@
               <pre class="code"><code>cd my-project
 npx reasonix code</code></pre>
               <p data-i18n="qs.step2.note">
-                First run walks you through a 30-second wizard (paste API key → pick
-                preset → pick MCP servers).
+                First run walks you through a short wizard — paste API key, pick a
+                preset, optionally attach MCP servers.
               </p>
             </li>
             <li>
-              <h3 data-i18n="qs.step3.title">Ask it to edit</h3>
+              <h3 data-i18n="qs.step3.title">Review and apply</h3>
               <p data-i18n="qs.step3.body">
-                The model proposes edits as SEARCH/REPLACE blocks — nothing hits disk
-                until you <code>/apply</code>.
+                The agent proposes edits as reviewable blocks — nothing hits disk until
+                you <code>/apply</code>. Plan mode lets you stage multi-file changes
+                before committing any.
               </p>
             </li>
           </ol>
@@ -225,7 +230,7 @@ npx reasonix code</code></pre>
           <p class="req" data-i18n="qs.req">
             Requires Node ≥ 22. macOS, Linux, Windows (PowerShell · Git Bash · Windows
             Terminal). Press <kbd>Esc</kbd> anytime to abort; <code>/help</code> for the
-            full command list.
+            full slash-command list.
           </p>
         </div>
       </section>
@@ -233,121 +238,147 @@ npx reasonix code</code></pre>
       <section id="features" class="features">
         <div class="container">
           <h2 class="section-title" data-i18n="feat.title">In the box</h2>
+          <p class="section-sub" data-i18n="feat.sub">
+            Twelve concrete capabilities. The loop is the foundation; everything below
+            is what you get on top of it.
+          </p>
 
           <div class="feat-grid">
             <article class="feat">
               <h3>
-                <span class="feat-tag">code</span>
-                <span data-i18n="feat.code.title">Pair programmer mode</span>
+                <span class="feat-tag">renderer</span>
+                <span data-i18n="feat.renderer.title">Cell-diff renderer</span>
               </h3>
-              <p data-i18n="feat.code.body">
-                <code>read_file</code> · <code>write_file</code> · <code>edit_file</code> ·
-                <code>search_files</code> · <code>directory_tree</code> ·
-                <code>run_command</code> with read-only allowlist. Sandboxed to the
-                launch root — no path escapes. Plan mode and per-edit review modal.
-              </p>
-            </article>
-            <article class="feat">
-              <h3>
-                <span class="feat-tag">memory</span>
-                <span data-i18n="feat.memory.title">Two-layer memory</span>
-              </h3>
-              <p data-i18n="feat.memory.body">
-                Committable <code>REASONIX.md</code> for team conventions plus a private
-                per-user <code>~/.reasonix/memory/</code> with global and per-project
-                scopes. The model can write to it via the <code>remember</code> tool.
-              </p>
-            </article>
-            <article class="feat">
-              <h3>
-                <span class="feat-tag">skills</span>
-                <span data-i18n="feat.skills.title">User-authored prompt packs</span>
-              </h3>
-              <p data-i18n="feat.skills.body">
-                Drop <code>SKILL.md</code> files anywhere. Names + descriptions are
-                pinned in the prefix; the model picks them autonomously, or you trigger
-                with <code>/skill name</code>.
-              </p>
-            </article>
-            <article class="feat">
-              <h3>
-                <span class="feat-tag">hooks</span>
-                <span data-i18n="feat.hooks.title">Lifecycle hooks</span>
-              </h3>
-              <p data-i18n="feat.hooks.body">
-                Shell commands fire at <code>PreToolUse</code> · <code>PostToolUse</code>
-                · <code>UserPromptSubmit</code> · <code>Stop</code>. Exit code drives
-                pass / block / warn.
+              <p data-i18n="feat.renderer.body">
+                Custom TUI runtime built on Yoga. No Ink dependency. Wide-char, emoji,
+                bracketed paste, and resize handled cleanly across platforms.
               </p>
             </article>
             <article class="feat">
               <h3>
                 <span class="feat-tag">mcp</span>
-                <span data-i18n="feat.mcp.title">Bring your own tools</span>
+                <span data-i18n="feat.mcp.title">MCP first-class</span>
               </h3>
               <p data-i18n="feat.mcp.body">
-                Wizard catalog, or <code>--mcp "name=cmd"</code> to attach stdio /
-                HTTP+SSE servers on the fly. Live progress bars on long calls.
+                Stdio and Streamable HTTP transports. Tools, resources, and prompts.
+                In-app browser to inspect any server's surface, plus
+                <code>--mcp "name=cmd"</code> on the fly.
               </p>
             </article>
             <article class="feat">
               <h3>
-                <span class="feat-tag">web</span>
-                <span data-i18n="feat.web.title">Web search built-in</span>
+                <span class="feat-tag">plan</span>
+                <span data-i18n="feat.plan.title">Plan mode</span>
               </h3>
-              <p data-i18n="feat.web.body">
-                <code>web_search</code> + <code>web_fetch</code> via Mojeek — no key, no
-                signup, off-by-flag for offline / CI. Bring-your-own provider via the
-                <code>WebSearchProvider</code> interface.
+              <p data-i18n="feat.plan.body">
+                Review proposed edits before they touch disk. Approve, refine, or reject.
+                Plan checkpoints persist across runs so you can resume mid-review.
+              </p>
+            </article>
+            <article class="feat">
+              <h3>
+                <span class="feat-tag">perms</span>
+                <span data-i18n="feat.perm.title">Permissions</span>
+              </h3>
+              <p data-i18n="feat.perm.body">
+                <code>allow</code> · <code>ask</code> · <code>deny</code> per-tool.
+                Granular shell command rules. Interactive prompts you can teach.
+              </p>
+            </article>
+            <article class="feat">
+              <h3>
+                <span class="feat-tag">dashboard</span>
+                <span data-i18n="feat.dash.title">Embedded dashboard</span>
+              </h3>
+              <p data-i18n="feat.dash.body">
+                Companion web view at <code>localhost</code>. Live cache hit rate, cost
+                ticker, session timeline, MCP health — all in one place.
+              </p>
+            </article>
+            <article class="feat">
+              <h3>
+                <span class="feat-tag">sessions</span>
+                <span data-i18n="feat.sess.title">Persistent sessions</span>
+              </h3>
+              <p data-i18n="feat.sess.body">
+                Per-workspace, named, resumable. <code>--resume</code> picks up exactly
+                where you left off — system prompt, history, plan state.
+              </p>
+            </article>
+            <article class="feat">
+              <h3>
+                <span class="feat-tag">hooks</span>
+                <span data-i18n="feat.hooks.title">Hooks · skills · memory</span>
+              </h3>
+              <p data-i18n="feat.hooks.body">
+                Shell commands fire on lifecycle events. Drop-in skill packs spawn
+                sub-agents. Project memory the agent reads on every turn.
+              </p>
+            </article>
+            <article class="feat">
+              <h3>
+                <span class="feat-tag">search</span>
+                <span data-i18n="feat.search.title">Semantic search</span>
+              </h3>
+              <p data-i18n="feat.search.body">
+                <code>reasonix index</code> builds an embedding index your agent can
+                query. Local Ollama or DeepSeek-hosted embeddings.
+              </p>
+            </article>
+            <article class="feat">
+              <h3>
+                <span class="feat-tag">checkpoint</span>
+                <span data-i18n="feat.ckpt.title">Auto-checkpoints</span>
+              </h3>
+              <p data-i18n="feat.ckpt.body">
+                Cursor-style session-scoped rollback for AI edits. Never pollutes git
+                history; the checkpoint stack is yours alone.
+              </p>
+            </article>
+            <article class="feat">
+              <h3>
+                <span class="feat-tag">effort</span>
+                <span data-i18n="feat.effort.title"><code>/effort</code> knob</span>
+              </h3>
+              <p data-i18n="feat.effort.body">
+                Switch reasoning depth per turn. <code>max</code> for the gnarly,
+                <code>low</code> for routine. Slash command and CLI flag.
+              </p>
+            </article>
+            <article class="feat">
+              <h3>
+                <span class="feat-tag">replay</span>
+                <span data-i18n="feat.replay.title">Transcript replay</span>
+              </h3>
+              <p data-i18n="feat.replay.body">
+                <code>reasonix replay</code> plays a recorded session back through the
+                renderer — useful for bug reports, demos, and audits.
+              </p>
+            </article>
+            <article class="feat">
+              <h3>
+                <span class="feat-tag">events</span>
+                <span data-i18n="feat.events.title">Event log</span>
+              </h3>
+              <p data-i18n="feat.events.body">
+                <code>events.jsonl</code> sidecar with reducers and a
+                <code>reasonix events</code> CLI. Build dashboards, audits, or your own
+                analytics.
               </p>
             </article>
           </div>
         </div>
       </section>
 
-      <section id="benchmarks" class="bench">
+      <section class="bench">
         <div class="container">
           <h2 class="section-title" data-i18n="bench.title">Verify the cache claim yourself</h2>
           <p class="section-sub" data-i18n="bench.sub">
-            On the same τ-bench-lite workload (8 multi-turn tool-use tasks × 3 repeats =
-            48 runs per side), live DeepSeek <code>deepseek-chat</code>, sole variable
-            prefix stability:
+            We don't ship benchmark numbers in marketing copy — they move with model
+            pricing and harness changes, so they live with the harness instead of the
+            README. Reproduce on your own machine:
           </p>
 
-          <div class="bench-table-wrap">
-            <table class="bench-table">
-              <thead>
-                <tr>
-                  <th data-i18n="bench.col.metric">metric</th>
-                  <th data-i18n="bench.col.baseline">baseline (cache-hostile)</th>
-                  <th data-i18n="bench.col.reasonix">Reasonix</th>
-                  <th data-i18n="bench.col.delta">delta</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td data-i18n="bench.row.cache">cache hit</td>
-                  <td>32.8%</td>
-                  <td class="hi">90.2%</td>
-                  <td>+57.4 pp</td>
-                </tr>
-                <tr>
-                  <td data-i18n="bench.row.cost">cost / task</td>
-                  <td>$0.000992</td>
-                  <td class="hi">$0.000593</td>
-                  <td><strong>−40%</strong></td>
-                </tr>
-                <tr>
-                  <td data-i18n="bench.row.pass">pass rate</td>
-                  <td>100% (24/24)</td>
-                  <td class="hi">100% (24/24)</td>
-                  <td>—</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <p data-i18n="bench.repro.intro">Reproduce without spending an API credit:</p>
           <pre class="code"><code>git clone https://github.com/esengine/reasonix.git &amp;&amp; cd reasonix &amp;&amp; npm install
 npx reasonix replay benchmarks/tau-bench/transcripts/t01_address_happy.reasonix.r1.jsonl
 npx reasonix diff \
@@ -355,9 +386,19 @@ npx reasonix diff \
   benchmarks/tau-bench/transcripts/t01_address_happy.reasonix.r1.jsonl</code></pre>
 
           <p data-i18n="bench.repro.note">
-            The committed JSONL transcripts carry per-turn <code>usage</code>,
+            Each committed JSONL transcript carries per-turn <code>usage</code>,
             <code>cost</code>, and <code>prefixHash</code>. Reasonix's prefix hash stays
-            byte-stable across every model call.
+            byte-stable across every model call — that's the whole game.
+          </p>
+          <p>
+            <a
+              class="cta ghost"
+              href="https://github.com/esengine/reasonix/tree/main/benchmarks"
+              target="_blank"
+              rel="noopener"
+              data-i18n="bench.link"
+              >Read the τ-bench-lite harness →</a
+            >
           </p>
         </div>
       </section>
@@ -366,18 +407,77 @@ npx reasonix diff \
         <div class="container">
           <h2 class="section-title" data-i18n="cli.title">CLI at a glance</h2>
           <pre class="code"><code>npx reasonix code [path]                 <span class="hash"># <span data-i18n="cli.code">coding mode scoped to path</span></span>
-npx reasonix                             <span class="hash"># <span data-i18n="cli.chat">chat (uses saved config)</span></span>
-npx reasonix setup                       <span class="hash"># <span data-i18n="cli.setup">reconfigure the wizard</span></span>
+npx reasonix chat                        <span class="hash"># <span data-i18n="cli.chat">interactive chat (saved config)</span></span>
 npx reasonix run "ask anything"          <span class="hash"># <span data-i18n="cli.run">one-shot, streams to stdout</span></span>
-npx reasonix stats                       <span class="hash"># <span data-i18n="cli.stats">cross-session cost dashboard</span></span>
-npx reasonix mcp inspect &lt;spec&gt;          <span class="hash"># <span data-i18n="cli.mcp">probe a single MCP server</span></span></code></pre>
+npx reasonix doctor                      <span class="hash"># <span data-i18n="cli.doctor">environment health check</span></span>
+npx reasonix replay &lt;file.jsonl&gt;         <span class="hash"># <span data-i18n="cli.replay">re-render a recorded session</span></span>
+npx reasonix diff a.jsonl b.jsonl        <span class="hash"># <span data-i18n="cli.diff">compare two transcripts</span></span>
+npx reasonix events &lt;name&gt;               <span class="hash"># <span data-i18n="cli.events">query the event log</span></span>
+npx reasonix stats                       <span class="hash"># <span data-i18n="cli.stats">cross-session usage</span></span>
+npx reasonix index                       <span class="hash"># <span data-i18n="cli.index">build semantic embedding index</span></span>
+npx reasonix mcp inspect &lt;spec&gt;          <span class="hash"># <span data-i18n="cli.mcp">probe one MCP server</span></span>
+npx reasonix mcp list                    <span class="hash"># <span data-i18n="cli.mcplist">list configured MCP servers</span></span>
+npx reasonix prune-sessions              <span class="hash"># <span data-i18n="cli.prune">clean up old sessions</span></span></code></pre>
 
           <p class="cli-flags" data-i18n="cli.flags.intro">Common flags:</p>
-          <pre class="code"><code>--preset &lt;fast|smart|max&gt;   <span class="hash"># <span data-i18n="cli.f.preset">model + harvest + branch bundle</span></span>
---model &lt;id&gt;                <span class="hash"># <span data-i18n="cli.f.model">explicit DeepSeek model id</span></span>
---mcp "name=cmd args…"      <span class="hash"># <span data-i18n="cli.f.mcp">attach an MCP server (repeatable)</span></span>
---session &lt;name&gt;            <span class="hash"># <span data-i18n="cli.f.session">named session</span></span>
---no-config                 <span class="hash"># <span data-i18n="cli.f.noconf">ignore ~/.reasonix/config.json (CI)</span></span></code></pre>
+          <pre class="code"><code>--effort &lt;max|high|medium|low&gt;   <span class="hash"># <span data-i18n="cli.f.effort">reasoning depth for the run</span></span>
+--model &lt;id&gt;                     <span class="hash"># <span data-i18n="cli.f.model">explicit DeepSeek model id</span></span>
+--mcp "name=cmd args…"           <span class="hash"># <span data-i18n="cli.f.mcp">attach an MCP server (repeatable)</span></span>
+--session &lt;name&gt;                 <span class="hash"># <span data-i18n="cli.f.session">named session</span></span>
+--resume                         <span class="hash"># <span data-i18n="cli.f.resume">pick up the latest session for this workspace</span></span>
+--new                            <span class="hash"># <span data-i18n="cli.f.new">force a fresh session, preserve old</span></span>
+--no-config                      <span class="hash"># <span data-i18n="cli.f.noconf">ignore ~/.reasonix/config.json (CI)</span></span></code></pre>
+        </div>
+      </section>
+
+      <section id="community" class="community">
+        <div class="container">
+          <h2 class="section-title" data-i18n="comm.title">Built by the community</h2>
+          <p class="section-sub" data-i18n="comm.sub">
+            Reasonix is open source and community-developed. Every avatar on the wall
+            below is a real PR that shipped — not a sponsorship slot.
+          </p>
+
+          <p align="center">
+            <a
+              href="https://github.com/esengine/reasonix/graphs/contributors"
+              target="_blank"
+              rel="noopener"
+            >
+              <img
+                src="https://contrib.rocks/image?repo=esengine/reasonix&max=100&columns=12"
+                alt="Contributors to esengine/reasonix"
+                style="max-width: 100%; border-radius: 8px;"
+              />
+            </a>
+          </p>
+
+          <div class="comm-links">
+            <a
+              class="cta ghost"
+              href="https://github.com/esengine/reasonix/labels/good%20first%20issue"
+              target="_blank"
+              rel="noopener"
+              data-i18n="comm.gfi"
+              >good first issue →</a
+            >
+            <a
+              class="cta ghost"
+              href="https://github.com/esengine/reasonix/discussions"
+              target="_blank"
+              rel="noopener"
+              data-i18n="comm.disc"
+              >Discussions</a
+            >
+            <a
+              class="cta ghost"
+              href="https://github.com/esengine/reasonix/blob/main/CONTRIBUTING.md"
+              target="_blank"
+              rel="noopener"
+              data-i18n="comm.contrib"
+              >Contributing guide</a
+            >
+          </div>
         </div>
       </section>
 
@@ -385,7 +485,7 @@ npx reasonix mcp inspect &lt;spec&gt;          <span class="hash"># <span data-i
         <div class="container">
           <h2 data-i18n="ctab.title">Ready to try?</h2>
           <p data-i18n="ctab.sub">
-            One <code>npx</code> away. Sandboxed. Reviewable. 98% cheaper.
+            One <code>npx</code> away. Sandboxed. Reviewable. Open source.
           </p>
           <div class="hero-ctas center">
             <a
@@ -427,11 +527,11 @@ npx reasonix mcp inspect &lt;spec&gt;          <span class="hash"># <span data-i
             <a href="https://github.com/esengine/reasonix" target="_blank" rel="noopener">GitHub</a>
             <a href="https://www.npmjs.com/package/reasonix" target="_blank" rel="noopener">npm</a>
             <a
-              href="https://github.com/esengine/reasonix/blob/main/CHANGELOG.md"
+              href="https://github.com/esengine/reasonix/releases"
               target="_blank"
               rel="noopener"
-              data-i18n="foot.changelog"
-              >Changelog</a
+              data-i18n="foot.releases"
+              >Releases</a
             >
             <a
               href="https://github.com/esengine/reasonix/blob/main/LICENSE"
@@ -463,6 +563,13 @@ npx reasonix mcp inspect &lt;spec&gt;          <span class="hash"># <span data-i
               data-i18n="foot.arch"
               >Architecture</a
             >
+            <a
+              href="https://github.com/esengine/reasonix/tree/main/benchmarks"
+              target="_blank"
+              rel="noopener"
+              data-i18n="foot.bench"
+              >Benchmarks</a
+            >
           </div>
           <div>
             <h4 data-i18n="foot.col.community">Community</h4>
@@ -479,6 +586,13 @@ npx reasonix mcp inspect &lt;spec&gt;          <span class="hash"># <span data-i
               rel="noopener"
               data-i18n="foot.discuss"
               >Discussions</a
+            >
+            <a
+              href="https://github.com/esengine/reasonix/graphs/contributors"
+              target="_blank"
+              rel="noopener"
+              data-i18n="foot.contributors"
+              >Contributors</a
             >
           </div>
         </div>
