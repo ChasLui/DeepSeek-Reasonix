@@ -71,7 +71,7 @@ import { openTranscriptFile, recordFromLoopEvent, writeRecord } from "../../tran
 import { AtMentionSuggestions } from "./AtMentionSuggestions.js";
 import { ChoiceConfirm, type ChoiceConfirmChoice } from "./ChoiceConfirm.js";
 import { EditConfirm, type EditReviewChoice } from "./EditConfirm.js";
-import { McpBrowser } from "./McpBrowser.js";
+import { McpHub } from "./McpHub.js";
 import { PlanCheckpointConfirm } from "./PlanCheckpointConfirm.js";
 import { PlanConfirm, type PlanConfirmChoice } from "./PlanConfirm.js";
 import { PlanRefineInput } from "./PlanRefineInput.js";
@@ -150,6 +150,12 @@ export interface AppProps {
    * (tools + resources + prompts per server).
    */
   mcpServers?: McpServerSummary[];
+  /**
+   * Hot-reload runtime owned by chatCommand. Lets slash + dashboard
+   * trigger an add/remove round-trip after the user installs from the
+   * marketplace, without restarting the process.
+   */
+  mcpRuntime?: import("../commands/chat.js").McpRuntime;
   /**
    * Shared ref the MCP bridge's onProgress callback writes through.
    * We attach our updater to `progressSink.current` on mount so any
@@ -274,6 +280,7 @@ function AppInner({
   tools,
   mcpSpecs,
   mcpServers,
+  mcpRuntime,
   progressSink,
   codeMode,
   noDashboard,
@@ -529,8 +536,8 @@ function AppInner({
   /** True while the SessionPicker is open mid-chat (triggered by `/sessions`). */
   const [pendingSessionsPicker, setPendingSessionsPicker] = useState(false);
   const [sessionsPickerList, setSessionsPickerList] = useState<ReturnType<typeof listSessions>>([]);
-  /** True while the McpBrowser modal is open (triggered by `/mcp`). */
-  const [pendingMcpBrowser, setPendingMcpBrowser] = useState(false);
+  /** Opens the unified McpHub modal — null when closed. `tab` selects the initial tab. */
+  const [pendingMcpHub, setPendingMcpHub] = useState<{ tab: "live" | "marketplace" } | null>(null);
   // Stashed plan + intent while the user types free-form feedback
   // (refinement or last instructions on approve). When the picker
   // returns "refine" or "approve", we defer the loop-resume and show
@@ -1212,7 +1219,7 @@ function AppInner({
       !pendingPlan &&
       !pendingReviseEditor &&
       !pendingSessionsPicker &&
-      !pendingMcpBrowser &&
+      !pendingMcpHub &&
       !stagedInput &&
       !pendingEditReview &&
       !walkthroughActive &&
@@ -1246,7 +1253,7 @@ function AppInner({
       !pendingPlan &&
       !pendingReviseEditor &&
       !pendingSessionsPicker &&
-      !pendingMcpBrowser &&
+      !pendingMcpHub &&
       !stagedInput &&
       !pendingEditReview &&
       !walkthroughActive &&
@@ -1829,6 +1836,13 @@ function AppInner({
           return fresh.length;
         },
         addToolToPrefix: (spec) => loop.prefix.addTool(spec),
+        reloadMcp: mcpRuntime
+          ? async () => {
+              const r = await mcpRuntime.reloadFromConfig(loop);
+              setLiveMcpServers(r.summaries);
+              return r.summaries.length;
+            }
+          : undefined,
       });
       dashboardRef.current = handle;
       setDashboardUrlState(handle.url);
@@ -1853,6 +1867,7 @@ function AppInner({
     pendingEditReview,
     pendingRevision,
     agentStore,
+    mcpRuntime,
   ]);
 
   const stopDashboard = useCallback(async (): Promise<void> => {
@@ -2166,6 +2181,13 @@ function AppInner({
             setHookList(fresh);
             return fresh.length;
           },
+          reloadMcp: mcpRuntime
+            ? async () => {
+                const r = await mcpRuntime.reloadFromConfig(loop);
+                setLiveMcpServers(r.summaries);
+                return r;
+              }
+            : undefined,
           latestVersion,
           refreshLatestVersion,
           models,
@@ -2177,8 +2199,8 @@ function AppInner({
           promptHistory.current.push(text);
           return;
         }
-        if (result.openMcpBrowser) {
-          setPendingMcpBrowser(true);
+        if (result.openMcpHub) {
+          setPendingMcpHub({ tab: result.openMcpHub.tab });
           promptHistory.current.push(text);
           return;
         }
@@ -2579,6 +2601,7 @@ function AppInner({
       prefixHash,
       log,
       agentStore.dispatch,
+      mcpRuntime,
     ],
   );
 
@@ -3131,7 +3154,7 @@ function AppInner({
           !!pendingPlan ||
           !!pendingReviseEditor ||
           pendingSessionsPicker ||
-          pendingMcpBrowser ||
+          !!pendingMcpHub ||
           !!pendingShell ||
           !!pendingEditReview ||
           walkthroughActive ||
@@ -3181,7 +3204,7 @@ function AppInner({
                 !pendingPlan &&
                 !pendingReviseEditor &&
                 !pendingSessionsPicker &&
-                !pendingMcpBrowser &&
+                !pendingMcpHub &&
                 !stagedInput &&
                 !pendingEditReview &&
                 ongoingTool ? (
@@ -3192,7 +3215,7 @@ function AppInner({
                 !pendingPlan &&
                 !pendingReviseEditor &&
                 !pendingSessionsPicker &&
-                !pendingMcpBrowser &&
+                !pendingMcpHub &&
                 !stagedInput &&
                 !pendingEditReview &&
                 subagentActivity ? (
@@ -3203,7 +3226,7 @@ function AppInner({
                 !pendingPlan &&
                 !pendingReviseEditor &&
                 !pendingSessionsPicker &&
-                !pendingMcpBrowser &&
+                !pendingMcpHub &&
                 !stagedInput &&
                 !pendingEditReview &&
                 !ongoingTool &&
@@ -3216,7 +3239,7 @@ function AppInner({
                 !pendingPlan &&
                 !pendingReviseEditor &&
                 !pendingSessionsPicker &&
-                !pendingMcpBrowser &&
+                !pendingMcpHub &&
                 !stagedInput &&
                 !pendingEditReview &&
                 !pendingChoice &&
@@ -3239,7 +3262,7 @@ function AppInner({
                 !pendingPlan &&
                 !pendingReviseEditor &&
                 !pendingSessionsPicker &&
-                !pendingMcpBrowser &&
+                !pendingMcpHub &&
                 !stagedInput &&
                 !pendingEditReview &&
                 busy &&
@@ -3253,7 +3276,7 @@ function AppInner({
                 !pendingPlan &&
                 !pendingReviseEditor &&
                 !pendingSessionsPicker &&
-                !pendingMcpBrowser &&
+                !pendingMcpHub &&
                 !stagedInput &&
                 !pendingEditReview ? (
                   <PlanLiveRow />
@@ -3347,17 +3370,27 @@ function AppInner({
                     }
                   }}
                 />
-              ) : pendingMcpBrowser ? (
-                <McpBrowser
-                  servers={liveMcpServers}
+              ) : pendingMcpHub ? (
+                <McpHub
+                  initialTab={pendingMcpHub.tab}
+                  liveServers={liveMcpServers}
                   configPath={defaultConfigPath()}
-                  onClose={() => setPendingMcpBrowser(false)}
+                  onClose={() => setPendingMcpHub(null)}
                   postInfo={(text) => log.pushInfo(text)}
                   applyAppend={(target, addedTools) => {
                     const updated = applyMcpAppend(loop, target, addedTools);
                     setLiveMcpServers((prev) => replaceMcpServerSummary(prev, target, updated));
                     return updated;
                   }}
+                  reloadMcp={
+                    mcpRuntime
+                      ? async () => {
+                          const r = await mcpRuntime.reloadFromConfig(loop);
+                          setLiveMcpServers(r.summaries);
+                          return r;
+                        }
+                      : undefined
+                  }
                 />
               ) : pendingPlan ? (
                 <PlanConfirm

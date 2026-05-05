@@ -10,8 +10,8 @@ export interface SlashResult {
   info?: string;
   /** Open the SessionPicker modal mid-chat — used by `/sessions` slash. */
   openSessionsPicker?: boolean;
-  /** Open the MCP browser modal — used by `/mcp` slash in interactive contexts. */
-  openMcpBrowser?: boolean;
+  /** Open the unified MCP hub — `/mcp` defaults to "live", `/mcp browse` to "marketplace". */
+  openMcpHub?: { tab: "live" | "marketplace" };
   /** Open the arg-completer picker for this command (e.g. `/language` → language picker). */
   openArgPickerFor?: string;
   /** Exit the app. */
@@ -92,6 +92,13 @@ export interface SlashContext {
   /** `/apply-plan` clears the picker so its own `resubmit` doesn't double-fire approval. */
   clearPendingPlan?: () => void;
   reloadHooks?: () => number;
+  /** Diff config.mcp[] vs live bridges → add/close clients accordingly. Wired from chat.tsx mcpRuntime. */
+  reloadMcp?: () => Promise<{
+    added: string[];
+    removed: string[];
+    failed: Array<{ spec: string; reason: string }>;
+    summaries: McpServerSummary[];
+  }>;
   /** `null` → still in flight OR offline; consumers can't distinguish, so always offer `refreshLatestVersion`. */
   latestVersion?: string | null;
   refreshLatestVersion?: () => void;
