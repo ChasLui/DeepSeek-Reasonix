@@ -6,6 +6,14 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { JobRegistry } from "../src/tools/jobs.js";
 
+async function waitFor(cond: () => boolean, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (cond()) return;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+}
+
 describe("JobRegistry", () => {
   let cwd: string;
   let registry: JobRegistry;
@@ -158,6 +166,9 @@ describe("JobRegistry", () => {
     const a = await registry.start(`node -e "setTimeout(()=>{}, 10000)"`, { cwd, waitSec: 0.2 });
     expect(registry.runningCount()).toBe(1);
     await registry.stop(a.jobId);
+    // Windows taskkill /T resolves before the OS finishes reaping the
+    // child tree; poll briefly so we test "settles to 0", not "is 0 right now".
+    await waitFor(() => registry.runningCount() === 0, 2000);
     expect(registry.runningCount()).toBe(0);
   });
 
@@ -176,6 +187,7 @@ describe("JobRegistry", () => {
     // 4s deadline: Windows taskkill /T is async and needs ~500-800ms
     // per process to propagate through the tree + reap confirmation.
     await registry.shutdown(4000);
+    await waitFor(() => registry.runningCount() === 0, 2000);
     expect(registry.runningCount()).toBe(0);
   });
 });
