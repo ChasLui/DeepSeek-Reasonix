@@ -5,6 +5,7 @@ import stringWidth from "string-width";
 import type { SessionSummary } from "../../telemetry/stats.js";
 import { ChromeRule } from "./primitives.js";
 import { COLOR, GRADIENT } from "./theme.js";
+import { formatBalance } from "./theme/tokens.js";
 
 const COLD_START_TURNS = 3;
 const CACHE_BAR_CELLS = 10;
@@ -53,7 +54,9 @@ export function ChromeBar(props: ChromeBarProps): React.ReactElement {
       ? `[↑ ${Math.round(props.scrollRatio * 100)}%]`
       : "";
   const updateLabel = props.updateAvailable ? `↑ ${props.updateAvailable}` : "";
-  const balanceLabel = props.balance ? formatBalanceLabel(props.balance) : "";
+  const balanceLabel = props.balance
+    ? formatBalance(props.balance.total, props.balance.currency, { label: true })
+    : "";
   const cachePct = Math.round(props.summary.cacheHitRatio * 100);
   // Use the worst-case rendered cache string (3-digit pct, full bar) so the
   // shed decision doesn't oscillate as the percentage changes turn-to-turn.
@@ -165,12 +168,6 @@ export function ChromeBar(props: ChromeBarProps): React.ReactElement {
   );
 }
 
-function formatBalanceLabel(balance: { currency: string; total: number }): string {
-  const sym = balance.currency === "USD" ? "$" : balance.currency === "CNY" ? "¥" : "";
-  const suf = sym ? "" : ` ${balance.currency}`;
-  return `w ${sym}${balance.total.toFixed(2)}${suf}`;
-}
-
 function CostPill({
   summary,
   cold,
@@ -203,7 +200,9 @@ function BalancePill({
 }): React.ReactElement {
   const { total } = balance;
   const color = total < 1 ? COLOR.err : total < 5 ? COLOR.warn : COLOR.ok;
-  return <Text color={color}>{formatBalanceLabel(balance)}</Text>;
+  return (
+    <Text color={color}>{formatBalance(balance.total, balance.currency, { label: true })}</Text>
+  );
 }
 
 function CachePill({
