@@ -12,10 +12,7 @@ import { describe, expect, it } from "vitest";
 import { StatusRow } from "../src/cli/ui/layout/StatusRow.js";
 import { AgentStoreProvider, useAgentStore } from "../src/cli/ui/state/provider.js";
 import type { AgentState, SessionInfo } from "../src/cli/ui/state/state.js";
-
-// ---------------------------------------------------------------------------
-// helpers
-// ---------------------------------------------------------------------------
+import { makeFakeStdin, makeFakeStdout } from "./helpers/ink-stdio.js";
 
 const SESSION: SessionInfo = {
   id: "test-session",
@@ -23,27 +20,6 @@ const SESSION: SessionInfo = {
   workspace: "/tmp/repo",
   model: "deepseek-chat",
 };
-
-function makeFakeStdout() {
-  const chunks: string[] = [];
-  return {
-    columns: 120,
-    rows: 30,
-    isTTY: true,
-    write(chunk: string) {
-      chunks.push(chunk);
-      return true;
-    },
-    on() {},
-    off() {},
-    data: chunks,
-    text(): string {
-      // Strip ANSI escape sequences so we can assert on readable text.
-      // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping ANSI SGR codes
-      return chunks.join("").replace(/\x1b\[[0-9;]*m/g, "");
-    },
-  };
-}
 
 /** Dispatches arbitrary events on mount into the store created by AgentStoreProvider. */
 function EventInjector({
@@ -78,13 +54,13 @@ function StateInjector({
 /** Render <StatusRow /> through Ink with a fake stdout, return collected text. */
 async function renderStatusRow(overrides: Partial<AgentState["status"]>): Promise<string> {
   const stdout = makeFakeStdout();
-  const { unmount, waitUntilExit } = render(
+  const { unmount } = render(
     <AgentStoreProvider session={SESSION}>
       <StateInjector overrides={overrides}>
         <StatusRow />
       </StateInjector>
     </AgentStoreProvider>,
-    { stdout: stdout as any, stdin: process.stdin as any },
+    { stdout: stdout as never, stdin: makeFakeStdin() as never },
   );
   // Let the StateInjector effect fire and StatusRow re-render.
   await new Promise((r) => setTimeout(r, 50));
@@ -169,7 +145,7 @@ describe("StatusRow - wallet currency symbol", () => {
 
   it("full USD flow: turn.end + session.update renders all $ symbols", async () => {
     const stdout = makeFakeStdout();
-    const { unmount, waitUntilExit } = render(
+    const { unmount } = render(
       <AgentStoreProvider session={SESSION}>
         <EventInjector
           events={[
@@ -183,7 +159,7 @@ describe("StatusRow - wallet currency symbol", () => {
           <StatusRow />
         </EventInjector>
       </AgentStoreProvider>,
-      { stdout: stdout as any, stdin: process.stdin as any },
+      { stdout: stdout as never, stdin: makeFakeStdin() as never },
     );
     await new Promise((r) => setTimeout(r, 50));
     unmount();
@@ -195,7 +171,7 @@ describe("StatusRow - wallet currency symbol", () => {
 
   it("full CNY flow: turn.end + session.update renders all ¥ symbols", async () => {
     const stdout = makeFakeStdout();
-    const { unmount, waitUntilExit } = render(
+    const { unmount } = render(
       <AgentStoreProvider session={SESSION}>
         <EventInjector
           events={[
@@ -209,7 +185,7 @@ describe("StatusRow - wallet currency symbol", () => {
           <StatusRow />
         </EventInjector>
       </AgentStoreProvider>,
-      { stdout: stdout as any, stdin: process.stdin as any },
+      { stdout: stdout as never, stdin: makeFakeStdin() as never },
     );
     await new Promise((r) => setTimeout(r, 50));
     unmount();
