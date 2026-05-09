@@ -27,8 +27,15 @@ function makeMockLog(): { log: Scrollback; calls: Call[] } {
     pushWarning: record("pushWarning", () => next("warn")),
     pushError: record("pushError", () => next("err")),
     pushInfo: record("pushInfo", () => next("info")),
+    pushTip: record("pushTip", () => next("tip")),
+    pushCtxPressureIfHigh: record("pushCtxPressureIfHigh", () => undefined),
     pushStepProgress: record("pushStepProgress", () => next("step")),
     pushPlanAnnounce: record("pushPlanAnnounce", () => next("plan")),
+    showDoctor: record("showDoctor", () => next("doctor")),
+    showUsageVerbose: record("showUsageVerbose", () => next("usage")),
+    showPlan: record("showPlan", () => next("plan")),
+    completePlanStep: record("completePlanStep", () => undefined),
+    showCtx: record("showCtx", () => next("ctx")),
     startReasoning: record("startReasoning", () => next("r")),
     appendReasoning: record("appendReasoning", () => undefined),
     endReasoning: record("endReasoning", () => undefined),
@@ -42,6 +49,7 @@ function makeMockLog(): { log: Scrollback; calls: Call[] } {
     thinking: record("thinking", () => next("think")),
     abortTurn: record("abortTurn", () => undefined),
     endTurn: record("endTurn", () => undefined),
+    reset: record("reset", () => undefined),
   };
   return { log, calls };
 }
@@ -111,6 +119,16 @@ describe("TurnTranslator", () => {
     const t = new TurnTranslator(log);
     t.toolEnd("stray output");
     expect(calls).toEqual([]);
+  });
+
+  it("toolAbort closes an open tool card as aborted", () => {
+    const { log, calls } = makeMockLog();
+    const t = new TurnTranslator(log);
+    t.toolStart("read_file", { path: "src/x.ts" });
+    t.toolAbort("Error: failed");
+    const endCall = calls.find((c) => c.method === "endTool");
+    expect(endCall?.args[0]).toBe("tool-1");
+    expect(endCall?.args[1]).toMatchObject({ output: "Error: failed", aborted: true });
   });
 
   it("reasoningDone derives paragraphs and tokens from accumulated text", () => {

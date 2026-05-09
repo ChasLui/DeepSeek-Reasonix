@@ -2650,7 +2650,13 @@ function AppInner({
               codeModeOn: !!codeMode,
             });
           } else if (ev.role === "error") {
-            handleErrorEvent(ev, { log });
+            handleErrorEvent(ev, {
+              log,
+              setOngoingTool,
+              setToolProgress,
+              toolStartedAtRef,
+              translator,
+            });
           } else if (ev.role === "warning") {
             handleWarningEvent(ev, { log, setTurnOnPro });
           }

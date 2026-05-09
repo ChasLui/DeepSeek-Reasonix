@@ -52,9 +52,19 @@ export function handleToolStart(ev: LoopEvent, ctx: ToolStartContext): void {
 
 export interface ErrorContext {
   log: Scrollback;
+  setOngoingTool: Dispatch<SetStateAction<{ name: string; args?: string } | null>>;
+  setToolProgress: Dispatch<
+    SetStateAction<{ progress: number; total?: number; message?: string } | null>
+  >;
+  toolStartedAtRef: MutableRefObject<number | null>;
+  translator: TurnTranslator;
 }
 
 export function handleErrorEvent(ev: LoopEvent, ctx: ErrorContext): void {
+  ctx.setOngoingTool(null);
+  ctx.setToolProgress(null);
+  ctx.toolStartedAtRef.current = null;
+  ctx.translator.toolAbort(ev.error ?? ev.content);
   ctx.log.pushError("tool error", ev.error ?? ev.content);
 }
 

@@ -35,6 +35,17 @@ export class TurnTranslator {
     }
   }
 
+  toolAbort(output?: string): void {
+    if (this.toolCardId) {
+      this.log.endTool(this.toolCardId, {
+        output,
+        elapsedMs: Date.now() - this.toolStartedAt,
+        aborted: true,
+      });
+      this.toolCardId = null;
+    }
+  }
+
   toolRetry(attempt: number, max: number): void {
     if (this.toolCardId) this.log.retryTool(this.toolCardId, attempt, max);
   }
