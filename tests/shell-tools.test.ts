@@ -18,6 +18,7 @@ import {
   smartDecodeOutput,
   tokenizeCommand,
 } from "../src/tools/shell.js";
+import { normalizeWindowsEnvVars } from "../src/tools/shell/exec.js";
 
 /** A PauseGate that records call args and denies — denial keeps the spawn from actually running. */
 class SpyGate extends PauseGate {
@@ -632,6 +633,17 @@ describe("resolveExecutable", () => {
     expect(out).toBe("npm");
   });
 
+  it("reads Path / pathext case-insensitively on Windows", () => {
+    const hits = new Set(["C:\\tools\\npm.CMD"]);
+    const out = resolveExecutable("npm", {
+      platform: "win32",
+      env: { Path: "C:\\tools", pathext: ".CMD" },
+      pathDelimiter: ";",
+      isFile: (p) => hits.has(p),
+    });
+    expect(out).toBe("C:\\tools\\npm.CMD");
+  });
+
   it("handles whitespace inside PATHEXT entries (' .CMD ' → '.CMD')", () => {
     const hits = new Set(["C:\\bin\\npm.CMD"]);
     const out = resolveExecutable("npm", {
@@ -847,6 +859,35 @@ describe("prepareSpawn", () => {
     });
     expect(out.bin).toBe("node.exe");
     expect(out.args).toEqual(["-v"]);
+  });
+});
+
+describe("normalizeWindowsEnvVars", () => {
+  it("collapses PATH casing variants into one Path entry", () => {
+    const out = normalizeWindowsEnvVars(
+      {
+        PATH: "C:\\Users\\me\\bin;C:\\Windows\\System32",
+        Path: "C:\\Program Files\\Go\\bin;C:\\Windows\\System32",
+        Foo: "bar",
+      },
+      { platform: "win32" },
+    );
+
+    expect(out.PATH).toBeUndefined();
+    expect(out.Path).toBe("C:\\Users\\me\\bin;C:\\Windows\\System32;C:\\Program Files\\Go\\bin");
+    expect(out.Foo).toBe("bar");
+  });
+
+  it("also normalizes PATHEXT casing variants", () => {
+    const out = normalizeWindowsEnvVars(
+      {
+        PATHEXT: ".EXE;.CMD",
+        PathExt: ".BAT;.CMD",
+      },
+      { platform: "win32" },
+    );
+
+    expect(out.PATHEXT).toBe(".EXE;.CMD;.BAT");
   });
 });
 

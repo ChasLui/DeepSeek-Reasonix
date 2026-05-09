@@ -65,6 +65,7 @@ export async function runCommand(
     });
   }
   const timeoutMs = timeoutSec * 1000;
+  const normalizedEnv = normalizeWindowsEnvVars(process.env);
 
   const spawnOpts: SpawnOptions = {
     cwd: opts.cwd,
@@ -78,7 +79,7 @@ export async function runCommand(
     // sees a Python traceback instead of the script's real output
     // and goes around in circles trying to fix the wrong problem.
     // Harmless on non-Python processes (env vars they don't read).
-    env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
+    env: { ...normalizedEnv, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
   };
 
   // Windows: two layered fixes on top of shell:false —
@@ -90,7 +91,7 @@ export async function runCommand(
   //      with verbatim args + manual quoting, so shell metacharacters
   //      in arguments stay literal.
   // Unix path is unchanged.
-  const { bin, args, spawnOverrides } = prepareSpawn(argv);
+  const { bin, args, spawnOverrides } = prepareSpawn(argv, { env: normalizedEnv });
   const effectiveSpawnOpts = { ...spawnOpts, ...spawnOverrides };
 
   return await new Promise<RunCommandResult>((resolve, reject) => {
@@ -207,12 +208,12 @@ export function resolveExecutable(cmd: string, opts: ResolveExecutableOptions = 
   if (pathMod.extname(cmd)) return cmd;
 
   const env = opts.env ?? process.env;
-  const pathExt = (env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD")
+  const pathExt = (getEnvCaseInsensitive(env, "PATHEXT") ?? ".COM;.EXE;.BAT;.CMD")
     .split(";")
     .map((e) => e.trim())
     .filter(Boolean);
   const delimiter = opts.pathDelimiter ?? (platform === "win32" ? ";" : pathMod.delimiter);
-  const pathDirs = (env.PATH ?? "").split(delimiter).filter(Boolean);
+  const pathDirs = (getEnvCaseInsensitive(env, "PATH") ?? "").split(delimiter).filter(Boolean);
   const isFile = opts.isFile ?? defaultIsFile;
 
   for (const dir of pathDirs) {
@@ -226,6 +227,67 @@ export function resolveExecutable(cmd: string, opts: ResolveExecutableOptions = 
     }
   }
   return cmd;
+}
+
+export function normalizeWindowsEnvVars(
+  env: NodeJS.ProcessEnv,
+  opts: { platform?: NodeJS.Platform } = {},
+): NodeJS.ProcessEnv {
+  const platform = opts.platform ?? process.platform;
+  if (platform !== "win32") return { ...env };
+
+  const out: NodeJS.ProcessEnv = {};
+  const pathValues: string[] = [];
+  const pathExtValues: string[] = [];
+
+  for (const [key, value] of Object.entries(env)) {
+    const lower = key.toLowerCase();
+    if (lower === "path") {
+      if (typeof value === "string") pathValues.push(value);
+      continue;
+    }
+    if (lower === "pathext") {
+      if (typeof value === "string") pathExtValues.push(value);
+      continue;
+    }
+    out[key] = value;
+  }
+
+  if (pathValues.length > 0) out.Path = mergeWindowsPathLike(pathValues, ";");
+  if (pathExtValues.length > 0) out.PATHEXT = mergeWindowsPathLike(pathExtValues, ";");
+
+  return out;
+}
+
+function getEnvCaseInsensitive(
+  env: Record<string, string | undefined>,
+  key: string,
+): string | undefined {
+  const exact = env[key];
+  if (exact !== undefined) return exact;
+  const target = key.toLowerCase();
+  for (const [candidate, value] of Object.entries(env)) {
+    if (candidate.toLowerCase() === target) return value;
+  }
+  return undefined;
+}
+
+function mergeWindowsPathLike(values: readonly string[], delimiter: string): string {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+
+  for (const value of values) {
+    for (const part of value.split(delimiter)) {
+      const entry = part.trim();
+      if (!entry) continue;
+      const normalized = entry.toLowerCase();
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      merged.push(entry);
+    }
+  }
+
+  return merged.join(delimiter);
 }
 
 function defaultIsFile(full: string): boolean {
