@@ -2,6 +2,7 @@ import { Box, Text, useStdout } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React, { useContext } from "react";
 import { clipToCells, wrapToCells } from "../../../frame/width.js";
+import { t } from "../../../i18n/index.js";
 import { countTokens } from "../../../tokenizer.js";
 import { LiveExpandContext } from "../layout/LiveExpandContext.js";
 import { useReserveRows } from "../layout/viewport-budget.js";
@@ -72,7 +73,7 @@ export function StreamingCard({ card }: { card: StreamingCardData }): React.Reac
         <CardHeader
           glyph="‹"
           tone={TONE.ok}
-          title="reply"
+          title={t("cardTitles.reply")}
           right={
             <>
               {ratePill}
@@ -94,7 +95,7 @@ export function StreamingCard({ card }: { card: StreamingCardData }): React.Reac
   const aborted = !!card.aborted;
   const headColor = aborted ? TONE.err : TONE_ACTIVE.brand;
   const glyph = aborted ? "‹" : "◈";
-  const headLabel = aborted ? "aborted" : "writing…";
+  const headLabel = aborted ? t("cardLabels.aborted") : t("cardLabels.writing");
 
   const { tokens: liveTokens, tps: liveTps } = tokenRate(card.text, card.ts, Date.now());
   const liveRatePill =
@@ -121,16 +122,18 @@ export function StreamingCard({ card }: { card: StreamingCardData }): React.Reac
         }
       />
       {expanded && droppedAbove > 0 ? (
-        <Text
-          color={FG.faint}
-        >{`⋯ ${droppedAbove} earlier line${droppedAbove === 1 ? "" : "s"} above`}</Text>
+        <Text color={FG.faint}>
+          {t(droppedAbove === 1 ? "cardLabels.earlierLine" : "cardLabels.earlierLines", {
+            count: droppedAbove,
+          })}
+        </Text>
       ) : null}
       {visible.map((line, i) => (
         <Box key={`${card.id}:${visualLines.length - visible.length + i}`} flexDirection="row">
           <Text color={aborted ? FG.meta : FG.body}>{clipToCells(line, lineCells)}</Text>
         </Box>
       ))}
-      {aborted ? <Text color={FG.faint}>[truncated by esc]</Text> : null}
+      {aborted ? <Text color={FG.faint}>{t("cardLabels.truncatedByEsc")}</Text> : null}
     </Card>
   );
 }
