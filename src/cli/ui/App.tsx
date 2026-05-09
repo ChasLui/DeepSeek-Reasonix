@@ -394,11 +394,21 @@ function AppInner({
   //     `27;5;13~` as Ctrl+Enter. Terminals that don't understand the
   //     SGR fall through silently — Shift+Enter just stays
   //     indistinguishable from Enter, no regression.
+  //
+  //   • SGR mouse tracking (DECSET 1006 + 1000) — terminal reports
+  //     wheel + button presses as `\x1b[<btn;col;row;M` instead of
+  //     translating the wheel to ↑/↓ key sequences. Lets the chat
+  //     scroll-handler route `mouseScrollUp/Down` independently of
+  //     PromptInput's arrow-key bindings (history / cursor). Cost:
+  //     terminal-native drag-to-select needs a modifier (Shift on
+  //     Windows Terminal / Alacritty / WezTerm, Option on iTerm2).
   useEffect(() => {
     if (!stdout || !stdout.isTTY) return;
     stdout.write("\u001b[?2004h");
     stdout.write("\u001b[>4;2m");
+    stdout.write("\u001b[?1006h\u001b[?1000h");
     return () => {
+      stdout.write("\u001b[?1000l\u001b[?1006l");
       stdout.write("\u001b[?2004l");
       stdout.write("\u001b[>4m");
     };
@@ -1094,8 +1104,7 @@ function AppInner({
     setSlashSelected,
     slashGroupMode,
     slashAdvancedHidden,
-    atPicker,
-    atMatches,
+    atState,
     atSelected,
     setAtSelected,
     pickAtMention,
@@ -1205,9 +1214,12 @@ function AppInner({
   // PromptInput can't act on it: while busy (disabled) or once chat is
   // unpinned (user already scrolling). When pinned + idle, PromptInput
   // owns arrows — empty buffer recalls history, otherwise cursor motion.
+  // Mouse wheel routes through mouseScrollUp/Down (SGR mouse mode) and
+  // bypasses the arrow-key path entirely so the wheel always scrolls
+  // scrollback regardless of buffer state.
   useKeystroke((ev) => {
-    if (ev.pageUp) chatScroll.scrollUp();
-    else if (ev.pageDown) chatScroll.scrollDown();
+    if (ev.pageUp || ev.mouseScrollUp) chatScroll.scrollUp();
+    else if (ev.pageDown || ev.mouseScrollDown) chatScroll.scrollDown();
     else if (ev.end) chatScroll.jumpToBottom();
     else if ((!chatScroll.pinned || busy) && ev.upArrow) chatScroll.scrollUp();
     else if ((!chatScroll.pinned || busy) && ev.downArrow) chatScroll.scrollDown();
@@ -1269,7 +1281,7 @@ function AppInner({
     // Esc dismisses any composer-level picker (slash / @ / slash-arg)
     // by clearing the prefix that triggered it. Picker footers advertise
     // "esc cancel" — this binds it.
-    if (key.escape && !busy && (slashMatches || atMatches || slashArgContext)) {
+    if (key.escape && !busy && (slashMatches || atState || slashArgContext)) {
       setInput("");
       return;
     }
@@ -1403,24 +1415,24 @@ function AppInner({
     // (hidden) prompt buffer. Bail early.
     if (pendingShell) return;
 
-    // @-mention picker takes the same priority tier as slash. When
-    // the user is typing `@…` in code mode and there are file matches,
-    // ↑/↓ walk the list and Tab substitutes the selected path. Enter
-    // is caught in handleSubmit. Must come BEFORE slash so the two
-    // pickers don't fight over arrow keys (mutually exclusive by
-    // construction — atPicker is null when slashMatches is set).
-    if (atMatches && atMatches.length > 0) {
+    // @-mention picker takes the same priority tier as slash. ↑/↓ walk
+    // the list; Tab on a folder drills into it, Tab on a file commits.
+    // Enter is caught in handleSubmit. Right arrow stays cursor-move
+    // (would otherwise fight PromptInput's multiline cursor). Must come
+    // BEFORE slash so the two pickers don't share arrow keys.
+    if (atState && atState.entries.length > 0) {
+      const entries = atState.entries;
       if (key.upArrow) {
         setAtSelected((i) => Math.max(0, i - 1));
         return;
       }
       if (key.downArrow) {
-        setAtSelected((i) => Math.min(atMatches.length - 1, i + 1));
+        setAtSelected((i) => Math.min(entries.length - 1, i + 1));
         return;
       }
       if (key.tab) {
-        const sel = atMatches[atSelected] ?? atMatches[0];
-        if (sel) pickAtMention(sel);
+        const sel = entries[atSelected] ?? entries[0];
+        if (sel) pickAtMention(sel, sel.isDir ? "drill" : "commit");
         return;
       }
     }
@@ -2026,16 +2038,15 @@ function AppInner({
       clearFiringFlag();
       if (busy) return;
 
-      // @-mention picker intercept. When the picker is open (trailing
-      // `@…` with file matches), Enter substitutes the highlighted
-      // path INTO the buffer and does NOT submit — the user almost
-      // always types more after a mention ("look at @file.ts and…").
-      // Substituting adds a trailing space which dismisses the picker,
-      // so the next Enter submits normally.
-      if (atMatches && atMatches.length > 0 && atPicker) {
-        const sel = atMatches[atSelected] ?? atMatches[0];
+      // @-mention picker intercept. Enter on either a file or a folder
+      // commits the path INTO the buffer (with trailing space) — the
+      // user almost always types more after a mention. The trailing
+      // space dismisses the picker, so the next Enter submits normally.
+      // Folders inline as a directory listing at submit time.
+      if (atState && atState.entries.length > 0) {
+        const sel = atState.entries[atSelected] ?? atState.entries[0];
         if (sel) {
-          pickAtMention(sel);
+          pickAtMention(sel, "commit");
           return;
         }
       }
@@ -2671,8 +2682,7 @@ function AppInner({
       planMode,
       session,
       slashSelected,
-      atMatches,
-      atPicker,
+      atState,
       atSelected,
       pickAtMention,
       recordRecentFile,
@@ -3700,12 +3710,8 @@ function AppInner({
                       advancedHidden={slashAdvancedHidden}
                     />
                   ) : null}
-                  {atMatches !== null ? (
-                    <AtMentionSuggestions
-                      matches={atMatches}
-                      selectedIndex={atSelected}
-                      query={atPicker?.query ?? ""}
-                    />
+                  {atState !== null ? (
+                    <AtMentionSuggestions state={atState} selectedIndex={atSelected} />
                   ) : null}
                   {slashArgContext ? (
                     <SlashArgPicker
