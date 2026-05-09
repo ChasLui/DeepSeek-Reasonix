@@ -10,6 +10,7 @@ import {
   suggestSlashCommands,
 } from "../src/cli/ui/slash.js";
 import { DeepSeekClient, Usage } from "../src/client.js";
+import { loadTheme } from "../src/config.js";
 import {
   getLanguage,
   notifyLanguageChange,
@@ -492,6 +493,7 @@ describe("handleSlash", () => {
       "status",
       "preset",
       "model",
+      "theme",
       "mcp",
       "memory",
       "retry",
@@ -1135,6 +1137,59 @@ describe("handleSlash", () => {
     it("/status hides the plan line when plan mode is off", () => {
       const r = handleSlash("status", [], makeLoop(), { planMode: false });
       expect(r.info).not.toMatch(/plan\s+ON/);
+    });
+  });
+
+  describe("/theme", () => {
+    let tempHome: string;
+    let originalHome: string | undefined;
+    let originalUserProfile: string | undefined;
+    let originalTheme: string | undefined;
+
+    beforeEach(() => {
+      tempHome = mkdtempSync(join(tmpdir(), "reasonix-theme-slash-"));
+      originalHome = process.env.HOME;
+      originalUserProfile = process.env.USERPROFILE;
+      originalTheme = process.env.REASONIX_THEME;
+      process.env.HOME = tempHome;
+      process.env.USERPROFILE = tempHome;
+      process.env.REASONIX_THEME = "github-dark";
+    });
+
+    afterEach(() => {
+      process.env.HOME = originalHome;
+      process.env.USERPROFILE = originalUserProfile;
+      if (originalTheme === undefined) {
+        process.env.REASONIX_THEME = undefined;
+      } else {
+        process.env.REASONIX_THEME = originalTheme;
+      }
+      rmSync(tempHome, { recursive: true, force: true });
+    });
+
+    it("shows current theme status and available choices", () => {
+      const r = handleSlash("theme", [], makeLoop());
+      expect(r.info).toMatch(/theme: github-dark/);
+      expect(r.info).toMatch(/configured: unset/);
+      expect(r.info).toMatch(/tokyo-night/);
+    });
+
+    it("persists a registered theme", () => {
+      const r = handleSlash("theme", ["tokyo-night"], makeLoop());
+      expect(r.info).toMatch(/theme saved: tokyo-night/);
+      expect(loadTheme()).toBe("tokyo-night");
+    });
+
+    it("persists auto so env can resolve the active theme", () => {
+      const r = handleSlash("theme", ["auto"], makeLoop());
+      expect(r.info).toMatch(/active on next launch: github-dark/);
+      expect(loadTheme()).toBe("auto");
+    });
+
+    it("rejects unknown theme names", () => {
+      const r = handleSlash("theme", ["solarized"], makeLoop());
+      expect(r.info).toMatch(/unknown theme: solarized/);
+      expect(loadTheme()).toBeUndefined();
     });
   });
 

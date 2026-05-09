@@ -4,7 +4,7 @@ import React from "react";
 import { Card } from "../primitives/Card.js";
 import { CardHeader } from "../primitives/CardHeader.js";
 import type { PlanCard as PlanCardData, PlanStep } from "../state/cards.js";
-import { FG, TONE, TONE_ACTIVE } from "../theme/tokens.js";
+import { useThemeTokens } from "../theme/context.js";
 
 const STATUS_GLYPH: Record<PlanStep["status"], string> = {
   queued: "○",
@@ -15,53 +15,53 @@ const STATUS_GLYPH: Record<PlanStep["status"], string> = {
   skipped: "s",
 };
 
-const STATUS_COLOR: Record<PlanStep["status"], string> = {
-  queued: FG.faint,
-  running: TONE_ACTIVE.brand,
-  done: TONE.ok,
-  failed: TONE.err,
-  blocked: TONE.warn,
-  skipped: FG.faint,
-};
-
 const VISIBLE_WINDOW = 5;
 
 export function PlanCard({ card }: { card: PlanCardData }): React.ReactElement {
+  const { fg, tone, toneActive } = useThemeTokens();
+  const statusColor: Record<PlanStep["status"], string> = {
+    queued: fg.faint,
+    running: toneActive.brand,
+    done: tone.ok,
+    failed: tone.err,
+    blocked: tone.warn,
+    skipped: fg.faint,
+  };
   const doneCount = card.steps.filter((s) => s.status === "done").length;
   const variantTag =
     card.variant === "resumed" ? "resumed · " : card.variant === "replay" ? "⏪ archive · " : "";
   const progress = `${variantTag}${doneCount}/${card.steps.length} done`;
   const hasRunning = card.steps.some((s) => s.status === "running");
-  const tone = hasRunning ? TONE_ACTIVE.accent : TONE.accent;
+  const cardTone = hasRunning ? toneActive.accent : tone.accent;
 
   const window = pickWindow(card.steps);
 
   return (
-    <Card tone={tone}>
-      <CardHeader glyph="⊞" tone={tone} title={card.title} meta={[progress]} />
+    <Card tone={cardTone}>
+      <CardHeader glyph="⊞" tone={cardTone} title={card.title} meta={[progress]} />
       {window.hiddenBefore > 0 ? (
         <Box flexDirection="row" gap={1}>
-          <Text color={TONE.ok}>✓</Text>
-          <Text color={FG.faint}>{`⋯ ${window.hiddenBefore} done`}</Text>
+          <Text color={tone.ok}>✓</Text>
+          <Text color={fg.faint}>{`⋯ ${window.hiddenBefore} done`}</Text>
         </Box>
       ) : null}
       {window.steps.map((step) => {
         const isActive = step.status === "running";
-        const titleColor = isActive ? FG.strong : FG.sub;
+        const titleColor = isActive ? fg.strong : fg.sub;
         return (
           <Box key={step.id} flexDirection="row" gap={1}>
-            <Text color={STATUS_COLOR[step.status]}>{STATUS_GLYPH[step.status]}</Text>
+            <Text color={statusColor[step.status]}>{STATUS_GLYPH[step.status]}</Text>
             <Text bold={isActive} color={titleColor}>
               {`${step.indexLabel}. ${step.title}`}
             </Text>
-            {isActive ? <Text color={TONE_ACTIVE.brand}>← in progress</Text> : null}
+            {isActive ? <Text color={toneActive.brand}>← in progress</Text> : null}
           </Box>
         );
       })}
       {window.hiddenAfter > 0 ? (
         <Box flexDirection="row" gap={1}>
-          <Text color={FG.faint}>○</Text>
-          <Text color={FG.faint}>{`⋯ ${window.hiddenAfter} upcoming`}</Text>
+          <Text color={fg.faint}>○</Text>
+          <Text color={fg.faint}>{`⋯ ${window.hiddenAfter} upcoming`}</Text>
         </Box>
       ) : null}
     </Card>

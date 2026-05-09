@@ -3,6 +3,7 @@
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { type ThemeName, isThemeName, resolveThemeName } from "./cli/ui/theme/tokens.js";
 import type { LanguageCode } from "./i18n/types.js";
 import {
   type IndexUserConfig,
@@ -81,6 +82,7 @@ export interface ReasonixConfig {
   editMode?: EditMode;
   editModeHintShown?: boolean;
   reasoningEffort?: ReasoningEffort;
+  theme?: ThemeName | "auto";
   /** Stored as `--mcp`-format strings so one parser handles both flag and config. */
   mcp?: string[];
   /** Names of servers in `mcp` to skip on bridge — see `/mcp disable <name>`. */
@@ -273,6 +275,27 @@ export function editModeHintShown(path: string = defaultConfigPath()): boolean {
 export function loadReasoningEffort(path: string = defaultConfigPath()): ReasoningEffort {
   const v = readConfig(path).reasoningEffort;
   return v === "high" ? "high" : "max";
+}
+
+export function loadTheme(path: string = defaultConfigPath()): ThemeName | "auto" | undefined {
+  const value = readConfig(path).theme;
+  if (value === "auto") return "auto";
+  if (typeof value === "string" && isThemeName(value)) return value;
+  return undefined;
+}
+
+export function resolveThemePreference(
+  configTheme: ThemeName | "auto" | undefined,
+  envTheme?: string | null,
+): ThemeName {
+  if (configTheme && configTheme !== "auto") return configTheme;
+  return resolveThemeName(envTheme);
+}
+
+export function saveTheme(theme: ThemeName | "auto", path: string = defaultConfigPath()): void {
+  const cfg = readConfig(path);
+  cfg.theme = theme;
+  writeConfig(cfg, path);
 }
 
 /** Persist the reasoning_effort cap so `/effort high` survives a relaunch. */

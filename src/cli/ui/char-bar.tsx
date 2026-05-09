@@ -28,9 +28,9 @@ export interface CharBarProps {
   pct: number;
   /** Cell count. Default 24. Min 4 enforced so the bar is at least readable. */
   width?: number;
-  /** Filled-cell color. Defaults to brand cyan. */
+  /** Filled-cell COLOR. Defaults to brand cyan. */
   color?: string;
-  /** Empty-cell color. Defaults to dim slate. */
+  /** Empty-cell COLOR. Defaults to dim slate. */
   emptyColor?: string;
   /**
    * Whether to render the percentage label after the bar. Off when the

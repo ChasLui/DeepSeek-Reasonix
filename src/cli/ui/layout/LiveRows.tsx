@@ -9,6 +9,7 @@ import { Card } from "../primitives/Card.js";
 import { CardHeader } from "../primitives/CardHeader.js";
 import { PILL_MODEL, PILL_SECTION, Pill, modelBadgeFor } from "../primitives/Pill.js";
 import { Spinner } from "../primitives/Spinner.js";
+import { useThemeTokens } from "../theme/context.js";
 import { CARD, FG, TONE } from "../theme/tokens.js";
 import { useElapsedSeconds, useSlowTick, useTick } from "../ticker.js";
 import type { SubagentActivity } from "../useSubagent.js";
@@ -18,6 +19,7 @@ export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", 
 /** "Thinking" row — soft pulse + italic label (model wait, not tool call). */
 export function ThinkingRow({ text }: { text: string }) {
   const elapsed = useElapsedSeconds();
+  const { fg, tone } = useThemeTokens();
   return (
     <Box marginY={1} paddingX={1} gap={1}>
       <Spinner kind="circle" color={TONE.accent} />

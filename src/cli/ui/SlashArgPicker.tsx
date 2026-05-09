@@ -2,7 +2,7 @@ import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig.jsx = "react" needs React in value scope for JSX compilation
 import React from "react";
 import type { SlashCommandSpec } from "./slash.js";
-import { COLOR, GLYPH } from "./theme.js";
+import { GLYPH, useColor } from "./theme.js";
 
 export interface SlashArgPickerProps {
   /**
@@ -37,16 +37,13 @@ export function SlashArgPicker({
   kind,
   partial,
 }: SlashArgPickerProps): React.ReactElement | null {
-  // Header row shared by both hint and picker modes — same shape so
-  // the UI looks like the same affordance, just with or without rows
-  // beneath. cmd in accent violet (matches SlashSuggestions), argsHint
-  // in dim, summary in info.
+  const color = useColor();
   const headerRow = (
     <Box>
-      <Text color={COLOR.accent} bold>
+      <Text color={color.accent} bold>
         {"/ "}
       </Text>
-      <Text color={COLOR.accent} bold>
+      <Text color={color.accent} bold>
         {`/${spec.cmd}`}
       </Text>
       {spec.argsHint ? <Text dimColor>{` ${spec.argsHint}`}</Text> : null}
@@ -54,7 +51,6 @@ export function SlashArgPicker({
     </Box>
   );
 
-  // Hint mode: header only.
   if (kind === "hint") {
     return (
       <Box paddingX={1} marginTop={1}>
@@ -69,10 +65,10 @@ export function SlashArgPicker({
       <Box flexDirection="column" paddingX={1} marginTop={1}>
         {headerRow}
         <Box>
-          <Text color={COLOR.warn} bold>
+          <Text color={color.warn} bold>
             {GLYPH.warn}
           </Text>
-          <Text color={COLOR.warn}>{` no match for "${partial}"`}</Text>
+          <Text color={color.warn}>{` no match for "${partial}"`}</Text>
           <Text dimColor>{" — keep typing, or Backspace to edit"}</Text>
         </Box>
       </Box>
@@ -102,12 +98,13 @@ export function SlashArgPicker({
 }
 
 function ArgRow({ value, isSelected }: { value: string; isSelected: boolean }) {
+  const color = useColor();
   return (
     <Box>
-      <Text color={isSelected ? COLOR.primary : COLOR.info} bold={isSelected}>
+      <Text color={isSelected ? color.primary : color.info} bold={isSelected}>
         {isSelected ? `${GLYPH.cur} ` : "  "}
       </Text>
-      <Text color={isSelected ? COLOR.user : COLOR.info} bold={isSelected} dimColor={!isSelected}>
+      <Text color={isSelected ? color.user : color.info} bold={isSelected} dimColor={!isSelected}>
         {value}
       </Text>
     </Box>

@@ -15,6 +15,7 @@ import { handlers as permissionsHandlers } from "./handlers/permissions.js";
 import { handlers as plansHandlers } from "./handlers/plans.js";
 import { handlers as sessionsHandlers } from "./handlers/sessions.js";
 import { handlers as skillHandlers } from "./handlers/skill.js";
+import { handlers as themeHandlers } from "./handlers/theme.js";
 import { handlers as webSearchEngineHandlers } from "./handlers/web-search-engine.js";
 import type { SlashContext, SlashResult } from "./types.js";
 
@@ -36,6 +37,7 @@ const HANDLERS: Record<string, SlashHandler> = {
   ...permissionsHandlers,
   ...plansHandlers,
   ...sessionsHandlers,
+  ...themeHandlers,
   ...skillHandlers,
   ...webSearchEngineHandlers,
 };

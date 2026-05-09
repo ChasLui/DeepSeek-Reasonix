@@ -36,7 +36,9 @@ import {
   editModeHintShown,
   loadEditMode,
   loadReasoningEffort,
+  loadTheme,
   markEditModeHintShown,
+  resolveThemePreference,
   saveEditMode,
   saveReasoningEffort,
 } from "../../config.js";
@@ -144,6 +146,7 @@ import { TurnTranslator } from "./state/TurnTranslator.js";
 import { cardsToDashboardMessages } from "./state/cards-to-messages.js";
 import { hydrateCardsFromMessages } from "./state/hydrate.js";
 import { AgentStoreProvider, useAgentState, useAgentStore } from "./state/provider.js";
+import { ThemeProvider } from "./theme/context.js";
 import { FG } from "./theme/tokens.js";
 import { TickerProvider } from "./ticker.js";
 import { useCompletionPickers } from "./useCompletionPickers.js";
@@ -293,10 +296,13 @@ export function App(props: AppProps): React.ReactElement {
     () => (props.session ? hydrateCardsFromMessages(loadSessionMessages(props.session)) : []),
     [props.session],
   );
+  const themeName = resolveThemePreference(loadTheme(), process.env.REASONIX_THEME);
   return (
-    <AgentStoreProvider session={session} initialCards={initialCards}>
-      <AppInner {...props} />
-    </AgentStoreProvider>
+    <ThemeProvider name={themeName}>
+      <AgentStoreProvider session={session} initialCards={initialCards}>
+        <AppInner {...props} />
+      </AgentStoreProvider>
+    </ThemeProvider>
   );
 }
 

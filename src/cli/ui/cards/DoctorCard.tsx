@@ -4,13 +4,8 @@ import React from "react";
 import { Card } from "../primitives/Card.js";
 import { CardHeader } from "../primitives/CardHeader.js";
 import type { DoctorCard as DoctorCardData, DoctorCheckEntry } from "../state/cards.js";
-import { CARD, FG, TONE } from "../theme/tokens.js";
-
-const LEVEL_COLOR: Record<DoctorCheckEntry["level"], string> = {
-  ok: TONE.ok,
-  warn: TONE.warn,
-  fail: TONE.err,
-};
+import { useThemeTokens } from "../theme/context.js";
+import { CARD } from "../theme/tokens.js";
 
 const LEVEL_GLYPH: Record<DoctorCheckEntry["level"], string> = {
   ok: "✓",
@@ -25,6 +20,12 @@ const LEVEL_TAG: Record<DoctorCheckEntry["level"], string> = {
 };
 
 export function DoctorCard({ card }: { card: DoctorCardData }): React.ReactElement {
+  const { fg, tone } = useThemeTokens();
+  const levelColor: Record<DoctorCheckEntry["level"], string> = {
+    ok: tone.ok,
+    warn: tone.warn,
+    fail: tone.err,
+  };
   const ok = card.checks.filter((c) => c.level === "ok").length;
   const warn = card.checks.filter((c) => c.level === "warn").length;
   const fail = card.checks.filter((c) => c.level === "fail").length;
@@ -36,12 +37,12 @@ export function DoctorCard({ card }: { card: DoctorCardData }): React.ReactEleme
       <CardHeader glyph="⚕" tone={CARD.tool.color} title="doctor" meta={[summary]} />
       {card.checks.map((c) => (
         <Box key={c.label} flexDirection="row" gap={1}>
-          <Text color={LEVEL_COLOR[c.level]}>{LEVEL_GLYPH[c.level]}</Text>
-          <Text bold color={FG.body}>
+          <Text color={levelColor[c.level]}>{LEVEL_GLYPH[c.level]}</Text>
+          <Text bold color={fg.body}>
             {c.label.padEnd(labelWidth + 1)}
           </Text>
-          <Text color={FG.sub}>{c.detail}</Text>
-          <Text color={LEVEL_COLOR[c.level]}>{LEVEL_TAG[c.level]}</Text>
+          <Text color={fg.sub}>{c.detail}</Text>
+          <Text color={levelColor[c.level]}>{LEVEL_TAG[c.level]}</Text>
         </Box>
       ))}
     </Card>

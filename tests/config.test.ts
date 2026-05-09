@@ -14,17 +14,20 @@ import {
   loadProjectShellAllowed,
   loadReasoningEffort,
   loadSemanticEmbeddingUserConfig,
+  loadTheme,
   markEditModeHintShown,
   readConfig,
   redactKey,
   redactSemanticEmbeddingConfig,
   removeProjectShellAllowed,
   resolveSemanticEmbeddingConfig,
+  resolveThemePreference,
   saveApiKey,
   saveEditMode,
   saveIndexConfig,
   saveReasoningEffort,
   saveSemanticEmbeddingConfig,
+  saveTheme,
   searchEnabled,
   writeConfig,
 } from "../src/config.js";
@@ -284,6 +287,41 @@ describe("config", () => {
     saveReasoningEffort("high", path);
     expect(loadEditMode(path)).toBe("auto");
     expect(loadReasoningEffort(path)).toBe("high");
+  });
+
+  it("saveTheme + loadTheme round-trip a registered theme", () => {
+    saveTheme("tokyo-night", path);
+    expect(loadTheme(path)).toBe("tokyo-night");
+    expect(readConfig(path).theme).toBe("tokyo-night");
+  });
+
+  it("saveTheme + loadTheme round-trip auto", () => {
+    saveTheme("auto", path);
+    expect(loadTheme(path)).toBe("auto");
+    expect(readConfig(path).theme).toBe("auto");
+  });
+
+  it("loadTheme returns undefined for invalid runtime values", () => {
+    const invalidValues = ["unknown", null, false, 123, [], { name: "github-light" }];
+
+    for (const theme of invalidValues) {
+      writeConfig({ theme } as never, path);
+      expect(loadTheme(path)).toBeUndefined();
+    }
+  });
+
+  it("resolveThemePreference lets env override auto but not registered config themes", () => {
+    expect(resolveThemePreference("auto", "github-light")).toBe("github-light");
+    expect(resolveThemePreference(undefined, "tokyo-night")).toBe("tokyo-night");
+    expect(resolveThemePreference("github-dark", "github-light")).toBe("github-dark");
+    expect(resolveThemePreference("auto", "unknown")).toBe("default");
+  });
+
+  it("saveTheme doesn't clobber other persisted fields", () => {
+    saveEditMode("auto", path);
+    saveTheme("github-light", path);
+    expect(loadEditMode(path)).toBe("auto");
+    expect(loadTheme(path)).toBe("github-light");
   });
 
   it("editModeHintShown defaults to false and toggles on markEditModeHintShown", () => {

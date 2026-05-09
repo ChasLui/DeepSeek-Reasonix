@@ -4,26 +4,13 @@ import React from "react";
 import { Card } from "../primitives/Card.js";
 import { CardHeader } from "../primitives/CardHeader.js";
 import type { TaskCard as TaskCardData, TaskStep } from "../state/cards.js";
-import { FG, TONE } from "../theme/tokens.js";
+import { useThemeTokens } from "../theme/context.js";
 
 const STEP_GLYPH: Record<TaskStep["status"], string> = {
   queued: "○",
   running: "▶",
   done: "✓",
   failed: "✗",
-};
-
-const STEP_COLOR: Record<TaskStep["status"], string> = {
-  queued: FG.faint,
-  running: TONE.warn,
-  done: TONE.ok,
-  failed: TONE.err,
-};
-
-const TASK_COLOR: Record<TaskCardData["status"], string> = {
-  running: TONE.warn,
-  done: TONE.ok,
-  failed: TONE.err,
 };
 
 const TASK_GLYPH: Record<TaskCardData["status"], string> = {
@@ -33,26 +20,38 @@ const TASK_GLYPH: Record<TaskCardData["status"], string> = {
 };
 
 export function TaskCard({ card }: { card: TaskCardData }): React.ReactElement {
+  const { fg, tone } = useThemeTokens();
+  const stepColor: Record<TaskStep["status"], string> = {
+    queued: fg.faint,
+    running: tone.warn,
+    done: tone.ok,
+    failed: tone.err,
+  };
+  const taskColor: Record<TaskCardData["status"], string> = {
+    running: tone.warn,
+    done: tone.ok,
+    failed: tone.err,
+  };
   const elapsed = `${(card.elapsedMs / 1000).toFixed(1)}s`;
   return (
-    <Card tone={TASK_COLOR[card.status]}>
+    <Card tone={taskColor[card.status]}>
       <CardHeader
         glyph={TASK_GLYPH[card.status]}
-        tone={TASK_COLOR[card.status]}
+        tone={taskColor[card.status]}
         title={`step ${card.index}/${card.total}`}
         subtitle={card.title}
         meta={[elapsed, card.status]}
       />
       {card.steps.map((step) => (
         <Box key={step.id} flexDirection="row" gap={1}>
-          <Text color={STEP_COLOR[step.status]}>{STEP_GLYPH[step.status]}</Text>
-          <Text bold color={FG.body}>
+          <Text color={stepColor[step.status]}>{STEP_GLYPH[step.status]}</Text>
+          <Text bold color={fg.body}>
             {(step.toolName ?? "step").padEnd(7)}
           </Text>
-          <Text color={FG.sub}>{step.title}</Text>
-          {step.detail ? <Text color={FG.faint}>{step.detail}</Text> : null}
+          <Text color={fg.sub}>{step.title}</Text>
+          {step.detail ? <Text color={fg.faint}>{step.detail}</Text> : null}
           {step.elapsedMs !== undefined ? (
-            <Text color={FG.faint}>{`${(step.elapsedMs / 1000).toFixed(2)}s`}</Text>
+            <Text color={fg.faint}>{`${(step.elapsedMs / 1000).toFixed(2)}s`}</Text>
           ) : null}
         </Box>
       ))}

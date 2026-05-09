@@ -1,30 +1,121 @@
-/** Brand gradient — REASONIX wordmark sweep, reused for accents / progress / dividers. */
-export const GRADIENT: ReadonlyArray<string> = [
-  "#5eead4", // teal
-  "#67e8f9", // cyan
-  "#7dd3fc", // sky
-  "#93c5fd", // blue
-  "#a5b4fc", // indigo
-  "#c4b5fd", // violet
-  "#d8b4fe", // purple
-  "#f0abfc", // fuchsia
-];
+import React from "react";
+import { useThemeTokens } from "./theme/context.js";
+import {
+  CARD,
+  FG as TOKEN_FG,
+  SURFACE as TOKEN_SURFACE,
+  TONE,
+  TONE_ACTIVE,
+  type ThemeTokens,
+} from "./theme/tokens.js";
 
-/** Tailwind 400/500 row — keeps tone consistent with GRADIENT. */
-export const COLOR = {
-  primary: "#67e8f9", // cyan-300
-  accent: "#c4b5fd", // violet-300
-  brand: "#5eead4", // teal-300
+export type UiColor = ReturnType<typeof colorFromTheme>;
+export type UiGradient = ReturnType<typeof gradientFromTheme>;
+export type UiSurface = ReturnType<typeof surfaceFromTheme>;
+export type UiFg = ReturnType<typeof fgFromTheme>;
 
-  user: "#67e8f9", // user message glyph + bar
-  assistant: "#86efac", // green-300, assistant glyph + bar
-  tool: "#fcd34d", // amber-300, tool ok pill bg
-  toolErr: "#fda4af", // rose-300, tool err pill bg
-  info: "#94a3b8", // slate-400, info / dim
-  warn: "#fbbf24", // amber-400
-  err: "#f87171", // red-400
-  ok: "#4ade80", // green-400
-} as const;
+export function gradientFromTheme(theme: ThemeTokens): ReadonlyArray<string> {
+  return [
+    theme.tone.ok,
+    theme.tone.brand,
+    theme.tone.info,
+    theme.toneActive.brand,
+    theme.toneActive.violet,
+    theme.tone.accent,
+    theme.toneActive.accent,
+    theme.tone.err,
+  ];
+}
+
+export function colorFromTheme(theme: ThemeTokens) {
+  return {
+    primary: theme.tone.brand,
+    accent: theme.tone.accent,
+    brand: theme.tone.ok,
+
+    user: theme.tone.brand,
+    assistant: theme.tone.ok,
+    tool: theme.tone.warn,
+    toolErr: theme.tone.err,
+    info: theme.fg.sub,
+    warn: theme.tone.warn,
+    err: theme.tone.err,
+    ok: theme.tone.ok,
+  } as const;
+}
+
+export function surfaceFromTheme(theme: ThemeTokens) {
+  return {
+    canvas: theme.surface.bg,
+    shell: theme.surface.bgInput,
+    card: theme.surface.bgElev,
+    elev: theme.surface.bgElev,
+    sel: theme.surface.bgInput,
+    line: theme.fg.faint,
+    lineSoft: theme.fg.meta,
+  } as const;
+}
+
+export function fgFromTheme(theme: ThemeTokens) {
+  return {
+    strong: theme.fg.strong,
+    default: theme.fg.body,
+    dim: theme.fg.sub,
+    faint: theme.fg.meta,
+    ghost: theme.fg.faint,
+  } as const;
+}
+
+function proxyThemeValue<T extends object>(build: () => T): T {
+  const target = build();
+  return new Proxy(target, {
+    get(_target, prop: string | symbol) {
+      return build()[prop as keyof T];
+    },
+    getOwnPropertyDescriptor(_target, prop: string | symbol) {
+      return Reflect.getOwnPropertyDescriptor(build(), prop);
+    },
+    has(_target, prop: string | symbol) {
+      return prop in build();
+    },
+    ownKeys() {
+      return Reflect.ownKeys(build());
+    },
+  });
+}
+
+function currentTheme(): ThemeTokens {
+  return {
+    fg: TOKEN_FG,
+    tone: TONE,
+    toneActive: TONE_ACTIVE,
+    surface: TOKEN_SURFACE,
+    card: CARD,
+  };
+}
+
+export function useGradient(): UiGradient {
+  const theme = useThemeTokens();
+  return React.useMemo(() => gradientFromTheme(theme), [theme]);
+}
+
+export function useColor(): UiColor {
+  const theme = useThemeTokens();
+  return React.useMemo(() => colorFromTheme(theme), [theme]);
+}
+
+export function useUiSurface(): UiSurface {
+  const theme = useThemeTokens();
+  return React.useMemo(() => surfaceFromTheme(theme), [theme]);
+}
+
+export function useUiFg(): UiFg {
+  const theme = useThemeTokens();
+  return React.useMemo(() => fgFromTheme(theme), [theme]);
+}
+
+export const GRADIENT = proxyThemeValue(() => gradientFromTheme(currentTheme()));
+export const COLOR = proxyThemeValue(() => colorFromTheme(currentTheme()));
 
 export const GLYPH = {
   brand: "◈",
@@ -43,63 +134,40 @@ export const GLYPH = {
   shade2: "▒",
   shade3: "▓",
 
-  // Status icons — checkbox-style states used across plan steps,
-  // job rows, history entries. Pair with the COLOR semantics:
-  // done→ok, cur→primary, pending→info-faint, fail→err.
   done: "✓",
   cur: "▸",
   pending: "○",
   fail: "✗",
   running: "●",
 
-  // Tree-drawing chars for hierarchical lists (plan steps, sub-loops,
-  // hook attachments). 1 cell each; render fine in every monospace
-  // font we've tested.
   branch: "┣",
   branchEnd: "┗",
   branchStub: "┃",
   rule: "─",
 
-  // Spinner frames — 4-step rotation. Cycle every 200ms via setInterval
-  // (Ink's useEffect setState pattern). Equivalent to ink-spinner but
-  // with our own cadence + character set.
   spinFrames: ["◐", "◓", "◑", "◒"] as readonly string[],
 } as const;
 
-/** Ordering survives 256-/16-color quantization — canvas always darker than sel. */
-export const SURFACE = {
-  canvas: "#070a10",
-  shell: "#0b1019",
-  card: "#101721",
-  elev: "#161f2c",
-  sel: "#1a2433",
-  line: "#1c2433",
-  lineSoft: "#141b27",
-} as const;
-
-export const FG = {
-  strong: "#e6edf6",
-  default: "#cbd5e1",
-  dim: "#94a3b8",
-  faint: "#64748b",
-  ghost: "#475569",
-} as const;
+export const SURFACE = proxyThemeValue(() => surfaceFromTheme(currentTheme()));
+export const FG = proxyThemeValue(() => fgFromTheme(currentTheme()));
 
 export function gradientCells(
   width: number,
   glyph: string = GLYPH.block,
+  gradient: ReadonlyArray<string> = GRADIENT,
 ): Array<{ ch: string; color: string }> {
   const cells: Array<{ ch: string; color: string }> = [];
   if (width <= 0) return cells;
-  const last = GRADIENT.length - 1;
+  const last = gradient.length - 1;
   for (let i = 0; i < width; i++) {
+    if (last <= 0) {
+      cells.push({ ch: glyph, color: gradient[0] ?? COLOR.primary });
+      continue;
+    }
     const t = width === 1 ? 0 : (i * last) / (width - 1);
     const lo = Math.floor(t);
     const hi = Math.min(last, lo + 1);
-    // Pick the closer of the two anchor colors for this cell. Linear
-    // hex blending could be fancier but the discrete steps already
-    // read as a smooth fade at any reasonable width.
-    const color = t - lo < 0.5 ? GRADIENT[lo]! : GRADIENT[hi]!;
+    const color = t - lo < 0.5 ? gradient[lo]! : gradient[hi]!;
     cells.push({ ch: glyph, color });
   }
   return cells;

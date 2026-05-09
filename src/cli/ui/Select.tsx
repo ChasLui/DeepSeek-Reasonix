@@ -3,7 +3,7 @@
 import { Box, Text } from "ink";
 import React, { useState } from "react";
 import { useKeystroke } from "./keystroke-context.js";
-import { COLOR } from "./theme.js";
+import { type UiColor, useColor } from "./theme.js";
 
 export interface SelectItem<V extends string = string> {
   value: V;
@@ -33,6 +33,7 @@ export function SingleSelect<V extends string>({
   onCancel,
   footer,
 }: SingleSelectProps<V>) {
+  const color = useColor();
   const initialIndex = Math.max(
     0,
     items.findIndex((i) => i.value === initialValue && !i.disabled),
@@ -64,6 +65,7 @@ export function SingleSelect<V extends string>({
           item={item}
           active={i === index}
           marker={i === index ? "▸" : " "}
+          color={color}
         />
       ))}
       {footer ? (
@@ -91,6 +93,7 @@ export function MultiSelect<V extends string>({
   onCancel,
   footer,
 }: MultiSelectProps<V>) {
+  const color = useColor();
   const [index, setIndex] = useState(() => {
     const first = items.findIndex((i) => !i.disabled);
     return first === -1 ? 0 : first;
@@ -113,7 +116,6 @@ export function MultiSelect<V extends string>({
         return next;
       });
     } else if (ev.return) {
-      // Catalog order keeps the resulting config.json diff stable across reruns.
       const ordered = items.filter((i) => selected.has(i.value)).map((i) => i.value);
       onSubmit(ordered);
     } else if (ev.escape && onCancel) {
@@ -132,6 +134,7 @@ export function MultiSelect<V extends string>({
             item={item}
             active={i === index}
             marker={`${i === index ? "▸" : " "} ${marker}`}
+            color={color}
           />
         );
       })}
@@ -148,16 +151,18 @@ function SelectRow<V extends string>({
   item,
   active,
   marker,
+  color,
 }: {
   item: SelectItem<V>;
   active: boolean;
   marker: string;
+  color: UiColor;
 }) {
-  const color = item.disabled ? COLOR.info : active ? COLOR.primary : undefined;
+  const rowColor = item.disabled ? color.info : active ? color.primary : undefined;
   return (
     <Box flexDirection="column">
       <Box>
-        <Text color={color} bold={active} dimColor={item.disabled}>
+        <Text color={rowColor} bold={active} dimColor={item.disabled}>
           {marker} {item.label}
         </Text>
       </Box>

@@ -1,7 +1,7 @@
 import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig.jsx = "react" needs React in value scope for JSX compilation
 import React from "react";
-import { COLOR, GLYPH } from "./theme.js";
+import { GLYPH, useColor } from "./theme.js";
 
 export interface AtMentionSuggestionsProps {
   /**
@@ -38,15 +38,17 @@ export function AtMentionSuggestions({
   selectedIndex,
   query,
 }: AtMentionSuggestionsProps): React.ReactElement | null {
+  const color = useColor();
+
   if (matches === null) return null;
   if (matches.length === 0) {
     return (
       <Box paddingX={1} marginTop={1}>
-        <Text color={COLOR.warn} bold>
+        <Text color={color.warn} bold>
           {GLYPH.warn}
         </Text>
         <Text> </Text>
-        <Text color={COLOR.warn}>{`no files match "@${query}"`}</Text>
+        <Text color={color.warn}>{`no files match "@${query}"`}</Text>
         <Text dimColor>{" — keep typing or Backspace; paths resolve from the code root"}</Text>
       </Box>
     );
@@ -61,7 +63,7 @@ export function AtMentionSuggestions({
   return (
     <Box flexDirection="column" paddingX={1} marginTop={1}>
       <Box>
-        <Text color={COLOR.primary} bold>
+        <Text color={color.primary} bold>
           {"@ "}
         </Text>
         <Text dimColor>
@@ -83,19 +85,16 @@ export function AtMentionSuggestions({
 }
 
 function FileRow({ path, isSelected }: { path: string; isSelected: boolean }) {
-  // Split the path so the basename visually pops — same dropdown
-  // affordance as VS Code's Quick Open. Basename in primary cyan
-  // (selected: bold), dir suffix in dim info color so the eye lands
-  // on the filename first and uses the path only as a disambiguator.
+  const color = useColor();
   const slash = path.lastIndexOf("/");
   const dir = slash >= 0 ? `${path.slice(0, slash)}/` : "";
   const base = slash >= 0 ? path.slice(slash + 1) : path;
   return (
     <Box>
-      <Text color={isSelected ? COLOR.primary : COLOR.info} bold={isSelected}>
+      <Text color={isSelected ? color.primary : color.info} bold={isSelected}>
         {isSelected ? `${GLYPH.cur} ` : "  "}
       </Text>
-      <Text color={COLOR.primary} bold={isSelected}>
+      <Text color={color.primary} bold={isSelected}>
         {base.padEnd(20)}
       </Text>
       {dir ? <Text dimColor>{`  ${dir}`}</Text> : null}

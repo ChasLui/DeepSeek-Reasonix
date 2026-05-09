@@ -5,16 +5,17 @@ import { ActiveCardContext, Card as CardWrap } from "../primitives/Card.js";
 import { CardHeader } from "../primitives/CardHeader.js";
 import { Spinner } from "../primitives/Spinner.js";
 import type { Card, SubAgentCard as SubAgentCardData } from "../state/cards.js";
-import { CARD, FG, TONE, TONE_ACTIVE } from "../theme/tokens.js";
-
-const STATUS_COLOR: Record<SubAgentCardData["status"], string> = {
-  running: TONE_ACTIVE.violet,
-  done: TONE.ok,
-  failed: TONE.err,
-};
+import { useThemeTokens } from "../theme/context.js";
+import { CARD } from "../theme/tokens.js";
 
 export function SubAgentCard({ card }: { card: SubAgentCardData }): React.ReactElement {
-  const headColor = STATUS_COLOR[card.status];
+  const { fg, tone, toneActive } = useThemeTokens();
+  const statusColor: Record<SubAgentCardData["status"], string> = {
+    running: toneActive.violet,
+    done: tone.ok,
+    failed: tone.err,
+  };
+  const headColor = statusColor[card.status];
   const headGlyph = card.status === "failed" ? "✖" : "⌬";
   const runningChildren = card.children.filter((c) => !isChildDone(c)).length;
   const isRunning = card.status === "running";
@@ -30,17 +31,17 @@ export function SubAgentCard({ card }: { card: SubAgentCardData }): React.ReactE
         glyph={headGlyph}
         tone={headColor}
         title="subagent"
-        titleColor={TONE.violet}
+        titleColor={tone.violet}
         subtitle={card.task}
         meta={headerMeta}
       />
-      {card.name ? <Text color={FG.faint}>{`agent · ${card.name}`}</Text> : null}
+      {card.name ? <Text color={fg.faint}>{`agent · ${card.name}`}</Text> : null}
       {card.tools && card.tools.length > 0 && (
-        <Text color={FG.faint}>{`tools · ${card.tools.join(", ")}`}</Text>
+        <Text color={fg.faint}>{`tools · ${card.tools.join(", ")}`}</Text>
       )}
       {card.children.map((child) => (
         <Box key={child.id} flexDirection="row" gap={1}>
-          {inLive ? null : <Text color={TONE.violet}>▎</Text>}
+          {inLive ? null : <Text color={tone.violet}>▎</Text>}
           <ChildRow card={child} />
         </Box>
       ))}
@@ -68,13 +69,14 @@ interface ChildVisual {
 }
 
 function ChildRow({ card }: { card: Card }): React.ReactElement {
-  const v = childVisual(card);
+  const { fg, tone } = useThemeTokens();
+  const v = childVisual(card, tone.ok, tone.err, fg.faint);
   const isDone = isChildDone(card);
   return (
     <>
       {v.statusGlyph}
       <Text color={v.kindColor}>{v.kindGlyph}</Text>
-      <Text dimColor={isDone} color={FG.body}>
+      <Text dimColor={isDone} color={fg.body}>
         {v.text}
       </Text>
     </>
@@ -89,16 +91,21 @@ function doneGlyph(color: string): React.ReactElement {
   return <Text color={color}>✓</Text>;
 }
 
-function failedGlyph(): React.ReactElement {
-  return <Text color={TONE.err}>✖</Text>;
+function failedGlyph(color: string): React.ReactElement {
+  return <Text color={color}>✖</Text>;
 }
 
-function childVisual(card: Card): ChildVisual {
+function childVisual(
+  card: Card,
+  doneColor: string,
+  failedColor: string,
+  fallbackColor: string,
+): ChildVisual {
   switch (card.kind) {
     case "reasoning": {
       const done = !card.streaming;
       return {
-        statusGlyph: done ? doneGlyph(TONE.ok) : runningGlyph(CARD.reasoning.color),
+        statusGlyph: done ? doneGlyph(doneColor) : runningGlyph(CARD.reasoning.color),
         kindGlyph: "◆",
         kindColor: CARD.reasoning.color,
         text: `reasoning · ${card.paragraphs} ¶`,
@@ -107,7 +114,7 @@ function childVisual(card: Card): ChildVisual {
     case "tool": {
       const elapsed = card.elapsedMs > 0 ? ` · ${(card.elapsedMs / 1000).toFixed(2)}s` : "";
       return {
-        statusGlyph: card.done ? doneGlyph(TONE.ok) : runningGlyph(CARD.tool.color),
+        statusGlyph: card.done ? doneGlyph(doneColor) : runningGlyph(CARD.tool.color),
         kindGlyph: "▣",
         kindColor: CARD.tool.color,
         text: `${card.name}${elapsed}`,
@@ -115,30 +122,30 @@ function childVisual(card: Card): ChildVisual {
     }
     case "streaming":
       return {
-        statusGlyph: card.done ? doneGlyph(TONE.ok) : runningGlyph(CARD.streaming.color),
+        statusGlyph: card.done ? doneGlyph(doneColor) : runningGlyph(CARD.streaming.color),
         kindGlyph: "◈",
         kindColor: CARD.streaming.color,
         text: card.done ? "response" : "writing …",
       };
     case "diff":
       return {
-        statusGlyph: doneGlyph(TONE.ok),
+        statusGlyph: doneGlyph(doneColor),
         kindGlyph: "±",
         kindColor: CARD.diff.color,
         text: card.file,
       };
     case "error":
       return {
-        statusGlyph: failedGlyph(),
+        statusGlyph: failedGlyph(failedColor),
         kindGlyph: "✖",
         kindColor: CARD.error.color,
         text: card.title,
       };
     default:
       return {
-        statusGlyph: <Text color={FG.faint}>·</Text>,
+        statusGlyph: <Text color={fallbackColor}>·</Text>,
         kindGlyph: "·",
-        kindColor: FG.faint,
+        kindColor: fallbackColor,
         text: card.kind,
       };
   }
