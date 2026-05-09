@@ -1,11 +1,17 @@
-import { t } from "@/i18n/index.js";
+import { release } from "node:os";
+import { loadTheme, resolveThemePreference } from "@/config.js";
+import { getLanguage, t } from "@/i18n/index.js";
 import {
   DEEPSEEK_CONTEXT_TOKENS,
   DEEPSEEK_PRICING,
   DEFAULT_CONTEXT_TOKENS,
 } from "@/telemetry/stats.js";
 import { countTokens } from "@/tokenizer.js";
+import { VERSION } from "@/version.js";
+import { writeClipboard } from "../../clipboard.js";
 import { computeCtxBreakdown } from "../../ctx-breakdown.js";
+import { buildFeedbackDiagnostic, buildFeedbackIssueUrl } from "../../feedback.js";
+import { openUrl } from "../../open-url.js";
 import type { SlashHandler } from "../dispatch.js";
 import { compactNum } from "../helpers.js";
 
@@ -225,9 +231,52 @@ function estimateCost(userText: string, loop: import("@/loop.js").CacheFirstLoop
   return { info: lines.join("\n") };
 }
 
+const feedback: SlashHandler = (_args, loop, ctx) => {
+  const themeName = resolveThemePreference(loadTheme(), process.env.REASONIX_THEME);
+  const diagnostic = buildFeedbackDiagnostic({
+    version: VERSION,
+    latestVersion: ctx.latestVersion ?? undefined,
+    platform: process.platform,
+    osRelease: release(),
+    termProgram: process.env.TERM_PROGRAM,
+    term: process.env.TERM,
+    colorTerm: process.env.COLORTERM,
+    inWindowsTerminal: !!process.env.WT_SESSION,
+    inTmux: !!process.env.TMUX,
+    inSsh: !!process.env.SSH_TTY,
+    wslDistro: process.env.WSL_DISTRO_NAME,
+    cols: process.stdout.columns,
+    rows: process.stdout.rows,
+    nodeVersion: process.version,
+    locale: getLanguage(),
+    theme: themeName,
+    model: loop.model,
+    reasoningEffort: loop.reasoningEffort,
+    editMode: ctx.editMode,
+    planMode: ctx.planMode,
+    mcpServerCount: ctx.mcpServers?.length ?? ctx.mcpSpecs?.length,
+    sessionId: ctx.sessionId,
+  });
+  // Clipboard is the belt-and-suspenders: GitHub's new-issue page accepts
+  // `?body=…` and we use that, but if the URL ever fails to open the
+  // user can paste from clipboard against any tracker.
+  writeClipboard(diagnostic);
+  const url = buildFeedbackIssueUrl(diagnostic);
+  const opened = openUrl(url);
+  const lines = [
+    opened.opened
+      ? "▸ issue page opened with the diagnostic block pre-filled. Just describe what you were doing and submit."
+      : `▸ couldn't open the browser (${opened.reason ?? "unknown"}). Diagnostic info is on your clipboard; open this URL manually: ${url}`,
+    "",
+    diagnostic,
+  ];
+  return { info: lines.join("\n") };
+};
+
 export const handlers: Record<string, SlashHandler> = {
   context,
   status,
   compact,
   cost,
+  feedback,
 };

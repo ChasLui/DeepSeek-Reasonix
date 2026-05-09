@@ -1,6 +1,7 @@
 import { Box, Text, useStdout } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
+import { VERSION } from "../../../version.js";
 import { Countdown } from "../primitives/Countdown.js";
 import { useAgentState } from "../state/provider.js";
 import type { Mode, NetworkState, StatusBar } from "../state/state.js";
@@ -9,6 +10,8 @@ import { FG, TONE, balanceColor, formatBalance, formatCost } from "../theme/toke
 const RULE_PAD = 4;
 const RULE_MIN = 20;
 const WALLET_MIN_COLS = 90;
+const VERSION_MIN_COLS = 70;
+const FEEDBACK_HINT_MIN_COLS = 100;
 
 export function StatusRow(): React.ReactElement {
   const status = useAgentState((s) => s.status);
@@ -57,6 +60,19 @@ export function StatusRow(): React.ReactElement {
             balance={status.balance}
             currency={status.balanceCurrency}
           />
+        )}
+        {cols >= VERSION_MIN_COLS && (
+          <>
+            <Sep />
+            <Text color={FG.faint}>{`v${VERSION}`}</Text>
+            {cols >= FEEDBACK_HINT_MIN_COLS && (
+              <>
+                <Text color={FG.faint}>{"  ·  "}</Text>
+                <Text color={FG.meta}>{"⚑ "}</Text>
+                <Text color={FG.sub}>{"/feedback"}</Text>
+              </>
+            )}
+          </>
         )}
       </Box>
     </Box>
