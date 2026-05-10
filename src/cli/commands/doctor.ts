@@ -12,6 +12,7 @@ import {
 } from "../../config.js";
 import { loadDotenv } from "../../env.js";
 import { loadHooks } from "../../hooks.js";
+import { t } from "../../i18n/index.js";
 import { indexExists } from "../../index/semantic/builder.js";
 import { checkOllamaStatus } from "../../index/semantic/ollama-launcher.js";
 import { listSessions } from "../../memory/session.js";
@@ -118,7 +119,7 @@ async function checkConfig(): Promise<Check> {
     return {
       label: "config       ",
       level: "fail",
-      detail: `${path} unreadable — ${(err as Error).message}`,
+      detail: t("doctorErrors.unreadable", { path, message: (err as Error).message }),
     };
   }
 }
@@ -228,7 +229,7 @@ async function checkSessions(): Promise<Check> {
     return {
       label: "sessions     ",
       level: "warn",
-      detail: `cannot list — ${(err as Error).message}`,
+      detail: t("doctorErrors.cannotList", { message: (err as Error).message }),
     };
   }
 }
@@ -247,7 +248,7 @@ async function checkHooks(projectRoot: string): Promise<Check> {
     return {
       label: "hooks        ",
       level: "warn",
-      detail: `couldn't parse settings.json — ${(err as Error).message}`,
+      detail: t("doctorErrors.parseFailed", { message: (err as Error).message }),
     };
   }
 }
@@ -317,7 +318,7 @@ async function checkOllama(projectRoot: string): Promise<Check> {
     return {
       label: "semantic     ",
       level: "warn",
-      detail: `probe failed — ${(err as Error).message}`,
+      detail: t("doctorErrors.probeFailed", { message: (err as Error).message }),
     };
   }
 }

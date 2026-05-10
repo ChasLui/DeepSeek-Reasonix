@@ -21,6 +21,7 @@
 import { readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { loadEditMode, loadProjectShellAllowed, readConfig } from "../../config.js";
+import { t } from "../../i18n/index.js";
 import { bootstrapSemanticSearchInCodeMode } from "../../index/semantic/tool.js";
 import { detectForeignAgentPlatform } from "../../memory/project.js";
 import { sanitizeName } from "../../memory/session.js";
@@ -160,8 +161,8 @@ export async function codeCommand(opts: CodeOptions = {}): Promise<void> {
   );
 
   process.stderr.write(
-    `▸ reasonix code: rooted at ${rootDir}, session "${session ?? "(ephemeral)"}" · ${tools.size} native tool(s)${
-      semantic.enabled ? " · semantic_search on" : ""
+    `${t("startup.codeRooted")}${rootDir}${t("startup.session")}${session ?? t("startup.ephemeral")}" · ${tools.size}${t("startup.nativeTools")}${
+      semantic.enabled ? t("startup.semanticOn") : ""
     }\n`,
   );
 
