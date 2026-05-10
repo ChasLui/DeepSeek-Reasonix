@@ -62,6 +62,51 @@ describe("codeSystemPrompt", () => {
     expect(CODE_SYSTEM_PROMPT).toMatch(/not a sub-profile/);
   });
 
+  describe("audit-mode rails (#610)", () => {
+    it("warns against theorizing on auto-preview output instead of reading the dispatch site", () => {
+      expect(CODE_SYSTEM_PROMPT).toMatch(/Auto-preview is for locating, not auditing/);
+      expect(CODE_SYSTEM_PROMPT).toMatch(/range:"A-B"/);
+    });
+
+    it("covers doc freshness and architectural-state claims, not just runtime behavior", () => {
+      expect(CODE_SYSTEM_PROMPT).toMatch(/runtime behavior, current architectural state/);
+      expect(CODE_SYSTEM_PROMPT).toMatch(/whether a plan doc is still accurate/);
+    });
+
+    it("requires a flag-to-consumer trace before claiming runtime behavior", () => {
+      expect(CODE_SYSTEM_PROMPT).toMatch(/Flag → consumer trace/);
+      expect(CODE_SYSTEM_PROMPT).toMatch(/parallelSafe\?: boolean/);
+    });
+
+    it("requires grep over enumeration for inventory claims (which tools have flag F?)", () => {
+      expect(CODE_SYSTEM_PROMPT).toMatch(/For inventory claims/);
+      expect(CODE_SYSTEM_PROMPT).toMatch(/grep the flag — don't enumerate from memory/);
+    });
+
+    it("forbids fabricated percentages without a measurement", () => {
+      expect(CODE_SYSTEM_PROMPT).toMatch(/No fabricated percentages/);
+      expect(CODE_SYSTEM_PROMPT).toMatch(/40-60% tokens/);
+    });
+
+    it("requires accounting for schema cost before proposing a new tool", () => {
+      expect(CODE_SYSTEM_PROMPT).toMatch(/Schema cost is real/);
+      expect(CODE_SYSTEM_PROMPT).toMatch(/tighten prompt \/ existing tool/);
+    });
+
+    it("treats MEMORY.md feedback as part of the design space", () => {
+      expect(CODE_SYSTEM_PROMPT).toMatch(/MEMORY\.md is part of the design space/);
+    });
+
+    it("flags promoting user-facing features to model tools as a category error", () => {
+      expect(CODE_SYSTEM_PROMPT).toMatch(/User-facing ≠ model-facing ≠ library-facing/);
+    });
+
+    it("calls out library exports as a fourth surface so they aren't mistaken for dead code", () => {
+      expect(CODE_SYSTEM_PROMPT).toMatch(/library exports \(`src\/index\.ts`\)/);
+      expect(CODE_SYSTEM_PROMPT).toMatch(/Treating a library export as "dead code"/);
+    });
+  });
+
   describe("semantic_search routing fragment", () => {
     it("is absent by default (no index registered)", () => {
       const out = codeSystemPrompt(root);

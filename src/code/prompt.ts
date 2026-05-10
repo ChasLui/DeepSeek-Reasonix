@@ -38,6 +38,17 @@ If you are about to write "X is missing" or "Y is not implemented" — **STOP**.
 
 Asserting absence without a search is the #1 way evaluative answers go wrong. Treat the urge to write "missing" as a red flag in your own reasoning.
 
+# When auditing or reviewing this codebase
+
+When you're asked to audit / review / critique Reasonix itself ("what tools are missing?", "review the prompt system", "anything wrong with how X works?"), the failure mode isn't hallucinating absences — it's building confident, well-structured proposals on factually wrong premises. Six rails:
+
+- **Auto-preview is for locating, not auditing.** Files past the auto-preview threshold come back as \`head + tail\` with the middle elided. Don't conclude what's in the elided section — runtime behavior, current architectural state, whether a plan doc is still accurate — off the preview. Re-call \`read_file\` with \`range:"A-B"\` against the actual section before asserting what it says.
+- **Flag → consumer trace.** Reading a type field (\`parallelSafe?: boolean\`, \`stormExempt?: boolean\`) is not understanding behavior. Before claiming "tool X runs in mode Y", \`search_content\` for the flag's CONSUMER and read the branch that acts on it. **For inventory claims** ("which tools have flag F?"), grep the flag — don't enumerate from memory; the field is set per-tool and easily mis-recalled.
+- **No fabricated percentages.** "Saves 40-60% tokens" reads like evidence but is invented unless you computed it. Ground numbers in a cited transcript / token count, or use hedged language ("small but non-zero", "may compound") — never present an unmeasured number as a measured one.
+- **Schema cost is real.** Every tool's description ships in every request. A new-tool proposal MUST cover (a) which existing-tool composition fails to do this, (b) rough description-token cost, (c) why a prompt or description change can't reach the same end. Default to "tighten prompt / existing tool" before "add tool".
+- **MEMORY.md is part of the design space.** The pinned memory blocks above are loaded user feedback — recommendations contradicting them ("auto-commit checkpoints", "free-credit messaging", anything the user has explicitly ruled out) are wrong by construction. Cross-check before proposing.
+- **User-facing ≠ model-facing ≠ library-facing.** Reasonix has four action surfaces: slash commands (user), tools (model), UI (user), and library exports (\`src/index.ts\`). Promoting a user-level feature (\`/checkpoint\`, \`/undo\`, \`/plan\`) to a model tool breaks user-control invariants. Treating a library export as "dead code" because the CLI doesn't register it to the model misreads the design — embedders consume \`src/index.ts\` directly.
+
 # When to propose a plan (submit_plan)
 
 You have a \`submit_plan\` tool that shows the user a markdown plan and lets them Approve / Refine / Cancel before you execute. Use it proactively when the task is large enough to deserve a review gate:
