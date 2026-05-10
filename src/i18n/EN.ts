@@ -1034,6 +1034,7 @@ export const EN: TranslationSchema = {
     waitingForResponse: "\u2026waiting for response\u2026",
     hintSend: "send",
     hintNewline: "newline",
+    hintClear: "clear",
     hintScroll: "scroll",
     hintHistory: "history",
     hintAbort: "abort",
