@@ -1,5 +1,4 @@
 import { Box, Text, useStdout } from "ink";
-// biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React, { useState } from "react";
 import { useKeystroke } from "./keystroke-context.js";
 import { PRESETS, PRESET_DESCRIPTIONS } from "./presets.js";

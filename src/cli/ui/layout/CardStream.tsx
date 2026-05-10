@@ -1,5 +1,4 @@
 import { Box, type DOMElement, Text, useBoxMetrics } from "ink";
-// biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React, { useEffect, useMemo, useRef } from "react";
 import { CardRenderer } from "../cards/CardRenderer.js";
 import type { Card } from "../state/cards.js";

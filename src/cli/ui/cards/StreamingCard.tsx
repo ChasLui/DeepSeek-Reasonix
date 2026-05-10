@@ -1,5 +1,4 @@
 import { Box, Text, useStdout } from "ink";
-// biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React, { useContext } from "react";
 import { clipToCells, wrapToCells } from "../../../frame/width.js";
 import { t } from "../../../i18n/index.js";
@@ -22,6 +21,19 @@ const EXPANDED_MAX_LINES = 60;
 
 const MIN_ELAPSED_MS_FOR_RATE = 500;
 const MIN_TOKENS_FOR_RATE = 4;
+const LIVE_TOKEN_CALIBRATION_CHARS = 500;
+const ESTIMATED_CHARS_PER_TOKEN = 4;
+
+export interface LiveTokenCalibration {
+  cardId: string;
+  chars: number;
+  tokens: number;
+}
+
+interface TokenRate {
+  tokens: number;
+  tps: number | null;
+}
 
 function formatTokenCount(n: number): string {
   if (n >= 10000) return `${(n / 1000).toFixed(1)}k`;
@@ -29,17 +41,55 @@ function formatTokenCount(n: number): string {
   return String(n);
 }
 
-function tokenRate(
-  text: string,
-  startTs: number,
-  endTs: number,
-): { tokens: number; tps: number | null } {
-  const tokens = countTokens(text);
+function rateFromTokens(tokens: number, startTs: number, endTs: number): TokenRate {
   const elapsedMs = endTs - startTs;
   if (elapsedMs < MIN_ELAPSED_MS_FOR_RATE || tokens < MIN_TOKENS_FOR_RATE) {
     return { tokens, tps: null };
   }
   return { tokens, tps: Math.round((tokens * 1000) / elapsedMs) };
+}
+
+function tokenRate(text: string, startTs: number, endTs: number): TokenRate {
+  return rateFromTokens(countTokens(text), startTs, endTs);
+}
+
+export function estimateLiveTokenCount(
+  text: string,
+  cardId: string,
+  calibration: LiveTokenCalibration | null,
+  countFn: (value: string) => number = countTokens,
+): { tokens: number; calibration: LiveTokenCalibration; exact: boolean } {
+  const chars = text.length;
+  const shouldCalibrate =
+    chars > 0 &&
+    (!calibration ||
+      calibration.cardId !== cardId ||
+      chars < calibration.chars ||
+      (calibration.chars === 0 && chars > 0) ||
+      chars - calibration.chars >= LIVE_TOKEN_CALIBRATION_CHARS);
+
+  if (shouldCalibrate) {
+    const tokens = countFn(text);
+    return { tokens, calibration: { cardId, chars, tokens }, exact: true };
+  }
+
+  const base = calibration?.cardId === cardId && chars >= calibration.chars ? calibration : null;
+  const baseChars = base?.chars ?? 0;
+  const baseTokens = base?.tokens ?? 0;
+  const estimatedDelta = Math.ceil(Math.max(0, chars - baseChars) / ESTIMATED_CHARS_PER_TOKEN);
+  return {
+    tokens: baseTokens + estimatedDelta,
+    calibration: base ?? { cardId, chars: 0, tokens: 0 },
+    exact: false,
+  };
+}
+
+function useLiveTokenRate(card: StreamingCardData, enabled: boolean): TokenRate {
+  const calibrationRef = React.useRef<LiveTokenCalibration | null>(null);
+  if (!enabled) return { tokens: 0, tps: null };
+  const estimate = estimateLiveTokenCount(card.text, card.id, calibrationRef.current);
+  calibrationRef.current = estimate.calibration;
+  return rateFromTokens(estimate.tokens, card.ts, Date.now());
 }
 
 const PILL_RATE = { bg: "#11141a", fg: "#8b949e" } as const;
@@ -56,6 +106,7 @@ export function StreamingCard({ card }: { card: StreamingCardData }): React.Reac
   // Re-render at 1Hz so the rate keeps updating even when chunks stall.
   // Frozen once `card.done` is true — settled cards render via Static.
   useSlowTick();
+  const liveRate = useLiveTokenRate(card, !card.done && !card.aborted);
 
   const modelBadge = card.model ? modelBadgeFor(card.model) : null;
   const modelPill = modelBadge ? (
@@ -97,10 +148,9 @@ export function StreamingCard({ card }: { card: StreamingCardData }): React.Reac
   const glyph = aborted ? "‹" : "◈";
   const headLabel = aborted ? t("cardLabels.aborted") : t("cardLabels.writing");
 
-  const { tokens: liveTokens, tps: liveTps } = tokenRate(card.text, card.ts, Date.now());
   const liveRatePill =
-    !aborted && liveTokens >= MIN_TOKENS_FOR_RATE && liveTps !== null ? (
-      <Pill label={`${liveTps} t/s`} {...PILL_RATE} bold={false} />
+    !aborted && liveRate.tokens >= MIN_TOKENS_FOR_RATE && liveRate.tps !== null ? (
+      <Pill label={`${liveRate.tps} t/s`} {...PILL_RATE} bold={false} />
     ) : null;
   const expandPill = !aborted ? (
     <Pill label={expanded ? "expanded ⌃o" : "preview ⌃o"} {...PILL_RATE} bold={false} />
