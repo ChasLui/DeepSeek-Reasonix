@@ -1,7 +1,7 @@
 /** Dashboard server — token/CSRF gates, endpoint shapes, permissions CRUD against a real http server. */
 
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -289,6 +289,70 @@ describe("dashboard server: endpoints", () => {
     expect(r.body.total).toBe(1);
     expect(r.body.tools[0].name).toBe("echo");
     expect(r.body.tools[0].readOnly).toBe(true);
+  });
+
+  it("GET /api/skills lists and edits flat-format project skills (#586)", async () => {
+    const proj = mkdtempSync(join(tmpdir(), "reasonix-dash-skills-"));
+    try {
+      const skillsDir = join(proj, ".reasonix", "skills");
+      const folderDir = join(skillsDir, "folder-skill");
+      const flatPath = join(skillsDir, "flat-skill.md");
+      await mkdir(folderDir, { recursive: true });
+      await writeFile(
+        join(folderDir, "SKILL.md"),
+        "---\ndescription: Folder skill\n---\nfolder body\n",
+        "utf8",
+      );
+      await writeFile(flatPath, "---\ndescription: Flat skill\n---\nflat body\n", "utf8");
+      await writeFile(join(skillsDir, "notes.txt"), "not a skill\n", "utf8");
+
+      const audited: Array<{ action: string; payload?: unknown }> = [];
+      const base = await boot({
+        getCurrentCwd: () => proj,
+        audit: (e) => audited.push({ action: e.action, payload: e.payload }),
+      });
+
+      const list = await call(`${base}api/skills`, { token: TOKEN });
+      expect(list.status).toBe(200);
+      expect(list.body.project.map((s: { name: string }) => s.name)).toEqual([
+        "flat-skill",
+        "folder-skill",
+      ]);
+      const flat = list.body.project.find((s: { name: string }) => s.name === "flat-skill");
+      expect(flat).toMatchObject({
+        name: "flat-skill",
+        scope: "project",
+        description: "Flat skill",
+        path: flatPath,
+      });
+
+      const read = await call(`${base}api/skills/project/flat-skill`, { token: TOKEN });
+      expect(read.status).toBe(200);
+      expect(read.body.path).toBe(flatPath);
+      expect(read.body.body).toContain("flat body");
+
+      const updated = "---\ndescription: Flat skill updated\n---\nnew body\n";
+      const save = await call(`${base}api/skills/project/flat-skill`, {
+        method: "POST",
+        token: TOKEN,
+        tokenInHeader: true,
+        body: { body: updated },
+      });
+      expect(save.status).toBe(200);
+      expect(save.body.path).toBe(flatPath);
+      expect(await readFile(flatPath, "utf8")).toBe(updated);
+
+      const del = await call(`${base}api/skills/project/flat-skill`, {
+        method: "DELETE",
+        token: TOKEN,
+        tokenInHeader: true,
+      });
+      expect(del.status).toBe(200);
+      expect(existsSync(flatPath)).toBe(false);
+      expect(audited.map((e) => e.action)).toEqual(["save-skill", "delete-skill"]);
+    } finally {
+      rmSync(proj, { recursive: true, force: true });
+    }
   });
 
   it("GET /api/permissions lists builtin always; project list when cwd is set", async () => {

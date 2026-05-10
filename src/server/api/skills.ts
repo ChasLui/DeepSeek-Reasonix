@@ -10,6 +10,7 @@ import {
   readSync,
   readdirSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -52,6 +53,13 @@ interface SkillListEntry {
   mtime: number;
 }
 
+type SkillLayout = "folder" | "flat";
+
+interface ResolvedSkillPath {
+  path: string;
+  layout: SkillLayout;
+}
+
 function parseFrontmatterDescription(raw: string): string | undefined {
   const lines = raw.split(/\r?\n/);
   if (lines[0] !== "---") return undefined;
@@ -63,45 +71,86 @@ function parseFrontmatterDescription(raw: string): string | undefined {
   return undefined;
 }
 
+function readSkillListEntry(
+  skillPath: string,
+  name: string,
+  scope: "project" | "global",
+): SkillListEntry | null {
+  try {
+    // Open once and reuse the fd so size/mtime/content all bind to
+    // the same inode — closes the exists→stat→read TOCTOU races.
+    const fd = openSync(skillPath, "r");
+    let stat: ReturnType<typeof fstatSync>;
+    let raw: string;
+    try {
+      stat = fstatSync(fd);
+      if (!stat.isFile()) return null;
+      const buf = Buffer.alloc(stat.size);
+      let read = 0;
+      while (read < stat.size) {
+        const n = readSync(fd, buf, read, stat.size - read, read);
+        if (n <= 0) break;
+        read += n;
+      }
+      raw = buf.toString("utf8", 0, read);
+    } finally {
+      closeSync(fd);
+    }
+    const item: SkillListEntry = {
+      name,
+      scope,
+      path: skillPath,
+      size: stat.size,
+      mtime: stat.mtime.getTime(),
+    };
+    const desc = parseFrontmatterDescription(raw);
+    if (desc) item.description = desc;
+    return item;
+  } catch {
+    return null;
+  }
+}
+
+function resolveSkillPath(dir: string, name: string): ResolvedSkillPath | null {
+  const folderPath = join(dir, name, SKILL_FILE);
+  try {
+    if (statSync(folderPath).isFile()) return { path: folderPath, layout: "folder" };
+  } catch {
+    /* try flat layout below */
+  }
+  const flatPath = join(dir, `${name}.md`);
+  try {
+    if (statSync(flatPath).isFile()) return { path: flatPath, layout: "flat" };
+  } catch {
+    /* not found */
+  }
+  return null;
+}
+
+function defaultSkillPath(dir: string, name: string): ResolvedSkillPath {
+  return { path: join(dir, name, SKILL_FILE), layout: "folder" };
+}
+
 function listSkills(dir: string, scope: "project" | "global"): SkillListEntry[] {
   if (!existsSync(dir)) return [];
   const out: SkillListEntry[] = [];
   try {
-    for (const entry of readdirSync(dir)) {
-      if (!SAFE_NAME.test(entry)) continue;
-      const skillPath = join(dir, entry, SKILL_FILE);
-      try {
-        // Open once and reuse the fd so size/mtime/content all bind to
-        // the same inode — closes the exists→stat→read TOCTOU races.
-        const fd = openSync(skillPath, "r");
-        let stat: ReturnType<typeof fstatSync>;
-        let raw: string;
-        try {
-          stat = fstatSync(fd);
-          const buf = Buffer.alloc(stat.size);
-          let read = 0;
-          while (read < stat.size) {
-            const n = readSync(fd, buf, read, stat.size - read, read);
-            if (n <= 0) break;
-            read += n;
-          }
-          raw = buf.toString("utf8", 0, read);
-        } finally {
-          closeSync(fd);
-        }
-        const item: SkillListEntry = {
-          name: entry,
-          scope,
-          path: skillPath,
-          size: stat.size,
-          mtime: stat.mtime.getTime(),
-        };
-        const desc = parseFrontmatterDescription(raw);
-        if (desc) item.description = desc;
-        out.push(item);
-      } catch {
-        /* skip unreadable */
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      let name: string;
+      let skillPath: string;
+      if (entry.isDirectory()) {
+        name = entry.name;
+        if (!SAFE_NAME.test(name)) continue;
+        skillPath = join(dir, name, SKILL_FILE);
+      } else if (entry.isFile() && entry.name.endsWith(".md")) {
+        name = entry.name.slice(0, -3);
+        if (!SAFE_NAME.test(name)) continue;
+        skillPath = join(dir, entry.name);
+      } else {
+        continue;
       }
+      const item = readSkillListEntry(skillPath, name, scope);
+      if (item) out.push(item);
     }
   } catch {
     /* skip unreadable dir */
@@ -184,11 +233,14 @@ export async function handleSkills(
   } else {
     dir = globalSkillsDir();
   }
-  const skillPath = join(dir, name, SKILL_FILE);
+  const resolved = resolveSkillPath(dir, name);
 
   if (method === "GET") {
-    if (!existsSync(skillPath)) return { status: 404, body: { error: "skill not found" } };
-    return { status: 200, body: { path: skillPath, body: readFileSync(skillPath, "utf8") } };
+    if (!resolved) return { status: 404, body: { error: "skill not found" } };
+    return {
+      status: 200,
+      body: { path: resolved.path, body: readFileSync(resolved.path, "utf8") },
+    };
   }
 
   if (method === "POST") {
@@ -196,20 +248,24 @@ export async function handleSkills(
     if (typeof contents !== "string") {
       return { status: 400, body: { error: "body (string) required" } };
     }
-    mkdirSync(dirname(skillPath), { recursive: true });
-    writeFileSync(skillPath, contents, "utf8");
+    const target = resolved ?? defaultSkillPath(dir, name);
+    mkdirSync(dirname(target.path), { recursive: true });
+    writeFileSync(target.path, contents, "utf8");
     ctx.audit?.({
       ts: Date.now(),
       action: "save-skill",
-      payload: { scope, name, path: skillPath },
+      payload: { scope, name, path: target.path },
     });
-    return { status: 200, body: { saved: true, path: skillPath } };
+    return { status: 200, body: { saved: true, path: target.path } };
   }
 
   if (method === "DELETE") {
-    if (!existsSync(skillPath)) return { status: 404, body: { error: "skill not found" } };
-    // Drop the whole skill folder (it may carry assets next to SKILL.md).
-    rmSync(dirname(skillPath), { recursive: true, force: true });
+    if (!resolved) return { status: 404, body: { error: "skill not found" } };
+    // Folder-layout skills may carry assets next to SKILL.md; flat skills are single-file entries.
+    rmSync(resolved.layout === "folder" ? dirname(resolved.path) : resolved.path, {
+      recursive: true,
+      force: true,
+    });
     ctx.audit?.({ ts: Date.now(), action: "delete-skill", payload: { scope, name } });
     return { status: 200, body: { deleted: true } };
   }
