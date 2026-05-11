@@ -141,6 +141,9 @@ export class StdioTransport implements McpTransport {
         // Malformed lines are dropped — some servers emit startup banners
         // before the JSON-RPC loop begins. We surface the noise to stderr
         // via the inherited stderr stream, not our event queue.
+        if (process.env.REASONIX_DEBUG_MCP === "1") {
+          process.stderr.write(`[mcp-stdio] dropped malformed line: ${line}\n`);
+        }
       }
     }
   }
