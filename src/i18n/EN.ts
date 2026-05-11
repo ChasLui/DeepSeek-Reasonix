@@ -1113,6 +1113,9 @@ export const EN: TranslationSchema = {
     allowAlwaysDesc: "remember `{prefix}` for this project",
     deny: "deny",
     denyDesc: "press Tab to add context telling the model why",
+    cwdLabel: "cwd",
+    timeoutLabel: "timeout",
+    waitLabel: "wait",
   },
   editConfirm: {
     footer:
@@ -1290,6 +1293,7 @@ export const EN: TranslationSchema = {
     error: "error",
     doctor: "doctor",
     you: "you",
+    task: "task",
   },
   cardLabels: {
     prompt: "prompt",

@@ -400,6 +400,9 @@ export interface TranslationSchema {
     allowAlwaysDesc: string;
     deny: string;
     denyDesc: string;
+    cwdLabel: string;
+    timeoutLabel: string;
+    waitLabel: string;
   };
   editConfirm: {
     footer: string;
@@ -553,6 +556,7 @@ export interface TranslationSchema {
     error: string;
     doctor: string;
     you: string;
+    task: string;
   };
   cardLabels: {
     prompt: string;
