@@ -194,8 +194,10 @@ export class CacheFirstLoop {
         }
         try {
           if (def.readOnlyCheck(args as never)) return false;
-        } catch {
-          /* ignore — fall through */
+        } catch (err) {
+          // Mirror tools.ts: surface buggy readOnlyCheck instead of silently
+          // falling through to the static flag.
+          console.warn(`readOnlyCheck for ${name} threw: ${(err as Error).message}`);
         }
       }
       return def.readOnly !== true;

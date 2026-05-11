@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ToolRegistry } from "../src/tools.js";
 
 describe("ToolRegistry", () => {
@@ -495,6 +495,45 @@ describe("ToolRegistry", () => {
       const out = await reg.dispatch("edit_file", "{}"); // first time for edit_file
       const parsed = JSON.parse(out);
       expect(parsed.consecutiveMalformed).toBeUndefined();
+    });
+  });
+
+  describe("isReadOnlyCall — buggy readOnlyCheck", () => {
+    it("warns when readOnlyCheck throws and treats the call as not read-only", async () => {
+      const reg = new ToolRegistry();
+      reg.register({
+        name: "buggy_tool",
+        readOnlyCheck: () => {
+          throw new Error("check is buggy");
+        },
+        fn: () => "ok",
+      });
+      reg.setPlanMode(true);
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const out = await reg.dispatch("buggy_tool", "{}");
+        expect(JSON.parse(out).error).toMatch(/unavailable in plan mode/);
+        expect(warnSpy).toHaveBeenCalledWith("readOnlyCheck for buggy_tool threw: check is buggy");
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
+    it("stays silent when readOnlyCheck succeeds", async () => {
+      const reg = new ToolRegistry();
+      reg.register({
+        name: "good_tool",
+        readOnlyCheck: () => true,
+        fn: () => "ok",
+      });
+      reg.setPlanMode(true);
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        await reg.dispatch("good_tool", "{}");
+        expect(warnSpy).not.toHaveBeenCalled();
+      } finally {
+        warnSpy.mockRestore();
+      }
     });
   });
 });

@@ -301,7 +301,10 @@ function isReadOnlyCall(tool: InternalTool, args: Record<string, unknown>): bool
   if (tool.readOnlyCheck) {
     try {
       return Boolean(tool.readOnlyCheck(args as never));
-    } catch {
+    } catch (err) {
+      // A buggy readOnlyCheck silently downgrades to "may mutate" — log it so
+      // the bug doesn't hide behind plan-mode refusals or storm-breaker noise.
+      console.warn(`readOnlyCheck for ${tool.name} threw: ${(err as Error).message}`);
       return false;
     }
   }
