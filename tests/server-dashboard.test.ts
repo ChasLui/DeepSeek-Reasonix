@@ -1189,3 +1189,153 @@ describe("dashboard server: D-1 settings + auto-loop surface", () => {
     expect(stop.status).toBe(503);
   });
 });
+
+describe("dashboard server: checkpoint API", () => {
+  let dir: string;
+  let cfgPath: string;
+  let usagePath: string;
+  let handle: DashboardServerHandle | null = null;
+  const TOKEN = "f".repeat(64);
+  let cwd: string;
+
+  beforeEach(async () => {
+    dir = mkdtempSync(join(tmpdir(), "reasonix-dash-cp-"));
+    cfgPath = join(dir, "config.json");
+    usagePath = join(dir, "usage.jsonl");
+    // Init a tiny git repo so checkpoint-create works
+    cwd = join(dir, "repo");
+    await mkdir(cwd, { recursive: true });
+    await writeFile(join(cwd, "hello.txt"), "hello world\n");
+    const { execSync } = await import("node:child_process");
+    execSync("git init", { cwd });
+    execSync("git config user.email test@test.com", { cwd });
+    execSync("git config user.name test", { cwd });
+    execSync("git add -A", { cwd });
+    execSync("git commit -m init", { cwd });
+  });
+
+  afterEach(async () => {
+    await handle?.close();
+    if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  async function boot(): Promise<string> {
+    handle = await startDashboardServer(
+      {
+        mode: "attached",
+        configPath: cfgPath,
+        usageLogPath: usagePath,
+        getCurrentCwd: () => cwd,
+      },
+      { token: TOKEN },
+    );
+    return handle.url.split("?")[0]!;
+  }
+
+  it("POST /api/checkpoint-create creates a snapshot", async () => {
+    const base = await boot();
+    const r = await call(`${base}api/checkpoint-create`, {
+      method: "POST",
+      token: TOKEN,
+      tokenInHeader: true,
+      body: { name: "snap1" },
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.id).toBeDefined();
+    expect(r.body.name).toBe("snap1");
+    expect(r.body.fileCount).toBe(1); // only hello.txt tracked by git
+    expect(r.body.bytes).toBeGreaterThan(0);
+  });
+
+  it("POST /api/checkpoint-create fails without name", async () => {
+    const base = await boot();
+    const r = await call(`${base}api/checkpoint-create`, {
+      method: "POST",
+      token: TOKEN,
+      tokenInHeader: true,
+      body: {},
+    });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toContain("missing name");
+  });
+
+  it("GET /api/checkpoints lists all checkpoints", async () => {
+    const base = await boot();
+    // Create one
+    await call(`${base}api/checkpoint-create`, {
+      method: "POST",
+      token: TOKEN,
+      tokenInHeader: true,
+      body: { name: "snap1" },
+    });
+    const r = await call(`${base}api/checkpoints`, { token: TOKEN });
+    expect(r.status).toBe(200);
+    expect(Array.isArray(r.body)).toBe(true);
+    expect(r.body.length).toBe(1);
+    expect(r.body[0].name).toBe("snap1");
+  });
+
+  it("GET /api/checkpoint-diffs returns diffs for a checkpoint", async () => {
+    const base = await boot();
+    const created = await call(`${base}api/checkpoint-create`, {
+      method: "POST",
+      token: TOKEN,
+      tokenInHeader: true,
+      body: { name: "snap1" },
+    });
+    // Modify file after snapshot so diff is non-empty
+    await writeFile(join(cwd, "hello.txt"), "hello world from checkpoint\n");
+    const r = await call(`${base}api/checkpoint-diffs?id=${created.body.id}`, { token: TOKEN });
+    expect(r.status).toBe(200);
+    expect(Array.isArray(r.body)).toBe(true);
+    expect(r.body.length).toBe(1);
+    expect(r.body[0].file).toBe("hello.txt");
+    expect(r.body[0].additions).toBeGreaterThan(0);
+  });
+
+  it("POST /api/checkpoint-restore restores files from snapshot", async () => {
+    const base = await boot();
+    const created = await call(`${base}api/checkpoint-create`, {
+      method: "POST",
+      token: TOKEN,
+      tokenInHeader: true,
+      body: { name: "snap1" },
+    });
+    // Modify file after snapshot
+    await writeFile(join(cwd, "hello.txt"), "hello world from checkpoint\n");
+    const r = await call(`${base}api/checkpoint-restore`, {
+      method: "POST",
+      token: TOKEN,
+      tokenInHeader: true,
+      body: { id: created.body.id },
+    });
+    expect(r.status).toBe(200);
+    expect(Array.isArray(r.body.restored)).toBe(true);
+    expect(r.body.restored).toContain("hello.txt");
+    expect(Array.isArray(r.body.removed)).toBe(true);
+    // File should be back to snapshot content
+    const content = await readFile(join(cwd, "hello.txt"), "utf8");
+    expect(content).toBe("hello world\n");
+  });
+
+  it("POST /api/checkpoint-delete removes snapshot", async () => {
+    const base = await boot();
+    const created = await call(`${base}api/checkpoint-create`, {
+      method: "POST",
+      token: TOKEN,
+      tokenInHeader: true,
+      body: { name: "snap1" },
+    });
+    const del = await call(`${base}api/checkpoint-delete`, {
+      method: "POST",
+      token: TOKEN,
+      tokenInHeader: true,
+      body: { id: created.body.id },
+    });
+    expect(del.status).toBe(200);
+    expect(del.body.deleted).toBe(created.body.id);
+    // List should be empty
+    const list = await call(`${base}api/checkpoints`, { token: TOKEN });
+    expect(list.body.length).toBe(0);
+  });
+});

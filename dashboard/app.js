@@ -21,6 +21,7 @@ import { SkillsPanel } from "./src/panels/skills";
 import { SystemPanel } from "./src/panels/system";
 import { ToolsPanel } from "./src/panels/tools";
 import { UsagePanel } from "./src/panels/usage";
+import { ChangesPanel } from "./src/panels/changes";
 
 const html = htm.bind(h);
 
@@ -32,6 +33,12 @@ function tabSections() {
         { id: "chat", name: t("app.tabChat"), glyph: "◆", panel: () => html`<${ChatPanel} />` },
         { id: "plans", name: t("app.tabPlans"), glyph: "⊞", panel: () => html`<${PlansPanel} />` },
         { id: "sessions", name: t("app.tabSessions"), glyph: "›", panel: () => html`<${SessionsPanel} />` },
+      ],
+    },
+    {
+      label: t("app.sectionChanges"),
+      tabs: [
+        { id: "changes", name: t("app.tabChanges"), glyph: "▨", panel: () => html`<${ChangesPanel} />` },
       ],
     },
     {

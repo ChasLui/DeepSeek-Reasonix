@@ -1,6 +1,13 @@
 import { handleAbort } from "./api/abort.js";
+import { handleCheckpointCreate } from "./api/checkpoint-create.js";
+import { handleCheckpointDelete } from "./api/checkpoint-delete.js";
+import { handleCheckpointDiffs } from "./api/checkpoint-diffs.js";
+import { handleCheckpointRestore } from "./api/checkpoint-restore.js";
+import { handleCheckpoints } from "./api/checkpoints.js";
 import { handleEditMode } from "./api/edit-mode.js";
+import { handleFileRead } from "./api/file-read.js";
 import { handleFiles } from "./api/files.js";
+import { handleGitDiffs } from "./api/git-diffs.js";
 import { handleHealth } from "./api/health.js";
 import { handleHooks } from "./api/hooks.js";
 import { handleIndexConfig } from "./api/index-config.js";
@@ -13,6 +20,8 @@ import { handleModels } from "./api/models.js";
 import { handleOverview } from "./api/overview.js";
 import { handlePermissions } from "./api/permissions.js";
 import { handlePlans } from "./api/plans.js";
+import { handleProjectTree } from "./api/project-tree.js";
+import { handleReviewDiffs } from "./api/review-diffs.js";
 import { handleSemantic } from "./api/semantic.js";
 import { handleSessions } from "./api/sessions.js";
 import { handleSettings } from "./api/settings.js";
@@ -83,6 +92,24 @@ export async function handleApi(
         return await handleSlash(method, rest, body, ctx);
       case "files":
         return await handleFiles(method, rest, body, ctx);
+      case "project-tree":
+        return await handleProjectTree(method, rest, body, ctx);
+      case "git-diffs":
+        return await handleGitDiffs(method, rest, body, ctx);
+      case "checkpoints":
+        return await handleCheckpoints(method, rest, body, ctx);
+      case "checkpoint-diffs":
+        return await handleCheckpointDiffs(method, rest, body, ctx, query);
+      case "checkpoint-restore":
+        return await handleCheckpointRestore(method, rest, body, ctx);
+      case "checkpoint-create":
+        return await handleCheckpointCreate(method, rest, body, ctx);
+      case "checkpoint-delete":
+        return await handleCheckpointDelete(method, rest, body, ctx);
+      case "review-diffs":
+        return await handleReviewDiffs(method, rest, body, ctx);
+      case "file":
+        return await handleFileRead(method, rest, body, ctx);
       case "loop":
         return await handleLoop(method, rest, body, ctx);
       case "models":
