@@ -285,7 +285,7 @@ export function ChangesPanel() {
                 onToggleReview=${toggleReviewMode}
                 files=${openFiles}
                 activePath=${activeFilePath}
-                onSelect=${setActiveFilePath}
+                onSelect=${(path: string) => { setActiveFilePath(path); setReviewMode(false); }}
                 onClose=${closeFile}
               />
               <div class="review-controls" style=${{ display: "flex", alignItems: "center", gap: "8px", padding: "6px 12px", borderBottom: "1px solid var(--bd)", fontSize: "12px" }}>
@@ -1545,7 +1545,6 @@ function ChatPane(props: ChatPaneProps) {
           </div>
         ` : null}
         <div style=${{ display: "flex", gap: "8px", alignItems: "flex-end", position: "relative" }}>
-          <button style=${{ background: "transparent", border: "none", color: "var(--fg-3)", padding: "8px", cursor: "pointer", fontSize: "18px", flexShrink: 0 }}>+</button>
           <div style=${{ flex: 1, position: "relative" }}>
             ${
               popoverKind && popoverItems.length > 0

@@ -780,12 +780,12 @@ main { padding: 32px 40px 60px 32px; min-width: 0; }
   flex: 1; min-height: 0;
 }
 .editor-line {
-  display: grid; grid-template-columns: 44px 1fr;
+  display: grid; grid-template-columns: 62px 1fr;
   padding: 0; white-space: pre;
 }
 .editor-line:hover { background: rgba(121,192,255,.04); }
 .editor-line.cur { background: rgba(121,192,255,.06); }
-.editor-line .lineno { color: var(--fg-4); text-align: right; padding-right: 14px; user-select: none; font-variant-numeric: tabular-nums; }
+.editor-line .lineno { color: var(--fg-4); text-align: right; padding: 0 10px 0 20px; user-select: none; font-variant-numeric: tabular-nums; }
 .editor-line .ln-content { color: var(--fg-1); }
 .editor-line .ln-content .kw  { color: var(--c-accent); }
 .editor-line .ln-content .str { color: var(--c-ok); }
@@ -2902,14 +2902,18 @@ input:focus, textarea:focus, select:focus { border-color: var(--c-brand); }
 }
 .diff-line.diff-add { background: rgba(126,231,135,.08); }
 .diff-line.diff-del { background: rgba(255,139,129,.08); }
+.diff-line {
+  display: flex;
+  padding-left: 8px;
+}
 .diff-ln-old,
 .diff-ln-new {
   display: inline-block;
-  width: 36px;
+  min-width: 32px;
   text-align: right;
   color: var(--fg-4);
   font-size: 11px;
-  padding-right: 8px;
+  padding: 0 6px 0 12px;
   user-select: none;
   flex-shrink: 0;
 }
