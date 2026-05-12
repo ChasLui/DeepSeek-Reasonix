@@ -671,6 +671,7 @@ export interface TranslationSchema {
     slow: string;
     verySlow: string;
     slowToast: string;
+    emptyHint: string;
   };
   denyContextInput: {
     description: string;

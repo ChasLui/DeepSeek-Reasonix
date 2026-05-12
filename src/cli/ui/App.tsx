@@ -268,6 +268,8 @@ export interface AppProps {
    * (CLI: `--no-mouse`) to suppress entirely.
    */
   mouse?: boolean;
+  /** One-time startup info rows injected by chatCommand. */
+  startupInfoHints?: string[];
 }
 
 /**
@@ -396,6 +398,7 @@ function AppInner({
   dashboardPort,
   onSwitchSession,
   mouse = true,
+  startupInfoHints,
   themeName,
   setThemeName,
   statusBar,
@@ -1265,6 +1268,7 @@ function AppInner({
     } else {
       log.pushInfo(t("ui.newSession", { name: session }));
     }
+    for (const hint of startupInfoHints ?? []) log.pushInfo(hint);
     // Restore any pending edit queue from a prior run that was
     // interrupted before /apply or /discard. The checkpoint file sits
     // next to the session log; if present, we re-populate pendingEdits
@@ -1330,7 +1334,7 @@ function AppInner({
       log.pushTip({ topic: tip.topic, sections: tip.sections, footer: tip.footer });
       markMouseClipboardHintShown();
     }
-  }, [session, loop, codeMode, syncPendingCount, log, pendingEdits]);
+  }, [session, loop, codeMode, syncPendingCount, log, pendingEdits, startupInfoHints]);
 
   // Esc handles "abort the current turn" separately; Ctrl+C is the universal "I'm done" key.
   const quitProcess = useQuit(transcriptRef);
