@@ -1,5 +1,20 @@
-import { CornerDownLeft, FilePlus, FocusIcon, Info, Settings, Sparkles, Trash2 } from "lucide-react";
+import {
+  ClipboardCopy,
+  CornerDownLeft,
+  Download,
+  FilePlus,
+  FocusIcon,
+  FolderOpen,
+  Info,
+  Plus,
+  Settings,
+  Sparkles,
+  SquareX,
+  StopCircle,
+  Trash2,
+} from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { t, useLang } from "./i18n";
 
 export type Command = {
   id: string;
@@ -28,50 +43,113 @@ export function useCommandPalette() {
   return { open, setOpen };
 }
 
-export function buildCommands(handlers: {
+export type CommandHandlers = {
   newChat: () => void;
   clearChat: () => void;
   focusComposer: () => void;
   openSettings: () => void;
   about: () => void;
-}): Command[] {
-  return [
+  abort: () => void;
+  copyLast: () => void;
+  exportMarkdown: () => void;
+  pickWorkspace: () => void;
+  newTab: () => void;
+  closeTab: () => void;
+  busy: boolean;
+  canCloseTab: boolean;
+  hasMessages: boolean;
+};
+
+export function buildCommands(handlers: CommandHandlers): Command[] {
+  const list: Command[] = [
     {
       id: "new-chat",
-      label: "New chat",
-      hint: "丢掉当前对话，开新一轮",
+      label: t("palette.newChat"),
+      hint: t("palette.newChatHint"),
       icon: <FilePlus size={14} />,
       shortcut: ["⌘", "N"],
       run: handlers.newChat,
     },
     {
-      id: "clear-chat",
-      label: "Clear messages",
-      hint: "只清当前 UI，subprocess 不重启",
-      icon: <Trash2 size={14} />,
-      run: handlers.clearChat,
-    },
-    {
-      id: "focus-composer",
-      label: "Focus composer",
-      icon: <FocusIcon size={14} />,
-      shortcut: ["⌘", "L"],
-      run: handlers.focusComposer,
-    },
-    {
-      id: "settings",
-      label: "Settings",
-      hint: "即将上线",
-      icon: <Settings size={14} />,
-      run: handlers.openSettings,
-    },
-    {
-      id: "about",
-      label: "About Reasonix",
-      icon: <Info size={14} />,
-      run: handlers.about,
+      id: "new-tab",
+      label: t("palette.newTab"),
+      hint: t("palette.newTabHint"),
+      icon: <Plus size={14} />,
+      shortcut: ["⌘", "T"],
+      run: handlers.newTab,
     },
   ];
+  if (handlers.canCloseTab) {
+    list.push({
+      id: "close-tab",
+      label: t("palette.closeTab"),
+      hint: t("palette.closeTabHint"),
+      icon: <SquareX size={14} />,
+      shortcut: ["⌘", "W"],
+      run: handlers.closeTab,
+    });
+  }
+  if (handlers.busy) {
+    list.push({
+      id: "abort",
+      label: t("palette.abort"),
+      hint: t("palette.abortHint"),
+      icon: <StopCircle size={14} />,
+      shortcut: ["esc"],
+      run: handlers.abort,
+    });
+  }
+  if (handlers.hasMessages) {
+    list.push({
+      id: "copy-last",
+      label: t("palette.copyLast"),
+      hint: t("palette.copyLastHint"),
+      icon: <ClipboardCopy size={14} />,
+      run: handlers.copyLast,
+    });
+    list.push({
+      id: "export-md",
+      label: t("palette.exportMd"),
+      hint: t("palette.exportMdHint"),
+      icon: <Download size={14} />,
+      run: handlers.exportMarkdown,
+    });
+    list.push({
+      id: "clear-chat",
+      label: t("palette.clearChat"),
+      hint: t("palette.clearChatHint"),
+      icon: <Trash2 size={14} />,
+      run: handlers.clearChat,
+    });
+  }
+  list.push({
+    id: "focus-composer",
+    label: t("palette.focusComposer"),
+    icon: <FocusIcon size={14} />,
+    shortcut: ["⌘", "L"],
+    run: handlers.focusComposer,
+  });
+  list.push({
+    id: "pick-workspace",
+    label: t("palette.pickWorkspace"),
+    hint: t("palette.pickWorkspaceHint"),
+    icon: <FolderOpen size={14} />,
+    run: handlers.pickWorkspace,
+  });
+  list.push({
+    id: "settings",
+    label: t("palette.settings"),
+    hint: t("palette.settingsHint"),
+    icon: <Settings size={14} />,
+    run: handlers.openSettings,
+  });
+  list.push({
+    id: "about",
+    label: t("palette.about"),
+    icon: <Info size={14} />,
+    run: handlers.about,
+  });
+  return list;
 }
 
 export function CommandPalette({
@@ -83,6 +161,7 @@ export function CommandPalette({
   onClose: () => void;
   commands: Command[];
 }) {
+  useLang();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -128,7 +207,7 @@ export function CommandPalette({
           <input
             ref={inputRef}
             className="palette-input"
-            placeholder="搜索命令…"
+            placeholder={t("palette.searchPlaceholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -148,7 +227,7 @@ export function CommandPalette({
           <span className="kbd">esc</span>
         </div>
         <div className="palette-list" ref={listRef}>
-          {filtered.length === 0 && <div className="palette-empty">没匹配到</div>}
+          {filtered.length === 0 && <div className="palette-empty">{t("palette.empty")}</div>}
           {filtered.map((c, i) => (
             <button
               type="button"
@@ -182,15 +261,15 @@ export function CommandPalette({
           <span className="kbd-group">
             <span className="kbd">↑</span>
             <span className="kbd">↓</span>
-            移动
+            {t("palette.footMove")}
           </span>
           <span className="kbd-group">
             <span className="kbd">↵</span>
-            执行
+            {t("palette.footRun")}
           </span>
           <span className="kbd-group">
             <span className="kbd">esc</span>
-            关闭
+            {t("palette.footClose")}
           </span>
         </div>
       </div>

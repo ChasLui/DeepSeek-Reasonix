@@ -36,11 +36,14 @@ import {
 import { Eventizer } from "../../core/eventize.js";
 import type { Event as KernelEvent } from "../../core/events.js";
 import {
+  type CheckpointVerdict,
   type ChoiceVerdict,
   type ConfirmationChoice,
   type PlanVerdict,
+  type RevisionVerdict,
   pauseGate,
 } from "../../core/pause-gate.js";
+import { autoResolveVerdict } from "../../core/pause-policy.js";
 import { loadDotenv } from "../../env.js";
 import { CacheFirstLoop, DeepSeekClient, ImmutablePrefix } from "../../index.js";
 import {
@@ -53,6 +56,7 @@ import {
 } from "../../memory/session.js";
 import type { ChoiceOption } from "../../tools/choice.js";
 import type { ChatMessage } from "../../types.js";
+import { VERSION } from "../../version.js";
 import { canonicalPresetName, resolvePreset } from "../ui/presets.js";
 
 export interface DesktopOptions {
@@ -68,6 +72,8 @@ type InMessage = { tabId?: string } & (
   | { cmd: "confirm_response"; id: number; response: ConfirmationChoice }
   | { cmd: "choice_response"; id: number; response: ChoiceVerdict }
   | { cmd: "plan_response"; id: number; response: PlanVerdict }
+  | { cmd: "checkpoint_response"; id: number; response: CheckpointVerdict }
+  | { cmd: "revision_response"; id: number; response: RevisionVerdict }
   | { cmd: "session_list" }
   | { cmd: "session_delete"; name: string }
   | { cmd: "session_load"; name: string }
@@ -108,6 +114,14 @@ interface SettingsEvent {
   model: string;
   preset: "auto" | "flash" | "pro";
   editor?: string;
+  version: string;
+}
+
+interface BalanceEvent {
+  type: "$balance";
+  currency: string;
+  total: number;
+  isAvailable: boolean;
 }
 
 interface PlanRequiredEvent {
@@ -194,6 +208,44 @@ interface ChoiceRequiredEvent {
   allowCustom: boolean;
 }
 
+interface PlanStepLite {
+  id: string;
+  title: string;
+  action: string;
+  risk?: "low" | "med" | "high";
+}
+
+interface CheckpointRequiredEvent {
+  type: "$checkpoint_required";
+  id: number;
+  stepId: string;
+  title?: string;
+  result: string;
+  notes?: string;
+  completed: number;
+  total: number;
+}
+
+interface RevisionRequiredEvent {
+  type: "$revision_required";
+  id: number;
+  reason: string;
+  remainingSteps: PlanStepLite[];
+  summary?: string;
+}
+
+interface StepCompletedEvent {
+  type: "$step_completed";
+  stepId: string;
+  title?: string;
+  result: string;
+  notes?: string;
+}
+
+interface PlanClearedEvent {
+  type: "$plan_cleared";
+}
+
 /** Direct fd write — bypasses Node's stream layer (and its piped-output
  *  block buffering) so every JSON line reaches Rust the moment it's
  *  produced, not whenever the next 8 KB flushes. */
@@ -205,10 +257,15 @@ type EmittableEvent =
   | ConfirmRequiredEvent
   | ChoiceRequiredEvent
   | PlanRequiredEvent
+  | CheckpointRequiredEvent
+  | RevisionRequiredEvent
+  | StepCompletedEvent
+  | PlanClearedEvent
   | SessionsEvent
   | SessionLoadedEvent
   | NeedsSetupEvent
   | SettingsEvent
+  | BalanceEvent
   | MentionResultsEvent
   | MentionPreviewEvent
   | TabOpenedEvent
@@ -283,6 +340,23 @@ function emitSettings(tab: Tab): void {
       model: tab.currentModel,
       preset: tab.currentPreset,
       editor: loadEditor(),
+      version: VERSION,
+    },
+    tab.id,
+  );
+}
+
+async function emitBalance(tab: Tab): Promise<void> {
+  if (!tab.runtime) return;
+  const bal = await tab.runtime.loop.client.getBalance().catch(() => null);
+  if (!bal || !bal.balance_infos.length) return;
+  const primary = bal.balance_infos[0]!;
+  emit(
+    {
+      type: "$balance",
+      currency: primary.currency,
+      total: Number(primary.total_balance),
+      isAvailable: bal.is_available,
     },
     tab.id,
   );
@@ -325,6 +399,12 @@ interface Tab {
   symbolIndex: SymbolEntry[] | null;
   symbolBuilding: Promise<SymbolEntry[]> | null;
   recentMentions: string[];
+  /** Pause-gate ids waiting on this tab — abort uses these to free stranded plan_checkpoint / plan_revision / shell-confirm callers. */
+  pendingGateIds: Set<number>;
+  /** Step ids already marked complete in the in-flight plan — also tells UI when a plan is "active". */
+  completedStepIds: Set<string>;
+  /** Total steps in the in-flight plan (0 = no active plan / steps not provided). */
+  planTotalSteps: number;
 }
 
 let tabCounter = 0;
@@ -480,6 +560,9 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
       symbolIndex: null,
       symbolBuilding: null,
       recentMentions: [],
+      pendingGateIds: new Set<number>(),
+      completedStepIds: new Set<string>(),
+      planTotalSteps: 0,
     };
     tab.currentSession = mintSessionFor(dir);
     if (loadApiKey()) {
@@ -516,7 +599,13 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
       } finally {
         tab.aborter = null;
         emit({ type: "$turn_complete" }, tab.id);
+        if (tab.planTotalSteps > 0 && tab.completedStepIds.size >= tab.planTotalSteps) {
+          tab.completedStepIds.clear();
+          tab.planTotalSteps = 0;
+          emit({ type: "$plan_cleared" }, tab.id);
+        }
         emitSessions(tab);
+        void emitBalance(tab);
       }
     });
   }
@@ -557,6 +646,25 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
     emitSettings(tab);
   }
 
+  function forgetGate(id: number): Tab | undefined {
+    for (const t of tabs.values()) {
+      if (t.pendingGateIds.delete(id)) return t;
+    }
+    return undefined;
+  }
+
+  function cancelPendingGates(tab: Tab): void {
+    const hadActivePlan = tab.planTotalSteps > 0 || tab.completedStepIds.size > 0;
+    const ids = [...tab.pendingGateIds];
+    tab.pendingGateIds.clear();
+    for (const id of ids) pauseGate.cancel(id);
+    if (hadActivePlan) {
+      tab.completedStepIds.clear();
+      tab.planTotalSteps = 0;
+      emit({ type: "$plan_cleared" }, tab.id);
+    }
+  }
+
   const first = await createTab();
   process.once("exit", () => {
     for (const t of tabs.values()) void t.toolset.jobs.shutdown();
@@ -565,6 +673,37 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
   pauseGate.on((req) => {
     const tab = activeRunningTab();
     const tabId = tab?.id;
+    if (tab) tab.pendingGateIds.add(req.id);
+    // Shared auto-resolve policy (e.g. plan_checkpoint in auto/yolo) — must
+    // still run BEFORE we emit any UI event, otherwise the surface flickers
+    // a card that we'd immediately tear down.
+    const auto = autoResolveVerdict(req, loadEditMode());
+    if (auto !== null) {
+      // plan_checkpoint specifically needs the step-completed signal to flow
+      // through so the rail progress ticks. Emit it before resolving.
+      if (req.kind === "plan_checkpoint") {
+        const payload = req.payload as {
+          stepId: string;
+          title?: string;
+          result: string;
+          notes?: string;
+        };
+        if (tab) tab.completedStepIds.add(payload.stepId);
+        emit(
+          {
+            type: "$step_completed",
+            stepId: payload.stepId,
+            title: payload.title,
+            result: payload.result,
+            notes: payload.notes,
+          },
+          tabId,
+        );
+      }
+      if (tab) tab.pendingGateIds.delete(req.id);
+      pauseGate.resolve(req.id, auto);
+      return;
+    }
     if (req.kind === "run_command" || req.kind === "run_background") {
       const payload = req.payload as { command?: string };
       emit(
@@ -592,13 +731,68 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
       return;
     }
     if (req.kind === "plan_proposed") {
-      const payload = req.payload as { plan: string; steps?: unknown[]; summary?: string };
+      const payload = req.payload as { plan: string; steps?: PlanStepLite[]; summary?: string };
+      if (tab) {
+        tab.completedStepIds.clear();
+        tab.planTotalSteps = payload.steps?.length ?? 0;
+      }
       emit(
         {
           type: "$plan_required",
           id: req.id,
           plan: payload.plan,
           steps: payload.steps,
+          summary: payload.summary,
+        },
+        tabId,
+      );
+      return;
+    }
+    if (req.kind === "plan_checkpoint") {
+      const payload = req.payload as {
+        stepId: string;
+        title?: string;
+        result: string;
+        notes?: string;
+      };
+      if (tab) tab.completedStepIds.add(payload.stepId);
+      emit(
+        {
+          type: "$step_completed",
+          stepId: payload.stepId,
+          title: payload.title,
+          result: payload.result,
+          notes: payload.notes,
+        },
+        tabId,
+      );
+      emit(
+        {
+          type: "$checkpoint_required",
+          id: req.id,
+          stepId: payload.stepId,
+          title: payload.title,
+          result: payload.result,
+          notes: payload.notes,
+          completed: tab?.completedStepIds.size ?? 0,
+          total: tab?.planTotalSteps ?? 0,
+        },
+        tabId,
+      );
+      return;
+    }
+    if (req.kind === "plan_revision") {
+      const payload = req.payload as {
+        reason: string;
+        remainingSteps: PlanStepLite[];
+        summary?: string;
+      };
+      emit(
+        {
+          type: "$revision_required",
+          id: req.id,
+          reason: payload.reason,
+          remainingSteps: payload.remainingSteps,
           summary: payload.summary,
         },
         tabId,
@@ -612,6 +806,7 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
   else emit({ type: "$needs_setup", reason: "no_api_key" }, first.id);
   emitSessions(first);
   emitSettings(first);
+  void emitBalance(first);
 
   const rl = createInterface({ input: stdin });
   rl.on("line", (line) => {
@@ -634,6 +829,7 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
           else emit({ type: "$needs_setup", reason: "no_api_key" }, tab.id);
           emitSessions(tab);
           emitSettings(tab);
+          void emitBalance(tab);
         } catch (err) {
           emit({ type: "$error", message: `tab_open failed: ${(err as Error).message}` });
         }
@@ -641,14 +837,37 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
       return;
     }
     if (msg.cmd === "confirm_response") {
+      forgetGate(msg.id);
       pauseGate.resolve(msg.id, msg.response);
       return;
     }
     if (msg.cmd === "choice_response") {
+      forgetGate(msg.id);
       pauseGate.resolve(msg.id, msg.response);
       return;
     }
     if (msg.cmd === "plan_response") {
+      const tab = forgetGate(msg.id);
+      if (tab && msg.response.type === "cancel") {
+        tab.completedStepIds.clear();
+        tab.planTotalSteps = 0;
+        emit({ type: "$plan_cleared" }, tab.id);
+      }
+      pauseGate.resolve(msg.id, msg.response);
+      return;
+    }
+    if (msg.cmd === "checkpoint_response") {
+      const tab = forgetGate(msg.id);
+      if (tab && msg.response.type === "stop") {
+        tab.completedStepIds.clear();
+        tab.planTotalSteps = 0;
+        emit({ type: "$plan_cleared" }, tab.id);
+      }
+      pauseGate.resolve(msg.id, msg.response);
+      return;
+    }
+    if (msg.cmd === "revision_response") {
+      forgetGate(msg.id);
       pauseGate.resolve(msg.id, msg.response);
       return;
     }
@@ -668,6 +887,7 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
           tab.runtime = buildRuntimeFor(tab);
           emit({ type: "$ready" }, tab.id);
           emitSettings(tab);
+          void emitBalance(tab);
         }
       } catch (err) {
         emit({ type: "$error", message: `saveApiKey failed: ${(err as Error).message}` });
@@ -683,6 +903,7 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
 
     if (msg.cmd === "abort") {
       tab.aborter?.abort();
+      cancelPendingGates(tab);
       return;
     }
     if (msg.cmd === "tab_close") {
@@ -703,6 +924,7 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
         const records = loadSessionMessages(msg.name);
         const meta = loadSessionMeta(msg.name);
         tab.aborter?.abort();
+        cancelPendingGates(tab);
         tab.currentSession = msg.name;
         if (tab.runtime) tab.runtime = buildRuntimeFor(tab);
         emit(
@@ -725,6 +947,7 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
     }
     if (msg.cmd === "new_chat") {
       tab.aborter?.abort();
+      cancelPendingGates(tab);
       tab.currentSession = mintSessionFor(tab.rootDir);
       if (tab.runtime) tab.runtime = buildRuntimeFor(tab);
       emitSessions(tab);

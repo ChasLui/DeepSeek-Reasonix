@@ -45,6 +45,52 @@ export type PlanVerdict =
   | { type: "refine"; feedback?: string }
   | { type: "cancel"; feedback?: string };
 
+export type PlanStep = {
+  id: string;
+  title: string;
+  action: string;
+  risk?: "low" | "med" | "high";
+};
+
+export type CheckpointRequiredEvent = {
+  type: "$checkpoint_required";
+  id: number;
+  stepId: string;
+  title?: string;
+  result: string;
+  notes?: string;
+  completed: number;
+  total: number;
+};
+
+export type CheckpointVerdict =
+  | { type: "continue" }
+  | { type: "revise"; feedback?: string }
+  | { type: "stop" };
+
+export type RevisionRequiredEvent = {
+  type: "$revision_required";
+  id: number;
+  reason: string;
+  remainingSteps: PlanStep[];
+  summary?: string;
+};
+
+export type RevisionVerdict =
+  | { type: "accepted" }
+  | { type: "rejected" }
+  | { type: "cancelled" };
+
+export type StepCompletedEvent = {
+  type: "$step_completed";
+  stepId: string;
+  title?: string;
+  result: string;
+  notes?: string;
+};
+
+export type PlanClearedEvent = { type: "$plan_cleared" };
+
 export type SessionsEvent = {
   type: "$sessions";
   items: { name: string; messageCount: number; mtime: string }[];
@@ -111,7 +157,7 @@ export type NeedsSetupEvent = {
   reason: "no_api_key";
 };
 
-export type EditMode = "default" | "yolo" | "review";
+export type EditMode = "review" | "auto" | "yolo";
 
 export type PresetName = "auto" | "flash" | "pro";
 
@@ -127,6 +173,14 @@ export type SettingsEvent = {
   model: string;
   preset: PresetName;
   editor?: string;
+  version: string;
+};
+
+export type BalanceEvent = {
+  type: "$balance";
+  currency: string;
+  total: number;
+  isAvailable: boolean;
 };
 
 export type SettingsPatch = {
@@ -242,6 +296,11 @@ export type IncomingEvent = { tabId?: string } & (
   | SessionLoadedEvent
   | NeedsSetupEvent
   | SettingsEvent
+  | BalanceEvent
+  | CheckpointRequiredEvent
+  | RevisionRequiredEvent
+  | StepCompletedEvent
+  | PlanClearedEvent
   | MentionResultsEvent
   | MentionPreviewEvent
   | TabOpenedEvent
@@ -263,6 +322,8 @@ export type OutgoingCommand = { tabId?: string } & (
   | { cmd: "confirm_response"; id: number; response: ConfirmationChoice }
   | { cmd: "choice_response"; id: number; response: ChoiceVerdict }
   | { cmd: "plan_response"; id: number; response: PlanVerdict }
+  | { cmd: "checkpoint_response"; id: number; response: CheckpointVerdict }
+  | { cmd: "revision_response"; id: number; response: RevisionVerdict }
   | { cmd: "session_list" }
   | { cmd: "session_delete"; name: string }
   | { cmd: "session_load"; name: string }

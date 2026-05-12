@@ -2,29 +2,27 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { check, type Update } from "@tauri-apps/plugin-updater";
-import { WorkspaceProvider } from "./Markdown";
+import { type Update, check } from "@tauri-apps/plugin-updater";
+import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { CommandPalette, Toast, buildCommands, useCommandPalette } from "./CommandPalette";
+import { WorkspaceProvider } from "./Markdown";
 import {
-  buildCommands,
-  CommandPalette,
-  Toast,
-  useCommandPalette,
-} from "./CommandPalette";
-import { ArrowDown } from "lucide-react";
-import {
+  ActivePlanRail,
   ApprovalCard,
   AssistantMessage,
+  CheckpointCard,
   ChoiceCard,
   Composer,
-  type ContextMenuAction,
   ContextMenu,
+  type ContextMenuAction,
   EmptyState,
   ErrorBanner,
   Header,
   OnboardingScreen,
   PlanCard,
+  RevisionCard,
   SettingsPanel,
   Sidebar,
   StatusLine,
@@ -33,12 +31,15 @@ import {
   UpdateBanner,
   UserBubble,
 } from "./components";
+import { t, useLang } from "./i18n";
 import type {
+  CheckpointVerdict,
   ChoiceVerdict,
   ConfirmationChoice,
   IncomingEvent,
   OutgoingCommand,
   PlanVerdict,
+  RevisionVerdict,
   SettingsPatch,
 } from "./protocol";
 
@@ -84,6 +85,40 @@ export type PendingPlan = {
   id: number;
   plan: string;
   summary?: string;
+  steps?: PlanStep[];
+};
+
+export type PlanStep = {
+  id: string;
+  title: string;
+  action: string;
+  risk?: "low" | "med" | "high";
+};
+
+export type ActivePlan = {
+  plan: string;
+  summary?: string;
+  steps: PlanStep[];
+  completedStepIds: string[];
+  /** Latest result for each completed step, keyed by stepId. */
+  stepResults: Record<string, string>;
+};
+
+export type PendingCheckpoint = {
+  id: number;
+  stepId: string;
+  title?: string;
+  result: string;
+  notes?: string;
+  completed: number;
+  total: number;
+};
+
+export type PendingRevision = {
+  id: number;
+  reason: string;
+  remainingSteps: PlanStep[];
+  summary?: string;
 };
 
 export type UsageStats = {
@@ -104,7 +139,7 @@ export type SessionInfo = {
 
 export type Settings = {
   reasoningEffort: "high" | "max";
-  editMode: "default" | "yolo" | "review";
+  editMode: "review" | "auto" | "yolo";
   budgetUsd: number | null;
   baseUrl?: string;
   apiKeyPrefix?: string;
@@ -113,6 +148,13 @@ export type Settings = {
   model: string;
   preset: "auto" | "flash" | "pro";
   editor?: string;
+  version: string;
+};
+
+export type Balance = {
+  currency: string;
+  total: number;
+  isAvailable: boolean;
 };
 
 type State = {
@@ -124,9 +166,13 @@ type State = {
   pendingConfirms: PendingConfirm[];
   pendingChoices: PendingChoice[];
   pendingPlans: PendingPlan[];
+  pendingCheckpoints: PendingCheckpoint[];
+  pendingRevisions: PendingRevision[];
+  activePlan: ActivePlan | null;
   usage: UsageStats;
   sessions: SessionInfo[];
   settings: Settings | null;
+  balance: Balance | null;
   mentionResults: MentionResults | null;
   mentionPreview: MentionPreviewState | null;
 };
@@ -153,7 +199,10 @@ type Action =
   | { t: "clear" }
   | { t: "resolve_confirm"; id: number }
   | { t: "resolve_choice"; id: number }
-  | { t: "resolve_plan"; id: number }
+  | { t: "resolve_plan"; id: number; verdict: PlanVerdict }
+  | { t: "resolve_checkpoint"; id: number; verdict: CheckpointVerdict }
+  | { t: "resolve_revision"; id: number; verdict: RevisionVerdict }
+  | { t: "dismiss_plan" }
   | { t: "mention_results"; results: MentionResults }
   | { t: "mention_preview"; preview: MentionPreviewState };
 
@@ -217,6 +266,9 @@ function reduce(state: State, action: Action): State {
         pendingConfirms: [],
         pendingChoices: [],
         pendingPlans: [],
+        pendingCheckpoints: [],
+        pendingRevisions: [],
+        activePlan: null,
         usage: {
           totalCostUsd: 0,
           totalPromptTokens: 0,
@@ -237,11 +289,49 @@ function reduce(state: State, action: Action): State {
         ...state,
         pendingChoices: state.pendingChoices.filter((c) => c.id !== action.id),
       };
-    case "resolve_plan":
+    case "resolve_plan": {
+      const removed = state.pendingPlans.find((p) => p.id === action.id);
+      let activePlan = state.activePlan;
+      if (removed && action.verdict.type === "approve") {
+        const pendingSteps = (removed as PendingPlan & { steps?: PlanStep[] }).steps;
+        activePlan = {
+          plan: removed.plan,
+          summary: removed.summary,
+          steps: pendingSteps ?? [],
+          completedStepIds: [],
+          stepResults: {},
+        };
+      }
       return {
         ...state,
         pendingPlans: state.pendingPlans.filter((p) => p.id !== action.id),
+        activePlan,
       };
+    }
+    case "resolve_checkpoint":
+      return {
+        ...state,
+        pendingCheckpoints: state.pendingCheckpoints.filter((c) => c.id !== action.id),
+      };
+    case "resolve_revision": {
+      const removed = state.pendingRevisions.find((r) => r.id === action.id);
+      let activePlan = state.activePlan;
+      if (removed && action.verdict.type === "accepted" && activePlan) {
+        const doneIds = new Set(activePlan.completedStepIds);
+        const keptDone = activePlan.steps.filter((s) => doneIds.has(s.id));
+        activePlan = {
+          ...activePlan,
+          steps: [...keptDone, ...removed.remainingSteps],
+        };
+      }
+      return {
+        ...state,
+        pendingRevisions: state.pendingRevisions.filter((r) => r.id !== action.id),
+        activePlan,
+      };
+    }
+    case "dismiss_plan":
+      return { ...state, activePlan: null };
     case "mention_results":
       return { ...state, mentionResults: action.results };
     case "mention_preview":
@@ -291,16 +381,76 @@ function applyIncoming(state: State, ev: IncomingEvent): State {
           },
         ],
       };
-    case "$plan_required":
+    case "$plan_required": {
+      const steps = Array.isArray(ev.steps) ? (ev.steps as PlanStep[]) : undefined;
       return {
         ...state,
         pendingPlans: [
           ...state.pendingPlans,
-          { id: ev.id, plan: ev.plan, summary: ev.summary },
+          { id: ev.id, plan: ev.plan, summary: ev.summary, ...(steps ? { steps } : {}) },
         ],
+      };
+    }
+    case "$checkpoint_required":
+      return {
+        ...state,
+        pendingCheckpoints: [
+          ...state.pendingCheckpoints,
+          {
+            id: ev.id,
+            stepId: ev.stepId,
+            title: ev.title,
+            result: ev.result,
+            notes: ev.notes,
+            completed: ev.completed,
+            total: ev.total,
+          },
+        ],
+      };
+    case "$revision_required":
+      return {
+        ...state,
+        pendingRevisions: [
+          ...state.pendingRevisions,
+          {
+            id: ev.id,
+            reason: ev.reason,
+            remainingSteps: ev.remainingSteps,
+            summary: ev.summary,
+          },
+        ],
+      };
+    case "$step_completed": {
+      if (!state.activePlan) return state;
+      const stepIds = new Set(state.activePlan.completedStepIds);
+      stepIds.add(ev.stepId);
+      return {
+        ...state,
+        activePlan: {
+          ...state.activePlan,
+          completedStepIds: [...stepIds],
+          stepResults: { ...state.activePlan.stepResults, [ev.stepId]: ev.result },
+        },
+      };
+    }
+    case "$plan_cleared":
+      return {
+        ...state,
+        activePlan: null,
+        pendingCheckpoints: [],
+        pendingRevisions: [],
       };
     case "$sessions":
       return { ...state, sessions: ev.items };
+    case "$balance":
+      return {
+        ...state,
+        balance: {
+          currency: ev.currency,
+          total: ev.total,
+          isAvailable: ev.isAvailable,
+        },
+      };
     case "$settings": {
       const prevWs = state.settings?.workspaceDir;
       const wsChanged = prevWs !== undefined && prevWs !== ev.workspaceDir;
@@ -311,6 +461,9 @@ function applyIncoming(state: State, ev: IncomingEvent): State {
         pendingConfirms: wsChanged ? [] : state.pendingConfirms,
         pendingChoices: wsChanged ? [] : state.pendingChoices,
         pendingPlans: wsChanged ? [] : state.pendingPlans,
+        pendingCheckpoints: wsChanged ? [] : state.pendingCheckpoints,
+        pendingRevisions: wsChanged ? [] : state.pendingRevisions,
+        activePlan: wsChanged ? null : state.activePlan,
         usage: wsChanged
           ? {
               totalCostUsd: 0,
@@ -333,6 +486,7 @@ function applyIncoming(state: State, ev: IncomingEvent): State {
           model: ev.model,
           preset: ev.preset,
           editor: ev.editor,
+          version: ev.version,
         },
       };
     }
@@ -366,6 +520,9 @@ function applyIncoming(state: State, ev: IncomingEvent): State {
         pendingConfirms: [],
         pendingChoices: [],
         pendingPlans: [],
+        pendingCheckpoints: [],
+        pendingRevisions: [],
+        activePlan: null,
         usage: {
           totalCostUsd: ev.carryover.totalCostUsd,
           totalPromptTokens: ev.carryover.cacheHitTokens + ev.carryover.cacheMissTokens,
@@ -459,9 +616,7 @@ function applyIncoming(state: State, ev: IncomingEvent): State {
         ...state,
         messages: state.messages.map((m) => {
           if (m.kind !== "assistant" || m.turn !== ev.turn) return m;
-          const idx = m.segments.findIndex(
-            (s) => s.kind === "tool" && s.callId === ev.callId,
-          );
+          const idx = m.segments.findIndex((s) => s.kind === "tool" && s.callId === ev.callId);
           if (idx >= 0) {
             const segs = [...m.segments];
             const seg = segs[idx];
@@ -563,10 +718,8 @@ function shortenPath(p: string, max = 44): string {
 
 function describeToolCall(name: string, args: string): string {
   const parsed = tryParseArgs(args);
-  const path =
-    parsed && typeof parsed.path === "string" ? shortenPath(parsed.path) : null;
-  const pattern =
-    parsed && typeof parsed.pattern === "string" ? parsed.pattern : null;
+  const path = parsed && typeof parsed.path === "string" ? shortenPath(parsed.path) : null;
+  const pattern = parsed && typeof parsed.pattern === "string" ? parsed.pattern : null;
   const command =
     parsed && typeof parsed.command === "string"
       ? parsed.command.length > 50
@@ -618,6 +771,9 @@ interface TabRuntimeProps {
   installUpdate: () => void;
   dismissUpdate: () => void;
   registerDispatch: (tabId: string, d: TabDispatcher | null) => void;
+  onNewTab: () => void;
+  onCloseTab: () => void;
+  canCloseTab: boolean;
 }
 
 function TabRuntime({
@@ -629,7 +785,11 @@ function TabRuntime({
   installUpdate,
   dismissUpdate,
   registerDispatch,
+  onNewTab,
+  onCloseTab,
+  canCloseTab,
 }: TabRuntimeProps) {
+  useLang();
   const [state, dispatch] = useReducer(reduce, {
     ready: false,
     needsSetup: false,
@@ -638,6 +798,9 @@ function TabRuntime({
     pendingConfirms: [],
     pendingChoices: [],
     pendingPlans: [],
+    pendingCheckpoints: [],
+    pendingRevisions: [],
+    activePlan: null,
     usage: {
       totalCostUsd: 0,
       totalPromptTokens: 0,
@@ -649,6 +812,7 @@ function TabRuntime({
     },
     sessions: [],
     settings: null,
+    balance: null,
     mentionResults: null,
     mentionPreview: null,
   });
@@ -737,7 +901,7 @@ function TabRuntime({
           icon: "⧉",
           run: () => {
             void navigator.clipboard.writeText(m.text);
-            flashToast("已复制");
+            flashToast(t("toast.copied"));
           },
         });
         acts.push({
@@ -759,7 +923,7 @@ function TabRuntime({
             icon: "⧉",
             run: () => {
               void navigator.clipboard.writeText(text);
-              flashToast("已复制");
+              flashToast(t("toast.copied"));
             },
           });
           acts.push({
@@ -783,7 +947,7 @@ function TabRuntime({
           icon: "⧉",
           run: () => {
             void navigator.clipboard.writeText(m.message);
-            flashToast("已复制");
+            flashToast(t("toast.copied"));
           },
         });
       }
@@ -791,7 +955,6 @@ function TabRuntime({
     },
     [flashToast],
   );
-
 
   const send = useCallback(
     (override?: string) => {
@@ -824,53 +987,97 @@ function TabRuntime({
   const resolvePlan = useCallback(
     (id: number, response: PlanVerdict) => {
       sendRpc({ cmd: "plan_response", id, response });
-      dispatch({ t: "resolve_plan", id });
+      dispatch({ t: "resolve_plan", id, verdict: response });
+    },
+    [sendRpc],
+  );
+  const resolveCheckpoint = useCallback(
+    (id: number, response: CheckpointVerdict) => {
+      sendRpc({ cmd: "checkpoint_response", id, response });
+      dispatch({ t: "resolve_checkpoint", id, verdict: response });
+    },
+    [sendRpc],
+  );
+  const resolveRevision = useCallback(
+    (id: number, response: RevisionVerdict) => {
+      sendRpc({ cmd: "revision_response", id, response });
+      dispatch({ t: "resolve_revision", id, verdict: response });
     },
     [sendRpc],
   );
 
+  const copyLastReply = useCallback(() => {
+    const last = [...state.messages].reverse().find((m) => m.kind === "assistant");
+    if (!last || last.kind !== "assistant") return;
+    const text = last.segments
+      .filter((s): s is { kind: "text"; text: string } => s.kind === "text")
+      .map((s) => s.text)
+      .join("\n\n")
+      .trim();
+    if (!text) return;
+    void navigator.clipboard.writeText(text);
+    flashToast(t("toast.copied"));
+  }, [state.messages, flashToast]);
+
+  const exportConversation = useCallback(() => {
+    const md = conversationToMarkdown(state.messages);
+    if (!md) return;
+    void navigator.clipboard.writeText(md);
+    flashToast(t("toast.copiedMd"));
+  }, [state.messages, flashToast]);
+
+  const versionLabel = state.settings?.version ?? "dev";
   const commands = buildCommands({
     newChat: () => {
       newChat();
-      flashToast("已开新会话");
+      flashToast(t("toast.newSession"));
     },
     clearChat: () => {
       dispatch({ t: "clear" });
-      flashToast("已清空 UI");
+      flashToast(t("toast.cleared"));
     },
     focusComposer: () => {
       composerRef.current?.focus();
     },
-    openSettings: () => flashToast("Settings 即将上线"),
-    about: () => flashToast("Reasonix · cache-first DeepSeek agent"),
+    openSettings: () => setSettingsOpen(true),
+    about: () => flashToast(t("toast.aboutLine", { version: versionLabel })),
+    abort,
+    copyLast: copyLastReply,
+    exportMarkdown: exportConversation,
+    pickWorkspace,
+    newTab: onNewTab,
+    closeTab: onCloseTab,
+    busy: state.busy,
+    canCloseTab,
+    hasMessages: state.messages.length > 0,
   });
 
   const slashCommands = [
     {
       id: "new",
-      label: "New chat",
-      hint: "新建会话",
+      label: t("palette.newChat"),
+      hint: t("palette.newChatHint"),
       run: () => {
         newChat();
-        flashToast("已开新会话");
+        flashToast(t("toast.newSession"));
       },
     },
     {
       id: "clear",
-      label: "Clear messages",
-      hint: "等同 /new",
+      label: t("palette.clearChat"),
+      hint: t("palette.clearChatHint"),
       run: () => dispatch({ t: "clear" }),
     },
     {
       id: "abort",
-      label: "Abort current turn",
-      hint: "停止模型当前生成",
+      label: t("palette.abort"),
+      hint: t("palette.abortHint"),
       run: () => abort(),
     },
     {
       id: "copy",
-      label: "Copy last reply",
-      hint: "复制最近一条助手回复",
+      label: t("palette.copyLast"),
+      hint: t("palette.copyLastHint"),
       run: () => {
         const last = [...state.messages].reverse().find((m) => m.kind === "assistant");
         if (last && last.kind === "assistant") {
@@ -881,28 +1088,22 @@ function TabRuntime({
             .trim();
           if (text) {
             void navigator.clipboard.writeText(text);
-            flashToast("已复制");
+            flashToast(t("toast.copied"));
           }
         }
       },
     },
     {
       id: "export",
-      label: "Export conversation as Markdown",
-      hint: "整段对话复制到剪贴板",
+      label: t("palette.exportMd"),
+      hint: t("palette.exportMdHint"),
       run: () => {
         const md = conversationToMarkdown(state.messages);
         if (md) {
           void navigator.clipboard.writeText(md);
-          flashToast("整段对话已复制为 Markdown");
+          flashToast(t("toast.copiedMd"));
         }
       },
-    },
-    {
-      id: "help",
-      label: "Show shortcuts",
-      hint: "⌘K · ⌘N · ⌘L",
-      run: () => flashToast("⌘K commands · ⌘N new chat · ⌘L focus composer"),
     },
   ];
 
@@ -979,196 +1180,236 @@ function TabRuntime({
     <WorkspaceProvider
       value={{ dir: state.settings?.workspaceDir, editor: state.settings?.editor }}
     >
-    <div className="app" style={{ display: active ? undefined : "none" }}>
-      <Sidebar
-        sessions={state.sessions}
-        onNewChat={newChat}
-        onOpenCommands={() => palette.setOpen(true)}
-        onOpenSettings={() => setSettingsOpen(true)}
-        onDeleteSession={(name) => sendRpc({ cmd: "session_delete", name })}
-        onLoadSession={(name) => sendRpc({ cmd: "session_load", name })}
-      />
-      <div className="main">
-        <Header
-          model={state.model}
-          preset={state.settings?.preset ?? "auto"}
-          workspaceDir={state.settings?.workspaceDir}
-          recentWorkspaces={state.settings?.recentWorkspaces ?? []}
-          streaming={state.busy}
-          turnCount={turnCount}
-          usage={state.usage}
+      <div className="app" style={{ display: active ? undefined : "none" }}>
+        <Sidebar
+          sessions={state.sessions}
+          version={state.settings?.version}
+          balance={state.balance}
+          onNewChat={newChat}
           onOpenCommands={() => palette.setOpen(true)}
-          onPickPreset={(p) => saveSettings({ preset: p })}
-          onPickWorkspace={pickWorkspace}
-          onSwitchWorkspace={(dir) => saveSettings({ workspaceDir: dir })}
-          currency={currency}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onDeleteSession={(name) => sendRpc({ cmd: "session_delete", name })}
+          onLoadSession={(name) => sendRpc({ cmd: "session_load", name })}
         />
-        {active && pendingUpdate && (
-          <UpdateBanner
-            version={pendingUpdate.version}
-            currentVersion={pendingUpdate.currentVersion}
-            body={pendingUpdate.body}
-            status={updateStatus}
-            onInstall={installUpdate}
-            onDismiss={dismissUpdate}
-          />
-        )}
-        {state.needsSetup ? (
-          <OnboardingScreen
+        <div className="main">
+          <Header
+            model={state.model}
+            preset={state.settings?.preset ?? "auto"}
+            editMode={state.settings?.editMode ?? "review"}
             workspaceDir={state.settings?.workspaceDir}
+            recentWorkspaces={state.settings?.recentWorkspaces ?? []}
+            streaming={state.busy}
+            turnCount={turnCount}
+            usage={state.usage}
+            onOpenCommands={() => palette.setOpen(true)}
+            onPickPreset={(p) => saveSettings({ preset: p })}
+            onPickEditMode={(m) => saveSettings({ editMode: m })}
             onPickWorkspace={pickWorkspace}
-            onSubmit={(key) => sendRpc({ cmd: "setup_save_key", key })}
+            onSwitchWorkspace={(dir) => saveSettings({ workspaceDir: dir })}
+            currency={currency}
           />
-        ) : hasMessages ? (
-          <div className="messages-wrap">
-            <Virtuoso
-              ref={virtuosoRef}
-              className="messages-virt"
-              data={state.messages}
-              followOutput={(isAtBottom) => (isAtBottom ? "smooth" : false)}
-              atBottomStateChange={setAtBottom}
-              atBottomThreshold={200}
-              increaseViewportBy={{ top: 200, bottom: 600 }}
-              itemContent={(i, m) => {
-                const actions = messageActions(m);
-                const isLastError =
-                  m.kind === "error" && i === state.messages.length - 1 && !state.busy;
-                const lastUserBefore = isLastError
-                  ? (() => {
-                      for (let j = i - 1; j >= 0; j--) {
-                        const prev = state.messages[j];
-                        if (prev?.kind === "user") return prev.text;
-                      }
-                      return null;
-                    })()
-                  : null;
-                const retry = lastUserBefore ? () => send(lastUserBefore) : undefined;
-                return (
-                  <div
-                    className="messages-row"
-                    onContextMenu={
-                      actions.length > 0
-                        ? (e) => {
-                            e.preventDefault();
-                            setCtxMenu({ x: e.clientX, y: e.clientY, actions });
-                          }
-                        : undefined
-                    }
-                  >
-                    <MessageRow message={m} onRetry={retry} />
-                  </div>
-                );
-              }}
-              components={{
-                Footer: () => (
-                  <div className="messages-footer">
-                    {state.pendingConfirms.map((c) => (
-                      <ApprovalCard
-                        key={c.id}
-                        kind={c.kind}
-                        command={c.command}
-                        onAllow={() => resolveConfirm(c.id, { type: "run_once" })}
-                        onAlwaysAllow={(prefix) =>
-                          resolveConfirm(c.id, { type: "always_allow", prefix })
-                        }
-                        onDeny={(reason) =>
-                          resolveConfirm(c.id, { type: "deny", denyContext: reason })
-                        }
-                      />
-                    ))}
-                    {state.pendingChoices.map((c) => (
-                      <ChoiceCard
-                        key={c.id}
-                        question={c.question}
-                        options={c.options}
-                        allowCustom={c.allowCustom}
-                        onPick={(optionId) => resolveChoice(c.id, { type: "pick", optionId })}
-                        onText={(text) => resolveChoice(c.id, { type: "text", text })}
-                        onCancel={() => resolveChoice(c.id, { type: "cancel" })}
-                      />
-                    ))}
-                    {state.pendingPlans.map((p) => (
-                      <PlanCard
-                        key={p.id}
-                        plan={p.plan}
-                        summary={p.summary}
-                        onApprove={(feedback) => resolvePlan(p.id, { type: "approve", feedback })}
-                        onRefine={(feedback) => resolvePlan(p.id, { type: "refine", feedback })}
-                        onCancel={(feedback) => resolvePlan(p.id, { type: "cancel", feedback })}
-                      />
-                    ))}
-                    {!state.ready && <StatusLine text="connecting to reasonix" />}
-                  </div>
-                ),
-              }}
+          {active && pendingUpdate && (
+            <UpdateBanner
+              version={pendingUpdate.version}
+              currentVersion={pendingUpdate.currentVersion}
+              body={pendingUpdate.body}
+              status={updateStatus}
+              onInstall={installUpdate}
+              onDismiss={dismissUpdate}
             />
-            <button
-              type="button"
-              className={`scroll-fab ${atBottom ? "" : "show"}`}
-              aria-label="scroll to bottom"
-              onClick={() =>
-                virtuosoRef.current?.scrollToIndex({
-                  index: state.messages.length - 1,
-                  behavior: "smooth",
-                })
-              }
-            >
-              <ArrowDown size={14} />
-            </button>
-          </div>
-        ) : (
-          <EmptyState onPick={(t) => send(t)} />
-        )}
-        {state.busy && thinkStart !== null && (
-          <ThinkingBar
-            startedAt={thinkStart}
-            label={activity}
-            promptTokens={state.usage.totalPromptTokens}
-            completionTokens={liveCompletionTokens}
-            onStop={abort}
+          )}
+          {state.activePlan && (
+            <ActivePlanRail
+              plan={state.activePlan.plan}
+              summary={state.activePlan.summary}
+              steps={state.activePlan.steps}
+              completedStepIds={state.activePlan.completedStepIds}
+              stepResults={state.activePlan.stepResults}
+              onDismiss={state.busy ? undefined : () => dispatch({ t: "dismiss_plan" })}
+            />
+          )}
+          {state.needsSetup ? (
+            <OnboardingScreen
+              workspaceDir={state.settings?.workspaceDir}
+              onPickWorkspace={pickWorkspace}
+              onSubmit={(key) => sendRpc({ cmd: "setup_save_key", key })}
+            />
+          ) : hasMessages ? (
+            <div className="messages-wrap">
+              <Virtuoso
+                ref={virtuosoRef}
+                className="messages-virt"
+                data={state.messages}
+                followOutput={(isAtBottom) => (isAtBottom ? "smooth" : false)}
+                atBottomStateChange={setAtBottom}
+                atBottomThreshold={200}
+                increaseViewportBy={{ top: 200, bottom: 600 }}
+                itemContent={(i, m) => {
+                  const actions = messageActions(m);
+                  const isLastError =
+                    m.kind === "error" && i === state.messages.length - 1 && !state.busy;
+                  const lastUserBefore = isLastError
+                    ? (() => {
+                        for (let j = i - 1; j >= 0; j--) {
+                          const prev = state.messages[j];
+                          if (prev?.kind === "user") return prev.text;
+                        }
+                        return null;
+                      })()
+                    : null;
+                  const retry = lastUserBefore ? () => send(lastUserBefore) : undefined;
+                  return (
+                    <div
+                      className="messages-row"
+                      onContextMenu={
+                        actions.length > 0
+                          ? (e) => {
+                              e.preventDefault();
+                              setCtxMenu({ x: e.clientX, y: e.clientY, actions });
+                            }
+                          : undefined
+                      }
+                    >
+                      <MessageRow message={m} onRetry={retry} />
+                    </div>
+                  );
+                }}
+                components={{
+                  Footer: () => (
+                    <div className="messages-footer">
+                      {state.pendingConfirms.map((c) => (
+                        <ApprovalCard
+                          key={c.id}
+                          kind={c.kind}
+                          command={c.command}
+                          onAllow={() => resolveConfirm(c.id, { type: "run_once" })}
+                          onAlwaysAllow={(prefix) =>
+                            resolveConfirm(c.id, { type: "always_allow", prefix })
+                          }
+                          onDeny={(reason) =>
+                            resolveConfirm(c.id, { type: "deny", denyContext: reason })
+                          }
+                        />
+                      ))}
+                      {state.pendingChoices.map((c) => (
+                        <ChoiceCard
+                          key={c.id}
+                          question={c.question}
+                          options={c.options}
+                          allowCustom={c.allowCustom}
+                          onPick={(optionId) => resolveChoice(c.id, { type: "pick", optionId })}
+                          onText={(text) => resolveChoice(c.id, { type: "text", text })}
+                          onCancel={() => resolveChoice(c.id, { type: "cancel" })}
+                        />
+                      ))}
+                      {state.pendingPlans.map((p) => (
+                        <PlanCard
+                          key={p.id}
+                          plan={p.plan}
+                          summary={p.summary}
+                          onApprove={(feedback) => resolvePlan(p.id, { type: "approve", feedback })}
+                          onRefine={(feedback) => resolvePlan(p.id, { type: "refine", feedback })}
+                          onCancel={(feedback) => resolvePlan(p.id, { type: "cancel", feedback })}
+                        />
+                      ))}
+                      {state.pendingCheckpoints.map((c) => (
+                        <CheckpointCard
+                          key={c.id}
+                          stepId={c.stepId}
+                          title={c.title}
+                          result={c.result}
+                          notes={c.notes}
+                          completed={c.completed}
+                          total={c.total}
+                          onContinue={() => resolveCheckpoint(c.id, { type: "continue" })}
+                          onRevise={(feedback) =>
+                            resolveCheckpoint(c.id, { type: "revise", feedback })
+                          }
+                          onStop={() => resolveCheckpoint(c.id, { type: "stop" })}
+                        />
+                      ))}
+                      {state.pendingRevisions.map((r) => (
+                        <RevisionCard
+                          key={r.id}
+                          reason={r.reason}
+                          remainingSteps={r.remainingSteps}
+                          summary={r.summary}
+                          onAccept={() => resolveRevision(r.id, { type: "accepted" })}
+                          onReject={() => resolveRevision(r.id, { type: "rejected" })}
+                          onCancel={() => resolveRevision(r.id, { type: "cancelled" })}
+                        />
+                      ))}
+                      {!state.ready && <StatusLine text="connecting to reasonix" />}
+                    </div>
+                  ),
+                }}
+              />
+              <button
+                type="button"
+                className={`scroll-fab ${atBottom ? "" : "show"}`}
+                aria-label="scroll to bottom"
+                onClick={() =>
+                  virtuosoRef.current?.scrollToIndex({
+                    index: state.messages.length - 1,
+                    behavior: "smooth",
+                  })
+                }
+              >
+                <ArrowDown size={14} />
+              </button>
+            </div>
+          ) : (
+            <EmptyState onPick={(t) => send(t)} />
+          )}
+          {state.busy && thinkStart !== null && (
+            <ThinkingBar
+              startedAt={thinkStart}
+              label={activity}
+              promptTokens={state.usage.totalPromptTokens}
+              completionTokens={liveCompletionTokens}
+            />
+          )}
+          <Composer
+            draft={draft}
+            setDraft={setDraft}
+            onSend={() => send()}
+            onAbort={abort}
+            onOpenCommands={() => palette.setOpen(true)}
+            slashCommands={slashCommands}
+            disabled={!state.ready}
+            busy={state.busy}
+            textareaRef={composerRef}
+            onMentionQuery={queryMentions}
+            onMentionPreview={previewMention}
+            onMentionPicked={markMentionPicked}
+            mentionResults={mentionResults}
+            mentionPreview={mentionPreview}
+          />
+        </div>
+        <CommandPalette
+          open={palette.open}
+          onClose={() => palette.setOpen(false)}
+          commands={commands}
+        />
+        {ctxMenu && (
+          <ContextMenu
+            x={ctxMenu.x}
+            y={ctxMenu.y}
+            actions={ctxMenu.actions}
+            onClose={() => setCtxMenu(null)}
           />
         )}
-        <Composer
-          draft={draft}
-          setDraft={setDraft}
-          onSend={() => send()}
-          onAbort={abort}
-          onOpenCommands={() => palette.setOpen(true)}
-          slashCommands={slashCommands}
-          disabled={!state.ready}
-          busy={state.busy}
-          textareaRef={composerRef}
-          onMentionQuery={queryMentions}
-          onMentionPreview={previewMention}
-          onMentionPicked={markMentionPicked}
-          mentionResults={mentionResults}
-          mentionPreview={mentionPreview}
-        />
+        {settingsOpen && state.settings && (
+          <SettingsPanel
+            settings={state.settings}
+            onSave={saveSettings}
+            onSaveApiKey={saveApiKey}
+            onPickWorkspace={pickWorkspace}
+            onClose={() => setSettingsOpen(false)}
+          />
+        )}
+        <Toast message={toast} />
       </div>
-      <CommandPalette
-        open={palette.open}
-        onClose={() => palette.setOpen(false)}
-        commands={commands}
-      />
-      {ctxMenu && (
-        <ContextMenu
-          x={ctxMenu.x}
-          y={ctxMenu.y}
-          actions={ctxMenu.actions}
-          onClose={() => setCtxMenu(null)}
-        />
-      )}
-      {settingsOpen && state.settings && (
-        <SettingsPanel
-          settings={state.settings}
-          onSave={saveSettings}
-          onSaveApiKey={saveApiKey}
-          onPickWorkspace={pickWorkspace}
-          onClose={() => setSettingsOpen(false)}
-        />
-      )}
-      <Toast message={toast} />
-    </div>
     </WorkspaceProvider>
   );
 }
@@ -1319,9 +1560,7 @@ export function App() {
 
             if (ev.type === "$settings" && tabId) {
               setTabs((prev) =>
-                prev.map((t) =>
-                  t.id === tabId ? { ...t, workspaceDir: ev.workspaceDir } : t,
-                ),
+                prev.map((t) => (t.id === tabId ? { ...t, workspaceDir: ev.workspaceDir } : t)),
               );
               // fall through to also deliver to the tab reducer
             }
@@ -1391,8 +1630,8 @@ export function App() {
   const closeTab = useCallback(
     (id: string) => {
       if (tabs.length <= 1) return;
-      invoke("rpc_send", { line: JSON.stringify({ cmd: "tab_close", tabId: id }) }).catch(
-        (err) => console.error("tab_close failed", err),
+      invoke("rpc_send", { line: JSON.stringify({ cmd: "tab_close", tabId: id }) }).catch((err) =>
+        console.error("tab_close failed", err),
       );
     },
     [tabs.length],
@@ -1411,9 +1650,7 @@ export function App() {
         if (tabs.length <= 1) return;
         e.preventDefault();
         const idx = tabs.findIndex((t) => t.id === activeTabId);
-        const next = e.shiftKey
-          ? (idx - 1 + tabs.length) % tabs.length
-          : (idx + 1) % tabs.length;
+        const next = e.shiftKey ? (idx - 1 + tabs.length) % tabs.length : (idx + 1) % tabs.length;
         const target = tabs[next];
         if (target) setActiveTabId(target.id);
       }
@@ -1454,6 +1691,9 @@ export function App() {
           installUpdate={installUpdate}
           dismissUpdate={() => setPendingUpdate(null)}
           registerDispatch={registerDispatch}
+          onNewTab={openTab}
+          onCloseTab={() => closeTab(t.id)}
+          canCloseTab={tabs.length > 1}
         />
       ))}
     </>
