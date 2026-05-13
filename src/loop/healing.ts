@@ -1,6 +1,13 @@
-import type { ChatMessage } from "../types.js";
+import type { ChatMessage, ToolCall } from "../types.js";
 import { shrinkOversizedToolResults, shrinkOversizedToolResultsByTokens } from "./shrink.js";
 import { isThinkingModeModel } from "./thinking.js";
+
+let _stampSeq = 0;
+
+/** DeepSeek 400s on tool_calls missing `id`. Give bare calls a fallback. */
+function stampMissingIds(calls: ToolCall[]): ToolCall[] {
+  return calls.map((c) => (c.id ? c : { ...c, id: `z-ext-${Date.now()}-${_stampSeq++}` }));
+}
 
 /** Drops both unpaired assistant.tool_calls and stray tool messages — DeepSeek 400s on either. */
 export function fixToolCallPairing(messages: ChatMessage[]): {
@@ -14,9 +21,11 @@ export function fixToolCallPairing(messages: ChatMessage[]): {
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i]!;
     if (msg.role === "assistant" && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
+      // Stamp missing ids before validation — DeepSeek rejects tool_calls without id.
+      const calls = stampMissingIds(msg.tool_calls);
       const needed = new Set<string>();
-      for (const call of msg.tool_calls) {
-        if (call?.id) needed.add(call.id);
+      for (const call of calls) {
+        if (call.id) needed.add(call.id);
       }
       const candidates: ChatMessage[] = [];
       let j = i + 1;
@@ -30,7 +39,7 @@ export function fixToolCallPairing(messages: ChatMessage[]): {
         j++;
       }
       if (needed.size === 0) {
-        out.push(msg);
+        out.push({ ...msg, tool_calls: calls });
         for (const r of candidates) out.push(r);
         i = j - 1;
       } else {
