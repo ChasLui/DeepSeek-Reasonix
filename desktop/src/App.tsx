@@ -6,21 +6,24 @@ import { type Update, check } from "@tauri-apps/plugin-updater";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { CommandPalette, Toast, buildCommands, useCommandPalette } from "./CommandPalette";
 import { I } from "./icons";
+import { getLang, setLang } from "./i18n";
 import { WorkspaceProvider } from "./Markdown";
 import type {
   CheckpointVerdict,
   ChoiceVerdict,
   ConfirmationChoice,
   IncomingEvent,
+  McpSpecInfo,
   OutgoingCommand,
   PlanVerdict,
   RevisionVerdict,
   SettingsPatch,
+  SkillInfo,
 } from "./protocol";
 import { Composer, type SlashCmd } from "./ui/composer";
 import { ContextPanel } from "./ui/context-panel";
 import { InterruptBar, useElapsed } from "./ui/live";
-import { SettingsModal } from "./ui/settings";
+import { type PageId as SettingsPageId, SettingsModal } from "./ui/settings";
 import { Sidebar } from "./ui/sidebar";
 import { Splash, shouldShowSplash } from "./ui/splash";
 import { StatusBar } from "./ui/statusbar";
@@ -52,7 +55,7 @@ export type AssistantSegment =
       durationMs?: number;
     };
 
-type ChatMessage =
+export type ChatMessage =
   | { kind: "user"; text: string; clientId: string; turn: number }
   | {
       kind: "assistant";
@@ -179,6 +182,9 @@ type State = {
   balance: Balance | null;
   mentionResults: MentionResults | null;
   mentionPreview: MentionPreviewState | null;
+  mcpSpecs: McpSpecInfo[];
+  mcpBridged: boolean;
+  skills: SkillInfo[];
 };
 
 type DeltaBatchItem = {
@@ -446,6 +452,10 @@ function applyIncoming(state: State, ev: IncomingEvent): State {
       };
     case "$sessions":
       return { ...state, sessions: ev.items };
+    case "$mcp_specs":
+      return { ...state, mcpSpecs: ev.specs, mcpBridged: ev.bridged };
+    case "$skills":
+      return { ...state, skills: ev.items };
     case "$balance":
       return {
         ...state,
@@ -728,6 +738,9 @@ function TabRuntime({
     balance: null,
     mentionResults: null,
     mentionPreview: null,
+    mcpSpecs: [],
+    mcpBridged: false,
+    skills: [],
   });
   const [draft, setDraft] = useState("");
   const [toast, setToast] = useState<string | null>(null);
@@ -737,6 +750,11 @@ function TabRuntime({
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsPage, setSettingsPage] = useState<SettingsPageId>("general");
+  const openSettingsAt = useCallback((page: SettingsPageId = "general") => {
+    setSettingsPage(page);
+    setSettingsOpen(true);
+  }, []);
   const palette = useCommandPalette();
 
   useEffect(() => {
@@ -772,6 +790,14 @@ function TabRuntime({
   );
   const saveApiKey = useCallback(
     (key: string) => sendRpc({ cmd: "setup_save_key", key }),
+    [sendRpc],
+  );
+  const addMcpSpec = useCallback(
+    (spec: string) => sendRpc({ cmd: "mcp_specs_add", spec }),
+    [sendRpc],
+  );
+  const removeMcpSpec = useCallback(
+    (spec: string) => sendRpc({ cmd: "mcp_specs_remove", spec }),
     [sendRpc],
   );
   const newChat = useCallback(() => {
@@ -870,7 +896,8 @@ function TabRuntime({
         setWdOpen((v) => !v);
       } else if (mod && e.key === ",") {
         e.preventDefault();
-        setSettingsOpen((v) => !v);
+        if (settingsOpen) setSettingsOpen(false);
+        else openSettingsAt("general");
       } else if (e.key === "Escape" && state.busy) {
         const target = e.target as HTMLElement | null;
         if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") return;
@@ -880,7 +907,7 @@ function TabRuntime({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [state.busy, abort, newChat]);
+  }, [state.busy, abort, newChat, settingsOpen, openSettingsAt]);
 
   const commands = buildCommands({
     newChat: () => {
@@ -892,7 +919,7 @@ function TabRuntime({
       flashToast("已清空");
     },
     focusComposer: () => composerRef.current?.focus(),
-    openSettings: () => setSettingsOpen(true),
+    openSettings: () => openSettingsAt("general"),
     about: () => flashToast(`Reasonix · ${state.settings?.version ?? "dev"}`),
     abort,
     copyLast: () => {
@@ -962,12 +989,26 @@ function TabRuntime({
         }
       },
     },
-    { cmd: "/model", desc: "切换模型", run: () => setSettingsOpen(true), kb: "⌘M" },
+    { cmd: "/model", desc: "切换模型", run: () => openSettingsAt("models") },
     { cmd: "/theme", desc: "切换深浅主题", run: onToggleTheme },
     {
       cmd: "/currency",
       desc: "切换货币显示 (CNY / USD)",
       run: onToggleCurrency,
+    },
+    {
+      cmd: "/lang",
+      desc: "切换界面语言 (中 / 英)",
+      run: () => {
+        const next = getLang() === "zh-CN" ? "en" : "zh-CN";
+        setLang(next);
+        flashToast(next === "zh-CN" ? "已切换到中文" : "switched to English");
+      },
+    },
+    {
+      cmd: "/export",
+      desc: "复制本会话为 Markdown",
+      run: () => exportConversation(),
     },
   ];
 
@@ -1043,7 +1084,7 @@ function TabRuntime({
           onToggleSide={onToggleSide}
           onToggleCtx={onToggleCtx}
           onOpenCommands={() => palette.setOpen(true)}
-          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSettings={() => openSettingsAt("general")}
           onExport={exportConversation}
           onClear={() => dispatch({ t: "clear" })}
           hasMessages={state.messages.length > 0}
@@ -1070,7 +1111,8 @@ function TabRuntime({
           onNewChat={newChat}
           onLoadSession={(name) => sendRpc({ cmd: "session_load", name })}
           onDeleteSession={(name) => sendRpc({ cmd: "session_delete", name })}
-          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSettings={() => openSettingsAt("general")}
+          onOpenRules={() => openSettingsAt("rules")}
           onOpenCommands={() => palette.setOpen(true)}
         />
 
@@ -1296,6 +1338,7 @@ function TabRuntime({
           settings={state.settings}
           usage={state.usage}
           workspaceDir={state.settings?.workspaceDir}
+          messages={state.messages}
         />
 
         <StatusBar
@@ -1308,7 +1351,7 @@ function TabRuntime({
           theme={theme}
           onToggleTheme={onToggleTheme}
           onToggleCurrency={onToggleCurrency}
-          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSettings={() => openSettingsAt("general")}
         />
 
         <CommandPalette
@@ -1333,10 +1376,16 @@ function TabRuntime({
             balance={state.balance}
             usage={state.usage}
             currency={currency}
+            initialPage={settingsPage}
+            mcpSpecs={state.mcpSpecs}
+            mcpBridged={state.mcpBridged}
+            skills={state.skills}
             onClose={() => setSettingsOpen(false)}
             onSave={saveSettings}
             onSaveApiKey={saveApiKey}
             onPickWorkspace={pickWorkspace}
+            onAddMcpSpec={addMcpSpec}
+            onRemoveMcpSpec={removeMcpSpec}
           />
         ) : null}
 
