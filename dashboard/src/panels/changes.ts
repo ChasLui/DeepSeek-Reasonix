@@ -1247,6 +1247,10 @@ function ChatPane(props: ChatPaneProps) {
   const [model, setModel] = useState<string | null>(null);
   const shouldAutoScroll = useRef(true);
   const feedRef = useRef<HTMLDivElement | null>(null);
+  const streamBufRef = useRef<StreamingState | null>(null);
+  const streamRafRef = useRef<number | null>(null);
+  /** Suppresses scroll listener during programmatic auto-snap so it doesn't re-arm shouldAutoScroll. */
+  const autoScrollInFlight = useRef(false);
   const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([]);
   const [popoverKind, setPopoverKind] = useState<PopoverKind>(null);
   const [popoverItems, setPopoverItems] = useState<PopoverItem[]>([]);
@@ -1301,8 +1305,44 @@ function ChatPane(props: ChatPaneProps) {
     };
   }, []);
 
+  // rAF-coalesce assistant_delta events — same pattern as ChatPanel.
+  const flushStreaming = useCallback(() => {
+    streamRafRef.current = null;
+    if (streamBufRef.current) setStreaming(streamBufRef.current);
+  }, []);
+  const cancelStreamingRaf = useCallback(() => {
+    if (streamRafRef.current !== null) {
+      cancelAnimationFrame(streamRafRef.current);
+      streamRafRef.current = null;
+    }
+    streamBufRef.current = null;
+  }, []);
+
+  // SSE reconnect drops missed deltas / finals — re-fetch canonical
+  // state to avoid wedging the UI on stale messages.
+  const refetchCanonicalState = useCallback(async () => {
+    try {
+      const data = await api<MessagesResponse>("/messages");
+      setMessages(data.messages ?? []);
+      setBusy(Boolean(data.busy));
+      cancelStreamingRaf();
+      setStreaming(null);
+      setActiveTool(null);
+    } catch {
+      /* keep current state — next event or next reconnect will retry */
+    }
+  }, [cancelStreamingRaf]);
+
   useEffect(() => {
     const es = new EventSource(`/api/events?token=${TOKEN}`);
+    let firstOpen = true;
+    es.onopen = () => {
+      if (firstOpen) {
+        firstOpen = false;
+        return;
+      }
+      void refetchCanonicalState();
+    };
     es.onmessage = (ev) => {
       let dash: any;
       try { dash = JSON.parse(ev.data); } catch { return; }
@@ -1313,14 +1353,20 @@ function ChatPane(props: ChatPaneProps) {
         return;
       }
       if (dash.kind === "assistant_delta") {
-        setStreaming((cur) => {
-          const text = (cur?.text ?? "") + (dash.contentDelta ?? "");
-          const reasoning = (cur?.reasoning ?? "") + (dash.reasoningDelta ?? "");
-          return { id: dash.id, text, reasoning };
-        });
+        const cur = streamBufRef.current;
+        const baseId = cur?.id === dash.id ? cur : null;
+        streamBufRef.current = {
+          id: dash.id,
+          text: (baseId?.text ?? "") + (dash.contentDelta ?? ""),
+          reasoning: (baseId?.reasoning ?? "") + (dash.reasoningDelta ?? ""),
+        };
+        if (streamRafRef.current === null) {
+          streamRafRef.current = requestAnimationFrame(flushStreaming);
+        }
         return;
       }
       if (dash.kind === "assistant_final") {
+        cancelStreamingRaf();
         setStreaming(null);
         setMessages((prev) => [
           ...prev,
@@ -1355,20 +1401,28 @@ function ChatPane(props: ChatPaneProps) {
       setError(t("chat.eventStreamError"));
       setTimeout(() => setError(null), 3000);
     };
-    return () => es.close();
-  }, []);
+    return () => {
+      es.close();
+      cancelStreamingRaf();
+    };
+  }, [refetchCanonicalState, cancelStreamingRaf]);
 
   useEffect(() => {
     if (!shouldAutoScroll.current) return;
     const el = feedRef.current;
     if (!el) return;
+    autoScrollInFlight.current = true;
     el.scrollTop = el.scrollHeight;
+    setTimeout(() => {
+      autoScrollInFlight.current = false;
+    }, 0);
   }, [messages, streaming]);
 
   useEffect(() => {
     const el = feedRef.current;
     if (!el) return;
     const onScroll = () => {
+      if (autoScrollInFlight.current) return;
       const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       shouldAutoScroll.current = distFromBottom < 80;
     };
