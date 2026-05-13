@@ -1283,18 +1283,22 @@ function ChatPane(props: ChatPaneProps) {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const tick = async () => {
       try {
         const data = await api<OverviewResponse>("/overview");
-        if (!cancelled) {
-          setStats(data.stats ?? null);
-          setModel(data.model ?? null);
-        }
+        if (cancelled) return;
+        setStats(data.stats ?? null);
+        setModel(data.model ?? null);
       } catch {
         /* swallow */
       }
-    })();
-    return () => { cancelled = true; };
+    };
+    tick();
+    const t = setInterval(tick, 2500);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
   }, []);
 
   useEffect(() => {
