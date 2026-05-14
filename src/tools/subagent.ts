@@ -103,7 +103,7 @@ function defaultSubagentSystem(modelId: string): string {
 const DEFAULT_MAX_RESULT_CHARS = 8000;
 const DEFAULT_MAX_ITERS = 16;
 const MIN_MAX_ITERS = 1;
-const MAX_MAX_ITERS = 32;
+const MAX_MAX_ITERS = 256;
 /** Iters-from-cap at which we start appending a remaining-budget hint to tool results. */
 const BUDGET_WARN_THRESHOLD = 3;
 
@@ -449,7 +449,7 @@ export function registerSubagentTool(
           type: "integer",
           minimum: MIN_MAX_ITERS,
           maximum: MAX_MAX_ITERS,
-          description: `Cap on the subagent's tool-call iterations. Default 16 (or the type's default when 'type' is set). Hard range: ${MIN_MAX_ITERS}-${MAX_MAX_ITERS}; out-of-range values are clamped to the nearest end.`,
+          description: `Cap on the subagent's tool-call iterations. Default 16 (or the type's default when 'type' is set). Hard range: ${MIN_MAX_ITERS}-${MAX_MAX_ITERS}; out-of-range values are clamped to the nearest end. Pick what the task actually needs — flash spawns are cheap, but values much larger than the work warrants just delay the natural termination.`,
         },
         type: {
           type: "string",

@@ -83,6 +83,7 @@ export async function buildCodeToolset(opts: CodeToolsetOpts): Promise<CodeTools
         model: skill.model,
         allowedTools: skill.allowedTools,
         maxToolIters: skill.maxToolIters,
+        skillName: skill.name,
       });
       return formatSubagentResult(result);
     },
