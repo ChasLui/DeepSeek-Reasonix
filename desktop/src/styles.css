@@ -1522,6 +1522,8 @@ button {
   max-width: 760px;
   margin: 0 auto;
   position: relative;
+  container-type: inline-size;
+  container-name: composer;
 }
 .composer {
   background: var(--card);
@@ -3962,18 +3964,17 @@ button {
   text-align: right;
 }
 
-/* Hide button labels when composer area gets cramped */
-@media (max-width: 1100px) {
+/* Collapse composer-foot when the composer column itself is cramped —
+   container query so panel state, not viewport width, drives it. */
+@container composer (max-width: 620px) {
   .composer-foot .cf-btn .label { display: none; }
 }
-@media (max-width: 900px) {
+@container composer (max-width: 520px) {
   .hint-row > span:first-child { display: none; }
   .composer-foot .model-pill { max-width: 140px; }
 }
-@media (max-width: 760px) {
-  .app[data-side-collapsed="false"][data-ctx-collapsed="false"] .composer-foot .model-pill {
-    max-width: 100px;
-  }
+@container composer (max-width: 420px) {
+  .composer-foot .model-pill { max-width: 100px; }
 }
 
 /* Main head — same compression behavior */
