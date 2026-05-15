@@ -2457,6 +2457,7 @@ function AppInner({
         }
         setSlashUsage(recordSlashUse(slash.cmd));
         const result = handleSlash(slash.cmd, slash.args, loop, {
+          configPath: defaultConfigPath(),
           mcpSpecs,
           mcpServers: liveMcpServers,
           codeUndo: codeMode ? codeUndo : undefined,
