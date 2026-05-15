@@ -58,7 +58,7 @@ export const I = {
   moon: (p: IconProps) => (<Ic {...p}><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" /></Ic>),
   panel_l: (p: IconProps) => (<Ic {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></Ic>),
   panel_r: (p: IconProps) => (<Ic {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M15 4v16" /></Ic>),
-  cog: (p: IconProps) => (<Ic {...p}><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></Ic>),
+  cog: (p: IconProps) => (<Ic {...p}><path d="M12 3.6 19.2 7.8v8.4L12 20.4 4.8 16.2V7.8Z" /><circle cx="12" cy="12" r="3.7" /></Ic>),
   stop: (p: IconProps) => (<Ic {...p}><rect x="6" y="6" width="12" height="12" rx="2" /></Ic>),
   play: (p: IconProps) => (<Ic {...p}><path d="M7 5v14l12-7Z" /></Ic>),
   more: (p: IconProps) => (<Ic {...p}><circle cx="6" cy="12" r="1.6" fill="currentColor" /><circle cx="12" cy="12" r="1.6" fill="currentColor" /><circle cx="18" cy="12" r="1.6" fill="currentColor" /></Ic>),

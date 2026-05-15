@@ -136,6 +136,7 @@ export const en = {
     pageShortcutsLabel: "Shortcuts",
     pageShortcutsDesc: "Keyboard shortcuts overview",
     // section headers
+    appearanceSection: "Appearance",
     workspaceSection: "Workspace",
     behaviorSection: "Behavior",
     apiSection: "DeepSeek API",

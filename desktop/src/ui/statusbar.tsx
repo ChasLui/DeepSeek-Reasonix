@@ -1,6 +1,7 @@
 import { I } from "../icons";
 import { t } from "../i18n";
 import type { Balance, Settings, UsageStats } from "../App";
+import { THEME, type Theme } from "../theme";
 
 function formatMoney(amount: number, currency: "CNY" | "USD"): string {
   const symbol = currency === "CNY" ? "¥" : "$";
@@ -31,7 +32,7 @@ export function StatusBar({
   busy: boolean;
   ready: boolean;
   currency: "CNY" | "USD";
-  theme: "dark" | "light";
+  theme: Theme;
   onToggleTheme: () => void;
   onToggleCurrency: () => void;
   onOpenSettings: () => void;
@@ -101,11 +102,8 @@ export function StatusBar({
         <span className="v ok">{balanceLabel}</span>
       </span>
       <span className="seg" title="切换主题" onClick={onToggleTheme}>
-        {theme === "dark" ? <I.moon size={11} /> : <I.sun size={11} />}
-        <span className="v">{theme === "dark" ? "深色" : "浅色"}</span>
-      </span>
-      <span className="seg" title="设置 (⌘,)" onClick={onOpenSettings}>
-        <I.cog size={11} />
+        {theme === THEME.DARK ? <I.moon size={11} /> : <I.sun size={11} />}
+        <span className="v">{theme === THEME.DARK ? "深色" : "浅色"}</span>
       </span>
     </footer>
   );

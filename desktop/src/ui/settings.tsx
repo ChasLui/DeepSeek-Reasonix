@@ -3,6 +3,7 @@ import type { Balance, Settings as SettingsType, UsageStats } from "../App";
 import { t } from "../i18n";
 import { I } from "../icons";
 import type { McpSpecInfo, SettingsPatch, SkillInfo } from "../protocol";
+import { THEME, type Theme } from "../theme";
 
 export type PageId =
   | "general"
@@ -30,6 +31,8 @@ export function SettingsModal({
   balance,
   usage,
   currency,
+  theme,
+  onSetTheme,
   initialPage,
   mcpSpecs,
   mcpBridged,
@@ -45,6 +48,8 @@ export function SettingsModal({
   balance: Balance | null;
   usage: UsageStats;
   currency: "CNY" | "USD";
+  theme: Theme;
+  onSetTheme: (theme: Theme) => void;
   initialPage?: PageId;
   mcpSpecs: McpSpecInfo[];
   mcpBridged: boolean;
@@ -96,7 +101,13 @@ export function SettingsModal({
           </div>
           <div className="settings-body">
             {page === "general" && (
-              <PageGeneral settings={settings} onSave={onSave} onPickWorkspace={onPickWorkspace} />
+              <PageGeneral
+                settings={settings}
+                theme={theme}
+                onSetTheme={onSetTheme}
+                onSave={onSave}
+                onPickWorkspace={onPickWorkspace}
+              />
             )}
             {page === "models" && <PageModels settings={settings} onSave={onSave} />}
             {page === "mcp" && (
@@ -131,16 +142,46 @@ export function SettingsModal({
 
 function PageGeneral({
   settings,
+  theme,
+  onSetTheme,
   onSave,
   onPickWorkspace,
 }: {
   settings: SettingsType;
+  theme: Theme;
+  onSetTheme: (theme: Theme) => void;
   onSave: (patch: SettingsPatch) => void;
   onPickWorkspace: () => void;
 }) {
   const [editorDraft, setEditorDraft] = useState(settings.editor ?? "");
   return (
     <>
+      <section className="section">
+        <div className="stitle">{t("settings.appearanceSection")}</div>
+        <div className="setting-row">
+          <div className="l">
+            <div className="n">{t("settings.theme")}</div>
+            <div className="h">{t("settings.themeHint")}</div>
+          </div>
+          <div className="seg-ctrl">
+            <button
+              type="button"
+              data-on={theme === THEME.DARK}
+              onClick={() => onSetTheme(THEME.DARK)}
+            >
+              {t("settings.themeDark")}
+            </button>
+            <button
+              type="button"
+              data-on={theme === THEME.LIGHT}
+              onClick={() => onSetTheme(THEME.LIGHT)}
+            >
+              {t("settings.themeLight")}
+            </button>
+          </div>
+        </div>
+      </section>
+
       <section className="section">
         <div className="stitle">{t("settings.workspaceSection")}</div>
         <div className="setting-row">

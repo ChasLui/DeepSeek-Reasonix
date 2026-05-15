@@ -8,6 +8,7 @@ import { CommandPalette, Toast, buildCommands, useCommandPalette } from "./Comma
 import { WorkspaceProvider } from "./Markdown";
 import { getLang, setLang, t, useLang } from "./i18n";
 import { I } from "./icons";
+import { THEME, type Theme } from "./theme";
 import type {
   CheckpointVerdict,
   ChoiceVerdict,
@@ -807,7 +808,8 @@ interface TabRuntimeProps {
   onNewTab: () => void;
   onCloseTab: () => void;
   canCloseTab: boolean;
-  theme: "dark" | "light";
+  theme: Theme;
+  onSetTheme: (theme: Theme) => void;
   onToggleTheme: () => void;
   sideCollapsed: boolean;
   ctxCollapsed: boolean;
@@ -832,6 +834,7 @@ function TabRuntime({
   onCloseTab,
   canCloseTab,
   theme,
+  onSetTheme,
   onToggleTheme,
   sideCollapsed,
   ctxCollapsed,
@@ -1605,6 +1608,8 @@ function TabRuntime({
             balance={state.balance}
             usage={state.usage}
             currency={currency}
+            theme={theme}
+            onSetTheme={onSetTheme}
             initialPage={settingsPage}
             mcpSpecs={state.mcpSpecs}
             mcpBridged={state.mcpBridged}
@@ -2133,9 +2138,9 @@ export function App() {
     const v = localStorage.getItem("reasonix.currency");
     return v === "USD" ? "USD" : "CNY";
   });
-  const [theme, setTheme] = useState<"dark" | "light">(() => {
+  const [theme, setTheme] = useState<Theme>(() => {
     const v = localStorage.getItem("reasonix.theme");
-    return v === "light" ? "light" : "dark";
+    return v === THEME.LIGHT ? THEME.LIGHT : THEME.DARK;
   });
   const [sideCollapsed, setSideCollapsed] = useState(false);
   const [ctxCollapsed, setCtxCollapsed] = useState(false);
@@ -2378,7 +2383,9 @@ export function App() {
   }, [openTab, closeTab, activeTabId, tabs]);
 
   const onToggleTheme = useCallback(() => {
-    setTheme((t) => (t === "dark" ? "light" : "dark"));
+    setTheme((currentTheme) =>
+      currentTheme === THEME.DARK ? THEME.LIGHT : THEME.DARK,
+    );
   }, []);
 
   const onToggleCurrency = useCallback(() => {
@@ -2407,6 +2414,7 @@ export function App() {
           onCloseTab={() => closeTab(t.id)}
           canCloseTab={tabs.length > 1}
           theme={theme}
+          onSetTheme={setTheme}
           onToggleTheme={onToggleTheme}
           sideCollapsed={sideCollapsed}
           ctxCollapsed={ctxCollapsed}

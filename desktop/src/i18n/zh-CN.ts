@@ -133,6 +133,7 @@ export const zhCN: typeof en = {
     pageBillingDesc: "账户余额、用量与发票",
     pageShortcutsLabel: "快捷键",
     pageShortcutsDesc: "键盘快捷键总览",
+    appearanceSection: "外观",
     workspaceSection: "工作区",
     behaviorSection: "行为",
     apiSection: "DeepSeek API",

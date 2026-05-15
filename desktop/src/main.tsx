@@ -9,9 +9,10 @@ import "@fontsource/ibm-plex-serif/400.css";
 import "@fontsource/ibm-plex-serif/500.css";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { isTheme } from "./theme";
 
 const stored = localStorage.getItem("reasonix.theme");
-if (stored === "light" || stored === "dark") {
+if (isTheme(stored)) {
   document.documentElement.dataset.theme = stored;
 }
 
