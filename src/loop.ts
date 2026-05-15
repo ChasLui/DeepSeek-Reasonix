@@ -33,10 +33,6 @@ import {
 import { hookWarnings, safeParseToolArgs } from "./loop/hook-events.js";
 import { buildAssistantMessage, buildSyntheticAssistantMessage } from "./loop/messages.js";
 import {
-  READONLY_LOOP_ESCALATION_THRESHOLD,
-  ReadOnlyLoopTracker,
-} from "./loop/read-only-loop-tracker.js";
-import {
   looksLikeCompleteJson,
   shrinkOversizedToolCallArgsByTokens,
   shrinkOversizedToolResults,
@@ -161,7 +157,6 @@ export class CacheFirstLoop {
   private _proArmedForNextTurn = false;
   private _escalateThisTurn = false;
   private readonly _turnFailures: TurnFailureTracker;
-  private readonly _readOnlyLoop: ReadOnlyLoopTracker;
   private _turnSelfCorrected = false;
   private _foldedThisTurn = false;
   private _toolDispatchesThisStep = 0;
@@ -188,10 +183,7 @@ export class CacheFirstLoop {
     this._turnFailures = new TurnFailureTracker(
       resolveFailureThreshold(opts.failureThreshold, FAILURE_ESCALATION_THRESHOLD),
     );
-    this._readOnlyLoop = new ReadOnlyLoopTracker(
-      parsePositiveIntEnv(process.env.REASONIX_READONLY_LOOP_THRESHOLD) ??
-        READONLY_LOOP_ESCALATION_THRESHOLD,
-    );
+
     // Last-resort backstop — primary stop is the token-context guard inside step().
     this.maxToolIters = opts.maxToolIters ?? 64;
     this.onIterBudgetExhausted = opts.onIterBudgetExhausted ?? "summarize";
@@ -398,15 +390,6 @@ export class CacheFirstLoop {
     return true;
   }
 
-  /** Returns true ONLY on the call where the read-only streak crosses the threshold (#681). */
-  private noteReadOnlyToolCall(call: ToolCall): boolean {
-    const isReadOnly = !this.isMutating(call);
-    if (!this._readOnlyLoop.noteAndCrossedThreshold(isReadOnly)) return false;
-    if (this._escalateThisTurn || !this.autoEscalate) return false;
-    this._escalateThisTurn = true;
-    return true;
-  }
-
   /** A call counts as mutating when its definition reports `readOnly !== true` and any dynamic `readOnlyCheck` doesn't override that for these args. */
   private isMutating(call: ToolCall): boolean {
     const name = call.function?.name;
@@ -581,7 +564,6 @@ export class CacheFirstLoop {
     // armed intent is one-shot — next turn starts fresh on flash
     // unless the user re-arms or mid-turn escalation triggers).
     this._turnFailures.reset();
-    this._readOnlyLoop.reset();
     this._turnSelfCorrected = false;
     this._escalateThisTurn = false;
     this._foldedThisTurn = false;
@@ -1202,17 +1184,6 @@ export class CacheFirstLoop {
               content: t("loop.autoEscalation", {
                 model: ESCALATION_MODEL,
                 breakdown: this._turnFailures.formatBreakdown(),
-                fallback: this.model,
-              }),
-            };
-          }
-          if (this.noteReadOnlyToolCall(call)) {
-            yield {
-              turn: this._turn,
-              role: "warning",
-              content: t("loop.readOnlyLoopEscalation", {
-                model: ESCALATION_MODEL,
-                n: this._readOnlyLoop.currentStreak,
                 fallback: this.model,
               }),
             };
