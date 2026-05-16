@@ -76,6 +76,8 @@ export interface SubagentResult {
   usage: Usage;
   /** True when the child hit its pause-every interval without producing a final answer. */
   paused?: boolean;
+  /** True when the child terminated via forceSummaryAfterIterLimit (storm-breaker / context-guard) — `output` carries the partial synthesis the model managed to produce; not a full answer. User-abort forced summaries do NOT set this (their content is a UX placeholder, routed to `error`). */
+  forcedSummary?: boolean;
   /** Session name the caller passes back as `resume_session` to continue. Set whenever `paused` is true. */
   pausedSession?: string;
   /** Subagent's own report of progress / remaining / blockers at the pause checkpoint — only set when paused. */
@@ -90,6 +92,8 @@ export interface SubagentToolOptions {
   maxToolIters?: number;
   maxResultChars?: number;
   sink?: SubagentSink;
+  /** Fires once per spawn, after `spawnSubagent` returns and before its result is formatted for the parent. Bind a `SubagentTelemetry.record` here for automatic distillation capture. */
+  onSpawnComplete?: (result: SubagentResult) => void;
 }
 
 /** Memory-stable prefix — shared across spawns, cached. The model-dependent escalation contract is appended per spawn so a pro spawn doesn't get told it's running on flash (#582). */
@@ -272,6 +276,7 @@ export async function spawnSubagent(opts: SpawnSubagentOptions): Promise<Subagen
   let toolIter = 0;
   let summarisingEmitted = false;
   let paused = false;
+  let forcedSummaryFired = false;
   let partialSummary: string | undefined;
   // Resume: tell the model the budget refreshed — without this it reads prior "finalize NOW" hints as still in force and refuses to keep calling tools.
   const taskForLoop = opts.resumeSession
@@ -312,7 +317,18 @@ export async function spawnSubagent(opts: SpawnSubagentOptions): Promise<Subagen
       }
       if (ev.role === "assistant_final") {
         if (ev.forcedSummary) {
-          errorMessage = ev.content?.trim() || "subagent ended without producing an answer";
+          // Two paths emit forcedSummary: user-abort (loop.ts ~670) carries a
+          // UX placeholder ("aborted by user (Esc)…") that's useless to a
+          // parent loop; storm-breaker / context-guard (force-summary.ts)
+          // carries a real partial synthesis worth keeping. Discriminate on
+          // parentSignal.aborted because the abort path only fires when the
+          // signal is set.
+          if (opts.parentSignal?.aborted) {
+            errorMessage = ev.content?.trim() || "subagent aborted before producing an answer";
+          } else {
+            final = ev.content ?? "";
+            forcedSummaryFired = true;
+          }
         } else {
           final = ev.content ?? "";
         }
@@ -371,7 +387,7 @@ export async function spawnSubagent(opts: SpawnSubagentOptions): Promise<Subagen
   });
 
   return {
-    success: !errorMessage,
+    success: !errorMessage && !forcedSummaryFired,
     output: errorMessage ? "" : truncated,
     error: errorMessage,
     turns,
@@ -382,6 +398,7 @@ export async function spawnSubagent(opts: SpawnSubagentOptions): Promise<Subagen
     skillName,
     usage,
     paused: paused || undefined,
+    forcedSummary: forcedSummaryFired || undefined,
     pausedSession: paused ? sessionName : undefined,
     partialSummary: paused ? partialSummary : undefined,
   };
@@ -411,6 +428,18 @@ export function formatSubagentResult(r: SubagentResult): string {
       cost_usd: r.costUsd,
       partial_summary: r.partialSummary,
       note: `Subagent reached its pause-every interval (${r.toolIters} tool calls) without producing a final answer. Read partial_summary above to see what was done / left / blocked, then decide: resume by calling spawn_subagent again with resume_session="${r.pausedSession}" (the task arg becomes a continuation nudge — e.g. "finish what you started"), or accept the partial work and proceed with what you already know.`,
+    });
+  }
+  if (r.forcedSummary) {
+    return JSON.stringify({
+      success: false,
+      partial: true,
+      output: r.output,
+      turns: r.turns,
+      tool_iters: r.toolIters,
+      elapsed_ms: r.elapsedMs,
+      cost_usd: r.costUsd,
+      note: "Subagent was force-summarized (storm-breaker or context-guard fired). `output` carries the partial synthesis the model produced before being stopped — useful but not a complete answer. Decide whether to accept the partial, narrow the task and re-spawn, or fall back to direct tools.",
     });
   }
   if (!r.success) {
@@ -545,6 +574,13 @@ export function registerSubagentTool(
       });
       sessionSpawnCount++;
       sessionSpawnTokens += result.usage.totalTokens;
+      if (opts.onSpawnComplete) {
+        try {
+          opts.onSpawnComplete(result);
+        } catch {
+          // Telemetry callback errors must not break the spawn-tool dispatch.
+        }
+      }
       const formatted = formatSubagentResult(result);
       const hint = subagentBudgetHint(sessionSpawnCount, sessionSpawnTokens);
       return hint ? `${formatted}\n${hint}` : formatted;
