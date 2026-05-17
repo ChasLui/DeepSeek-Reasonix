@@ -197,7 +197,7 @@ export function DoctorCard({ rows, headerSubtitle }: { rows: DoctorRow[]; header
             <div
               className="ss"
               style={{
-                fontFamily: "IBM Plex Mono, monospace",
+                fontFamily: "Geist Mono, monospace",
                 fontSize: 10.5,
                 color: "var(--muted)",
               }}

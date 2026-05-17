@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { type Update, check } from "@tauri-apps/plugin-updater";
@@ -950,7 +951,7 @@ function TabRuntime({
   });
   useLang();
   const [draft, setDraft] = useState("");
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; yolo?: boolean } | null>(null);
   const [splashOn, setSplashOn] = useState<boolean>(() => shouldShowSplash());
   const [wdOpen, setWdOpen] = useState(false);
   const [wdAnchor, setWdAnchor] = useState<
@@ -1032,10 +1033,13 @@ function TabRuntime({
     }
   }, [saveSettings, state.settings?.workspaceDir]);
 
-  const flashToast = useCallback((msg: string) => {
-    setToast(msg);
-    window.setTimeout(() => setToast(null), 1600);
-  }, []);
+  const flashToast = useCallback(
+    (msg: string, opts?: { yolo?: boolean; duration?: number }) => {
+      setToast({ msg, yolo: opts?.yolo });
+      window.setTimeout(() => setToast(null), opts?.duration ?? 1600);
+    },
+    [],
+  );
 
   // Drag-and-drop: dropping files/folders onto the window inserts them
   // as @-mentions in the draft (relative to workspaceDir when inside it).
@@ -1492,27 +1496,6 @@ function TabRuntime({
                   setWdOpen(true);
                 }}
               />
-              {state.settings?.editMode === "yolo" ? (
-                <div className="mode-banner">
-                  <span className="mb-pip" />
-                  <I.warn size={13} />
-                  <span className="mb-tag">YOLO</span>
-                  <span className="mb-msg">
-                    {t("app.yolo.banner1")}
-                    <b>{t("app.yolo.bannerBold")}</b>
-                    {t("app.yolo.banner2")}
-                  </span>
-                  <span className="grow" />
-                  <button
-                    type="button"
-                    className="mb-btn"
-                    onClick={() => saveSettings({ editMode: "review" })}
-                  >
-                    {t("app.yolo.switchBack")}
-                  </button>
-                </div>
-              ) : null}
-
               <div className="thread" ref={threadRef}>
                 <div className="thread-inner" ref={threadInnerRef}>
                   {pendingUpdate ? (
@@ -1665,7 +1648,7 @@ function TabRuntime({
                       style={{
                         padding: 12,
                         color: "var(--muted)",
-                        fontFamily: "IBM Plex Mono, monospace",
+                        fontFamily: "Geist Mono, monospace",
                         fontSize: 11,
                       }}
                     >
@@ -1710,7 +1693,11 @@ function TabRuntime({
                 editMode={state.settings?.editMode ?? "review"}
                 onEditModeChange={(mode) => {
                   saveSettings({ editMode: mode });
-                  flashToast(t("app.toast.modeSwitched", { mode: mode.toUpperCase() }));
+                  if (mode === "yolo") {
+                    flashToast(t("app.yolo.toast"), { yolo: true, duration: 3000 });
+                  } else {
+                    flashToast(t("app.toast.modeSwitched", { mode: mode.toUpperCase() }));
+                  }
                 }}
                 workspaceDir={state.settings?.workspaceDir}
                 slashCommands={slashCommands}
@@ -1815,6 +1802,37 @@ function TabRuntime({
   );
 }
 
+function WinMinimize() {
+  return (
+    <svg width="10" height="1" viewBox="0 0 10 1" aria-hidden>
+      <rect width="10" height="1" fill="currentColor" />
+    </svg>
+  );
+}
+function WinMaximize() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+      <rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="1" />
+    </svg>
+  );
+}
+function WinRestore() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+      <rect x="2.5" y="0.5" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1" />
+      <rect x="0.5" y="2.5" width="7" height="7" fill="var(--bg-2, #eee)" stroke="currentColor" strokeWidth="1" />
+    </svg>
+  );
+}
+function WinClose() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+      <line x1="0.5" y1="0.5" x2="9.5" y2="9.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="9.5" y1="0.5" x2="0.5" y2="9.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function TitleBar({
   session,
   model,
@@ -1842,7 +1860,20 @@ function TitleBar({
 }) {
   useLang();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
   const moreWrapRef = useRef<HTMLDivElement>(null);
+  const isMac = document.documentElement.dataset.platform === "macos";
+
+  useEffect(() => {
+    const win = getCurrentWindow();
+    win.isMaximized().then(setIsMaximized);
+    let unlisten: (() => void) | undefined;
+    win.listen("tauri://resize", async () => {
+      setIsMaximized(await win.isMaximized());
+    }).then((fn) => { unlisten = fn; });
+    return () => unlisten?.();
+  }, []);
+
   useEffect(() => {
     if (!menuOpen) return;
     const onDown = (e: MouseEvent) => {
@@ -1852,19 +1883,53 @@ function TitleBar({
     window.addEventListener("mousedown", onDown);
     return () => window.removeEventListener("mousedown", onDown);
   }, [menuOpen]);
+
+  const win = getCurrentWindow();
+
   return (
     <header className="titlebar">
-      <div className="brand">
-        <span className="mark" />
-        <span>Reasonix</span>
-      </div>
-      <div className="crumbs">
-        <span>{session}</span>
-        <span className="sep">/</span>
-        <span className="cur">{model ?? "—"}</span>
-      </div>
-      <span className="grow" />
-      <div className="actions">
+      {/* left: sidebar toggle + brand */}
+      <div className="tb-left">
+        {isMac ? (
+          <div className="mac-controls" aria-label={t("app.titlebar.windowControls")}>
+            <button
+              type="button"
+              className="mac-ctrl close"
+              title={t("app.titlebar.close")}
+              aria-label={t("app.titlebar.close")}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                win.close();
+              }}
+            >
+              <WinClose />
+            </button>
+            <button
+              type="button"
+              className="mac-ctrl minimize"
+              title={t("app.titlebar.minimize")}
+              aria-label={t("app.titlebar.minimize")}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                win.minimize();
+              }}
+            >
+              <WinMinimize />
+            </button>
+            <button
+              type="button"
+              className="mac-ctrl zoom"
+              title={isMaximized ? t("app.titlebar.restore") : t("app.titlebar.maximize")}
+              aria-label={isMaximized ? t("app.titlebar.restore") : t("app.titlebar.maximize")}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                win.toggleMaximize();
+              }}
+            >
+              {isMaximized ? <WinRestore /> : <WinMaximize />}
+            </button>
+          </div>
+        ) : null}
         <button
           type="button"
           className="iconbtn"
@@ -1874,6 +1939,25 @@ function TitleBar({
         >
           <I.panel_l size={14} />
         </button>
+        <div className="tb-meta" data-tauri-drag-region>
+          <div className="brand" data-tauri-drag-region>
+            <span className="mark" />
+            <span className="brand-name">Reasonix</span>
+          </div>
+          {session && (
+            <div className="crumbs" data-tauri-drag-region>
+              <span className="sep">/</span>
+              <span className="cur">{model ?? "—"}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* center: drag region */}
+      <span className="grow" data-tauri-drag-region />
+
+      {/* right: panel toggles + more + window controls */}
+      <div className="tb-right">
         <button
           type="button"
           className="iconbtn"
@@ -1883,6 +1967,7 @@ function TitleBar({
         >
           <I.panel_r size={14} />
         </button>
+
         <div ref={moreWrapRef} style={{ position: "relative" }}>
           <button
             type="button"
@@ -1895,79 +1980,65 @@ function TitleBar({
           {menuOpen ? (
             <div
               className="popup"
-              style={{
-                top: "calc(100% + 6px)",
-                right: 0,
-                left: "auto",
-                bottom: "auto",
-                width: 220,
-              }}
+              style={{ top: "calc(100% + 6px)", right: 0, left: "auto", bottom: "auto", width: 220 }}
             >
               <div className="popup-list">
-                <div
-                  className="popup-item"
-                  onClick={() => {
-                    onOpenCommands();
-                    setMenuOpen(false);
-                  }}
-                >
-                  <span className="ico">
-                    <I.search size={12} />
-                  </span>
-                  <div className="nm">
-                    <span>{t("app.titlebar.commandPalette")}</span>
-                  </div>
+                <div className="popup-item" onClick={() => { onOpenCommands(); setMenuOpen(false); }}>
+                  <span className="ico"><I.search size={12} /></span>
+                  <div className="nm"><span>{t("app.titlebar.commandPalette")}</span></div>
                   <span className="kb">⌘K</span>
                 </div>
                 <div
                   className="popup-item"
-                  onClick={() => {
-                    if (hasMessages) onExport();
-                    setMenuOpen(false);
-                  }}
-                  data-active={!hasMessages ? undefined : false}
+                  onClick={() => { if (hasMessages) onExport(); setMenuOpen(false); }}
                   style={{ opacity: hasMessages ? 1 : 0.5 }}
                 >
-                  <span className="ico">
-                    <I.download size={12} />
-                  </span>
-                  <div className="nm">
-                    <span>{t("app.titlebar.exportMd")}</span>
-                  </div>
+                  <span className="ico"><I.download size={12} /></span>
+                  <div className="nm"><span>{t("app.titlebar.exportMd")}</span></div>
                 </div>
-                <div
-                  className="popup-item"
-                  onClick={() => {
-                    onClear();
-                    setMenuOpen(false);
-                  }}
-                >
-                  <span className="ico">
-                    <I.x size={12} />
-                  </span>
-                  <div className="nm">
-                    <span>{t("app.titlebar.clearChat")}</span>
-                  </div>
+                <div className="popup-item" onClick={() => { onClear(); setMenuOpen(false); }}>
+                  <span className="ico"><I.x size={12} /></span>
+                  <div className="nm"><span>{t("app.titlebar.clearChat")}</span></div>
                 </div>
-                <div
-                  className="popup-item"
-                  onClick={() => {
-                    onOpenSettings();
-                    setMenuOpen(false);
-                  }}
-                >
-                  <span className="ico">
-                    <I.cog size={12} />
-                  </span>
-                  <div className="nm">
-                    <span>{t("app.titlebar.settings")}</span>
-                  </div>
+                <div className="popup-item" onClick={() => { onOpenSettings(); setMenuOpen(false); }}>
+                  <span className="ico"><I.cog size={12} /></span>
+                  <div className="nm"><span>{t("app.titlebar.settings")}</span></div>
                   <span className="kb">⌘,</span>
                 </div>
               </div>
             </div>
           ) : null}
         </div>
+
+        {/* window controls — use onMouseDown+stopPropagation so the drag region doesn't swallow the event */}
+        {isMac ? null : (
+          <div className="win-controls">
+            <button
+              type="button"
+              className="win-ctrl"
+              title={t("app.titlebar.minimize")}
+              onMouseDown={(e) => { e.stopPropagation(); win.minimize(); }}
+            >
+              <WinMinimize />
+            </button>
+            <button
+              type="button"
+              className="win-ctrl"
+              title={isMaximized ? t("app.titlebar.restore") : t("app.titlebar.maximize")}
+              onMouseDown={(e) => { e.stopPropagation(); win.toggleMaximize(); }}
+            >
+              {isMaximized ? <WinRestore /> : <WinMaximize />}
+            </button>
+            <button
+              type="button"
+              className="win-ctrl close"
+              title={t("app.titlebar.close")}
+              onMouseDown={(e) => { e.stopPropagation(); win.close(); }}
+            >
+              <WinClose />
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );
@@ -2130,7 +2201,7 @@ function EmptyState({
         padding: "48px 16px 24px",
         textAlign: "center",
         color: "var(--muted)",
-        fontFamily: "var(--font-sans, 'IBM Plex Sans', sans-serif)",
+        fontFamily: "var(--font-sans, 'Geist', sans-serif)",
       }}
     >
       <div
@@ -2159,7 +2230,7 @@ function EmptyState({
         {wsLabel ? (
           <>
             {t("app.empty.currentWorkspace")}
-            <code style={{ fontFamily: "IBM Plex Mono, monospace" }}>{wsLabel}</code>
+            <code style={{ fontFamily: "Geist Mono, monospace" }}>{wsLabel}</code>
           </>
         ) : (
           t("app.empty.selectWorkspace")
@@ -2349,7 +2420,7 @@ export function App() {
   }, [fontScale]);
 
   useEffect(() => {
-    // CSS rules use var(--font-sans); changing it here re-styles every sans surface in one shot. Mono stays put because code/transcripts hardcode "IBM Plex Mono".
+    // CSS rules use var(--font-sans); changing it here re-styles every sans surface in one shot. Mono stays put because code/transcripts hardcode "Geist Mono".
     document.documentElement.style.setProperty("--font-sans", FONT_FAMILY_STACK[fontFamily]);
     localStorage.setItem("reasonix.fontFamily", fontFamily);
   }, [fontFamily]);

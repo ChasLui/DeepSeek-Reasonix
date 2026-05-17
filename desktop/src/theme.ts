@@ -40,7 +40,7 @@ export function isFontFamily(value: unknown): value is FontFamily {
 }
 
 export const FONT_FAMILY_STACK: Record<FontFamily, string> = {
-  sans: '"IBM Plex Sans", -apple-system, system-ui, sans-serif',
+  sans: '"Geist", system-ui, sans-serif',
   system: '-apple-system, system-ui, "Segoe UI", Roboto, sans-serif',
-  serif: '"IBM Plex Serif", "IBM Plex Sans", Georgia, serif',
+  serif: '"Geist", Georgia, serif',
 };

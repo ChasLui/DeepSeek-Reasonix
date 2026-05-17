@@ -56,7 +56,7 @@ export function WorkdirPop({
           <span
             style={{
               marginLeft: "auto",
-              fontFamily: "IBM Plex Mono, monospace",
+              fontFamily: "Geist Mono, monospace",
               fontSize: 10,
               color: "var(--muted)",
             }}
@@ -88,7 +88,7 @@ export function WorkdirPop({
                 padding: "16px 12px",
                 fontSize: 11.5,
                 color: "var(--muted)",
-                fontFamily: "IBM Plex Mono, monospace",
+                fontFamily: "Geist Mono, monospace",
               }}
             >
               {t("workdir.empty")}

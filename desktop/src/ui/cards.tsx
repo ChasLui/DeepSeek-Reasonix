@@ -12,6 +12,7 @@ export function Card({
   name,
   meta,
   defaultOpen = true,
+  compact = false,
   children,
   headRight,
 }: {
@@ -21,12 +22,15 @@ export function Card({
   name?: ReactNode;
   meta?: ReactNode;
   defaultOpen?: boolean;
+  /** Slimmer header — used for thinking / tool-call process cards so they
+   *  read as background detail rather than primary content. */
+  compact?: boolean;
   children: ReactNode;
   headRight?: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="card" data-tone={tone} data-open={open}>
+    <div className={compact ? "card is-compact" : "card"} data-tone={tone} data-open={open}>
       <button
         type="button"
         className="card-head"
@@ -155,6 +159,7 @@ export function ReasoningCard({
         </>
       }
       defaultOpen={streaming}
+      compact
     >
       <div className="reason">
         <div className="stream">
@@ -216,6 +221,7 @@ export function ShellCard({
       icon={<I.terminal size={12} />}
       kind="shell"
       name="shell"
+      compact
       meta={
         state === "await" ? (
           <span className="pill-tag warn">{t("cards.shellAwaiting")}</span>
@@ -304,6 +310,7 @@ export function ToolCard({
       kind="tool"
       name={name}
       defaultOpen={false}
+      compact
       meta={
         running ? (
           <span className="pill-tag run">running</span>

@@ -319,7 +319,15 @@ export function CommandPalette({
   );
 }
 
-export function Toast({ message }: { message: string | null }) {
+export function Toast({ message }: { message: { msg: string; yolo?: boolean } | null }) {
   if (!message) return null;
-  return <div className="toast">{message}</div>;
+  if (message.yolo) {
+    return (
+      <div className="toast toast-yolo">
+        <span className="toast-yolo-badge">YOLO</span>
+        {message.msg}
+      </div>
+    );
+  }
+  return <div className="toast">{message.msg}</div>;
 }

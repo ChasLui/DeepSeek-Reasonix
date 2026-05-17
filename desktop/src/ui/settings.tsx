@@ -628,7 +628,7 @@ function PageSkills({ skills }: { skills: SkillInfo[] }) {
                 <div className="nm">
                   <span
                     style={{
-                      fontFamily: "IBM Plex Mono, monospace",
+                      fontFamily: "Geist Mono, monospace",
                       color: "var(--accent)",
                     }}
                   >
@@ -644,7 +644,7 @@ function PageSkills({ skills }: { skills: SkillInfo[] }) {
             <div className="desc">{s.description}</div>
             <div
               style={{
-                fontFamily: "IBM Plex Mono, monospace",
+                fontFamily: "Geist Mono, monospace",
                 fontSize: 10.5,
                 color: "var(--muted-2)",
                 marginTop: 4,

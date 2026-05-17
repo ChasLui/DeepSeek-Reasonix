@@ -119,7 +119,7 @@ export function Sidebar({
                 padding: "12px 8px",
                 fontSize: 11,
                 color: "var(--muted-2)",
-                fontFamily: "IBM Plex Mono, monospace",
+                fontFamily: "Geist Mono, monospace",
               }}
             >
               暂无会话
@@ -130,7 +130,7 @@ export function Sidebar({
                 padding: "12px 8px",
                 fontSize: 11,
                 color: "var(--muted-2)",
-                fontFamily: "IBM Plex Mono, monospace",
+                fontFamily: "Geist Mono, monospace",
               }}
             >
               无匹配结果

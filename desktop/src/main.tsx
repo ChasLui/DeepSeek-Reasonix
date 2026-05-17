@@ -1,12 +1,14 @@
-import "@fontsource/ibm-plex-sans/400.css";
-import "@fontsource/ibm-plex-sans/500.css";
-import "@fontsource/ibm-plex-sans/600.css";
-import "@fontsource/ibm-plex-sans/700.css";
-import "@fontsource/ibm-plex-mono/400.css";
-import "@fontsource/ibm-plex-mono/500.css";
-import "@fontsource/ibm-plex-mono/600.css";
-import "@fontsource/ibm-plex-serif/400.css";
-import "@fontsource/ibm-plex-serif/500.css";
+import "@fontsource/geist/400.css";
+import "@fontsource/geist/500.css";
+import "@fontsource/geist/600.css";
+import "@fontsource/geist/700.css";
+import "@fontsource/geist-mono/400.css";
+import "@fontsource/geist-mono/500.css";
+import "@fontsource/geist-mono/600.css";
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
+import "@fontsource/inter/600.css";
+import "@fontsource/inter/700.css";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { isTheme } from "./theme";
@@ -15,6 +17,10 @@ const stored = localStorage.getItem("reasonix.theme");
 if (isTheme(stored)) {
   document.documentElement.dataset.theme = stored;
 }
+
+const platform = /Mac|macOS/i.test(navigator.userAgent) ? "macos" : "default";
+document.documentElement.dataset.platform = platform;
+document.body.dataset.platform = platform;
 
 const host = document.getElementById("root");
 if (!host) throw new Error("#root missing");

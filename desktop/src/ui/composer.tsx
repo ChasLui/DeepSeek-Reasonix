@@ -414,6 +414,9 @@ export function Composer({
                   {fmtElapsed(busyElapsedMs ?? 0)}
                 </span>
               </span>
+              <span className="grow" />
+              <ModeSwitch mode={editMode} onChange={onEditModeChange} />
+              <span className="hint-sep" />
               <span>
                 <kbd>⏎</kbd> {t("composer.queue")} &nbsp;·&nbsp; <kbd>esc</kbd> {t("composer.interrupt")}
               </span>
@@ -424,6 +427,9 @@ export function Composer({
                 <kbd>/</kbd> {t("composer.commands")} &nbsp;·&nbsp; <kbd>@</kbd> {t("composer.mentionFiles")}
                 &nbsp;·&nbsp; <kbd>⌘K</kbd> {t("composer.commandPalette")}
               </span>
+              <span className="grow" />
+              <ModeSwitch mode={editMode} onChange={onEditModeChange} />
+              <span className="hint-sep" />
               <span>
                 <kbd>⏎</kbd> {t("composer.send")} &nbsp; <kbd>⇧⏎</kbd> {t("composer.newline")}
               </span>
@@ -511,8 +517,6 @@ export function Composer({
             </button>
 
             <span className="grow" />
-
-            <ModeSwitch mode={editMode} onChange={onEditModeChange} />
 
             <div ref={modelWrapRef} style={{ position: "relative" }}>
               <button
@@ -621,7 +625,7 @@ function Popup({
               padding: "12px 8px",
               fontSize: 11.5,
               color: "var(--muted-2)",
-              fontFamily: "IBM Plex Mono, monospace",
+              fontFamily: "Geist Mono, monospace",
             }}
           >
             {t("composer.noMatches")}
