@@ -5,7 +5,7 @@ use ratatui::style::Modifier;
 use crate::state::SceneState;
 
 use super::cards::render_cards;
-use super::paint::paint_str_to;
+use super::paint::{paint_link, paint_str_to};
 use super::theme::{DS, FG, FG2, FG3, LOGO};
 
 pub fn render_scroll(
@@ -119,6 +119,23 @@ fn render_boot_meta(buf: &mut Buffer, area: Rect, start_row: u16, state: &SceneS
                 Modifier::empty(),
             );
             paint_str_to(buf, val_col, row, cwd, end_x, FG, BG, Modifier::empty());
+            row += 1;
+        }
+    }
+
+    if row < bottom {
+        if let Some(url) = state.dashboard_url.as_deref() {
+            paint_str_to(
+                buf,
+                key_col,
+                row,
+                "dashboard",
+                end_x,
+                FG2,
+                BG,
+                Modifier::empty(),
+            );
+            paint_link(buf, val_col, row, url, url, DS_BRIGHT, BG);
             row += 1;
         }
     }

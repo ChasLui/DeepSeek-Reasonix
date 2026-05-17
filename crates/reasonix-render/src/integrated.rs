@@ -19,8 +19,9 @@ use crate::input::is_quit;
 use crate::state::{decode_message, Payload, SceneState};
 use crate::view::render_setup;
 use crate::whole_screen::{
-    at_completion, at_match_count, cards_layout, extract_text, slash_completion, slash_match_count,
-    Selection, WholeScreen,
+    at_completion, at_match_count, cards_layout, extract_text, slash_arg_completion,
+    slash_arg_match_count, slash_completion, slash_is_exact, slash_match_count, Selection,
+    WholeScreen,
 };
 
 type Terminal = ratatui::Terminal<CrosstermBackend<BufWriter<io::Stdout>>>;
@@ -81,6 +82,7 @@ pub fn run_integrated_loop(terminal: &mut Terminal) -> Result<()> {
     let mut dragging = false;
     let mut scrollbar_drag: Option<i32> = None;
     let mut slash_idx: usize = 0;
+    let mut slash_arg_idx: usize = 0;
     let mut at_idx: usize = 0;
     let mut history_cursor: i32 = -1;
     let mut approval_idx: usize = 0;
@@ -157,7 +159,17 @@ pub fn run_integrated_loop(terminal: &mut Terminal) -> Result<()> {
         } else if slash_idx >= slash_count {
             slash_idx = slash_count - 1;
         }
-        let at_count = if slash_count > 0 {
+        let slash_arg_count = if slash_count > 0 {
+            0
+        } else {
+            slash_arg_match_count(&buffer, &scene)
+        };
+        if slash_arg_count == 0 {
+            slash_arg_idx = 0;
+        } else if slash_arg_idx >= slash_arg_count {
+            slash_arg_idx = slash_arg_count - 1;
+        }
+        let at_count = if slash_count > 0 || slash_arg_count > 0 {
             0
         } else {
             at_match_count(&buffer, &scene)
@@ -176,7 +188,11 @@ pub fn run_integrated_loop(terminal: &mut Terminal) -> Result<()> {
             }
         }
 
-        if buffer != prev_emitted_buffer {
+        // While a prompt-input is active the composer buffer is a
+        // private text answer (e.g. an API secret), not a chat draft.
+        // Don't echo it back to Node — handle_prompt_input_key emits a
+        // single `prompt-response` on Enter instead.
+        if scene.prompt_input.is_none() && buffer != prev_emitted_buffer {
             emit_event(serde_json::json!({
                 "event": "composer",
                 "text": buffer.clone(),
@@ -205,6 +221,7 @@ pub fn run_integrated_loop(terminal: &mut Terminal) -> Result<()> {
                                 .with_scroll(scroll_offset)
                                 .with_selection(selection)
                                 .with_slash_index(slash_idx)
+                                .with_slash_arg_index(slash_arg_idx)
                                 .with_at_index(at_idx)
                                 .with_approval_index(approval_idx)
                                 .with_mode_picker(mode_picker)
@@ -309,6 +326,10 @@ pub fn run_integrated_loop(terminal: &mut Terminal) -> Result<()> {
                     handle_mode_picker_key(&key, &mut mode_picker, &mut preset_picker);
                     continue;
                 }
+                if let Some(prompt) = scene.prompt_input.as_ref() {
+                    handle_prompt_input_key(&key, prompt, &mut buffer, &mut cursor);
+                    continue;
+                }
                 if let Some(approval) = scene.approval.as_ref() {
                     approval_log(&format!(
                         "key {:?} (modifiers {:?}) approval={}",
@@ -320,7 +341,9 @@ pub fn run_integrated_loop(terminal: &mut Terminal) -> Result<()> {
                     continue;
                 }
                 let slash_active = slash_count > 0;
-                let at_active = !slash_active && at_count > 0;
+                let slash_arg_active = !slash_active && slash_arg_count > 0;
+                let at_active = !slash_active && !slash_arg_active && at_count > 0;
+                let slash_complete_only = slash_active && !slash_is_exact(&buffer, &scene);
                 match key.code {
                     KeyCode::Up if slash_active => {
                         slash_idx = slash_idx.saturating_sub(1);
@@ -329,11 +352,10 @@ pub fn run_integrated_loop(terminal: &mut Terminal) -> Result<()> {
                         slash_idx = (slash_idx + 1).min(slash_count - 1);
                     }
                     KeyCode::Tab if slash_active => {
-                        slash_idx = if key.modifiers.contains(KeyModifiers::SHIFT) {
-                            slash_idx.saturating_sub(1)
-                        } else {
-                            (slash_idx + 1) % slash_count
-                        };
+                        if let Some(completion) = slash_completion(&buffer, slash_idx, &scene) {
+                            buffer = completion.trim_end().to_string();
+                            cursor = buffer.chars().count();
+                        }
                     }
                     KeyCode::BackTab if slash_active => {
                         slash_idx = if slash_idx == 0 {
@@ -342,8 +364,37 @@ pub fn run_integrated_loop(terminal: &mut Terminal) -> Result<()> {
                             slash_idx - 1
                         };
                     }
-                    KeyCode::Enter if slash_active => {
+                    KeyCode::Enter if slash_complete_only => {
                         if let Some(completion) = slash_completion(&buffer, slash_idx, &scene) {
+                            cursor = completion.chars().count();
+                            buffer = completion;
+                        }
+                    }
+                    KeyCode::Up if slash_arg_active => {
+                        slash_arg_idx = slash_arg_idx.saturating_sub(1);
+                    }
+                    KeyCode::Down if slash_arg_active => {
+                        slash_arg_idx = (slash_arg_idx + 1).min(slash_arg_count - 1);
+                    }
+                    KeyCode::Tab if slash_arg_active => {
+                        if let Some(completion) =
+                            slash_arg_completion(&buffer, slash_arg_idx, &scene)
+                        {
+                            cursor = completion.chars().count();
+                            buffer = completion;
+                        }
+                    }
+                    KeyCode::BackTab if slash_arg_active => {
+                        slash_arg_idx = if slash_arg_idx == 0 {
+                            slash_arg_count - 1
+                        } else {
+                            slash_arg_idx - 1
+                        };
+                    }
+                    KeyCode::Enter if slash_arg_active => {
+                        if let Some(completion) =
+                            slash_arg_completion(&buffer, slash_arg_idx, &scene)
+                        {
                             cursor = completion.chars().count();
                             buffer = completion;
                         }
@@ -355,11 +406,10 @@ pub fn run_integrated_loop(terminal: &mut Terminal) -> Result<()> {
                         at_idx = (at_idx + 1).min(at_count - 1);
                     }
                     KeyCode::Tab if at_active => {
-                        at_idx = if key.modifiers.contains(KeyModifiers::SHIFT) {
-                            at_idx.saturating_sub(1)
-                        } else {
-                            (at_idx + 1) % at_count
-                        };
+                        if let Some(completion) = at_completion(&buffer, at_idx, &scene) {
+                            cursor = completion.chars().count();
+                            buffer = completion;
+                        }
                     }
                     KeyCode::BackTab if at_active => {
                         at_idx = if at_idx == 0 {
@@ -682,6 +732,55 @@ fn current_preset_idx(scene: &SceneState) -> usize {
         Some("flash") => 1,
         Some("pro") => 2,
         _ => 0,
+    }
+}
+
+fn handle_prompt_input_key(
+    key: &crossterm::event::KeyEvent,
+    prompt: &crate::state::PromptInput,
+    buffer: &mut String,
+    cursor: &mut usize,
+) {
+    match key.code {
+        KeyCode::Enter => {
+            let answer = if buffer.is_empty() {
+                prompt.default_value.clone().unwrap_or_default()
+            } else {
+                std::mem::take(buffer)
+            };
+            *cursor = 0;
+            emit_event(serde_json::json!({
+                "event": "prompt-response",
+                "id": prompt.id,
+                "text": answer,
+            }));
+        }
+        KeyCode::Esc => {
+            buffer.clear();
+            *cursor = 0;
+            emit_event(serde_json::json!({
+                "event": "prompt-response",
+                "id": prompt.id,
+                "cancelled": true,
+            }));
+        }
+        KeyCode::Backspace if *cursor > 0 => {
+            remove_char_at(buffer, *cursor - 1);
+            *cursor -= 1;
+        }
+        KeyCode::Left => {
+            *cursor = cursor.saturating_sub(1);
+        }
+        KeyCode::Right => {
+            *cursor = (*cursor + 1).min(buffer.chars().count());
+        }
+        KeyCode::Home => *cursor = 0,
+        KeyCode::End => *cursor = buffer.chars().count(),
+        KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+            insert_char_at(buffer, *cursor, c);
+            *cursor += 1;
+        }
+        _ => {}
     }
 }
 

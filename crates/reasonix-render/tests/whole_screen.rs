@@ -2,8 +2,9 @@ use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use reasonix_render::state::{SceneCard, SceneState};
 use reasonix_render::whole_screen::{
-    at_completion, at_match_count, cards_layout, demo_state, extract_text, slash_completion,
-    slash_match_count, Selection, WholeScreen,
+    at_completion, at_match_count, cards_layout, demo_state, extract_text, slash_arg_completion,
+    slash_arg_match_count, slash_completion, slash_is_exact, slash_match_count, Selection,
+    WholeScreen,
 };
 use unicode_width::UnicodeWidthStr;
 
@@ -295,13 +296,194 @@ fn catalog_state() -> reasonix_render::state::SceneState {
                 .map(|cmd| SlashMatch {
                     cmd: (*cmd).to_string(),
                     summary: String::new(),
+                    group: None,
                     args_hint: None,
                     aliases: Vec::new(),
+                    arg_completer: None,
                 })
                 .collect(),
         ),
         ..Default::default()
     }
+}
+
+#[test]
+fn dashboard_url_renders_in_boot_block() {
+    let state = SceneState {
+        model: Some("deepseek-v3.2-coder".to_string()),
+        cwd: Some("~/work/reasonix-core".to_string()),
+        dashboard_url: Some("http://localhost:7777".to_string()),
+        ..Default::default()
+    };
+    let rows = draw(&state, 120, 36);
+    let all = joined(&rows);
+    assert!(all.contains("dashboard"), "dashboard label missing");
+    assert!(
+        all.contains("http://localhost:7777"),
+        "dashboard URL missing"
+    );
+}
+
+#[test]
+fn dashboard_line_hidden_when_url_absent() {
+    let state = SceneState {
+        model: Some("deepseek-v3.2-coder".to_string()),
+        ..Default::default()
+    };
+    let rows = draw(&state, 120, 30);
+    let all = joined(&rows);
+    assert!(!all.contains("dashboard"), "no dashboard line without URL");
+}
+
+#[test]
+fn double_slash_does_not_match_anything() {
+    let state = catalog_state();
+    // Bare "/" is browse mode — every catalog entry surfaces.
+    assert_eq!(slash_match_count("/", &state), 6, "bare slash shows all");
+    // "//" is two literal slashes, not "bare slash with prefix" — the
+    // user is most likely typing a chat message starting with //, so the
+    // overlay should NOT explode into the whole catalog.
+    assert_eq!(
+        slash_match_count("//", &state),
+        0,
+        "double slash matches nothing"
+    );
+    assert_eq!(
+        slash_match_count("///c", &state),
+        0,
+        "triple slash also matches nothing"
+    );
+}
+
+#[test]
+fn slash_arg_picker_static_completer() {
+    use reasonix_render::state::{SceneState, SlashMatch};
+    let state = SceneState {
+        slash_catalog: Some(vec![
+            SlashMatch {
+                cmd: "preset".to_string(),
+                summary: String::new(),
+                group: Some("setup".to_string()),
+                args_hint: Some("<auto|flash|pro>".to_string()),
+                aliases: Vec::new(),
+                arg_completer: Some(vec![
+                    "auto".to_string(),
+                    "flash".to_string(),
+                    "pro".to_string(),
+                ]),
+            },
+            SlashMatch {
+                cmd: "language".to_string(),
+                summary: String::new(),
+                group: Some("setup".to_string()),
+                args_hint: Some("<EN|zh-CN>".to_string()),
+                aliases: Vec::new(),
+                arg_completer: Some(vec!["EN".to_string(), "zh-CN".to_string()]),
+            },
+            SlashMatch {
+                cmd: "help".to_string(),
+                summary: String::new(),
+                group: Some("chat".to_string()),
+                args_hint: None,
+                aliases: Vec::new(),
+                arg_completer: None,
+            },
+        ]),
+        ..Default::default()
+    };
+    assert_eq!(
+        slash_arg_match_count("/preset ", &state),
+        3,
+        "bare arg shows all"
+    );
+    assert_eq!(
+        slash_arg_match_count("/preset fl", &state),
+        1,
+        "prefix filters"
+    );
+    assert_eq!(
+        slash_arg_match_count("/preset flash", &state),
+        0,
+        "exact dismisses"
+    );
+    assert_eq!(slash_arg_match_count("/help ", &state), 0, "no completer");
+    assert_eq!(
+        slash_arg_match_count("/preset auto x", &state),
+        0,
+        "past first arg"
+    );
+    assert_eq!(slash_arg_match_count("/zzz ", &state), 0, "unknown cmd");
+    assert_eq!(
+        slash_arg_completion("/preset fl", 0, &state).as_deref(),
+        Some("/preset flash"),
+    );
+    assert_eq!(
+        slash_arg_completion("/language ", 1, &state).as_deref(),
+        Some("/language zh-CN"),
+    );
+}
+
+#[test]
+fn slash_arg_state_overrides_catalog_for_dynamic_completers() {
+    use reasonix_render::state::{SceneState, SlashArgState, SlashMatch};
+    let state = SceneState {
+        slash_catalog: Some(vec![SlashMatch {
+            cmd: "model".to_string(),
+            summary: String::new(),
+            group: Some("setup".to_string()),
+            args_hint: Some("<id>".to_string()),
+            aliases: Vec::new(),
+            arg_completer: None,
+        }]),
+        slash_arg_state: Some(SlashArgState {
+            cmd: "model".to_string(),
+            partial: "ds".to_string(),
+            matches: vec!["deepseek-v3.2-coder".to_string(), "deepseek-r1".to_string()],
+        }),
+        ..Default::default()
+    };
+    assert_eq!(
+        slash_arg_match_count("/model ds", &state),
+        2,
+        "scene picks up dynamic matches"
+    );
+    assert_eq!(
+        slash_arg_completion("/model ds", 0, &state).as_deref(),
+        Some("/model deepseek-v3.2-coder"),
+    );
+    let no_match = SceneState {
+        slash_catalog: state.slash_catalog.clone(),
+        slash_arg_state: Some(SlashArgState {
+            cmd: "model".to_string(),
+            partial: "old".to_string(),
+            matches: vec!["irrelevant".to_string()],
+        }),
+        ..Default::default()
+    };
+    assert_eq!(
+        slash_arg_match_count("/model ds", &no_match),
+        0,
+        "stale scene partial does not leak in",
+    );
+}
+
+#[test]
+fn slash_is_exact_matches_full_command_only() {
+    let state = catalog_state();
+    assert!(slash_is_exact("/clear", &state), "full name matches");
+    assert!(slash_is_exact("/CLEAR", &state), "case-insensitive");
+    assert!(!slash_is_exact("/cl", &state), "prefix is not exact");
+    assert!(
+        !slash_is_exact("/clear ", &state),
+        "trailing space is not exact"
+    );
+    assert!(
+        !slash_is_exact("/clear foo", &state),
+        "with args is not exact"
+    );
+    assert!(!slash_is_exact("clear", &state), "no leading slash");
+    assert!(!slash_is_exact("/zzz", &state), "unknown command");
+    assert!(!slash_is_exact("/", &state), "empty cmd");
 }
 
 #[test]

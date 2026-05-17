@@ -41,6 +41,8 @@ pub struct SceneState {
     pub preset: Option<String>,
     #[serde(default)]
     pub cwd: Option<String>,
+    #[serde(default, rename = "dashboardUrl")]
+    pub dashboard_url: Option<String>,
     #[serde(default)]
     pub ctx_tokens: Option<u32>,
     #[serde(default)]
@@ -60,11 +62,37 @@ pub struct SceneState {
     #[serde(default)]
     pub slash_catalog: Option<Vec<SlashMatch>>,
     #[serde(default)]
+    pub slash_arg_state: Option<SlashArgState>,
+    #[serde(default)]
     pub prompt_history: Option<Vec<String>>,
     #[serde(default)]
     pub approval: Option<Approval>,
     #[serde(default)]
     pub at_state: Option<AtState>,
+    #[serde(default)]
+    pub prompt_input: Option<PromptInput>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct PromptInput {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default, rename = "defaultValue")]
+    pub default_value: Option<String>,
+    #[serde(default)]
+    pub secret: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct SlashArgState {
+    #[serde(default)]
+    pub cmd: String,
+    #[serde(default)]
+    pub partial: String,
+    #[serde(default)]
+    pub matches: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -182,10 +210,14 @@ pub struct SlashMatch {
     pub cmd: String,
     #[serde(default)]
     pub summary: String,
+    #[serde(default)]
+    pub group: Option<String>,
     #[serde(default, rename = "argsHint")]
     pub args_hint: Option<String>,
     #[serde(default)]
     pub aliases: Vec<String>,
+    #[serde(default, rename = "argCompleter")]
+    pub arg_completer: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

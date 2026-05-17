@@ -20,7 +20,7 @@ use reasonix_render::state::{decode_message, Payload};
 use reasonix_render::view::render_setup;
 use reasonix_render::whole_screen::{
     at_completion, at_match_count, cards_layout, demo_state, extract_text, slash_completion,
-    slash_match_count, Selection, WholeScreen,
+    slash_is_exact, slash_match_count, Selection, WholeScreen,
 };
 
 type RenderTerminal = ratatui::Terminal<CrosstermBackend<BufWriter<io::Stdout>>>;
@@ -245,6 +245,7 @@ fn run_demo_loop(terminal: &mut RenderTerminal) -> Result<()> {
                 }
                 let slash_active = slash_count > 0;
                 let at_active = !slash_active && at_count > 0;
+                let slash_complete_only = slash_active && !slash_is_exact(&buffer, &state);
                 match key.code {
                     KeyCode::Up if slash_active => {
                         slash_idx = slash_idx.saturating_sub(1);
@@ -253,10 +254,9 @@ fn run_demo_loop(terminal: &mut RenderTerminal) -> Result<()> {
                         slash_idx = (slash_idx + 1).min(slash_count - 1);
                     }
                     KeyCode::Tab if slash_active => {
-                        if key.modifiers.contains(KeyModifiers::SHIFT) {
-                            slash_idx = slash_idx.saturating_sub(1);
-                        } else {
-                            slash_idx = (slash_idx + 1) % slash_count;
+                        if let Some(completion) = slash_completion(&buffer, slash_idx, &state) {
+                            buffer = completion.trim_end().to_string();
+                            cursor = buffer.chars().count();
                         }
                     }
                     KeyCode::BackTab if slash_active => {
@@ -266,7 +266,7 @@ fn run_demo_loop(terminal: &mut RenderTerminal) -> Result<()> {
                             slash_idx - 1
                         };
                     }
-                    KeyCode::Enter if slash_active => {
+                    KeyCode::Enter if slash_complete_only => {
                         if let Some(completion) = slash_completion(&buffer, slash_idx, &state) {
                             cursor = completion.chars().count();
                             buffer = completion;
@@ -279,10 +279,9 @@ fn run_demo_loop(terminal: &mut RenderTerminal) -> Result<()> {
                         at_idx = (at_idx + 1).min(at_count - 1);
                     }
                     KeyCode::Tab if at_active => {
-                        if key.modifiers.contains(KeyModifiers::SHIFT) {
-                            at_idx = at_idx.saturating_sub(1);
-                        } else {
-                            at_idx = (at_idx + 1) % at_count;
+                        if let Some(completion) = at_completion(&buffer, at_idx, &state) {
+                            cursor = completion.chars().count();
+                            buffer = completion;
                         }
                     }
                     KeyCode::BackTab if at_active => {

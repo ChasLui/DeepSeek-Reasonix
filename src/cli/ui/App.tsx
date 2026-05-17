@@ -1,7 +1,14 @@
 import { type WriteStream, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { Box, Text, useStdin, useStdout } from "ink";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   type JsonlEventSink,
   eventLogPath,
@@ -167,6 +174,7 @@ import { openUrl } from "./open-url.js";
 import { formatLongPaste } from "./paste-collapse.js";
 import { extractOpenQuestionsSection } from "./plan-open-questions.js";
 import { PRESETS, resolvePreset } from "./presets.js";
+import { getActivePromptInput, subscribePromptInput } from "./scene/prompt-input-store.js";
 import { type McpServerSummary, handleSlash, parseSlash, suggestSlashCommands } from "./slash.js";
 import { TurnTranslator } from "./state/TurnTranslator.js";
 import { cardsToDashboardMessages } from "./state/cards-to-messages.js";
@@ -1381,12 +1389,20 @@ function AppInner({
   const slashCatalogJson = useMemo(() => {
     const all = suggestSlashCommands("", !!codeMode);
     return JSON.stringify(
-      all.map((m) => ({
-        cmd: m.cmd,
-        summary: m.summary,
-        ...(m.argsHint !== undefined ? { argsHint: m.argsHint } : {}),
-        ...(m.aliases && m.aliases.length > 0 ? { aliases: m.aliases } : {}),
-      })),
+      all.map((m) => {
+        const i18nKey = `slash.${m.cmd}.description`;
+        const translated = t(i18nKey);
+        const summary = translated === i18nKey ? m.summary : translated;
+        const argCompleter = Array.isArray(m.argCompleter) ? [...m.argCompleter] : undefined;
+        return {
+          cmd: m.cmd,
+          summary,
+          group: m.group,
+          ...(m.argsHint !== undefined ? { argsHint: m.argsHint } : {}),
+          ...(m.aliases && m.aliases.length > 0 ? { aliases: [...m.aliases] } : {}),
+          ...(argCompleter ? { argCompleter } : {}),
+        };
+      }),
     );
   }, [codeMode]);
 
@@ -1395,9 +1411,29 @@ function AppInner({
     return JSON.stringify(atState);
   }, [atState]);
 
+  const slashArgStateJson = useMemo(() => {
+    if (!slashArgContext || slashArgContext.kind !== "picker") return undefined;
+    if (!slashArgMatches || slashArgMatches.length === 0) return undefined;
+    return JSON.stringify({
+      cmd: slashArgContext.spec.cmd,
+      partial: slashArgContext.partial,
+      matches: [...slashArgMatches],
+    });
+  }, [slashArgContext, slashArgMatches]);
+
   const promptHistoryJson = useMemo(
     () => (promptHistory.length === 0 ? undefined : JSON.stringify(promptHistory)),
     [promptHistory],
+  );
+
+  const activePromptInput = useSyncExternalStore(
+    subscribePromptInput,
+    getActivePromptInput,
+    getActivePromptInput,
+  );
+  const promptInputJson = useMemo(
+    () => (activePromptInput ? JSON.stringify(activePromptInput) : undefined),
+    [activePromptInput],
   );
 
   useEffect(() => {
@@ -1491,6 +1527,11 @@ function AppInner({
     return undefined;
   }, [pendingPlan, pendingShell, pendingPath, pendingEditReview, pendingChoice, pendingCheckpoint]);
 
+  // Hoisted above useSceneTrace so the dashboard URL can ride the
+  // scene frame to the rust renderer. Definition (incl. setter) lives
+  // here; the auto-start effect that populates it follows further down.
+  const [dashboardUrl, setDashboardUrlState] = useState<string | null>(null);
+
   useSceneTrace({
     cardCount,
     busy,
@@ -1513,6 +1554,7 @@ function AppInner({
     editMode,
     preset: presetForDisplay,
     cwd: currentRootDir,
+    dashboardUrl: dashboardUrl ?? undefined,
     ctxTokens,
     ctxCap,
     sessionCostUsd,
@@ -1522,9 +1564,11 @@ function AppInner({
     sessionOutputTokens,
     lastTurnMs: lastTurnMs > 0 ? lastTurnMs : undefined,
     slashCatalogJson,
+    slashArgStateJson,
     promptHistoryJson,
     approvalJson,
     atStateJson,
+    promptInputJson,
   });
 
   // Ctrl+P / Ctrl+N from PromptInput route here. When any input-prefix
@@ -2422,11 +2466,12 @@ function AppInner({
     return dashboardRef.current?.url ?? null;
   }, []);
 
-  // Mirror of the dashboard URL into React state so the StatsPanel
-  // header can render a clickable pill the moment the server is up.
-  // Updated by both the auto-start effect below and the explicit
-  // /dashboard slash path (via startDashboard).
-  const [dashboardUrl, setDashboardUrlState] = useState<string | null>(null);
+  // dashboardUrl state lives near the top of this component so it can
+  // ride the scene frame (see useSceneTrace input above). Mirror of
+  // the dashboard URL so the StatsPanel header can render a clickable
+  // pill the moment the server is up. Updated by both the auto-start
+  // effect below and the explicit /dashboard slash path (via
+  // startDashboard).
 
   // Auto-start the dashboard once the TUI is mounted unless the user
   // opted out with --no-dashboard. The whole point is discoverability:

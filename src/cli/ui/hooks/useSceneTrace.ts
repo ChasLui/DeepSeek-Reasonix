@@ -42,6 +42,8 @@ export type SceneTraceInput = {
   editMode?: "review" | "auto" | "yolo";
   preset?: "auto" | "flash" | "pro";
   cwd?: string;
+  /** Local URL of the running dashboard server — surfaced in the rust boot block so users can discover the web UI. Null when --no-dashboard or while the server is still starting. */
+  dashboardUrl?: string;
   ctxTokens?: number;
   ctxCap?: number;
   sessionCostUsd?: number;
@@ -51,9 +53,13 @@ export type SceneTraceInput = {
   sessionInputTokens?: number;
   sessionOutputTokens?: number;
   slashCatalogJson?: string;
+  /** Resolved {cmd, partial, matches} for the active slash-arg picker — covers static AND dynamic completers (models / path / mcp-resources / mcp-prompts / skills) since Node has the data to resolve them. */
+  slashArgStateJson?: string;
   promptHistoryJson?: string;
   approvalJson?: string;
   atStateJson?: string;
+  /** Active text-input prompt — rust intercepts composer Enter to send the answer back as `prompt-response` instead of submitting it as a chat message. Used by /qq connect and friends under integrated mode. */
+  promptInputJson?: string;
 };
 
 export type SetupSceneInput = {
@@ -118,9 +124,65 @@ export function toSceneCard(card: Card): SceneCard {
         ts: card.ts,
         meta: card.done ? "done" : "streaming…",
       };
+    case "live":
+      return { kind: "info", summary, body: card.text, ts: card.ts, meta: card.meta };
+    case "warn":
+      return {
+        kind: "warn",
+        summary: card.title,
+        body: card.message,
+        ts: card.ts,
+        meta: card.detail,
+      };
+    case "usage":
+      return {
+        kind: "usage",
+        summary: `cost · turn ${card.turn}`,
+        body: formatUsageBody(card),
+        ts: card.ts,
+        meta: card.elapsedMs ? formatElapsed(card.elapsedMs) : undefined,
+      };
+    case "tip":
+      return { kind: "info", summary, body: formatTipBody(card), ts: card.ts };
     default:
       return { kind: card.kind, summary };
   }
+}
+
+function formatUsageBody(card: Extract<Card, { kind: "usage" }>): string {
+  const { tokens } = card;
+  const pct = Math.round(card.cacheHit * 100);
+  const lines = [
+    `turn ${card.turn} · this ${formatCost(card.cost)} · session ${formatCost(card.sessionCost)}`,
+    `prompt ${formatTokens(tokens.prompt)} / ${formatTokens(tokens.promptCap)}    output ${formatTokens(tokens.output)} (reason ${formatTokens(tokens.reason)})`,
+    `cache ${pct}%`,
+  ];
+  if (card.balance !== undefined) {
+    lines.push(`balance ${card.balance.toFixed(2)} ${card.balanceCurrency ?? ""}`.trim());
+  }
+  return lines.join("\n");
+}
+
+function formatTipBody(card: Extract<Card, { kind: "tip" }>): string {
+  const parts: string[] = [];
+  for (const sec of card.sections) {
+    if (sec.title) parts.push(sec.title);
+    for (const r of sec.rows) {
+      parts.push(r.key ? `  ${r.key}  ${r.text}` : `  ${r.text}`);
+    }
+  }
+  if (card.footer) parts.push(card.footer);
+  return parts.join("\n");
+}
+
+function formatCost(usd: number): string {
+  return usd < 0.01 ? `$${usd.toFixed(5)}` : `$${usd.toFixed(4)}`;
+}
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
 }
 
 function toolStatus(card: Card & { kind: "tool" }): "ok" | "err" | "running" {
@@ -238,6 +300,7 @@ export function useSceneTrace(input: SceneTraceInput): void {
     editMode,
     preset,
     cwd,
+    dashboardUrl,
     ctxTokens,
     ctxCap,
     sessionCostUsd,
@@ -247,9 +310,11 @@ export function useSceneTrace(input: SceneTraceInput): void {
     sessionInputTokens,
     sessionOutputTokens,
     slashCatalogJson,
+    slashArgStateJson,
     promptHistoryJson,
     approvalJson,
     atStateJson,
+    promptInputJson,
   } = input;
   useEffect(() => {
     if (!isSceneTraceEnabled()) return;
@@ -274,6 +339,7 @@ export function useSceneTrace(input: SceneTraceInput): void {
       editMode,
       preset,
       cwd,
+      dashboardUrl,
       ctxTokens,
       ctxCap,
       sessionCostUsd,
@@ -283,9 +349,11 @@ export function useSceneTrace(input: SceneTraceInput): void {
       sessionInputTokens,
       sessionOutputTokens,
       slashCatalog: parseSlashMatches(slashCatalogJson),
+      slashArgState: parseApproval(slashArgStateJson),
       promptHistory: parseStringArray(promptHistoryJson),
       approval: parseApproval(approvalJson),
       atState: parseApproval(atStateJson),
+      promptInput: parseApproval(promptInputJson),
       fallbackCols,
       fallbackRows,
     });
@@ -311,6 +379,7 @@ export function useSceneTrace(input: SceneTraceInput): void {
     editMode,
     preset,
     cwd,
+    dashboardUrl,
     ctxTokens,
     ctxCap,
     sessionCostUsd,
@@ -320,9 +389,11 @@ export function useSceneTrace(input: SceneTraceInput): void {
     sessionInputTokens,
     sessionOutputTokens,
     slashCatalogJson,
+    slashArgStateJson,
     promptHistoryJson,
     approvalJson,
     atStateJson,
+    promptInputJson,
   ]);
 }
 

@@ -6,7 +6,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::state::{SceneState, SlashMatch};
 
 use super::paint::{paint, paint_str};
-use super::theme::{BG, DS, DS_BRIGHT, FG, FG2};
+use super::theme::{BG, DS, DS_BRIGHT, FG, FG2, FG3};
 
 const FALLBACK_COMMANDS: &[(&str, &str)] = &[
     ("/clear", "reset conversation context"),
@@ -23,6 +23,30 @@ pub fn slash_match_count(query: &str, state: &SceneState) -> usize {
     match_iter(query, state).count()
 }
 
+/// True when `query` is `/<cmd>` for a `<cmd>` that exists in the catalog
+/// (case-insensitive). The composer uses this to decide whether Enter
+/// should auto-complete the highlighted match or submit the typed command
+/// directly. Without this, typing the full name (e.g. `/cost`) re-completes
+/// to `/cost ` and the user has to press Enter twice.
+pub fn slash_is_exact(query: &str, state: &SceneState) -> bool {
+    let Some(needle) = query.strip_prefix('/') else {
+        return false;
+    };
+    if needle.is_empty() || needle.contains(' ') {
+        return false;
+    }
+    let needle_lower = needle.to_lowercase();
+    if let Some(catalog) = state.slash_catalog.as_ref() {
+        return catalog
+            .iter()
+            .any(|m| m.cmd.eq_ignore_ascii_case(&needle_lower));
+    }
+    FALLBACK_COMMANDS.iter().any(|(name, _)| {
+        name.trim_start_matches('/')
+            .eq_ignore_ascii_case(&needle_lower)
+    })
+}
+
 pub fn slash_completion(query: &str, idx: usize, state: &SceneState) -> Option<String> {
     if !query.starts_with('/') {
         return None;
@@ -32,8 +56,75 @@ pub fn slash_completion(query: &str, idx: usize, state: &SceneState) -> Option<S
         .map(|name| format!("/{name} "))
 }
 
+/// Number of arg-completer matches for `/<cmd> <partial>`. Returns 0 when
+/// the command has no static argCompleter, partial already exact-matches a
+/// value, or partial has progressed past the first argument (contains a
+/// space). Dynamic completers (`"models"`, `"path"`, `"mcp-resources"`,
+/// `"mcp-prompts"`, `"skills"`) are not surfaced here yet — those live on
+/// the Node side.
+pub fn slash_arg_match_count(query: &str, state: &SceneState) -> usize {
+    slash_arg_matches(query, state)
+        .map(|v| v.len())
+        .unwrap_or(0)
+}
+
+/// Build the full composer text after picking arg `idx` — replaces the
+/// trailing partial with the chosen value. Returns None when there are
+/// no matches.
+pub fn slash_arg_completion(query: &str, idx: usize, state: &SceneState) -> Option<String> {
+    let matches = slash_arg_matches(query, state)?;
+    let chosen = matches.get(idx)?;
+    let (cmd, _partial) = split_slash_arg(query)?;
+    Some(format!("/{cmd} {chosen}"))
+}
+
+fn slash_arg_matches(query: &str, state: &SceneState) -> Option<Vec<String>> {
+    let (cmd, partial) = split_slash_arg(query)?;
+    if partial.contains(' ') {
+        return None;
+    }
+    // Prefer the Node-resolved scene field: it's the only way to surface
+    // dynamic completers (models / path / mcp-resources / mcp-prompts /
+    // skills) because rust can't read MCP catalogs or the filesystem from
+    // here. Match by cmd + partial so a stale push doesn't leak in.
+    if let Some(s) = state.slash_arg_state.as_ref() {
+        if s.cmd.eq_ignore_ascii_case(cmd) && s.partial == partial && !s.matches.is_empty() {
+            return Some(s.matches.clone());
+        }
+    }
+    let catalog = state.slash_catalog.as_ref()?;
+    let m = catalog.iter().find(|m| m.cmd.eq_ignore_ascii_case(cmd))?;
+    let completer = m.arg_completer.as_ref()?;
+    let needle = partial.to_lowercase();
+    if !partial.is_empty() && completer.iter().any(|v| v.to_lowercase() == needle) {
+        return None;
+    }
+    if partial.is_empty() {
+        return Some(completer.clone());
+    }
+    Some(
+        completer
+            .iter()
+            .filter(|v| v.to_lowercase().starts_with(&needle))
+            .cloned()
+            .collect(),
+    )
+}
+
+fn split_slash_arg(query: &str) -> Option<(&str, &str)> {
+    let stripped = query.strip_prefix('/')?;
+    let space_pos = stripped.find(' ')?;
+    let cmd = &stripped[..space_pos];
+    let partial = &stripped[space_pos + 1..];
+    Some((cmd, partial))
+}
+
 fn match_iter<'a>(query: &'a str, state: &'a SceneState) -> Box<dyn Iterator<Item = &'a str> + 'a> {
-    let needle = query.trim_start_matches('/').to_lowercase();
+    // strip_prefix removes ONE leading '/', not all of them — so "//" has
+    // needle "/" which matches nothing (intended: user typed two slashes
+    // as literal punctuation). trim_start_matches('/') would collapse
+    // them and surface the whole catalog instead.
+    let needle = query.strip_prefix('/').unwrap_or("").to_lowercase();
     if let Some(catalog) = state.slash_catalog.as_ref() {
         return Box::new(
             catalog
@@ -57,6 +148,106 @@ fn matches_query(cmd: &str, needle_lower: &str) -> bool {
     cmd.to_lowercase().starts_with(needle_lower)
 }
 
+pub fn render_slash_arg_overlay(
+    buf: &mut Buffer,
+    dock_area: Rect,
+    state: &SceneState,
+    selected_idx: usize,
+) {
+    let Some(text) = state.composer_text.as_deref() else {
+        return;
+    };
+    let Some(matches) = slash_arg_matches(text, state) else {
+        return;
+    };
+    if matches.is_empty() {
+        return;
+    }
+    let Some((cmd, partial)) = split_slash_arg(text) else {
+        return;
+    };
+    let max_value_w = matches.iter().map(|s| s.width()).max().unwrap_or(8);
+    let header = format!("/{cmd} <arg>");
+    let header_w = header.width();
+    let popup_w = (header_w.max(max_value_w + 4) as u16 + 4).min(dock_area.width.saturating_sub(4));
+    if popup_w < 12 {
+        return;
+    }
+    let cap = (dock_area.y as usize).saturating_sub(3).clamp(1, 10);
+    let visible = matches.len().min(cap) as u16;
+    let popup_h = 3 + visible;
+    if popup_h > dock_area.y {
+        return;
+    }
+    let popup_x = dock_area.x + 2;
+    let popup_y = dock_area.y - popup_h;
+    let popup = Rect::new(popup_x, popup_y, popup_w, popup_h);
+    draw_box(buf, popup);
+    paint_str(
+        buf,
+        popup.x + 2,
+        popup.y + 1,
+        &header,
+        DS_BRIGHT,
+        BG,
+        Modifier::BOLD,
+    );
+    let count_text = if matches.len() == 1 {
+        "1 option".to_string()
+    } else {
+        format!("{} options", matches.len())
+    };
+    let ccol = popup.x + popup.width.saturating_sub(count_text.width() as u16 + 2);
+    paint_str(
+        buf,
+        ccol,
+        popup.y + 1,
+        &count_text,
+        FG3,
+        BG,
+        Modifier::empty(),
+    );
+    let selected = selected_idx.min(matches.len().saturating_sub(1));
+    let start = if selected >= visible as usize {
+        selected + 1 - visible as usize
+    } else {
+        0
+    };
+    let needle = partial.to_lowercase();
+    for (i, value) in matches
+        .iter()
+        .enumerate()
+        .skip(start)
+        .take(visible as usize)
+    {
+        let row = popup.y + 2 + (i - start) as u16;
+        let is_sel = i == selected;
+        if is_sel {
+            paint_str(buf, popup.x + 2, row, "▸", DS_BRIGHT, BG, Modifier::BOLD);
+        }
+        let fg = if is_sel { FG } else { DS_BRIGHT };
+        let modifier = if is_sel {
+            Modifier::BOLD
+        } else {
+            Modifier::empty()
+        };
+        paint_str(buf, popup.x + 4, row, value, fg, BG, modifier);
+        if !partial.is_empty() && value.to_lowercase().starts_with(&needle) {
+            let suffix: String = value.chars().skip(partial.chars().count()).collect();
+            let typed_w = partial.width() as u16;
+            paint_str(
+                buf,
+                popup.x + 4 + typed_w,
+                row,
+                &suffix,
+                FG2,
+                BG,
+                Modifier::empty(),
+            );
+        }
+    }
+}
+
 pub fn render_slash_overlay(
     buf: &mut Buffer,
     dock_area: Rect,
@@ -71,6 +262,7 @@ pub fn render_slash_overlay(
     }
     let all_rows: Vec<SlashRow> = collect_rows(text, state);
     if all_rows.is_empty() {
+        render_no_match(buf, dock_area, text);
         return;
     }
     let total = all_rows.len();
@@ -249,11 +441,12 @@ fn description_with_aliases(row: &SlashRow) -> String {
 }
 
 fn row_visual_height(row: &SlashRow, layout: &ColumnLayout, selected: bool) -> usize {
+    let header = if row.header_above { 1 } else { 0 };
     if !selected {
-        return 1;
+        return header + 1;
     }
     let desc = description_with_aliases(row);
-    wrap_desc(&desc, layout.desc_w as usize).len().max(1)
+    header + wrap_desc(&desc, layout.desc_w as usize).len().max(1)
 }
 
 fn wrap_desc(text: &str, width: usize) -> Vec<String> {
@@ -303,12 +496,19 @@ struct SlashRow {
     desc: String,
     args_hint: Option<String>,
     aliases: Vec<String>,
+    group: Option<String>,
+    /// Render a group header row just above this command. Set true for
+    /// the first row of each group when the user is browsing the bare
+    /// `/` menu (group mode); always false in search mode.
+    header_above: bool,
 }
 
 fn collect_rows(query: &str, state: &SceneState) -> Vec<SlashRow> {
-    let needle = query.trim_start_matches('/').to_lowercase();
-    if let Some(catalog) = state.slash_catalog.as_ref() {
-        return catalog
+    // See match_iter for why strip_prefix instead of trim_start_matches.
+    let needle = query.strip_prefix('/').unwrap_or("").to_lowercase();
+    let group_mode = needle.is_empty();
+    let raw: Vec<SlashRow> = if let Some(catalog) = state.slash_catalog.as_ref() {
+        catalog
             .iter()
             .filter(|m| matches_query(&m.cmd, &needle))
             .map(|m: &SlashMatch| SlashRow {
@@ -316,19 +516,77 @@ fn collect_rows(query: &str, state: &SceneState) -> Vec<SlashRow> {
                 desc: m.summary.clone(),
                 args_hint: m.args_hint.clone(),
                 aliases: m.aliases.clone(),
+                group: m.group.clone(),
+                header_above: false,
             })
-            .collect();
+            .collect()
+    } else {
+        FALLBACK_COMMANDS
+            .iter()
+            .filter(|(name, _)| matches_query(name.trim_start_matches('/'), &needle))
+            .map(|(name, desc)| SlashRow {
+                name: (*name).to_string(),
+                desc: (*desc).to_string(),
+                args_hint: None,
+                aliases: Vec::new(),
+                group: None,
+                header_above: false,
+            })
+            .collect()
+    };
+    if !group_mode {
+        return raw;
     }
-    FALLBACK_COMMANDS
-        .iter()
-        .filter(|(name, _)| matches_query(name.trim_start_matches('/'), &needle))
-        .map(|(name, desc)| SlashRow {
-            name: (*name).to_string(),
-            desc: (*desc).to_string(),
-            args_hint: None,
-            aliases: Vec::new(),
-        })
-        .collect()
+    let mut out = raw;
+    let mut prev_group: Option<&str> = None;
+    for row in out.iter_mut() {
+        let g = row.group.as_deref();
+        if g != prev_group {
+            row.header_above = true;
+            prev_group = g;
+        }
+    }
+    out
+}
+
+fn render_no_match(buf: &mut Buffer, dock_area: Rect, query: &str) {
+    let popup_w = dock_area.width.saturating_sub(4).min(80);
+    if popup_w < 30 {
+        return;
+    }
+    let popup_h: u16 = 3;
+    if popup_h > dock_area.y {
+        return;
+    }
+    let popup_x = dock_area.x + 2;
+    let popup_y = dock_area.y - popup_h;
+    let popup = Rect::new(popup_x, popup_y, popup_w, popup_h);
+    draw_box(buf, popup);
+    let msg = format!("no command matches '{query}'");
+    paint_str(buf, popup.x + 2, popup.y + 1, "▲", FG2, BG, Modifier::BOLD);
+    paint_str(
+        buf,
+        popup.x + 4,
+        popup.y + 1,
+        &msg,
+        FG2,
+        BG,
+        Modifier::empty(),
+    );
+}
+
+fn group_label(group: &str) -> &'static str {
+    match group {
+        "setup" => "SETUP",
+        "info" => "INFO",
+        "chat" => "CHAT",
+        "extend" => "EXTEND",
+        "session" => "SESSION",
+        "code" => "CODE",
+        "jobs" => "JOBS",
+        "advanced" => "ADVANCED",
+        _ => "OTHER",
+    }
 }
 
 fn draw_box(buf: &mut Buffer, area: Rect) {
@@ -405,6 +663,18 @@ fn draw_rows_wrapped(
     for (i, row_data) in rows_data.iter().enumerate() {
         if row >= bottom {
             break;
+        }
+        if row_data.header_above {
+            let label = row_data
+                .group
+                .as_deref()
+                .map(group_label)
+                .unwrap_or("OTHER");
+            paint_str(buf, area.x + 2, row, label, FG3, BG, Modifier::BOLD);
+            row += 1;
+            if row >= bottom {
+                break;
+            }
         }
         let selected = i == selected_idx;
 
