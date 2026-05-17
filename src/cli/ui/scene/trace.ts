@@ -1,14 +1,9 @@
 import { appendFileSync, closeSync, openSync } from "node:fs";
-import {
-  DEFAULT_COMMAND,
-  type RendererProcess,
-  type RustEvent,
-  spawnRenderer,
-} from "./renderer-process.js";
+import { type RendererProcess, type RustEvent, spawnRenderer } from "./renderer-process.js";
+import { resolveRenderer } from "./renderer-resolver.js";
 
 const FILE_VAR = "REASONIX_SCENE_TRACE";
 const RENDERER_VAR = "REASONIX_RENDERER";
-const COMMAND_OVERRIDE_VAR = "REASONIX_RENDER_CMD";
 const INTEGRATED_VAR = "REASONIX_RENDERER_INTEGRATED";
 
 let integratedHandler: ((event: RustEvent) => void) | null = null;
@@ -17,8 +12,9 @@ export function setIntegratedEventHandler(handler: (event: RustEvent) => void): 
   integratedHandler = handler;
 }
 
+/** Default-on when the rust renderer is active; set REASONIX_RENDERER_INTEGRATED=0 to opt back to the --emit-input split. */
 export function isIntegratedRendererRequested(): boolean {
-  return process.env[RENDERER_VAR] === "rust" && process.env[INTEGRATED_VAR] === "1";
+  return process.env[RENDERER_VAR] !== "node" && process.env[INTEGRATED_VAR] !== "0";
 }
 
 type Mode = "off" | "file" | "child";
@@ -75,36 +71,25 @@ export async function flushSceneTrace(): Promise<void> {
 function ensureInitialized(): void {
   if (state.opened) return;
   state.opened = true;
-  if (process.env[RENDERER_VAR] === "rust") {
-    state.mode = "child";
-    const integrated = process.env[INTEGRATED_VAR] === "1";
-    state.child = spawnRenderer({
-      command: rendererCommand(),
-      integrated,
-      onEvent: integrated && integratedHandler ? integratedHandler : undefined,
-    });
+  // Explicit file-trace opt-in wins over the renderer choice — it's the
+  // dev/replay surface and the user has clearly asked for it.
+  const raw = process.env[FILE_VAR];
+  if (raw && raw.length > 0) {
+    state.mode = "file";
+    state.path = raw;
+    truncate(raw);
     return;
   }
-  const raw = process.env[FILE_VAR];
-  if (!raw || raw.length === 0) return;
-  state.mode = "file";
-  state.path = raw;
-  truncate(raw);
-}
-
-function rendererCommand(): readonly string[] {
-  const override = process.env[COMMAND_OVERRIDE_VAR];
-  if (override && override.length > 0) {
-    try {
-      const parsed = JSON.parse(override);
-      if (Array.isArray(parsed) && parsed.every((p) => typeof p === "string")) {
-        return parsed;
-      }
-    } catch {
-      // fall through to default
-    }
-  }
-  return [...DEFAULT_COMMAND];
+  if (process.env[RENDERER_VAR] === "node") return;
+  const { command, source } = resolveRenderer();
+  if (source === null || command.length === 0) return;
+  const integrated = process.env[INTEGRATED_VAR] !== "0";
+  state.mode = "child";
+  state.child = spawnRenderer({
+    command,
+    integrated,
+    onEvent: integrated && integratedHandler ? integratedHandler : undefined,
+  });
 }
 
 function truncate(path: string): void {
