@@ -9,37 +9,26 @@ import {
 } from "react";
 import type React from "react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
+import { t, type TKey } from "../i18n";
 import { I } from "../icons";
 import { fmtElapsed } from "./live";
 
 export type PresetName = "auto" | "flash" | "pro";
 export type EditMode = "review" | "auto" | "yolo";
 
-const PRESET_INFO: Record<PresetName, { label: string; badge: string; desc: string }> = {
-  auto: { label: "auto", badge: "AUTO", desc: "Flash → Pro 自动升级" },
-  flash: { label: "deepseek-v4-flash", badge: "FLASH", desc: "快、便宜、长上下文" },
-  pro: { label: "deepseek-v4-pro", badge: "PRO", desc: "深度推理" },
+type PresetEntry = { label: string; badge: string; desc: TKey };
+type ModeEntry = { k: EditMode; label: string; icon: React.ReactNode; hint: TKey };
+
+const PRESET_INFO: Record<PresetName, PresetEntry> = {
+  auto: { label: "auto", badge: "AUTO", desc: "preset.autoDesc" },
+  flash: { label: "deepseek-v4-flash", badge: "FLASH", desc: "preset.flashDesc" },
+  pro: { label: "deepseek-v4-pro", badge: "PRO", desc: "preset.proDesc" },
 };
 
-const MODE_INFO: { k: EditMode; label: string; icon: React.ReactNode; hint: string }[] = [
-  {
-    k: "review",
-    label: "Review",
-    icon: <I.shield size={11} />,
-    hint: "每个工具调用都需要批准",
-  },
-  {
-    k: "auto",
-    label: "Auto",
-    icon: <I.zap size={11} />,
-    hint: "命中白名单的命令自动批准",
-  },
-  {
-    k: "yolo",
-    label: "YOLO",
-    icon: <I.warn size={11} />,
-    hint: "全部自动批准 · 谨慎使用",
-  },
+const MODE_INFO: ModeEntry[] = [
+  { k: "review", label: "Review", icon: <I.shield size={11} />, hint: "editMode.reviewHint" },
+  { k: "auto", label: "Auto", icon: <I.zap size={11} />, hint: "editMode.autoHint" },
+  { k: "yolo", label: "YOLO", icon: <I.warn size={11} />, hint: "editMode.yoloHint" },
 ];
 
 export function ModeSwitch({
@@ -49,9 +38,8 @@ export function ModeSwitch({
   mode: EditMode;
   onChange: (m: EditMode) => void;
 }) {
-  const cur = MODE_INFO.find((m) => m.k === mode) ?? MODE_INFO[1]!;
   return (
-    <div className="mode-switch" data-mode={mode} title={cur.hint}>
+    <div className="mode-switch" data-mode={mode}>
       {MODE_INFO.map((m) => (
         <button
           key={m.k}
@@ -60,6 +48,7 @@ export function ModeSwitch({
           data-on={mode === m.k}
           data-k={m.k}
           onClick={() => onChange(m.k)}
+          title={t(m.hint)}
         >
           {m.icon}
           <span>{m.label}</span>
@@ -69,8 +58,17 @@ export function ModeSwitch({
   );
 }
 
-export type SlashCmd = { cmd: string; desc: string; run: () => void; kb?: string };
-export type MentionItem = { name: string; kind: "file" | "dir" | "url" | "agent" | "clip"; desc?: string };
+export type SlashCmd = {
+  cmd: string;
+  desc: string;
+  run: () => void;
+  kb?: string;
+};
+export type MentionItem = {
+  name: string;
+  kind: "file" | "dir" | "url" | "agent" | "clip";
+  desc?: string;
+};
 
 export type Chip =
   | { kind: "at"; label: string }
@@ -188,7 +186,10 @@ export function Composer({
   useEffect(() => {
     if (!modelMenuOpen) return;
     const onDown = (e: MouseEvent) => {
-      if (modelWrapRef.current && !modelWrapRef.current.contains(e.target as Node)) {
+      if (
+        modelWrapRef.current &&
+        !modelWrapRef.current.contains(e.target as Node)
+      ) {
         setModelMenuOpen(false);
       }
     };
@@ -202,9 +203,15 @@ export function Composer({
         multiple: false,
         directory: false,
         defaultPath: workspaceDir,
-        filters: filter === "image"
-          ? [{ name: "图片", extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg"] }]
-          : undefined,
+        filters:
+          filter === "image"
+            ? [
+                {
+                  name: t("composer.imageFilterName"),
+                  extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg"],
+                },
+              ]
+            : undefined,
       });
       if (typeof picked !== "string" || !picked) return;
       const rel =
@@ -247,7 +254,8 @@ export function Composer({
     return base;
   }, [popup, mentionResults]);
 
-  const items = popup?.kind === "slash" ? slashItems : popup?.kind === "at" ? atItems : [];
+  const items =
+    popup?.kind === "slash" ? slashItems : popup?.kind === "at" ? atItems : [];
 
   useEffect(() => {
     setActiveIdx(0);
@@ -316,7 +324,9 @@ export function Composer({
       }
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        setActiveIdx((i) => (items.length ? (i - 1 + items.length) % items.length : 0));
+        setActiveIdx((i) =>
+          items.length ? (i - 1 + items.length) % items.length : 0,
+        );
         return;
       }
       if (e.key === "Escape") {
@@ -378,7 +388,9 @@ export function Composer({
       <div className="composer-inner">
         {queuedSends && queuedSends.length > 0 ? (
           <div className="composer-queued">
-            <span className="composer-queued-label">排队 {queuedSends.length}</span>
+            <span className="composer-queued-label">
+              {t("composer.queueCount", { n: queuedSends.length })}
+            </span>
             {queuedSends.map((text, i) => (
               <span key={i} className="composer-queue-chip" title={text}>
                 <span className="text">{text}</span>
@@ -398,19 +410,22 @@ export function Composer({
               <span className="composer-busy-status">
                 <span className="composer-busy-pip" />
                 <span className="composer-busy-label">{busyLabel}</span>
-                <span className="composer-busy-time">{fmtElapsed(busyElapsedMs ?? 0)}</span>
+                <span className="composer-busy-time">
+                  {fmtElapsed(busyElapsedMs ?? 0)}
+                </span>
               </span>
               <span>
-                <kbd>⏎</kbd> 排队 &nbsp;·&nbsp; <kbd>esc</kbd> 中断
+                <kbd>⏎</kbd> {t("composer.queue")} &nbsp;·&nbsp; <kbd>esc</kbd> {t("composer.interrupt")}
               </span>
             </>
           ) : (
             <>
               <span>
-                <kbd>/</kbd> 命令 &nbsp;·&nbsp; <kbd>@</kbd> 提及文件 &nbsp;·&nbsp; <kbd>⌘K</kbd> 命令面板
+                <kbd>/</kbd> {t("composer.commands")} &nbsp;·&nbsp; <kbd>@</kbd> {t("composer.mentionFiles")}
+                &nbsp;·&nbsp; <kbd>⌘K</kbd> {t("composer.commandPalette")}
               </span>
               <span>
-                <kbd>⏎</kbd> 发送 &nbsp; <kbd>⇧⏎</kbd> 换行
+                <kbd>⏎</kbd> {t("composer.send")} &nbsp; <kbd>⇧⏎</kbd> {t("composer.newline")}
               </span>
             </>
           )}
@@ -421,11 +436,17 @@ export function Composer({
             <div className="composer-tags">
               {chips.map((c, i) => (
                 <span key={i} className={`chip ${c.kind}`}>
-                  {c.kind === "slash" ? <I.slash size={11} /> : <I.at size={11} />}
+                  {c.kind === "slash" ? (
+                    <I.slash size={11} />
+                  ) : (
+                    <I.at size={11} />
+                  )}
                   <span>{c.label}</span>
                   <span
                     className="x"
-                    onClick={() => setChips((cs) => cs.filter((_, j) => j !== i))}
+                    onClick={() =>
+                      setChips((cs) => cs.filter((_, j) => j !== i))
+                    }
                   >
                     <I.x size={10} />
                   </span>
@@ -437,7 +458,7 @@ export function Composer({
           <textarea
             ref={textareaRef}
             value={draft}
-            placeholder="向 Agent 提问 / 安排任务…"
+            placeholder={t("composer.placeholder")}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
             rows={2}
@@ -448,7 +469,7 @@ export function Composer({
             <button
               type="button"
               className="cf-btn"
-              title="插入文件 (@ 提及)"
+              title={t("composer.insertFile")}
               onClick={() => void attachFile()}
             >
               <span className="ico">
@@ -458,7 +479,7 @@ export function Composer({
             <button
               type="button"
               className="cf-btn"
-              title="插入图片 (@ 提及)"
+              title={t("composer.insertImage")}
               onClick={() => void attachFile("image")}
             >
               <span className="ico">
@@ -498,7 +519,7 @@ export function Composer({
                 type="button"
                 className="model-pill"
                 onClick={() => setModelMenuOpen((v) => !v)}
-                title="切换模型预设"
+                title={t("composer.switchPreset")}
               >
                 <I.brain size={12} />
                 <span>{modelLabel}</span>
@@ -521,7 +542,7 @@ export function Composer({
                 className="send-btn"
                 style={{ background: "var(--danger)" }}
                 onClick={onAbort}
-                title="中断"
+                title={t("composer.interrupt")}
               >
                 <I.stop size={14} />
               </button>
@@ -583,7 +604,11 @@ function Popup({
     <div className="popup" onMouseDown={(e) => e.preventDefault()}>
       <div className="ph">
         <span className="tok">{kind === "slash" ? "/" : "@"}</span>
-        <span>{kind === "slash" ? "命令 — 控制 agent、模型与会话" : "提及 — 工作区中的文件"}</span>
+        <span>
+          {kind === "slash"
+            ? t("composer.slashHeader")
+            : t("composer.atHeader")}
+        </span>
         <span className="grow" />
         <span style={{ cursor: "pointer" }} onClick={onClose}>
           <I.x size={11} />
@@ -599,7 +624,7 @@ function Popup({
               fontFamily: "IBM Plex Mono, monospace",
             }}
           >
-            无匹配项
+            {t("composer.noMatches")}
           </div>
         ) : null}
         {items.map((it, i) => (
@@ -611,7 +636,9 @@ function Popup({
             onMouseEnter={() => onHover(i, it)}
           >
             <span className="ico">
-              {kind === "slash" ? slashIcon((it as SlashCmd).cmd) : atIcon((it as MentionItem).kind)}
+              {kind === "slash"
+                ? slashIcon((it as SlashCmd).cmd)
+                : atIcon((it as MentionItem).kind)}
             </span>
             <div className="nm">
               {kind === "slash" ? (
@@ -628,19 +655,21 @@ function Popup({
                 </>
               )}
             </div>
-            <span className="kb">{kind === "slash" ? (it as SlashCmd).kb ?? "" : ""}</span>
+            <span className="kb">
+              {kind === "slash" ? ((it as SlashCmd).kb ?? "") : ""}
+            </span>
           </div>
         ))}
       </div>
       <div className="popup-foot">
         <span>
-          <kbd>↑↓</kbd> 选择
+          <kbd>↑↓</kbd> {t("composer.select")}
         </span>
         <span>
-          <kbd>⏎</kbd> 确认
+          <kbd>⏎</kbd> {t("composer.confirm")}
         </span>
         <span>
-          <kbd>esc</kbd> 关闭
+          <kbd>esc</kbd> {t("composer.close")}
         </span>
       </div>
     </div>
@@ -668,7 +697,7 @@ function ModelMenu({
     >
       <div className="ph">
         <span className="tok">M</span>
-        <span>切换模型预设</span>
+        <span>{t("composer.switchPreset")}</span>
       </div>
       <div className="popup-list">
         {order.map((p) => (
@@ -683,7 +712,7 @@ function ModelMenu({
             </span>
             <div className="nm">
               <span className="cmd">{PRESET_INFO[p].label}</span>
-              <div className="desc">{PRESET_INFO[p].desc}</div>
+              <div className="desc">{t(PRESET_INFO[p].desc)}</div>
             </div>
             <span className="kb">{PRESET_INFO[p].badge}</span>
           </div>
