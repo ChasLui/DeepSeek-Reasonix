@@ -175,7 +175,10 @@ import { openUrl } from "./open-url.js";
 import { formatLongPaste } from "./paste-collapse.js";
 import { extractOpenQuestionsSection } from "./plan-open-questions.js";
 import { PRESETS, resolvePreset } from "./presets.js";
+import { requestListPicker } from "./scene/list-picker-store.js";
+import { getActiveListPicker, subscribeListPicker } from "./scene/list-picker-store.js";
 import { getActivePromptInput, subscribePromptInput } from "./scene/prompt-input-store.js";
+import { isIntegratedRendererRequested } from "./scene/trace.js";
 import { type McpServerSummary, handleSlash, parseSlash, suggestSlashCommands } from "./slash.js";
 import { TurnTranslator } from "./state/TurnTranslator.js";
 import { cardsToDashboardMessages } from "./state/cards-to-messages.js";
@@ -1458,6 +1461,16 @@ function AppInner({
     [activePromptInput],
   );
 
+  const activeListPicker = useSyncExternalStore(
+    subscribeListPicker,
+    getActiveListPicker,
+    getActiveListPicker,
+  );
+  const listPickerJson = useMemo(
+    () => (activeListPicker ? JSON.stringify(activeListPicker) : undefined),
+    [activeListPicker],
+  );
+
   useEffect(() => {
     setSessionsPickerList(listSessionsForWorkspace(currentRootDir));
   }, [currentRootDir]);
@@ -1591,6 +1604,7 @@ function AppInner({
     approvalJson,
     atStateJson,
     promptInputJson,
+    listPickerJson,
   });
 
   // Ctrl+P / Ctrl+N from PromptInput route here. When any input-prefix
@@ -2504,6 +2518,182 @@ function AppInner({
   // pill the moment the server is up. Updated by both the auto-start
   // effect below and the explicit /dashboard slash path (via
   // startDashboard).
+
+  // Integrated-mode picker bridge: under REASONIX_RENDERER_INTEGRATED=1
+  // the rust child owns the alt-screen, so React modals (SessionPicker,
+  // ThemePicker) aren't visible. Intercept the pendingXPicker state
+  // changes and route through scene-driven requestListPicker, dispatch
+  // the choice to the same handlers the modal would call.
+  useEffect(() => {
+    if (!pendingSessionsPicker) return;
+    if (!isIntegratedRendererRequested()) return;
+    if (sessionsPickerList.length === 0) return;
+    let cancelled = false;
+    requestListPicker({
+      title: "switch session",
+      hint: "↑↓ move  ↵ open  esc cancel",
+      options: sessionsPickerList.map((s) => ({
+        key: s.name,
+        label: s.name,
+        sublabel: s.meta.branch ? `branch ${s.meta.branch}` : undefined,
+        meta: fmtAgo(s.mtime.getTime()),
+      })),
+    })
+      .then((picked) => {
+        if (cancelled) return;
+        setPendingSessionsPicker(false);
+        if (picked && onSwitchSession) onSwitchSession(picked);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingSessionsPicker, sessionsPickerList, onSwitchSession]);
+
+  useEffect(() => {
+    if (!pendingThemePicker) return;
+    if (!isIntegratedRendererRequested()) return;
+    let cancelled = false;
+    const active = themeName;
+    const preference = loadTheme() ?? "auto";
+    const all = ["auto", ...listThemeNames()];
+    requestListPicker({
+      title: "pick theme",
+      hint: "↑↓ move  ↵ select  esc cancel",
+      options: all.map((name) => ({
+        key: name,
+        label: name,
+        sublabel:
+          name === preference
+            ? `saved · active: ${active}`
+            : name === active
+              ? "active"
+              : undefined,
+      })),
+    })
+      .then((picked) => {
+        if (cancelled) return;
+        setPendingThemePicker(false);
+        if (!picked) return;
+        const choice = picked as ThemeChoice;
+        saveTheme(choice);
+        const resolved = resolveThemePreference(choice, process.env.REASONIX_THEME);
+        setThemeName(resolved);
+        log.pushInfo(`theme: ${choice} (active: ${resolved})`);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingThemePicker, themeName, setThemeName, log]);
+
+  useEffect(() => {
+    if (!pendingCheckpointPicker) return;
+    if (!isIntegratedRendererRequested()) return;
+    if (checkpointPickerList.length === 0) return;
+    let cancelled = false;
+    requestListPicker({
+      title: "restore checkpoint",
+      hint: "↑↓ move  ↵ restore  esc cancel",
+      options: checkpointPickerList.map((c) => ({
+        key: c.id,
+        label: c.name,
+        sublabel: c.id.slice(0, 7),
+        meta: fmtAgo(c.createdAt),
+      })),
+    })
+      .then((picked) => {
+        if (cancelled) return;
+        setPendingCheckpointPicker(false);
+        if (!picked) return;
+        const target = checkpointPickerList.find((c) => c.id === picked);
+        if (!target) return;
+        const result = restoreCheckpoint(currentRootDir, target.id);
+        const lines = [
+          `restored "${target.name}" (${target.id.slice(0, 7)}, ${fmtAgo(target.createdAt)})`,
+        ];
+        if (result.restored.length > 0) {
+          lines.push(`  wrote ${result.restored.length} file(s)`);
+        }
+        if (result.removed.length > 0) {
+          lines.push(`  removed ${result.removed.length} file(s)`);
+        }
+        if (result.skipped.length > 0) {
+          lines.push(`  skipped ${result.skipped.length} file(s)`);
+        }
+        log.pushInfo(lines.join("\n"));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingCheckpointPicker, checkpointPickerList, currentRootDir, log]);
+
+  useEffect(() => {
+    if (!pendingModelPicker) return;
+    if (!isIntegratedRendererRequested()) return;
+    const modelList = models ?? [];
+    if (modelList.length === 0) return;
+    let cancelled = false;
+    requestListPicker({
+      title: "pick model",
+      hint: "↑↓ move  ↵ select  esc cancel",
+      options: modelList.map((m) => ({
+        key: m,
+        label: m,
+        sublabel: m === loop.model ? "current" : undefined,
+      })),
+    })
+      .then((picked) => {
+        if (cancelled) return;
+        setPendingModelPicker(false);
+        if (!picked) return;
+        loop.configure({ model: picked, autoEscalate: false });
+        agentStore.dispatch({ type: "session.model.change", model: picked });
+        const inferred =
+          picked === "deepseek-v4-pro" ? "pro" : picked === "deepseek-v4-flash" ? "flash" : null;
+        setPreset(inferred ?? "flash");
+        agentStore.dispatch({ type: "session.preset.change", preset: inferred });
+        if (inferred) {
+          try {
+            savePreset(inferred);
+          } catch {}
+        }
+        log.pushInfo(`model: ${picked}`);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingModelPicker, models, loop, agentStore, setPreset, log]);
+
+  // MCP hub: the full Live/Marketplace tabbed modal is heavy and
+  // interactive (install / configure flows). Under integrated mode
+  // dump a read-only inventory of currently-connected servers so the
+  // user at least sees what's wired up; full hub still works in non-
+  // integrated mode for now.
+  useEffect(() => {
+    if (!pendingMcpHub) return;
+    if (!isIntegratedRendererRequested()) return;
+    const lines: string[] = [];
+    if (liveMcpServers.length === 0) {
+      lines.push("(no MCP servers connected)");
+    } else {
+      for (const s of liveMcpServers) {
+        const tools = s.report.tools.supported ? s.report.tools.items.length : 0;
+        const res = s.report.resources.supported ? s.report.resources.items.length : 0;
+        const prompts = s.report.prompts.supported ? s.report.prompts.items.length : 0;
+        lines.push(
+          `· ${s.label}  —  ${tools} tool${tools === 1 ? "" : "s"}, ${res} resource${res === 1 ? "" : "s"}, ${prompts} prompt${prompts === 1 ? "" : "s"}`,
+        );
+        lines.push(`    ${s.spec}`);
+      }
+    }
+    lines.push("");
+    lines.push("Install / configure flows are only available in non-integrated mode.");
+    log.pushInfo(`MCP hub (live)\n${lines.join("\n")}`);
+    setPendingMcpHub(null);
+  }, [pendingMcpHub, liveMcpServers, log]);
 
   // Auto-start the dashboard once the TUI is mounted unless the user
   // opted out with --no-dashboard. The whole point is discoverability:

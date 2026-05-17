@@ -68,17 +68,16 @@ fn homepage_input_box_drawn_with_corners() {
 #[test]
 fn homepage_status_bar_has_segments_and_ctx_meter() {
     let rows = draw(&demo_state(), 120, 36);
+    // Status row carries "ctx" + a context bar + cost — find by ctx
+    // since the brand cell now swaps to an activity label when busy.
     let last = rows
         .iter()
         .rev()
-        .find(|r| r.contains("reasonix"))
+        .find(|r| r.contains("ctx") && r.contains("cache"))
         .expect("status row");
     assert!(last.contains("●"), "brand dot missing");
-    assert!(last.contains("ctx"));
     assert!(last.contains("19.2k/128k"));
-    assert!(last.contains("cache"));
     assert!(last.contains("87%"));
-    assert!(last.contains("cost"));
     assert!(last.contains("$0.043"));
     assert!(last.contains("▰") && last.contains("▱"), "ctx bar segments");
 }
@@ -304,6 +303,106 @@ fn catalog_state() -> reasonix_render::state::SceneState {
                 .collect(),
         ),
         ..Default::default()
+    }
+}
+
+#[test]
+fn idle_banner_includes_starter_command_hints() {
+    let rows = draw(&SceneState::default(), 120, 30);
+    let all = joined(&rows);
+    assert!(all.contains("● idle"), "idle marker");
+    assert!(all.contains("/help"), "starter /help");
+    assert!(all.contains("/cost"), "starter /cost");
+    assert!(all.contains("/init"), "starter /init");
+    assert!(all.contains("/sessions"), "starter /sessions");
+}
+
+#[test]
+fn status_bar_shows_activity_phase_when_busy() {
+    let state = SceneState {
+        busy: true,
+        activity: Some("reasoning".to_string()),
+        ..Default::default()
+    };
+    let rows = draw(&state, 140, 36);
+    let last = rows
+        .iter()
+        .rev()
+        .find(|r| r.contains("reasoning"))
+        .expect("status row with phase label");
+    assert!(last.contains("●"), "brand dot visible: {last}");
+}
+
+#[test]
+fn list_picker_modal_renders_when_scene_carries_one() {
+    use reasonix_render::state::{ListPicker, ListPickerOption, SceneState};
+    let state = SceneState {
+        list_picker: Some(ListPicker {
+            id: "pick-1".to_string(),
+            title: "switch session".to_string(),
+            hint: Some("↑↓ move  ↵ open".to_string()),
+            options: vec![
+                ListPickerOption {
+                    key: "s-2026-05-17".to_string(),
+                    label: "s-2026-05-17".to_string(),
+                    sublabel: Some("branch main".to_string()),
+                    meta: Some("2h ago".to_string()),
+                },
+                ListPickerOption {
+                    key: "s-2026-05-16".to_string(),
+                    label: "s-2026-05-16".to_string(),
+                    sublabel: None,
+                    meta: Some("1d ago".to_string()),
+                },
+            ],
+        }),
+        ..Default::default()
+    };
+    let rows = draw(&state, 120, 30);
+    let all = joined(&rows);
+    assert!(all.contains("switch session"), "picker title missing");
+    assert!(all.contains("s-2026-05-17"), "first option missing");
+    assert!(all.contains("s-2026-05-16"), "second option missing");
+    assert!(all.contains("branch main"), "sublabel missing");
+    assert!(all.contains("2h ago"), "meta missing");
+    assert!(all.contains("↵"), "hint visible");
+}
+
+#[test]
+fn renders_doctor_memory_ctx_plan_card_task_kinds() {
+    let cards = [
+        ("doctor", "/doctor", "✓ git\n✕ docker"),
+        (
+            "memory",
+            "memory · 2",
+            "· [user] ds engineer\n· [project] rust port",
+        ),
+        (
+            "ctx",
+            "context breakdown",
+            "8.0k / 128k used (6%)\nsystem 1.2k",
+        ),
+        ("plan-card", "rewrite renderer", "○ scaffold\n◆ port cards"),
+        ("task", "build · 1/3", "✓ install\n◆ compile"),
+    ];
+    for (kind, summary, body) in cards {
+        let state = SceneState {
+            cards: vec![SceneCard {
+                kind: kind.to_string(),
+                summary: summary.to_string(),
+                body: Some(body.to_string()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let rows = draw(&state, 140, 30);
+        let all = joined(&rows);
+        assert!(all.contains(summary), "{kind} summary missing: {summary}");
+        let first_body_line = body.lines().next().unwrap();
+        assert!(
+            all.contains(first_body_line),
+            "{kind} body missing: {first_body_line}"
+        );
     }
 }
 

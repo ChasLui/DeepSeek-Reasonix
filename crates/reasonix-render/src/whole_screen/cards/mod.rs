@@ -141,6 +141,27 @@ fn render_idle_banner(buf: &mut Buffer, area: Rect, start_row: u16) {
         tcol = paint_str(buf, tcol, row, " ", FG2, BG, Modifier::empty());
         tcol = paint_str(buf, tcol, row, label, FG2, BG, Modifier::empty());
     }
+
+    // Starter hints — surfaces the most-likely-useful slash commands
+    // upfront, matches the Node TUI WelcomeBanner; helps brand-new
+    // users discover the surface without /help.
+    let starters: [(&str, &str); 4] = [
+        ("/help", "see all commands"),
+        ("/cost", "session spend + tokens"),
+        ("/init", "scan repo into REASONIX.md"),
+        ("/sessions", "switch / resume past sessions"),
+    ];
+    for (i, (cmd, desc)) in starters.iter().enumerate() {
+        let r = start_row + 3 + i as u16;
+        if r >= bottom {
+            break;
+        }
+        paint_rail(buf, area, r, OK);
+        let mut sc = area.x + 4;
+        sc = paint_str(buf, sc, r, cmd, DS, BG, Modifier::BOLD);
+        sc = paint_str(buf, sc, r, "  ", FG3, BG, Modifier::empty());
+        paint_str(buf, sc, r, desc, FG2, BG, Modifier::empty());
+    }
 }
 
 pub(super) fn total_cards_height(state: &SceneState, body_width: u16) -> u16 {
@@ -218,7 +239,8 @@ fn card_height(card: &SceneCard, body_width: u16) -> u16 {
     match card.kind.as_str() {
         "user" | "reasoning" | "think" | "thinking" | "assistant" | "streaming" | "diff"
         | "cmd" | "fileview" | "search" | "subagent" | "confirm" | "await" | "await_input"
-        | "error" | "info" | "warn" | "usage" => 1 + body_lines + 1,
+        | "error" | "info" | "warn" | "usage" | "doctor" | "memory" | "ctx" | "plan-card"
+        | "task" => 1 + body_lines + 1,
         "todo" | "plan" => {
             let items = card
                 .body
@@ -259,6 +281,11 @@ fn render_card(
         "info" => notify::render_info_card(buf, area, row, card, super::theme::INFO, "ⓘ"),
         "warn" => notify::render_info_card(buf, area, row, card, super::theme::WARN, "▲"),
         "usage" => notify::render_info_card(buf, area, row, card, super::theme::DS_BRIGHT, "$"),
+        "doctor" => notify::render_info_card(buf, area, row, card, super::theme::OK, "✚"),
+        "memory" => notify::render_info_card(buf, area, row, card, super::theme::DS_PURPLE, "◈"),
+        "ctx" => notify::render_info_card(buf, area, row, card, super::theme::INFO, "▦"),
+        "plan-card" => notify::render_info_card(buf, area, row, card, super::theme::DS_PURPLE, "◆"),
+        "task" => notify::render_info_card(buf, area, row, card, super::theme::DS_BRIGHT, "▸"),
         _ => row,
     }
 }
