@@ -10,7 +10,7 @@ import { buildMcpServerSummary } from "../../mcp/summary.js";
 import { buildTransportFromSpec } from "../../mcp/transport-from-spec.js";
 import type { ToolRegistry } from "../../tools.js";
 import type { ToolSpec } from "../../types.js";
-import { formatMcpLifecycleEvent } from "../ui/mcp-lifecycle.js";
+import { type McpLifecycleEvent, formatMcpLifecycleEvent } from "../ui/mcp-lifecycle.js";
 import { formatMcpSlowToast } from "../ui/mcp-toast.js";
 import type { McpServerSummary } from "../ui/slash.js";
 
@@ -50,7 +50,9 @@ export type McpLifecycleNotice =
     }
   | { kind: "disabled"; name: string }
   | { kind: "failed"; name: string; reason: string }
-  | { kind: "slow"; serverName: string; p95Ms: number; sampleSize: number };
+  | { kind: "slow"; serverName: string; p95Ms: number; sampleSize: number }
+  | { kind: "tools-ready"; name: string; tools: number; ms: number }
+  | { kind: "warn"; name: string; reason: string };
 
 export type McpLifecycleSink = (notice: McpLifecycleNotice) => void;
 
@@ -80,7 +82,22 @@ export const stderrLifecycleSink: McpLifecycleSink = (n) => {
     );
     return;
   }
-  process.stderr.write(`${formatMcpLifecycleEvent({ state: n.kind, name: n.name })}\n`);
+  if (n.kind === "tools-ready") {
+    process.stderr.write(
+      `${formatMcpLifecycleEvent({ state: "tools-ready", name: n.name, tools: n.tools, ms: n.ms })}\n`,
+    );
+    return;
+  }
+  if (n.kind === "warn") {
+    process.stderr.write(
+      `${formatMcpLifecycleEvent({ state: "warn", name: n.name, reason: n.reason })}\n`,
+    );
+    return;
+  }
+  // handshake / disabled — no extra fields needed
+  process.stderr.write(
+    `${formatMcpLifecycleEvent({ state: n.kind as "handshake" | "disabled", name: n.name })}\n`,
+  );
 };
 
 export interface McpRuntime {
@@ -171,6 +188,46 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
             sampleSize: info.sampleSize,
           }),
       });
+      // Tools are registered — record the bridge NOW so the UI shows
+      // "bridged" even if later non-critical steps (inspect, hot-add) fail.
+      const ms = Date.now() - t0;
+      const allSpecs = tools.specs();
+      const registeredSpecs = allSpecs.filter((s) =>
+        bridge.registeredNames.includes(s.function.name),
+      );
+      // Create a provisional record immediately (tools already usable).
+      records.set(raw, {
+        spec: raw,
+        client: mcp,
+        summary: buildMcpServerSummary({
+          label,
+          spec: raw,
+          toolCount: bridge.registeredNames.length,
+          report: {
+            protocolVersion: mcp.protocolVersion,
+            serverInfo: mcp.serverInfo,
+            capabilities: mcp.serverCapabilities ?? {},
+            tools: { supported: true, items: [] },
+            resources: { supported: false, reason: "still inspecting" },
+            prompts: { supported: false, reason: "still inspecting" },
+            elapsedMs: ms,
+          },
+          host,
+          bridgeEnv: bridge.env,
+        }),
+        registeredNames: bridge.registeredNames,
+        registeredSpecs,
+      });
+      insertionOrder.push(raw);
+      resolveReady();
+      sink({
+        kind: "tools-ready",
+        name: label,
+        tools: bridge.registeredNames.length,
+        ms,
+      });
+
+      // Non-critical: inspect + hot-add. Failures here don't un-bridge.
       let report: InspectionReport;
       try {
         report = await inspectMcpServer(mcp);
@@ -185,9 +242,9 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
           elapsedMs: 0,
         };
       }
-      const ms = Date.now() - t0;
       const resourceCount = report.resources.supported ? report.resources.items.length : 0;
       const promptCount = report.prompts.supported ? report.prompts.items.length : 0;
+      // Re-emit with full inspection data (the provisional event reported 0).
       sink({
         kind: "connected",
         name: label,
@@ -196,7 +253,6 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
         prompts: promptCount,
         ms,
       });
-      resolveReady();
       const summary = buildMcpServerSummary({
         label,
         spec: raw,
@@ -205,11 +261,7 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
         host,
         bridgeEnv: bridge.env,
       });
-      // Snapshot tool specs AFTER bridge so hot-add can replay them into loop.prefix.
-      const allSpecs = tools.specs();
-      const registeredSpecs = allSpecs.filter((s) =>
-        bridge.registeredNames.includes(s.function.name),
-      );
+      // Replace the provisional record with the fully-inspected summary.
       records.set(raw, {
         spec: raw,
         client: mcp,
@@ -217,17 +269,32 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
         registeredNames: bridge.registeredNames,
         registeredSpecs,
       });
-      insertionOrder.push(raw);
       // Hot-add: shift the prefix so the live loop sees the new tools
       // on the very next turn. Each addTool is one cache-miss turn.
-      if (loop) for (const s of registeredSpecs) loop.prefix.addTool(s);
+      if (loop)
+        for (const s of registeredSpecs)
+          try {
+            loop.prefix.addTool(s);
+          } catch (err) {
+            sink({
+              kind: "warn",
+              name: label,
+              reason: `addTool failed for ${s.function.name}: ${(err as Error).message}`,
+            });
+          }
       return { ok: true, summary };
     } catch (err) {
-      await mcp?.close().catch(() => undefined);
+      // If we got far enough to create a provisional record, keep it —
+      // tools are already registered and usable even after a late failure.
       const reason = (err as Error).message;
-      sink({ kind: "failed", name: label, reason });
-      rejectReady(new Error(`MCP server "${label}" failed to start: ${reason}`));
-      return { ok: false, reason };
+      if (!records.has(raw)) {
+        await mcp?.close().catch(() => undefined);
+        rejectReady(new Error(`MCP server "${label}" failed to start: ${reason}`));
+        sink({ kind: "failed", name: label, reason });
+        return { ok: false, reason };
+      }
+      sink({ kind: "warn", name: label, reason });
+      return { ok: true, summary: records.get(raw)!.summary };
     }
   }
 

@@ -548,6 +548,8 @@ function AppInner({
   // Live MCP server list: initialized from the boot-time prop, then
   // updated immutably when append-drift adds tools mid-session.
   const [liveMcpServers, setLiveMcpServers] = useState<McpServerSummary[]>(() => mcpServers ?? []);
+  const liveMcpServersRef = useRef(liveMcpServers);
+  liveMcpServersRef.current = liveMcpServers;
   // Tracks whether the current turn has been aborted via Esc, so the
   // Esc handler only fires once per turn (repeated presses would yield
   // stacked warning events).
@@ -1129,6 +1131,25 @@ function AppInner({
           `${notice.reason}\n闂?run \`reasonix setup\` to remove this entry, or fix the underlying issue (missing npm package, network, etc.).`,
         );
         bumpReady();
+      } else if (notice.kind === "tools-ready") {
+        log.pushInfo(
+          formatMcpLifecycleEvent({
+            state: "tools-ready",
+            name: notice.name,
+            tools: notice.tools,
+            ms: notice.ms,
+          }),
+        );
+        bumpReady();
+      } else if (notice.kind === "warn") {
+        log.pushWarning(
+          `MCP ${notice.name} warn`,
+          formatMcpLifecycleEvent({
+            state: "warn",
+            name: notice.name,
+            reason: notice.reason,
+          }),
+        );
       } else if (notice.kind === "slow") {
         log.pushInfo(
           formatMcpSlowToast({
@@ -2176,7 +2197,7 @@ function AppInner({
           usageLogPath: defaultUsageLogPath(),
           loop,
           tools,
-          mcpServers: liveMcpServers,
+          getMcpServers: () => liveMcpServersRef.current,
           getCurrentCwd: () => (codeMode ? currentRootDirRef.current : undefined),
           getEditMode: () => (codeMode ? editModeRef.current : undefined),
           getPlanMode: () => planModeRef.current,
@@ -2438,7 +2459,6 @@ function AppInner({
   }, [
     loop,
     tools,
-    liveMcpServers,
     codeMode,
     session,
     togglePlanMode,
@@ -3501,7 +3521,6 @@ function AppInner({
       loop,
       latestVersion,
       mcpSpecs,
-      liveMcpServers,
       models,
       planMode,
       session,
@@ -3559,6 +3578,7 @@ function AppInner({
       mcpRuntime,
       pushHistory,
       resetCursor,
+      liveMcpServers,
     ],
   );
 
