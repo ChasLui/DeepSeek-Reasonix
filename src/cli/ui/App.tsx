@@ -109,7 +109,9 @@ import { AtMentionSuggestions } from "./AtMentionSuggestions.js";
 import { BootSplash } from "./BootSplash.js";
 import { CheckpointPicker } from "./CheckpointPicker.js";
 import { ChoiceConfirm, type ChoiceConfirmChoice } from "./ChoiceConfirm.js";
+import { ComposerArea } from "./ComposerArea.js";
 import { EditConfirm, type EditReviewChoice } from "./EditConfirm.js";
+import { LiveActivityArea } from "./LiveActivityArea.js";
 import { McpHub } from "./McpHub.js";
 import { ModelPicker } from "./ModelPicker.js";
 import { PathConfirm } from "./PathConfirm.js";
@@ -159,17 +161,9 @@ import { useWorkspaceRoot } from "./hooks/useWorkspaceRoot.js";
 import { useKeystroke } from "./keystroke-context.js";
 import { CardStream } from "./layout/CardStream.js";
 import { LiveExpandContext } from "./layout/LiveExpandContext.js";
-import {
-  ModeStatusBar,
-  OngoingToolRow,
-  SubagentLiveStack,
-  ThinkingRow,
-  UndoBanner,
-} from "./layout/LiveRows.js";
+import { ModeStatusBar } from "./layout/LiveRows.js";
 import { StatusRow } from "./layout/StatusRow.js";
 import type { StatusBarConfig } from "./layout/StatusRow.js";
-import { ToastRail } from "./layout/ToastRail.js";
-import { PlanLiveRow } from "./layout/plan-live-row.js";
 import { ViewportBudgetProvider } from "./layout/viewport-budget.js";
 import { formatLoopStatus } from "./loop.js";
 import { applyMcpAppend } from "./mcp-append.js";
@@ -4577,44 +4571,34 @@ function AppInner({
                       languageVersion={languageVersion}
                     />
                   ) : null}
-                  {/*
-          Live rows are hidden while the ShellConfirm modal is up 闂?the
-          model's concurrent "please confirm" stream is noise the user
-          doesn't need, and the picker shouldn't fight it for visual
-          attention. They come back naturally once the user chooses and
-          the next turn begins.
-        */}
-                  {noTakeoverOverlay && ongoingTool ? (
-                    <OngoingToolRow tool={ongoingTool} progress={toolProgress} />
-                  ) : null}
-                  {noTakeoverOverlay && subagentActivities.length > 0 ? (
-                    <SubagentLiveStack activities={subagentActivities} max={3} />
-                  ) : null}
-                  {noTakeoverOverlay && !ongoingTool && statusLine ? (
-                    <ThinkingRow text={statusLine} />
-                  ) : null}
-                  {undoBanner &&
-                  !pendingShell &&
-                  !pendingPlan &&
-                  !pendingReviseEditor &&
-                  !pendingSessionsPicker &&
-                  !pendingCheckpointPicker &&
-                  !pendingMcpHub &&
-                  !stagedInput &&
-                  !pendingEditReview &&
-                  !pendingChoice &&
-                  !stagedChoiceCustom &&
-                  !pendingRevision &&
-                  !stagedCheckpointRevise &&
-                  !pendingCheckpoint ? (
-                    <UndoBanner banner={undoBanner} />
-                  ) : null}
-                  {/* Activity row when no targeted indicator is visible 闂?phase label from useActivityLabel. */}
-                  {noTakeoverOverlay && busy && !isStreaming && !ongoingTool && !statusLine ? (
-                    <ThinkingRow text={activityLabel} />
-                  ) : null}
-                  {noTakeoverOverlay ? <PlanLiveRow /> : null}
-                  <ToastRail />
+                  <LiveActivityArea
+                    noTakeoverOverlay={noTakeoverOverlay}
+                    ongoingTool={ongoingTool}
+                    toolProgress={toolProgress}
+                    subagentActivities={subagentActivities}
+                    statusLine={statusLine}
+                    busy={busy}
+                    isStreaming={isStreaming}
+                    activityLabel={activityLabel}
+                    undoBanner={undoBanner}
+                    hideUndo={
+                      !!(
+                        pendingShell ||
+                        pendingPlan ||
+                        pendingReviseEditor ||
+                        pendingSessionsPicker ||
+                        pendingCheckpointPicker ||
+                        pendingMcpHub ||
+                        stagedInput ||
+                        pendingEditReview ||
+                        pendingChoice ||
+                        stagedChoiceCustom ||
+                        pendingRevision ||
+                        stagedCheckpointRevise ||
+                        pendingCheckpoint
+                      )
+                    }
+                  />
                 </Box>
                 {stagedInput ? (
                   <PlanRefineInput
@@ -4931,58 +4915,32 @@ function AppInner({
                     onChoose={handleWalkChoice}
                   />
                 ) : (
-                  <InputAreaWithHistoryHint
-                    inputArea={
-                      <Box flexDirection="column" flexShrink={0} flexWrap="nowrap">
-                        <Box flexDirection="column" flexShrink={0} flexWrap="nowrap">
-                          {codeMode ? (
-                            <ModeStatusBar
-                              editMode={editMode}
-                              pendingCount={pendingCount}
-                              flash={modeFlash}
-                              planMode={planMode}
-                              undoArmed={!!undoBanner || hasUndoable()}
-                              jobs={codeMode.jobs}
-                            />
-                          ) : null}
-                          {activeLoop ? <LoopStatusRow loop={activeLoop} /> : null}
-                          <StatusRow statusBar={statusBar} />
-                          <PromptInput
-                            value={input}
-                            onChange={setInput}
-                            onSubmit={handleSubmit}
-                            disabled={busy}
-                            onHistoryPrev={handleHistoryPrev}
-                            onHistoryNext={handleHistoryNext}
-                            onOpenExternalEditor={handleOpenExternalEditor}
-                            onCursorChange={setComposerCursor}
-                          />
-                        </Box>
-                        <Box flexDirection="column" flexShrink={0} flexWrap="nowrap">
-                          {slashMatches !== null ? (
-                            <SlashSuggestions
-                              key={`slash-suggestions:${slashGroupMode ? "group" : "search"}`}
-                              matches={slashMatches}
-                              selectedIndex={slashSelected}
-                              groupMode={slashGroupMode}
-                              advancedHidden={slashAdvancedHidden}
-                            />
-                          ) : null}
-                          {atState !== null ? (
-                            <AtMentionSuggestions state={atState} selectedIndex={atSelected} />
-                          ) : null}
-                        </Box>
-                        {slashArgContext ? (
-                          <SlashArgPicker
-                            matches={slashArgMatches}
-                            selectedIndex={slashArgSelected}
-                            spec={slashArgContext.spec}
-                            kind={slashArgContext.kind}
-                            partial={slashArgContext.partial}
-                          />
-                        ) : null}
-                      </Box>
-                    }
+                  <ComposerArea
+                    editMode={editMode}
+                    pendingCount={pendingCount}
+                    modeFlash={modeFlash}
+                    planMode={planMode}
+                    undoArmed={!!undoBanner || hasUndoable()}
+                    jobs={codeMode ? codeMode.jobs : undefined}
+                    activeLoop={activeLoop}
+                    statusBar={statusBar}
+                    input={input}
+                    setInput={setInput}
+                    busy={busy}
+                    onSubmit={handleSubmit}
+                    onHistoryPrev={handleHistoryPrev}
+                    onHistoryNext={handleHistoryNext}
+                    onOpenExternalEditor={handleOpenExternalEditor}
+                    onCursorChange={setComposerCursor}
+                    slashMatches={slashMatches}
+                    slashSelected={slashSelected}
+                    slashGroupMode={slashGroupMode}
+                    slashAdvancedHidden={slashAdvancedHidden}
+                    atState={atState}
+                    atSelected={atSelected}
+                    slashArgContext={slashArgContext}
+                    slashArgMatches={slashArgMatches}
+                    slashArgSelected={slashArgSelected}
                   />
                 )}
               </Box>
