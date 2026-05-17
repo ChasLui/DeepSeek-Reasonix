@@ -1,10 +1,25 @@
 import { appendFileSync, closeSync, openSync } from "node:fs";
-import { DEFAULT_COMMAND, type RendererProcess, spawnRenderer } from "./renderer-process.js";
-import type { SceneFrame } from "./types.js";
+import {
+  DEFAULT_COMMAND,
+  type RendererProcess,
+  type RustEvent,
+  spawnRenderer,
+} from "./renderer-process.js";
 
 const FILE_VAR = "REASONIX_SCENE_TRACE";
 const RENDERER_VAR = "REASONIX_RENDERER";
 const COMMAND_OVERRIDE_VAR = "REASONIX_RENDER_CMD";
+const INTEGRATED_VAR = "REASONIX_RENDERER_INTEGRATED";
+
+let integratedHandler: ((event: RustEvent) => void) | null = null;
+
+export function setIntegratedEventHandler(handler: (event: RustEvent) => void): void {
+  integratedHandler = handler;
+}
+
+export function isIntegratedRendererRequested(): boolean {
+  return process.env[RENDERER_VAR] === "rust" && process.env[INTEGRATED_VAR] === "1";
+}
 
 type Mode = "off" | "file" | "child";
 
@@ -22,21 +37,24 @@ export function isSceneTraceEnabled(): boolean {
   return state.mode !== "off";
 }
 
-export function emitSceneFrame(frame: SceneFrame): void {
+export function emitSceneMessage(message: unknown): void {
   ensureInitialized();
   switch (state.mode) {
     case "off":
       return;
     case "file":
       if (state.path) {
-        appendFileSync(state.path, `${JSON.stringify(frame)}\n`);
+        appendFileSync(state.path, `${JSON.stringify(message)}\n`);
       }
       return;
     case "child":
-      state.child?.emit(frame);
+      state.child?.emit(message);
       return;
   }
 }
+
+/** @deprecated kept for transition only; prefer emitSceneMessage. */
+export const emitSceneFrame = emitSceneMessage;
 
 export function resetSceneTrace(): void {
   if (state.child) {
@@ -59,7 +77,12 @@ function ensureInitialized(): void {
   state.opened = true;
   if (process.env[RENDERER_VAR] === "rust") {
     state.mode = "child";
-    state.child = spawnRenderer({ command: rendererCommand() });
+    const integrated = process.env[INTEGRATED_VAR] === "1";
+    state.child = spawnRenderer({
+      command: rendererCommand(),
+      integrated,
+      onEvent: integrated && integratedHandler ? integratedHandler : undefined,
+    });
     return;
   }
   const raw = process.env[FILE_VAR];
