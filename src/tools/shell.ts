@@ -16,6 +16,7 @@ import { isCommandAllowed } from "./shell/parse.js";
 export {
   BUILTIN_ALLOWLIST,
   detectShellOperator,
+  hasSensitivePathArgs,
   isAllowed,
   isCommandAllowed,
   isDqEscape,
@@ -46,6 +47,7 @@ export interface ShellToolsOptions {
   jobs?: JobRegistry;
   /** Fired after `run_background` / `stop_job` mutate the registry — used by the desktop popover for near-real-time updates without polling. */
   onJobsChanged?: () => void;
+  sensitivePaths?: { prefixes?: readonly string[]; patterns?: readonly string[] };
 }
 
 /** Error thrown by `run_command` when the command isn't allowlisted. */
@@ -94,7 +96,7 @@ export function registerShellTools(registry: ToolRegistry, opts: ShellToolsOptio
       if (isAllowAll()) return true;
       const cmd = typeof args?.command === "string" ? args.command.trim() : "";
       if (!cmd) return false;
-      return isCommandAllowed(cmd, getExtraAllowed());
+      return isCommandAllowed(cmd, getExtraAllowed(), rootDir, opts.sensitivePaths);
     },
     parameters: {
       type: "object",
@@ -115,7 +117,10 @@ export function registerShellTools(registry: ToolRegistry, opts: ShellToolsOptio
       const cmd = args.command.trim();
       if (!cmd) throw new Error("run_command: empty command");
       const effectiveTimeout = Math.max(1, Math.min(600, args.timeoutSec ?? timeoutSec));
-      if (!isAllowAll() && !isCommandAllowed(cmd, getExtraAllowed())) {
+      if (
+        !isAllowAll() &&
+        !isCommandAllowed(cmd, getExtraAllowed(), rootDir, opts.sensitivePaths)
+      ) {
         const gate = ctx?.confirmationGate ?? pauseGate;
         const choice = await gate.ask({
           kind: "run_command",
@@ -170,7 +175,10 @@ export function registerShellTools(registry: ToolRegistry, opts: ShellToolsOptio
       const cmd = args.command.trim();
       if (!cmd) throw new Error("run_background: empty command");
       const cwd = resolveCwdInsideRoot(rootDir, args.cwd);
-      if (!isAllowAll() && !isCommandAllowed(cmd, getExtraAllowed())) {
+      if (
+        !isAllowAll() &&
+        !isCommandAllowed(cmd, getExtraAllowed(), rootDir, opts.sensitivePaths)
+      ) {
         const gate = ctx?.confirmationGate ?? pauseGate;
         const choice = await gate.ask({
           kind: "run_background",

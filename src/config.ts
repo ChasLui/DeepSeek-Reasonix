@@ -152,6 +152,14 @@ export interface ReasonixConfig {
       pathAllowed?: string[];
     };
   };
+  /** Issue #259 — user-configurable sensitive-path prefixes and filename patterns.
+   *  Commands touching these paths are demoted to the confirm gate even when allowlisted. */
+  sensitivePaths?: {
+    /** Path prefixes (tilde-relative or absolute) that trigger confirmation. */
+    prefixes?: string[];
+    /** Glob-style filename patterns (matched against basename, case-insensitive). */
+    patterns?: string[];
+  };
   index?: IndexUserConfig;
   semantic?: SemanticEmbeddingUserConfig;
   skills?: {
