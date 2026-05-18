@@ -50,3 +50,15 @@ jobs:
       # runner (POSIX + Windows) — beats hardcoding /tmp.
       - name: τ-bench harness dry-run
         run: npx tsx benchmarks/tau-bench/runner.ts --dry --out "${{ runner.temp }}/tau-dry.json"
+
+      - name: Notify Discord on main failure
+        if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_CI_WEBHOOK }}
+        run: |
+          test -n "$WEBHOOK_URL" || { echo "DISCORD_CI_WEBHOOK unset, skipping"; exit 0; }
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -sS -X POST -H "Content-Type: application/json" \
+            -d "{\"content\":\"❌ CI failed on \`${{ github.ref_name }}\` (${{ matrix.os }}) — ${{ github.actor }}\n${RUN_URL}\"}" \
+            "$WEBHOOK_URL"
