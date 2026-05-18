@@ -524,6 +524,34 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
       expect(out).not.toMatch(/src[\\]cli/);
     });
 
+    it("scans a 1.5 MiB single-line file fully without hanging (issue #1236)", async () => {
+      // Minified-bundle shape — long single line. We want the search to
+      // (a) cover the whole line, and (b) complete in reasonable time
+      // against a literal pattern. The pattern below is literal so V8's
+      // fast regex path handles 1.5 MiB in tens of ms. The walk-level
+      // deadline (WALK_DEADLINE_MS) is the backstop if a future change
+      // regresses to quadratic behaviour.
+      const longLine = "a".repeat(1_500_000);
+      await fs.writeFile(join(root, "huge.txt"), `${longLine}\n`);
+      const start = Date.now();
+      const out = await tools.dispatch(
+        "search_content",
+        JSON.stringify({ pattern: "definitely_not_in_aaaa" }),
+      );
+      expect(Date.now() - start).toBeLessThan(2000);
+      expect(out).toMatch(/no matches/);
+    });
+
+    it("returns an aborted error when the signal fires before dispatch (issue #1236)", async () => {
+      const ctrl = new AbortController();
+      ctrl.abort();
+      const out = await tools.dispatch("search_content", JSON.stringify({ pattern: "anything" }), {
+        signal: ctrl.signal,
+      });
+      expect(out).toMatch(/aborted before dispatch/);
+      expect(JSON.parse(out)).toMatchObject({ rejectedReason: "aborted" });
+    });
+
     it("honors AbortSignal during recursive content search", async () => {
       await fs.mkdir(join(root, "src", "nested"), { recursive: true });
       await fs.writeFile(join(root, "src", "nested", "deep.ts"), "export const z = 3;\n");

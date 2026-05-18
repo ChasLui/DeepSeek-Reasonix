@@ -71,6 +71,8 @@ export async function searchFiles(
 const MAX_HITS_PER_FILE = 30;
 /** Once printed bytes pass this fraction of the byte budget, remaining files switch to histogram. */
 const SUMMARY_MODE_TRIGGER_RATIO = 0.8;
+/** Soft deadline for a single searchContent invocation — a stuck walk fails loudly instead of hanging the turn. */
+const WALK_DEADLINE_MS = 15_000;
 
 export async function searchContent(
   ctx: SearchContext,
@@ -104,6 +106,14 @@ export async function searchContent(
   let summaryMode = summaryOnly;
   let summaryNoticeEmitted = false;
   const fileHitCounts = new Map<string, number>();
+  const t0 = Date.now();
+  const throwIfTimedOut = (): void => {
+    if (Date.now() - t0 > WALK_DEADLINE_MS) {
+      throw new Error(
+        `search_content exceeded ${WALK_DEADLINE_MS}ms — narrow the scope (path/glob) or simplify the pattern`,
+      );
+    }
+  };
 
   const pushLine = (out: string): boolean => {
     if (totalBytes + out.length + 1 > ctx.maxListBytes) {
@@ -141,6 +151,7 @@ export async function searchContent(
     for (const e of entries) {
       if (truncated) return;
       throwIfAborted(args.signal);
+      throwIfTimedOut();
       if (e.isDirectory()) {
         if (!includeDeps && ctx.skipDirNames.has(e.name)) continue;
         await walk(pathMod.join(dir, e.name));
