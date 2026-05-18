@@ -203,6 +203,11 @@ fn open_in_editor(command: String, path: String, line: Option<u32>) -> Result<()
     Ok(())
 }
 
+#[tauri::command]
+fn write_text_file(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, &content).map_err(|e| format!("write failed: {e}"))
+}
+
 fn main() {
     #[cfg(target_os = "linux")]
     linux_webkit_compat();
@@ -219,7 +224,8 @@ fn main() {
             rpc_kill,
             open_in_editor,
             list_workspace_tree,
-            git_status
+            git_status,
+            write_text_file
         ])
         .setup(|app| {
             use tauri::Manager;

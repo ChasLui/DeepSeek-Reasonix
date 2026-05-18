@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { type Update, check } from "@tauri-apps/plugin-updater";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
@@ -903,6 +903,43 @@ function applyIncoming(state: State, ev: IncomingEvent): State {
   }
 }
 
+function formatConversationMarkdown(messages: ChatMessage[], userLabel: string): string {
+  return messages
+    .map((m) => {
+      if (m.kind === "user") return `### ${userLabel}\n\n${m.text}`;
+      if (m.kind === "assistant") {
+        const body = m.segments
+          .map((s) => {
+            if (s.kind === "text") return s.text;
+            if (s.kind === "reasoning")
+              return `<details>\n<summary>${t("app.exportReasoningSummary")}</summary>\n\n${s.text}\n\n</details>`;
+            if (s.kind === "tool") {
+              const arg = s.args ? `\n\n\`\`\`json\n${s.args}\n\`\`\`` : "";
+              const res = s.result ? `\n\n\`\`\`\n${s.result}\n\`\`\`` : "";
+              return `> **${t("app.exportToolLabel")} · \`${s.name}\`**${arg}${res}`;
+            }
+            return "";
+          })
+          .filter(Boolean)
+          .join("\n\n");
+        return `### Reasonix\n\n${body}`;
+      }
+      if (m.kind === "error") return `### Error\n\n${m.message}`;
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n\n---\n\n");
+}
+
+function sanitizeFilename(name: string): string {
+  return name.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").replace(/^\.+/, "").slice(0, 200) || "session";
+}
+
+function defaultExportFilename(session: string): string {
+  const safe = sanitizeFilename(session);
+  return `${safe}.md`;
+}
+
 type TabAction = Action;
 type TabDispatcher = (action: TabAction) => void;
 
@@ -1304,32 +1341,11 @@ function TabRuntime({
         flashToast(t("app.toast.copied"));
       }
     },
+    conversationCopy: () => {
+      conversationCopy();
+    },
     exportMarkdown: () => {
-      const userLabel = t("app.exportUserLabel");
-      const md = state.messages
-        .map((m) => {
-          if (m.kind === "user") return `### ${userLabel}\n\n${m.text}`;
-          if (m.kind === "assistant") {
-            const body = m.segments
-              .map((s) => {
-                if (s.kind === "text") return s.text;
-                if (s.kind === "reasoning")
-                  return `<details>\n<summary>${t("app.exportReasoningSummary")}</summary>\n\n${s.text}\n\n</details>`;
-                return "";
-              })
-              .filter(Boolean)
-              .join("\n\n");
-            return `### Reasonix\n\n${body}`;
-          }
-          if (m.kind === "error") return `### Error\n\n${m.message}`;
-          return "";
-        })
-        .filter(Boolean)
-        .join("\n\n---\n\n");
-      if (md) {
-        void navigator.clipboard.writeText(md);
-        flashToast(t("app.toast.copiedMd"));
-      }
+      exportConversation();
     },
     pickWorkspace,
     newTab: onNewTab,
@@ -1431,39 +1447,38 @@ function TabRuntime({
       : workspaceLabel;
   })();
 
-  const exportConversation = useCallback(() => {
+  const exportConversation = useCallback(async () => {
     const userLabel = t("app.exportUserLabel");
-    const md = state.messages
-      .map((m) => {
-        if (m.kind === "user") return `### ${userLabel}\n\n${m.text}`;
-        if (m.kind === "assistant") {
-          const body = m.segments
-            .map((s) => {
-              if (s.kind === "text") return s.text;
-              if (s.kind === "reasoning")
-                return `<details>\n<summary>${t("app.exportReasoningSummary")}</summary>\n\n${s.text}\n\n</details>`;
-              if (s.kind === "tool") {
-                const arg = s.args ? `\n\n\`\`\`json\n${s.args}\n\`\`\`` : "";
-                const res = s.result ? `\n\n\`\`\`\n${s.result}\n\`\`\`` : "";
-                return `> **${t("app.exportToolLabel")} · \`${s.name}\`**${arg}${res}`;
-              }
-              return "";
-            })
-            .filter(Boolean)
-            .join("\n\n");
-          return `### Reasonix\n\n${body}`;
-        }
-        if (m.kind === "error") return `### Error\n\n${m.message}`;
-        return "";
-      })
-      .filter(Boolean)
-      .join("\n\n---\n\n");
-    if (md) {
-      void navigator.clipboard.writeText(md);
-      flashToast(t("app.toast.copiedMd"));
-    } else {
+    const md = formatConversationMarkdown(state.messages, userLabel);
+    if (!md) {
       flashToast(t("app.toast.emptySession"));
+      return;
     }
+    try {
+      const filename = defaultExportFilename(session);
+      const path = await saveDialog({
+        defaultPath: filename,
+        filters: [{ name: "Markdown", extensions: ["md"] }],
+        title: t("app.toast.exportDialogTitle"),
+      });
+      if (!path) return;
+      await invoke("write_text_file", { path, content: md });
+      flashToast(t("app.toast.exportedMd"));
+    } catch (err) {
+      console.error("export failed", err);
+      flashToast(t("app.toast.exportFailed", { error: String(err) }));
+    }
+  }, [state.messages, session, flashToast]);
+
+  const conversationCopy = useCallback(() => {
+    const userLabel = t("app.exportUserLabel");
+    const md = formatConversationMarkdown(state.messages, userLabel);
+    if (!md) {
+      flashToast(t("app.toast.emptySession"));
+      return;
+    }
+    void navigator.clipboard.writeText(md);
+    flashToast(t("app.toast.copiedMd"));
   }, [state.messages, flashToast]);
 
   return (
@@ -1486,6 +1501,7 @@ function TabRuntime({
           onToggleCtx={onToggleCtx}
           onOpenCommands={() => palette.setOpen(true)}
           onOpenSettings={() => openSettingsAt("general")}
+          onCopy={conversationCopy}
           onExport={exportConversation}
           onClear={() => dispatch({ t: "clear" })}
           hasMessages={state.messages.length > 0}
@@ -1534,6 +1550,7 @@ function TabRuntime({
                 hasMessages={state.messages.length > 0}
                 onAbort={abort}
                 onNewChat={newChat}
+                onCopy={conversationCopy}
                 onExport={exportConversation}
                 onOpenWorkdir={(anchor) => {
                   setWdAnchor(anchor);
@@ -1888,6 +1905,7 @@ function TitleBar({
   onToggleCtx,
   onOpenCommands,
   onOpenSettings,
+  onCopy,
   onExport,
   onClear,
   hasMessages,
@@ -1900,6 +1918,7 @@ function TitleBar({
   onToggleCtx: () => void;
   onOpenCommands: () => void;
   onOpenSettings: () => void;
+  onCopy: () => void;
   onExport: () => void;
   onClear: () => void;
   hasMessages: boolean;
@@ -2038,6 +2057,14 @@ function TitleBar({
                 </div>
                 <div
                   className="popup-item"
+                  onClick={() => { if (hasMessages) onCopy(); setMenuOpen(false); }}
+                  style={{ opacity: hasMessages ? 1 : 0.5 }}
+                >
+                  <span className="ico"><I.copy size={12} /></span>
+                  <div className="nm"><span>{t("app.titlebar.copyMd")}</span></div>
+                </div>
+                <div
+                  className="popup-item"
                   onClick={() => { if (hasMessages) onExport(); setMenuOpen(false); }}
                   style={{ opacity: hasMessages ? 1 : 0.5 }}
                 >
@@ -2159,6 +2186,7 @@ function MainHead({
   hasMessages,
   onAbort,
   onNewChat,
+  onCopy,
   onExport,
   onOpenWorkdir,
 }: {
@@ -2169,6 +2197,7 @@ function MainHead({
   hasMessages: boolean;
   onAbort: () => void;
   onNewChat: () => void;
+  onCopy: () => void;
   onExport: () => void;
   onOpenWorkdir: (anchor: { top?: number; bottom?: number; left: number }) => void;
 }) {
@@ -2211,9 +2240,18 @@ function MainHead({
       <button
         type="button"
         className="h-btn"
-        onClick={onExport}
+        onClick={onCopy}
         disabled={!hasMessages}
         title={t("app.header.copyMd")}
+      >
+        <I.copy size={12} /> {t("app.header.copy")}
+      </button>
+      <button
+        type="button"
+        className="h-btn"
+        onClick={onExport}
+        disabled={!hasMessages}
+        title={t("app.header.exportMd")}
       >
         <I.download size={12} /> {t("app.header.export")}
       </button>
