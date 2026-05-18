@@ -208,7 +208,7 @@ npx reasonix code --dir /path/to/project
 ## 社区
 
 > [!NOTE]
-> Reasonix 是开源、社区共建的项目。下面贡献者墙不是装饰 —— 每一个头像都对应一次真实合并的 PR。
+> Reasonix 是开源、社区共建的项目。文末"致谢"那面贡献者墙上的每一个头像，都对应一次真实合并的 PR。
 
 给新手准备的入门 issue —— 每个都带背景说明、代码定位、验收标准、提示 —— 全部挂在 [`good first issue`](https://github.com/esengine/reasonix/labels/good%20first%20issue) 标签下。挑任意一个还没人认领的就行。
 
@@ -227,12 +227,6 @@ npx reasonix code --dir /path/to/project
 </p>
 
 **第一次提 PR 之前**：先读 [`CONTRIBUTING.md`](./CONTRIBUTING.md) —— 短小、严格的项目规则（注释、错误处理、用现成库不手写）。`tests/comment-policy.test.ts` 静态强制执行注释那部分，`npm run verify` 是 push 前的闸。参与本项目即同意 [行为准则](./CODE_OF_CONDUCT.md)。安全相关问题请走 [SECURITY.md](./SECURITY.md)。
-
-<p align="center">
-  <a href="https://github.com/esengine/reasonix/graphs/contributors">
-    <img src="https://contrib.rocks/image?repo=esengine/DeepSeek-Reasonix&max=100&columns=12" alt="esengine/DeepSeek-Reasonix 贡献者" width="860"/>
-  </a>
-</p>
 
 <br/>
 
@@ -281,7 +275,7 @@ npx reasonix code --dir /path/to/project
 
 <p align="center">
   <a href="https://github.com/esengine/DeepSeek-Reasonix/graphs/contributors">
-    <img src="https://contrib.rocks/image?repo=esengine/DeepSeek-Reasonix" alt="contributors"/>
+    <img src="https://contrib.rocks/image?repo=esengine/DeepSeek-Reasonix&max=100&columns=12" alt="esengine/DeepSeek-Reasonix 贡献者" width="860"/>
   </a>
 </p>
 

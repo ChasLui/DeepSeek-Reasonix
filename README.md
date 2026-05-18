@@ -238,7 +238,7 @@ For live cache-hit rates, costs, and methodology, see [`benchmarks/`](./benchmar
 ## Community
 
 > [!NOTE]
-> Reasonix is open source and community-developed. The contributors wall below isn't decoration — every avatar is a real PR that shipped.
+> Reasonix is open source and community-developed. Every avatar in the Acknowledgments wall at the bottom of this file is a real PR that shipped.
 
 Scoped starter tickets — each with background, code pointers, acceptance criteria, and hints — live under the [`good first issue`](https://github.com/esengine/reasonix/labels/good%20first%20issue) label. Pick anything open.
 
@@ -257,12 +257,6 @@ Scoped starter tickets — each with background, code pointers, acceptance crite
 </p>
 
 **Before your first PR**: read [`CONTRIBUTING.md`](./CONTRIBUTING.md) — short, strict rules (comments, errors, libraries-over-hand-rolled). `tests/comment-policy.test.ts` enforces the comment ones; `npm run verify` is the pre-push gate. By participating you agree to the [Code of Conduct](./CODE_OF_CONDUCT.md). Security issues → [SECURITY.md](./SECURITY.md).
-
-<p align="center">
-  <a href="https://github.com/esengine/reasonix/graphs/contributors">
-    <img src="https://contrib.rocks/image?repo=esengine/DeepSeek-Reasonix&max=100&columns=12" alt="Contributors to esengine/DeepSeek-Reasonix" width="860"/>
-  </a>
-</p>
 
 <br/>
 
@@ -313,7 +307,7 @@ for designing the project logo (see [`docs/brand/`](./docs/brand/)), and to
 
 <p align="center">
   <a href="https://github.com/esengine/DeepSeek-Reasonix/graphs/contributors">
-    <img src="https://contrib.rocks/image?repo=esengine/DeepSeek-Reasonix" alt="contributors"/>
+    <img src="https://contrib.rocks/image?repo=esengine/DeepSeek-Reasonix&max=100&columns=12" alt="Contributors to esengine/DeepSeek-Reasonix" width="860"/>
   </a>
 </p>
 
