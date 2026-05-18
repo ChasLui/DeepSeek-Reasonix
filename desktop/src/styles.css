@@ -758,13 +758,27 @@ html[data-platform="macos"] .titlebar .tb-left {
   background: var(--accent-strong);
 }
 .side-head .new-btn kbd {
-  margin-left: auto;
   font-family: inherit;
   font-size: 14px;
   background: oklch(100% 0 0 / 0.18);
   padding: 1px 5px;
   border-radius: 3px;
   font-weight: 500;
+}
+.side-head .new-btn .shortcut {
+  margin-left: auto;
+}
+.side-head .new-btn .shortcut kbd {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: inherit;
+  color: inherit;
+  background: oklch(100% 0 0 / 0.18);
+  border: none;
+  border-radius: 3px;
+  padding: 1px 5px;
+  box-shadow: none;
 }
 .side-head .icon-btn {
   width: 30px;
@@ -1323,6 +1337,32 @@ html[data-platform="macos"] .titlebar .tb-left {
   font-family: inherit;
   font-size: 14px;
   color: var(--muted);
+}
+
+.shortcut {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+.shortcut kbd {
+  min-width: 18px;
+  text-align: center;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--fg-2);
+  background: linear-gradient(180deg, var(--card), var(--panel));
+  border: 1px solid var(--border);
+  border-bottom-color: var(--border-strong);
+  border-radius: 4px;
+  padding: 1px 5px;
+  box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.05);
+}
+html:not([data-platform="macos"]) .shortcut kbd[data-key="mod"] {
+  min-width: 30px;
 }
 
 /* ---------- MAIN ---------- */
@@ -2780,6 +2820,13 @@ html[data-platform="macos"] .titlebar .tb-left {
   padding: 0 4px;
   font-size: 14px;
 }
+.hint-row .shortcut kbd {
+  min-width: 0;
+  font-size: 14px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
 /* ModeSwitch inside hint-row — slightly smaller to sit inline with text */
 .hint-row .mode-switch {
   font-size: 13px;
@@ -2873,6 +2920,17 @@ html[data-platform="macos"] .titlebar .tb-left {
   background: var(--panel-2);
   padding: 1px 5px;
   border-radius: 4px;
+}
+.popup-item .kb .shortcut kbd,
+.cmdk-row .kb .shortcut kbd {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+html:not([data-platform="macos"]) .popup-item .kb .shortcut kbd[data-key="mod"],
+html:not([data-platform="macos"]) .cmdk-row .kb .shortcut kbd[data-key="mod"] {
+  min-width: 24px;
 }
 
 .popup-foot {

@@ -4,6 +4,7 @@ import { setLang, t, useLang } from "../i18n";
 import { I } from "../icons";
 import type { McpSpecInfo, SettingsPatch, SkillInfo } from "../protocol";
 import { FONT_FAMILY, FONT_SCALE, type FontFamily, type FontScale, THEME, type Theme } from "../theme";
+import { Shortcut, type ShortcutKey } from "./shortcut";
 
 export type PageId =
   | "general"
@@ -777,15 +778,15 @@ function PageBilling({
 }
 
 function PageShortcuts() {
-  const rows: { nm: string; keys: string[] }[] = [
-    { nm: t("settings.shortcutNewChat"), keys: ["⌘", "N"] },
-    { nm: t("settings.shortcutNewTab"), keys: ["⌘", "T"] },
-    { nm: t("settings.shortcutCloseTab"), keys: ["⌘", "W"] },
-    { nm: t("settings.shortcutCommandPalette"), keys: ["⌘", "K"] },
-    { nm: t("settings.shortcutFocusComposer"), keys: ["⌘", "L"] },
-    { nm: t("settings.shortcutSwitchTab"), keys: ["⌘", "⇥"] },
+  const rows: { nm: string; keys: ShortcutKey[] }[] = [
+    { nm: t("settings.shortcutNewChat"), keys: ["mod", "N"] },
+    { nm: t("settings.shortcutNewTab"), keys: ["mod", "T"] },
+    { nm: t("settings.shortcutCloseTab"), keys: ["mod", "W"] },
+    { nm: t("settings.shortcutCommandPalette"), keys: ["mod", "K"] },
+    { nm: t("settings.shortcutFocusComposer"), keys: ["mod", "L"] },
+    { nm: t("settings.shortcutSwitchTab"), keys: ["mod", "tab"] },
     { nm: t("settings.shortcutAbort"), keys: ["esc"] },
-    { nm: t("settings.shortcutSettings"), keys: ["⌘", ","] },
+    { nm: t("settings.shortcutSettings"), keys: ["mod", ","] },
   ];
   return (
     <section className="section">
@@ -798,14 +799,12 @@ function PageShortcuts() {
   );
 }
 
-function SectionRow({ nm, keys }: { nm: string; keys: string[] }): ReactNode {
+function SectionRow({ nm, keys }: { nm: string; keys: ShortcutKey[] }): ReactNode {
   return (
     <>
       <div className="nm">{nm}</div>
       <div className="keys">
-        {keys.map((k, j) => (
-          <kbd key={j}>{k}</kbd>
-        ))}
+        <Shortcut keys={keys} />
       </div>
     </>
   );

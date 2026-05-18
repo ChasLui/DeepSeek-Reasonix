@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { SessionInfo } from "../App";
 import { t, useLang } from "../i18n";
 import { I } from "../icons";
+import { Shortcut } from "./shortcut";
 
 type PendingDelete = {
   name: string;
@@ -92,7 +93,7 @@ export function Sidebar({
         <button type="button" className="new-btn" onClick={onNewChat}>
           <I.plus size={14} />
           <span>{t("sidebarPanel.newChat")}</span>
-          <kbd>⌘N</kbd>
+          <Shortcut keys={["mod", "N"]} />
         </button>
         <button
           type="button"
@@ -112,7 +113,7 @@ export function Sidebar({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <kbd>⌘K</kbd>
+          <Shortcut keys={["mod", "K"]} />
         </div>
       </div>
 
@@ -219,7 +220,9 @@ export function Sidebar({
             <I.cog size={13} />
           </span>
           <span>{t("sidebarPanel.settings")}</span>
-          <span className="right">⌘,</span>
+          <span className="right">
+            <Shortcut keys={["mod", ","]} />
+          </span>
         </div>
       </div>
 

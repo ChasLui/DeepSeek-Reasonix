@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { t, useLang } from "./i18n";
+import { Shortcut, type ShortcutKey } from "./ui/shortcut";
 
 export type CommandGroup = "nav" | "action" | "workspace" | "settings";
 
@@ -22,7 +23,7 @@ export type Command = {
   label: string;
   hint?: string;
   icon: ReactNode;
-  shortcut?: string[];
+  shortcut?: ShortcutKey[];
   group: CommandGroup;
   run: () => void;
 };
@@ -72,7 +73,7 @@ export function buildCommands(handlers: CommandHandlers): Command[] {
       label: t("palette.newChat"),
       hint: t("palette.newChatHint"),
       icon: <FilePlus size={13} />,
-      shortcut: ["⌘", "N"],
+      shortcut: ["mod", "N"],
       run: handlers.newChat,
     },
     {
@@ -81,7 +82,7 @@ export function buildCommands(handlers: CommandHandlers): Command[] {
       label: t("palette.newTab"),
       hint: t("palette.newTabHint"),
       icon: <Plus size={13} />,
-      shortcut: ["⌘", "T"],
+      shortcut: ["mod", "T"],
       run: handlers.newTab,
     },
   ];
@@ -92,7 +93,7 @@ export function buildCommands(handlers: CommandHandlers): Command[] {
       label: t("palette.closeTab"),
       hint: t("palette.closeTabHint"),
       icon: <SquareX size={13} />,
-      shortcut: ["⌘", "W"],
+      shortcut: ["mod", "W"],
       run: handlers.closeTab,
     });
   }
@@ -101,7 +102,7 @@ export function buildCommands(handlers: CommandHandlers): Command[] {
     group: "nav",
     label: t("palette.focusComposer"),
     icon: <FocusIcon size={13} />,
-    shortcut: ["⌘", "L"],
+    shortcut: ["mod", "L"],
     run: handlers.focusComposer,
   });
   if (handlers.busy) {
@@ -262,7 +263,7 @@ export function CommandPalette({
             }}
           />
           <span className="hint">
-            <kbd>esc</kbd>
+            <Shortcut keys={["esc"]} />
           </span>
         </div>
         <div className="cmdk-body" ref={listRef}>
@@ -287,7 +288,9 @@ export function CommandPalette({
                     <span className="l">{c.label}</span>
                     <span className="g">{groupLabel(c.group)}</span>
                     {c.shortcut ? (
-                      <span className="kb">{c.shortcut.join("")}</span>
+                      <span className="kb">
+                        <Shortcut keys={c.shortcut} />
+                      </span>
                     ) : (
                       <span className="kb-empty" />
                     )}
@@ -299,15 +302,15 @@ export function CommandPalette({
         </div>
         <div className="cmdk-foot">
           <span>
-            <kbd>↑↓</kbd>
+            <Shortcut keys={["updown"]} />
             {t("palette.footMove")}
           </span>
           <span>
-            <kbd>⏎</kbd>
+            <Shortcut keys={["enter"]} />
             {t("palette.footRun")}
           </span>
           <span>
-            <kbd>esc</kbd>
+            <Shortcut keys={["esc"]} />
             {t("palette.footClose")}
           </span>
           <span style={{ marginLeft: "auto", color: "var(--muted)" }}>

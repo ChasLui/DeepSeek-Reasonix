@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { I } from "../icons";
 import { t, useLang } from "../i18n";
+import { Shortcut } from "./shortcut";
 
 type Anchor = { top?: number; bottom?: number; left: number };
 
@@ -61,7 +62,7 @@ export function WorkdirPop({
               color: "var(--muted)",
             }}
           >
-            ⌘O
+            <Shortcut keys={["mod", "O"]} />
           </span>
         </div>
         <input

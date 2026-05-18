@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { I } from "../icons";
 import { t, useLang } from "../i18n";
 import type { JobInfo } from "../protocol";
+import { Shortcut } from "./shortcut";
 
 export function JobsPop({
   open,
@@ -96,7 +97,8 @@ export function JobsPop({
             </span>
             <span className="grow" />
             <span>
-              <kbd>⌘J</kbd> {t("jobs.kbToggle")} · <kbd>esc</kbd> {t("jobs.kbClose")}
+              <Shortcut keys={["mod", "J"]} /> {t("jobs.kbToggle")} ·{" "}
+              <Shortcut keys={["esc"]} /> {t("jobs.kbClose")}
             </span>
           </div>
         </div>

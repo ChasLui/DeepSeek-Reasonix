@@ -12,6 +12,7 @@ import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { t, type TKey } from "../i18n";
 import { I } from "../icons";
 import { fmtElapsed } from "./live";
+import { Shortcut } from "./shortcut";
 
 export type PresetName = "auto" | "flash" | "pro";
 export type EditMode = "review" | "auto" | "yolo";
@@ -418,20 +419,23 @@ export function Composer({
               <ModeSwitch mode={editMode} onChange={onEditModeChange} />
               <span className="hint-sep" />
               <span>
-                <kbd>⏎</kbd> {t("composer.queue")} &nbsp;·&nbsp; <kbd>esc</kbd> {t("composer.interrupt")}
+                <Shortcut keys={["enter"]} /> {t("composer.queue")} &nbsp;·&nbsp;{" "}
+                <Shortcut keys={["esc"]} /> {t("composer.interrupt")}
               </span>
             </>
           ) : (
             <>
               <span>
-                <kbd>/</kbd> {t("composer.commands")} &nbsp;·&nbsp; <kbd>@</kbd> {t("composer.mentionFiles")}
-                &nbsp;·&nbsp; <kbd>⌘K</kbd> {t("composer.commandPalette")}
+                <Shortcut keys={["/"]} /> {t("composer.commands")} &nbsp;·&nbsp;{" "}
+                <Shortcut keys={["@"]} /> {t("composer.mentionFiles")}
+                &nbsp;·&nbsp; <Shortcut keys={["mod", "K"]} /> {t("composer.commandPalette")}
               </span>
               <span className="grow" />
               <ModeSwitch mode={editMode} onChange={onEditModeChange} />
               <span className="hint-sep" />
               <span>
-                <kbd>⏎</kbd> {t("composer.send")} &nbsp; <kbd>⇧⏎</kbd> {t("composer.newline")}
+                <Shortcut keys={["enter"]} /> {t("composer.send")} &nbsp;{" "}
+                <Shortcut keys={["shift", "enter"]} /> {t("composer.newline")}
               </span>
             </>
           )}
@@ -667,13 +671,13 @@ function Popup({
       </div>
       <div className="popup-foot">
         <span>
-          <kbd>↑↓</kbd> {t("composer.select")}
+          <Shortcut keys={["updown"]} /> {t("composer.select")}
         </span>
         <span>
-          <kbd>⏎</kbd> {t("composer.confirm")}
+          <Shortcut keys={["enter"]} /> {t("composer.confirm")}
         </span>
         <span>
-          <kbd>esc</kbd> {t("composer.close")}
+          <Shortcut keys={["esc"]} /> {t("composer.close")}
         </span>
       </div>
     </div>

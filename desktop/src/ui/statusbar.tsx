@@ -3,6 +3,7 @@ import { t } from "../i18n";
 import type { Balance, Settings, UsageStats } from "../App";
 import type { JobInfo } from "../protocol";
 import { THEME, type Theme } from "../theme";
+import { localizeShortcutText } from "./shortcut";
 
 function formatMoney(amount: number, currency: "CNY" | "USD"): string {
   const symbol = currency === "CNY" ? "¥" : "$";
@@ -84,7 +85,7 @@ export function StatusBar({
       <span
         className={`seg jobs ${jobsOpen ? "active" : ""}`}
         onClick={onToggleJobs}
-        title={t("statusbar.jobsTip")}
+        title={localizeShortcutText(t("statusbar.jobsTip"))}
       >
         <I.cpu size={11} />
         <span>{t("statusbar.jobs")}</span>

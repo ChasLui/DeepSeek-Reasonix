@@ -19,7 +19,11 @@ if (isTheme(stored)) {
   document.documentElement.dataset.theme = stored;
 }
 
-const platform = /Mac|macOS/i.test(navigator.userAgent) ? "macos" : "default";
+const platform = /Mac|macOS/i.test(navigator.userAgent)
+  ? "macos"
+  : /Windows/i.test(navigator.userAgent)
+    ? "windows"
+    : "default";
 document.documentElement.dataset.platform = platform;
 document.body.dataset.platform = platform;
 

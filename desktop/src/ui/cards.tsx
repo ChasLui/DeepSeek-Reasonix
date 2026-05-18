@@ -2,6 +2,7 @@ import { memo, useState, type ReactNode } from "react";
 import { I } from "../icons";
 import { Markdown } from "../Markdown";
 import { t, useLang } from "../i18n";
+import { Shortcut } from "./shortcut";
 
 type Tone = "default" | "success" | "warning" | "danger" | "accent" | "violet";
 
@@ -271,11 +272,11 @@ export function ShellCard({
               ) : null}
               {onReject ? (
                 <button type="button" className="btn" onClick={onReject}>
-                  {t("cards.shellReject")} <kbd>⌘.</kbd>
+                  {t("cards.shellReject")} <Shortcut keys={["mod", "."]} />
                 </button>
               ) : null}
               <button type="button" className="btn primary" onClick={onApprove}>
-                {t("cards.shellRun")} <kbd>⌘⏎</kbd>
+                {t("cards.shellRun")} <Shortcut keys={["mod", "enter"]} />
               </button>
             </div>
           </div>
@@ -421,7 +422,7 @@ export function DiffCard({
               ) : null}
               {onApply ? (
                 <button type="button" className="btn primary" onClick={onApply}>
-                  {t("cards.diffApply")} <kbd>⌘⏎</kbd>
+                  {t("cards.diffApply")} <Shortcut keys={["mod", "enter"]} />
                 </button>
               ) : null}
             </div>

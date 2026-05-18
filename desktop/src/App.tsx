@@ -42,6 +42,7 @@ import { useElapsed } from "./ui/live";
 import { AboutModal } from "./ui/about";
 import { SettingsModal, type PageId as SettingsPageId } from "./ui/settings";
 import { Sidebar } from "./ui/sidebar";
+import { Shortcut, localizeShortcutText, shortcutText } from "./ui/shortcut";
 import { Splash, shouldShowSplash } from "./ui/splash";
 import { StatusBar } from "./ui/statusbar";
 import {
@@ -1313,7 +1314,7 @@ function TabRuntime({
         composerRef.current?.focus();
       },
     },
-    { cmd: "/new", desc: t("app.cmd.newSession"), run: () => newChat(), kb: "⌘N" },
+    { cmd: "/new", desc: t("app.cmd.newSession"), run: () => newChat(), kb: shortcutText(["mod", "N"]) },
     { cmd: "/clear", desc: t("app.cmd.clearChat"), run: () => dispatch({ t: "clear" }) },
     { cmd: "/abort", desc: t("app.cmd.abort"), run: () => abort(), kb: "esc" },
     {
@@ -1945,7 +1946,7 @@ function TitleBar({
           type="button"
           className="iconbtn"
           data-on={sideOn}
-          title={t("app.titlebar.sidebar")}
+          title={localizeShortcutText(t("app.titlebar.sidebar"))}
           onClick={onToggleSide}
         >
           <I.panel_l size={14} />
@@ -1997,7 +1998,9 @@ function TitleBar({
                 <div className="popup-item" onClick={() => { onOpenCommands(); setMenuOpen(false); }}>
                   <span className="ico"><I.search size={12} /></span>
                   <div className="nm"><span>{t("app.titlebar.commandPalette")}</span></div>
-                  <span className="kb">⌘K</span>
+                  <span className="kb">
+                    <Shortcut keys={["mod", "K"]} />
+                  </span>
                 </div>
                 <div
                   className="popup-item"
@@ -2014,7 +2017,9 @@ function TitleBar({
                 <div className="popup-item" onClick={() => { onOpenSettings(); setMenuOpen(false); }}>
                   <span className="ico"><I.cog size={12} /></span>
                   <div className="nm"><span>{t("app.titlebar.settings")}</span></div>
-                  <span className="kb">⌘,</span>
+                  <span className="kb">
+                    <Shortcut keys={["mod", ","]} />
+                  </span>
                 </div>
               </div>
             </div>
@@ -2104,7 +2109,7 @@ function TabBar({
           </div>
         );
       })}
-      <div className="tab newtab" title={t("app.tab.newTabTitle")} onClick={onNew}>
+      <div className="tab newtab" title={localizeShortcutText(t("app.tab.newTabTitle"))} onClick={onNew}>
         <I.plus size={12} />
         <span style={{ fontSize: 11, marginLeft: 4 }}>{t("app.tab.newTab")}</span>
       </div>
