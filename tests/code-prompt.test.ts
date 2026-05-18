@@ -35,14 +35,18 @@ describe("codeSystemPrompt", () => {
   });
 
   it("truncates a .gitignore larger than 2000 chars", () => {
+    // Baseline prompt with a tiny .gitignore — isolates the truncation
+    // delta from unrelated, fixed-size additions (e.g. the builtin Skills
+    // index), so the bound doesn't go stale as the prompt grows.
+    writeFileSync(join(root, ".gitignore"), "node_modules/\n", "utf8");
+    const small = codeSystemPrompt(root);
     const huge = `${"# comment ".repeat(500)}\n`; // ~5000 chars
     writeFileSync(join(root, ".gitignore"), huge, "utf8");
     const out = codeSystemPrompt(root);
     expect(out).toMatch(/truncated \d+ chars/);
-    // The .gitignore block (base + truncated + fences) is bounded.
-    // Allow extra slack for the builtin Skills index that applyMemoryStack
-    // also injects — that's a fixed-size addition, not unbounded.
-    expect(out.length).toBeLessThan(CODE_SYSTEM_PROMPT.length + 5000);
+    // A 5 KB .gitignore must be capped near the 2000-char limit — only a
+    // little larger than the tiny-.gitignore baseline, not 5 KB larger.
+    expect(out.length).toBeLessThan(small.length + 2500);
   });
 
   it("reminds the model to skip dependency / build / VCS dirs", () => {
