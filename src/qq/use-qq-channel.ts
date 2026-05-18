@@ -10,6 +10,7 @@ import { loadQQConfig, resolveThemePreference, saveQQConfig } from "../config.js
 import { type SessionInfo, freshSessionName } from "../memory/session.js";
 import type { ChoiceOption } from "../tools/choice.js";
 import type { PlanStep } from "../tools/plan.js";
+import { describeQQAccess } from "./access.js";
 import { QQChannel } from "./channel.js";
 
 type QQInteractionKind =
@@ -251,9 +252,24 @@ export function useQQChannel({
         throw new Error("QQ App ID and App Secret are required.");
       }
 
-      saveQQConfig({ appId, appSecret, sandbox, enabled: false });
+      saveQQConfig({
+        appId,
+        appSecret,
+        sandbox,
+        enabled: false,
+        ownerOpenId: existing.ownerOpenId,
+        allowlist: existing.allowlist,
+      });
       if (channelRef.current) {
-        saveQQConfig({ appId, appSecret, sandbox, enabled: true });
+        saveQQConfig({
+          appId,
+          appSecret,
+          sandbox,
+          enabled: true,
+          ownerOpenId: existing.ownerOpenId,
+          allowlist: existing.allowlist,
+        });
+        channelRef.current.refreshAccessConfig();
         return `QQ is already connected (${codeMode ? "code" : "chat"} mode). Auto-start is enabled.`;
       }
 
@@ -263,7 +279,14 @@ export function useQQChannel({
       });
       await channel.start();
       channelRef.current = channel;
-      saveQQConfig({ appId, appSecret, sandbox, enabled: true });
+      saveQQConfig({
+        appId,
+        appSecret,
+        sandbox,
+        enabled: true,
+        ownerOpenId: existing.ownerOpenId,
+        allowlist: existing.allowlist,
+      });
       return `QQ connected in ${codeMode ? "code" : "chat"} mode. It will auto-start on future launches.`;
     },
     [codeMode, log, promptLine, setQueuedSubmit],
@@ -285,7 +308,13 @@ export function useQQChannel({
     const enabled = config.enabled ? "enabled" : "disabled";
     const appId = config.appId ? `${config.appId.slice(0, 6)}...` : "none";
     const sandbox = config.sandbox ? "sandbox" : "production";
-    return `QQ: ${connected}, auto-start ${enabled}, credentials ${configured}, appId ${appId}, ${sandbox}, current mode ${codeMode ? "code" : "chat"}.`;
+    const access =
+      channelRef.current?.describeAccess() ??
+      describeQQAccess({
+        ownerOpenId: config.ownerOpenId,
+        allowlist: config.allowlist,
+      });
+    return `QQ: ${connected}, auto-start ${enabled}, credentials ${configured}, appId ${appId}, ${sandbox}, access ${access}, current mode ${codeMode ? "code" : "chat"}.`;
   }, [codeMode]);
 
   const resetInteractions = useCallback(() => {
