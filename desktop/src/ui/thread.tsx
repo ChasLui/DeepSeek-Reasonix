@@ -23,16 +23,17 @@ export const UserMsg = memo(function UserMsg({
   time?: string;
   skill?: SkillOrigin;
 }) {
+  useLang();
   return (
     <div className="msg user">
       <div className="avatar">YOU</div>
       <div className="body">
         <div className="who">
-          <span className="name">你</span>
+          <span className="name">{t("thread.you")}</span>
           {skill ? (
             <span className="skill-chip" title={`skill · ${skill.runAs}`}>
               <I.zap size={10} /> /{skill.name}
-              {skill.runAs === "subagent" ? <span className="sub">subagent</span> : null}
+              {skill.runAs === "subagent" ? <span className="sub">{t("thread.subagent")}</span> : null}
             </span>
           ) : null}
           {time ? <span className="time">{time}</span> : null}
@@ -154,6 +155,7 @@ export function PlanBanner({
   plan: ActivePlan;
   onDismiss?: () => void;
 }) {
+  useLang();
   const total = plan.steps.length || 1;
   const done = plan.completedStepIds.length;
   const pct = (done / total) * 100;
@@ -165,7 +167,7 @@ export function PlanBanner({
       </span>
       <div className="body">
         <div className="t">
-          计划执行中 · step {Math.min(done + 1, total)} / {total}
+          {t("thread.planRunning", { step: Math.min(done + 1, total), total })}
           {current ? ` — ${current.title}` : ""}
         </div>
         <div className="s">{plan.plan}</div>
@@ -176,7 +178,7 @@ export function PlanBanner({
         </div>
         {onDismiss ? (
           <button type="button" onClick={onDismiss}>
-            收起
+            {t("thread.collapse")}
           </button>
         ) : null}
       </div>
@@ -185,6 +187,7 @@ export function PlanBanner({
 }
 
 export function ActivePlanCard({ plan }: { plan: ActivePlan }) {
+  useLang();
   const done = new Set(plan.completedStepIds);
   const items: PlanItem[] = plan.steps.map((s) => {
     let status: PlanItem["status"];
@@ -196,10 +199,10 @@ export function ActivePlanCard({ plan }: { plan: ActivePlan }) {
       status,
       text: s.title,
       tool: s.action,
-      note: s.risk ? `risk: ${s.risk}` : undefined,
+      note: s.risk ? `${t("thread.risk")}: ${s.risk}` : undefined,
     };
   });
-  return <PlanCardView items={items} title="活动计划" />;
+  return <PlanCardView items={items} title={t("thread.activePlan")} />;
 }
 
 // ---- Approval bindings ----
@@ -215,13 +218,14 @@ export function PlanApprovalCard({
   onRefine: () => void;
   onCancel: () => void;
 }) {
+  useLang();
   const stepCount = p.steps?.length ?? 0;
-  const sub = stepCount > 0 ? `${stepCount} step` : undefined;
+  const sub = stepCount > 0 ? t("thread.planStepCount", { count: stepCount }) : undefined;
   return (
     <ApprovalCard
-      kind="plan confirmation"
+      kind={t("thread.planConfirmationKind")}
       tone="info"
-      title="开始执行计划"
+      title={t("thread.startPlan")}
       sub={sub}
       body={
         <>
@@ -230,9 +234,9 @@ export function PlanApprovalCard({
         </>
       }
       meta={`plan/#${p.id}`}
-      primaryLabel="批准"
-      secondaryLabel="取消"
-      tertiaryLabel="细化"
+      primaryLabel={t("thread.approve")}
+      secondaryLabel={t("thread.cancel")}
+      tertiaryLabel={t("thread.refine")}
       onPrimary={onApprove}
       onSecondary={onCancel}
       onTertiary={onRefine}
@@ -251,12 +255,13 @@ export function CheckpointApprovalCard({
   onRevise: () => void;
   onStop: () => void;
 }) {
+  useLang();
   return (
     <ApprovalCard
-      kind="plan checkpoint"
+      kind={t("thread.checkpointKind")}
       tone="brand"
-      title={c.title ?? `step ${c.completed} / ${c.total} 完成`}
-      sub={`检查点 · ${c.completed} / ${c.total}`}
+      title={c.title ?? t("thread.checkpointTitle", { completed: c.completed, total: c.total })}
+      sub={t("thread.checkpointSub", { completed: c.completed, total: c.total })}
       body={
         <>
           <div style={{ whiteSpace: "pre-wrap" }}>{c.result}</div>
@@ -266,9 +271,9 @@ export function CheckpointApprovalCard({
         </>
       }
       meta={`checkpoint · ${c.stepId}`}
-      primaryLabel="继续"
-      secondaryLabel="停止"
-      tertiaryLabel="修订"
+      primaryLabel={t("thread.continue")}
+      secondaryLabel={t("thread.stop")}
+      tertiaryLabel={t("thread.revise")}
       onPrimary={onContinue}
       onSecondary={onStop}
       onTertiary={onRevise}
@@ -288,9 +293,9 @@ export function RevisionApprovalCard({
   useLang();
   return (
     <ApprovalCard
-      kind="plan revision"
+      kind={t("thread.planRevisionKind")}
       tone="warn"
-      title="计划重写"
+      title={t("thread.rewritePlan")}
       sub={t("thread.keepSteps", { n: r.remainingSteps.length })}
       body={
         <>
@@ -323,8 +328,8 @@ export function RevisionApprovalCard({
           </ul>
         </>
       }
-      meta="reason · runtime constraint"
-      primaryLabel="批准重写"
+      meta={t("thread.revisionMeta")}
+      primaryLabel={t("thread.approveRewrite")}
       secondaryLabel={t("thread.keepOriginal")}
       onPrimary={onAccept}
       onSecondary={onReject}
@@ -343,23 +348,24 @@ export function ConfirmApprovalCard({
   onAlwaysAllow: (prefix: string) => void;
   onDeny: () => void;
 }) {
+  useLang();
   const isBackground = c.kind === "run_background";
   const firstWord = c.command.split(/\s+/)[0] ?? c.command;
   return (
     <ApprovalCard
-      kind="shell confirmation"
+      kind={t("thread.shellConfirmationKind")}
       tone="warn"
-      title={isBackground ? "后台运行命令" : "运行命令"}
+      title={isBackground ? t("thread.runBackgroundCommand") : t("thread.runCommand")}
       sub={c.command.length > 80 ? `${c.command.slice(0, 80)}…` : c.command}
       preview={
         <>
           <span style={{ color: "var(--accent)" }}>$</span> {c.command}
         </>
       }
-      meta={`risk · 中 · ${c.kind}`}
-      primaryLabel="执行"
-      secondaryLabel="拒绝"
-      tertiaryLabel={`始终允许 "${firstWord} *"`}
+      meta={t("thread.riskMedium", { kind: c.kind })}
+      primaryLabel={t("thread.execute")}
+      secondaryLabel={t("thread.reject")}
+      tertiaryLabel={t("thread.alwaysAllow", { prefix: `${firstWord} *` })}
       onPrimary={onAllow}
       onSecondary={onDeny}
       onTertiary={() => onAlwaysAllow(`${firstWord} *`)}
@@ -385,12 +391,13 @@ export function PathAccessApprovalCard({
   onAlwaysAllow: (prefix: string) => void;
   onDeny: () => void;
 }) {
-  const intentText = p.intent === "write" ? "写入" : "读取";
+  useLang();
+  const isWrite = p.intent === "write";
   return (
     <ApprovalCard
-      kind="path access"
+      kind={t("thread.pathAccessKind")}
       tone="warn"
-      title={`${intentText}沙盒外的路径`}
+      title={isWrite ? t("thread.writePathOutsideSandbox") : t("thread.readPathOutsideSandbox")}
       sub={p.path}
       preview={
         <>
@@ -400,10 +407,10 @@ export function PathAccessApprovalCard({
           </div>
         </>
       }
-      meta={`risk · 中 · ${p.intent}`}
-      primaryLabel={intentText === "写入" ? "允许写入" : "允许读取"}
-      secondaryLabel="拒绝"
-      tertiaryLabel={`始终允许 ${p.allowPrefix}`}
+      meta={t("thread.riskMedium", { kind: p.intent })}
+      primaryLabel={isWrite ? t("thread.allowWrite") : t("thread.allowRead")}
+      secondaryLabel={t("thread.reject")}
+      tertiaryLabel={t("thread.alwaysAllowPrefix", { prefix: p.allowPrefix })}
       onPrimary={onAllow}
       onSecondary={onDeny}
       onTertiary={() => onAlwaysAllow(p.allowPrefix)}
@@ -420,12 +427,13 @@ export function ChoiceApprovalCard({
   onPick: (optionId: string) => void;
   onCancel: () => void;
 }) {
+  useLang();
   return (
     <ApprovalCard
-      kind="user choice"
+      kind={t("thread.userChoiceKind")}
       tone="info"
       title={c.question}
-      sub={`${c.options.length} 个选项`}
+      sub={t("thread.optionCount", { count: c.options.length })}
       body={
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {c.options.map((o) => (
@@ -448,7 +456,7 @@ export function ChoiceApprovalCard({
           ))}
         </div>
       }
-      primaryLabel="取消"
+      primaryLabel={t("thread.cancel")}
       onPrimary={onCancel}
     />
   );
@@ -466,9 +474,10 @@ export function activePlanToTaskSteps(plan: ActivePlan): TaskStepView[] {
 }
 
 export function ActivePlanTaskCard({ plan }: { plan: ActivePlan }) {
+  useLang();
   return (
     <TaskCard
-      title="活动计划"
+      title={t("thread.activePlan")}
       subtitle={plan.summary}
       steps={activePlanToTaskSteps(plan)}
     />

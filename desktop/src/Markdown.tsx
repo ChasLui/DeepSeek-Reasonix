@@ -16,6 +16,7 @@ import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import { CodeView } from "./CodeView";
+import { t, useLang } from "./i18n";
 
 async function openWithEditor(
   editor: string | undefined,
@@ -49,6 +50,7 @@ const FILE_PATH_RE = new RegExp(
 );
 
 function FilePill({ path, line }: { path: string; line?: string }) {
+  useLang();
   const ctx = useContext(WorkspaceContext);
   const [done, setDone] = useState<"open" | "copy" | null>(null);
   const display = line ? `${path}:${line}` : path;
@@ -95,7 +97,7 @@ function FilePill({ path, line }: { path: string; line?: string }) {
           void openInEditor();
         }
       }}
-      title="click to open · right-click to copy"
+      title={t("markdown.filePillTitle")}
     >
       <FileText size={10} className="file-pill-icon" />
       <span className="file-pill-path">{path}</span>
@@ -166,6 +168,7 @@ export const Markdown = memo(function Markdown({ source }: { source: string }) {
 });
 
 function SafeLink({ href, children }: { href?: string; children: ReactNode }) {
+  useLang();
   const ctx = useContext(WorkspaceContext);
   const [done, setDone] = useState(false);
   const isExternal = !!href && /^https?:\/\//i.test(href);
@@ -199,7 +202,11 @@ function SafeLink({ href, children }: { href?: string; children: ReactNode }) {
       href={href ?? "#"}
       onClick={onClick}
       className={`md-link ${isExternal ? "external" : "local"} ${done ? "done" : ""}`}
-      title={isExternal ? `open ${href} in browser` : `open ${href}`}
+      title={
+        isExternal
+          ? t("markdown.externalLinkTitle", { href: href ?? "" })
+          : t("markdown.localLinkTitle", { href: href ?? "" })
+      }
     >
       {children}
       {isExternal ? (
@@ -212,6 +219,7 @@ function SafeLink({ href, children }: { href?: string; children: ReactNode }) {
 }
 
 function CodeBlock({ lang, text }: { lang: string; text: string }): ReactNode {
+  useLang();
   const [copied, setCopied] = useState(false);
   const onCopy = async () => {
     try {
@@ -228,7 +236,7 @@ function CodeBlock({ lang, text }: { lang: string; text: string }): ReactNode {
         <span className="codeblock-lang">{lang}</span>
         <button type="button" className={`copy-btn ${copied ? "done" : ""}`} onClick={onCopy}>
           {copied ? <Check size={11} /> : <Copy size={11} />}
-          {copied ? "copied" : "copy"}
+          {copied ? t("markdown.copied") : t("markdown.copy")}
         </button>
       </div>
       <CodeView text={text} lang={lang} />

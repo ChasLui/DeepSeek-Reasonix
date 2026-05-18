@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { I } from "../icons";
-import { t } from "../i18n";
+import { t, useLang } from "../i18n";
 
 export type ApprovalTone = "ok" | "warn" | "danger" | "info" | "brand" | "ghost";
 
@@ -12,8 +12,8 @@ export function ApprovalCard({
   body,
   preview,
   meta,
-  primaryLabel = "批准",
-  secondaryLabel = "拒绝",
+  primaryLabel,
+  secondaryLabel,
   tertiaryLabel,
   onPrimary,
   onSecondary,
@@ -33,6 +33,7 @@ export function ApprovalCard({
   onSecondary?: () => void;
   onTertiary?: () => void;
 }) {
+  useLang();
   return (
     <div className="approval" data-tone={tone}>
       <div className="ap-head">
@@ -50,12 +51,12 @@ export function ApprovalCard({
       <div className="ap-foot">
         {onPrimary ? (
           <button type="button" className="btn primary" onClick={onPrimary}>
-            {primaryLabel}
+            {primaryLabel ?? t("extraCards.approve")}
           </button>
         ) : null}
         {onSecondary ? (
           <button type="button" className="btn ghost" onClick={onSecondary}>
-            {secondaryLabel}
+            {secondaryLabel ?? t("extraCards.reject")}
           </button>
         ) : null}
         {onTertiary && tertiaryLabel ? (
@@ -89,6 +90,7 @@ export function TaskCard({
   subtitle?: string;
   steps: TaskStepView[];
 }) {
+  useLang();
   const done = steps.filter((x) => x.state === "done").length;
   const pct = steps.length ? (done / steps.length) * 100 : 0;
   return (
@@ -183,6 +185,7 @@ export function TipCard({
 export type DoctorRow = { s: "ok" | "warn" | "fail"; nm: string; sub: string; v: string };
 
 export function DoctorCard({ rows, headerSubtitle }: { rows: DoctorRow[]; headerSubtitle?: string }) {
+  useLang();
   const c = { ok: 0, warn: 0, fail: 0 };
   for (const r of rows) c[r.s]++;
   return (
@@ -192,7 +195,7 @@ export function DoctorCard({ rows, headerSubtitle }: { rows: DoctorRow[]; header
           <I.shield size={13} />
         </span>
         <div>
-          <div className="tt">/doctor · 系统体检</div>
+          <div className="tt">{t("extraCards.doctorTitle")}</div>
           {headerSubtitle ? (
             <div
               className="ss"
@@ -252,6 +255,7 @@ export function UsageFull({
   balanceLabel?: string;
   range?: string;
 }) {
+  useLang();
   const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`);
   const total = promptTokens + reasoningTokens + outputTokens + cacheHitTokens || 1;
   const pct = (n: number) => Math.round((n / total) * 100);
@@ -266,22 +270,22 @@ export function UsageFull({
       </div>
       <div className="ub">
         <div className="ucol">
-          <div className="l">prompt</div>
+          <div className="l">{t("extraCards.prompt")}</div>
           <div className="v acc">{fmt(promptTokens)}</div>
           <div className="pct">{pct(promptTokens)}%</div>
         </div>
         <div className="ucol">
-          <div className="l">reasoning</div>
+          <div className="l">{t("extraCards.reasoning")}</div>
           <div className="v vio">{fmt(reasoningTokens)}</div>
           <div className="pct">{pct(reasoningTokens)}%</div>
         </div>
         <div className="ucol">
-          <div className="l">output</div>
+          <div className="l">{t("extraCards.output")}</div>
           <div className="v ok">{fmt(outputTokens)}</div>
           <div className="pct">{pct(outputTokens)}%</div>
         </div>
         <div className="ucol">
-          <div className="l">cache hit</div>
+          <div className="l">{t("extraCards.cacheHit")}</div>
           <div className="v">{fmt(cacheHitTokens)}</div>
           <div className="pct">{pct(cacheHitTokens)}%</div>
         </div>
@@ -295,23 +299,23 @@ export function UsageFull({
       <div className="uf">
         <span className="x">
           <span className="sw" style={{ background: "var(--accent)" }} />
-          prompt
+          {t("extraCards.prompt")}
         </span>
         <span className="x">
           <span className="sw" style={{ background: "var(--violet)" }} />
-          reasoning
+          {t("extraCards.reasoning")}
         </span>
         <span className="x">
           <span className="sw" style={{ background: "var(--tone-ok)" }} />
-          output
+          {t("extraCards.output")}
         </span>
         <span className="x">
           <span className="sw" style={{ background: "var(--border-strong)" }} />
-          cache
+          {t("extraCards.cache")}
         </span>
         <span style={{ marginLeft: "auto" }}>
           {t("extraCards.sessionCost", { costLabel })}
-          {balanceLabel ? ` · 余额 ${balanceLabel}` : ""}
+          {balanceLabel ? ` · ${t("extraCards.balance", { balanceLabel })}` : ""}
         </span>
       </div>
     </div>
@@ -332,10 +336,11 @@ export function CtxCard({
   parts: CtxPart[];
   topTools: CtxTopRow[];
 }) {
+  useLang();
   return (
     <div className="ctx-card">
       <div className="h">
-        <span className="tt">上下文窗口</span>
+        <span className="tt">{t("extraCards.contextWindow")}</span>
         <span className="grow" />
         <span className="v">{totalLabel}</span>
       </div>
@@ -365,7 +370,7 @@ export function CtxCard({
       </div>
       {topTools.length > 0 ? (
         <div className="ttop">
-          <div className="stt">Top tools — 占用</div>
+          <div className="stt">{t("extraCards.topToolsUsage")}</div>
           {topTools.map((t, i) => (
             <div className="row" key={i}>
               <span className="n">{t.name}</span>
@@ -387,14 +392,15 @@ export type MemGroupKey = "user" | "feedback" | "project" | "reference";
 export type MemEntry = { text: string; meta?: string };
 export type MemGroups = Partial<Record<MemGroupKey, MemEntry[]>>;
 
-const GROUP_LABELS: Record<MemGroupKey, string> = {
-  user: "USER · 用户偏好",
-  feedback: "FEEDBACK · 反馈与纠正",
-  project: "PROJECT · 项目规范",
-  reference: "REFERENCE · 引用资料",
+const GROUP_LABELS: Record<MemGroupKey, Parameters<typeof t>[0]> = {
+  user: "extraCards.memoryUser",
+  feedback: "extraCards.memoryFeedback",
+  project: "extraCards.memoryProject",
+  reference: "extraCards.memoryReference",
 };
 
 export function MemoryGroups({ data }: { data: MemGroups }) {
+  useLang();
   const keys: MemGroupKey[] = ["user", "feedback", "project", "reference"];
   return (
     <div className="mem-groups">
@@ -405,7 +411,7 @@ export function MemoryGroups({ data }: { data: MemGroups }) {
           <div key={g}>
             <div className="gh" data-g={g}>
               <span className="sw" />
-              <span>{GROUP_LABELS[g]}</span>
+              <span>{t(GROUP_LABELS[g])}</span>
               <span className="grow" />
               <span className="cnt">{rows.length}</span>
             </div>
@@ -426,9 +432,10 @@ export function MemoryGroups({ data }: { data: MemGroups }) {
 // ---- Fallback ----
 
 export function FallbackCard({ kindLabel, payload }: { kindLabel: string; payload: Record<string, string> }) {
+  useLang();
   return (
     <div className="fallback-card">
-      <div className="hd"># unknown card kind — fallback render</div>
+      <div className="hd">{t("extraCards.unknownKind")}</div>
       <div className="kv">
         <span className="k">kind</span>
         <span className="v">"{kindLabel}"</span>

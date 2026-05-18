@@ -270,10 +270,10 @@ function PageGeneral({
               data-on={lang === "zh-CN"}
               onClick={() => setLang("zh-CN")}
             >
-              中文
+              {t("settings.langZhCn")}
             </button>
             <button type="button" data-on={lang === "en"} onClick={() => setLang("en")}>
-              English
+              {t("settings.langEn")}
             </button>
           </div>
         </div>

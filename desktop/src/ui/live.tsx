@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { I } from "../icons";
+import { t, useLang } from "../i18n";
 
 export function fmtElapsed(ms: number): string {
   const s = ms / 1000;
@@ -55,10 +56,11 @@ export function ThinkingPill({
 }
 
 export function LiveReasoning({ lines }: { lines: string[] }) {
+  useLang();
   return (
     <div className="live-reason">
       <div className="head">
-        <span className="dot" /> live · reasoning
+        <span className="dot" /> {t("live.reasoning")}
       </div>
       {lines.map((line, i) => (
         <div key={i}>
@@ -81,6 +83,7 @@ export function ToolRunningCard({
   elapsedMs: number;
   logLines?: { text: string; tone?: "ok" | "dim" }[];
 }) {
+  useLang();
   const ic =
     kind === "shell" ? <I.terminal size={12} /> : kind === "fetch" ? <I.globe size={12} /> : kind === "search" ? <I.search size={12} /> : <I.wrench size={12} />;
   return (
@@ -90,7 +93,7 @@ export function ToolRunningCard({
         <span className="kind">{kind}</span>
         <span style={{ color: "var(--fg)", fontWeight: 500 }}>{name}</span>
         <span className="grow" />
-        <span className="pill-tag run">running</span>
+        <span className="pill-tag run">{t("live.running")}</span>
         <span className="timer">{fmtElapsed(elapsedMs)}</span>
       </div>
       {logLines && logLines.length > 0 ? (
@@ -117,18 +120,21 @@ export function ToolRunningCard({
 }
 
 export function PendingUserMsg({ text, elapsedMs }: { text: string; elapsedMs: number }) {
+  useLang();
   return (
     <div className="msg user">
       <div className="avatar">YOU</div>
       <div className="body">
         <div className="who">
-          <span className="name">你</span>
-          <span className="time">{(elapsedMs / 1000).toFixed(1)}s ago</span>
+          <span className="name">{t("live.you")}</span>
+          <span className="time">
+            {t("live.secondsAgo", { seconds: (elapsedMs / 1000).toFixed(1) })}
+          </span>
         </div>
         <div className="msg-text user-pending">{text}</div>
         <div className="user-status">
           <span className="spin" />
-          <span>已送达 · 等待 agent 响应</span>
+          <span>{t("live.deliveredWaiting")}</span>
         </div>
       </div>
     </div>

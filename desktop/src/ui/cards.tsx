@@ -151,7 +151,7 @@ export function ReasoningCard({
           ) : null}
           {streaming ? (
             <span className="pill-tag warn">
-              <span className="shimmer">streaming…</span>
+              <span className="shimmer">{t("cards.streaming")}</span>
             </span>
           ) : (
             <span className="pill-tag ok">{t("cards.reasoningComplete")}</span>
@@ -178,12 +178,12 @@ export function ReasoningCard({
           <div className="meta">
             {model ? (
               <span>
-                <span className="k">model</span> {model}
+                <span className="k">{t("settings.model")}</span> {model}
               </span>
             ) : null}
             {tokens !== undefined ? (
               <span>
-                <span className="k">tokens</span> {tokens.toLocaleString()}
+                <span className="k">{t("statusbar.tokens")}</span> {tokens.toLocaleString()}
               </span>
             ) : null}
           </div>
@@ -228,9 +228,9 @@ export function ShellCard({
         ) : state === "running" ? (
           <span className="pill-tag run">{t("cards.shellRunning")}</span>
         ) : state === "failed" ? (
-          <span className="pill-tag err">failed{durationLabel}</span>
+          <span className="pill-tag err">{t("cards.failed")}{durationLabel}</span>
         ) : (
-          <span className="pill-tag ok">done{durationLabel}</span>
+          <span className="pill-tag ok">{t("cards.done")}{durationLabel}</span>
         )
       }
     >
@@ -300,6 +300,7 @@ export function ToolCard({
   ok?: boolean;
   durationMs?: number;
 }) {
+  useLang();
   const running = result === undefined;
   const tone: Tone = running ? "default" : ok === false ? "danger" : "success";
   const dur = durationMs ? `${durationMs} ms` : "—";
@@ -313,11 +314,11 @@ export function ToolCard({
       compact
       meta={
         running ? (
-          <span className="pill-tag run">running</span>
+          <span className="pill-tag run">{t("cards.running")}</span>
         ) : ok === false ? (
-          <span className="pill-tag err">error · {dur}</span>
+          <span className="pill-tag err">{t("cards.error")} · {dur}</span>
         ) : (
-          <span className="pill-tag ok">done · {dur}</span>
+          <span className="pill-tag ok">{t("cards.done")} · {dur}</span>
         )
       }
     >
@@ -332,7 +333,7 @@ export function ToolCard({
         ) : null}
         {result !== undefined ? (
           <div className="row">
-            <span className="k">{ok === false ? "error" : "result"}</span>
+            <span className="k">{ok === false ? t("cards.error") : t("cards.result")}</span>
             <span className="v">
               <span className={ok === false ? "num" : "str"}>
                 {result.length > 1200 ? `${result.slice(0, 1200)}…` : result}
@@ -379,7 +380,7 @@ export function DiffCard({
         <>
           <span style={{ color: "var(--success)" }}>+{adds}</span>
           <span style={{ color: "var(--danger)" }}>−{rms}</span>
-          {applied ? <span className="pill-tag ok">applied</span> : <span className="pill-tag warn">{t("cards.diffAwaiting")}</span>}
+          {applied ? <span className="pill-tag ok">{t("cards.applied")}</span> : <span className="pill-tag warn">{t("cards.diffAwaiting")}</span>}
         </>
       }
     >
@@ -466,7 +467,7 @@ export function WebSearchCard({ query, results }: { query: string; results: Sear
       meta={
         <>
           <span>"{query}"</span>
-          <span className="pill-tag ok">{results.length} hits</span>
+          <span className="pill-tag ok">{results.length} {t("cards.hits")}</span>
         </>
       }
     >
@@ -586,6 +587,7 @@ export function AttachCard({
   meta: string;
   preview?: string;
 }) {
+  useLang();
   return (
     <Card
       tone="default"
@@ -628,32 +630,32 @@ export function MetricStrip({
       {cacheHit !== undefined ? (
         <span className="item">
           <I.zap size={11} style={{ color: "var(--accent)" }} />
-          <span>cache_hit</span>
+          <span>{t("cards.cacheHit")}</span>
           <span className="v acc">{cacheHit}%</span>
         </span>
       ) : null}
       {promptTokens !== undefined ? (
         <span className="item">
-          <span>prompt</span>
+          <span>{t("cards.prompt")}</span>
           <span className="v">{promptTokens.toLocaleString()} t</span>
         </span>
       ) : null}
       {outputTokens !== undefined ? (
         <span className="item">
-          <span>output</span>
+          <span>{t("cards.output")}</span>
           <span className="v">{outputTokens.toLocaleString()} t</span>
         </span>
       ) : null}
       {costLabel ? (
         <span className="item">
           <I.coin size={11} />
-          <span>cost</span>
+          <span>{t("cards.cost")}</span>
           <span className="v ok">{costLabel}</span>
         </span>
       ) : null}
       {elapsed ? (
         <span className="item">
-          <span>elapsed</span>
+          <span>{t("cards.elapsed")}</span>
           <span className="v">{elapsed}</span>
         </span>
       ) : null}

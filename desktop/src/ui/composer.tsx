@@ -17,7 +17,7 @@ export type PresetName = "auto" | "flash" | "pro";
 export type EditMode = "review" | "auto" | "yolo";
 
 type PresetEntry = { label: string; badge: string; desc: TKey };
-type ModeEntry = { k: EditMode; label: string; icon: React.ReactNode; hint: TKey };
+type ModeEntry = { k: EditMode; label: TKey; icon: React.ReactNode; hint: TKey };
 
 const PRESET_INFO: Record<PresetName, PresetEntry> = {
   auto: { label: "auto", badge: "AUTO", desc: "preset.autoDesc" },
@@ -26,9 +26,9 @@ const PRESET_INFO: Record<PresetName, PresetEntry> = {
 };
 
 const MODE_INFO: ModeEntry[] = [
-  { k: "review", label: "Review", icon: <I.shield size={11} />, hint: "editMode.reviewHint" },
-  { k: "auto", label: "Auto", icon: <I.zap size={11} />, hint: "editMode.autoHint" },
-  { k: "yolo", label: "YOLO", icon: <I.warn size={11} />, hint: "editMode.yoloHint" },
+  { k: "review", label: "editMode.review", icon: <I.shield size={11} />, hint: "editMode.reviewHint" },
+  { k: "auto", label: "editMode.auto", icon: <I.zap size={11} />, hint: "editMode.autoHint" },
+  { k: "yolo", label: "editMode.yolo", icon: <I.warn size={11} />, hint: "editMode.yoloHint" },
 ];
 
 export function ModeSwitch({
@@ -51,7 +51,7 @@ export function ModeSwitch({
           title={t(m.hint)}
         >
           {m.icon}
-          <span>{m.label}</span>
+          <span>{t(m.label)}</span>
         </button>
       ))}
     </div>
@@ -248,7 +248,7 @@ export function Composer({
       base.unshift({
         name: "..",
         kind: "dir",
-        desc: parent ? `↑ ${parent}` : "↑ workspace root",
+        desc: parent ? `↑ ${parent}` : `↑ ${t("composer.workspaceRoot")}`,
       });
     }
     return base;
@@ -500,7 +500,7 @@ export function Composer({
               <span className="ico">
                 <I.slash size={14} />
               </span>
-              <span className="label">commands</span>
+              <span className="label">{t("composer.commandsLabel")}</span>
             </button>
             <button
               type="button"
@@ -513,7 +513,7 @@ export function Composer({
               <span className="ico">
                 <I.at size={14} />
               </span>
-              <span className="label">mention</span>
+              <span className="label">{t("composer.mentionLabel")}</span>
             </button>
 
             <span className="grow" />

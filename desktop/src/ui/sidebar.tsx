@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { SessionInfo } from "../App";
-import { t } from "../i18n";
+import { t, useLang } from "../i18n";
 import { I } from "../icons";
 
 type PendingDelete = {
@@ -15,20 +15,25 @@ function prettyName(s: SessionInfo): string {
   const m = s.name.match(/^desktop-(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(?:-(\d+))?$/);
   if (m) {
     const [, , month, day, hh, mm, tab] = m;
-    return `会话 ${month}-${day} ${hh}:${mm}${tab && tab !== "1" ? ` · #${tab}` : ""}`;
+    return `${t("sidebarPanel.sessionTitle", {
+      month,
+      day,
+      hour: hh,
+      minute: mm,
+    })}${tab && tab !== "1" ? ` · #${tab}` : ""}`;
   }
   return s.name.replace(/^desktop-/, "").replace(/[-_]+/g, " ");
 }
 
 function relative(ms: number): string {
   const min = ms / 60_000;
-  if (min < 1) return "刚刚";
-  if (min < 60) return `${Math.floor(min)} 分钟前`;
+  if (min < 1) return t("sidebarPanel.justNow");
+  if (min < 60) return t("sidebarPanel.minutesAgo", { n: Math.floor(min) });
   const hr = min / 60;
-  if (hr < 24) return `${Math.floor(hr)} 小时前`;
+  if (hr < 24) return t("sidebarPanel.hoursAgo", { n: Math.floor(hr) });
   const d = hr / 24;
-  if (d < 7) return `${Math.floor(d)} 天前`;
-  return `${Math.floor(d / 7)} 周前`;
+  if (d < 7) return t("sidebarPanel.daysAgo", { n: Math.floor(d) });
+  return t("sidebarPanel.weeksAgo", { n: Math.floor(d / 7) });
 }
 
 export function Sidebar({
@@ -52,6 +57,7 @@ export function Sidebar({
   onOpenCommands: () => void;
   onOpenAbout: () => void;
 }) {
+  useLang();
   const [query, setQuery] = useState("");
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const filtered = query
@@ -85,13 +91,13 @@ export function Sidebar({
       <div className="side-head">
         <button type="button" className="new-btn" onClick={onNewChat}>
           <I.plus size={14} />
-          <span>新会话</span>
+          <span>{t("sidebarPanel.newChat")}</span>
           <kbd>⌘N</kbd>
         </button>
         <button
           type="button"
           className="icon-btn"
-          title="命令面板"
+          title={t("sidebarPanel.commandPalette")}
           onClick={onOpenCommands}
         >
           <I.history size={14} />
@@ -102,7 +108,7 @@ export function Sidebar({
         <div className="input">
           <I.search size={13} />
           <input
-            placeholder="搜索会话…"
+            placeholder={t("sidebarPanel.searchSessions")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -113,7 +119,7 @@ export function Sidebar({
       <div className="session-list">
         <div className="side-section">
           <div className="label">
-            <span>近期</span>
+            <span>{t("sidebarPanel.recent")}</span>
             <span className="count">{filtered.length}</span>
           </div>
           {sessions.length === 0 ? (
@@ -125,7 +131,7 @@ export function Sidebar({
                 fontFamily: "Geist Mono, monospace",
               }}
             >
-              暂无会话
+              {t("sidebarPanel.noSessions")}
             </div>
           ) : filtered.length === 0 ? (
             <div
@@ -136,7 +142,7 @@ export function Sidebar({
                 fontFamily: "Geist Mono, monospace",
               }}
             >
-              无匹配结果
+              {t("sidebarPanel.noMatches")}
             </div>
           ) : null}
           {filtered.map((s) => {
@@ -163,7 +169,7 @@ export function Sidebar({
                 <div className="body">
                   <span className="title">{prettyName(s)}</span>
                   <span className="meta">
-                    <span>{s.messageCount} 条</span>
+                    <span>{t("sidebarPanel.messageCount", { count: s.messageCount })}</span>
                     <span className="sep">·</span>
                     <span>{updated}</span>
                   </span>
@@ -171,8 +177,8 @@ export function Sidebar({
                 <button
                   type="button"
                   className="delete-btn"
-                  title="删除会话"
-                  aria-label="删除会话"
+                  title={t("sidebarPanel.deleteSession")}
+                  aria-label={t("sidebarPanel.deleteSession")}
                   onClick={(e) => {
                     e.stopPropagation();
                     const rect = e.currentTarget.getBoundingClientRect();
@@ -200,7 +206,7 @@ export function Sidebar({
           <span className="ico">
             <I.shield size={13} />
           </span>
-          <span>审批规则</span>
+          <span>{t("sidebarPanel.approvalRules")}</span>
         </div>
         <div className="row" onClick={onOpenAbout}>
           <span className="ico">
@@ -212,7 +218,7 @@ export function Sidebar({
           <span className="ico">
             <I.cog size={13} />
           </span>
-          <span>设置</span>
+          <span>{t("sidebarPanel.settings")}</span>
           <span className="right">⌘,</span>
         </div>
       </div>
@@ -271,16 +277,16 @@ function SessionDeletePopover({
       style={{ left: pos.left, top: pos.top }}
     >
       <div className="msg">
-        删除会话
+        {t("sidebarPanel.deleteSession")}
         <span className="name">{target.pretty}</span>
       </div>
       <div className="actions">
         <button ref={cancelRef} type="button" className="cancel" onClick={onCancel}>
-          取消
+          {t("sidebarPanel.cancel")}
         </button>
         <button type="button" className="confirm" onClick={onConfirm}>
           <I.x size={11} />
-          删除
+          {t("sidebarPanel.delete")}
         </button>
       </div>
     </div>

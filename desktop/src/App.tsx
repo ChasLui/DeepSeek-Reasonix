@@ -1026,7 +1026,7 @@ function TabRuntime({
       const picked = await openDialog({
         directory: true,
         multiple: false,
-        title: "Pick workspace directory",
+        title: t("workdir.title"),
         defaultPath: state.settings?.workspaceDir,
       });
       if (typeof picked === "string" && picked.length > 0) {
@@ -1275,7 +1275,7 @@ function TabRuntime({
               .map((s) => {
                 if (s.kind === "text") return s.text;
                 if (s.kind === "reasoning")
-                  return `<details>\n<summary>Reasoning</summary>\n\n${s.text}\n\n</details>`;
+                  return `<details>\n<summary>${t("app.exportReasoningSummary")}</summary>\n\n${s.text}\n\n</details>`;
                 return "";
               })
               .filter(Boolean)
@@ -1402,11 +1402,11 @@ function TabRuntime({
             .map((s) => {
               if (s.kind === "text") return s.text;
               if (s.kind === "reasoning")
-                return `<details>\n<summary>Reasoning</summary>\n\n${s.text}\n\n</details>`;
+                return `<details>\n<summary>${t("app.exportReasoningSummary")}</summary>\n\n${s.text}\n\n</details>`;
               if (s.kind === "tool") {
                 const arg = s.args ? `\n\n\`\`\`json\n${s.args}\n\`\`\`` : "";
                 const res = s.result ? `\n\n\`\`\`\n${s.result}\n\`\`\`` : "";
-                return `> **Tool · \`${s.name}\`**${arg}${res}`;
+                return `> **${t("app.exportToolLabel")} · \`${s.name}\`**${arg}${res}`;
               }
               return "";
             })

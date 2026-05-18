@@ -4126,13 +4126,13 @@ html[data-platform="macos"] .titlebar .tb-left {
   border-radius: 4px;
   text-transform: uppercase;
 }
-.mem-edit .scope[data-s="项目"], .mem-edit .scope[data-s="project"] {
+.mem-edit .scope[data-s="project"] {
   background: var(--accent-soft); color: var(--accent);
 }
-.mem-edit .scope[data-s="用户"], .mem-edit .scope[data-s="user"] {
+.mem-edit .scope[data-s="user"] {
   background: var(--violet-soft); color: var(--violet);
 }
-.mem-edit .scope[data-s="全局"], .mem-edit .scope[data-s="global"] {
+.mem-edit .scope[data-s="global"] {
   background: var(--success-soft); color: var(--success);
 }
 .mem-edit .txt {
