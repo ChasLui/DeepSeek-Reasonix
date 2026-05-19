@@ -12,7 +12,6 @@ import "@fontsource/inter/700.css";
 import "katex/dist/katex.min.css";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import { applyProductionLockdown } from "./prod-guard";
 import {
   defaultStyleForTheme,
   isTheme,
@@ -37,8 +36,6 @@ const platform = /Mac|macOS/i.test(navigator.userAgent)
     : "default";
 document.documentElement.dataset.platform = platform;
 document.body.dataset.platform = platform;
-
-applyProductionLockdown();
 
 const host = document.getElementById("root");
 if (!host) throw new Error("#root missing");
