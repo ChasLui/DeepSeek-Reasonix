@@ -182,6 +182,7 @@ import { hydrateCardsFromMessages } from "./state/hydrate.js";
 import { InflightProvider } from "./state/inflight-context.js";
 import { AgentStoreProvider, useAgentState, useAgentStore } from "./state/provider.js";
 import { VerboseContext } from "./state/verbose-context.js";
+import { isLegacyWindowsConsole } from "./terminal-host.js";
 import { ThemeProvider } from "./theme/context.js";
 import { listThemeNames } from "./theme/tokens.js";
 import { FG, type ThemeName } from "./theme/tokens.js";
@@ -295,14 +296,17 @@ export interface AppProps {
 /**
  * Throttle interval in ms. 50ms —20Hz —slow enough that cursor-up
  * repaints on winpty/MINTTY/ConEmu/tmux don't leave half-drawn frames,
- * fast enough that streaming text still reads as continuous. Override
- * via `REASONIX_FLUSH_MS` if you want 60Hz on a terminal you trust.
+ * fast enough that streaming text still reads as continuous. Legacy
+ * Windows conhost paints each frame visibly, so 20Hz on a maximized
+ * `powershell.exe` is a flicker storm (#1300) — drop to ~7Hz there.
+ * Override via `REASONIX_FLUSH_MS` if you want 60Hz on a terminal you trust.
  */
 const FLUSH_INTERVAL_MS = (() => {
   const raw = process.env.REASONIX_FLUSH_MS;
-  if (!raw) return 50;
+  const fallback = isLegacyWindowsConsole() ? 150 : 50;
+  if (!raw) return fallback;
   const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < 16 || parsed > 1000) return 50;
+  if (!Number.isFinite(parsed) || parsed < 16 || parsed > 1000) return fallback;
   return Math.round(parsed);
 })();
 
