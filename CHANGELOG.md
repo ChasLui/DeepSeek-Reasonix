@@ -3,6 +3,54 @@
 All notable changes to Reasonix. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.47.0] — 2026-05-18
+
+**Desktop matures.** The Tauri app picks up the polish it was missing —
+About modal with one-click update check, KaTeX math rendering in chat,
+window/tab/session/scroll restore across relaunch, /compact /retry /btw
+/feedback slash commands, per-message copy + file-export actions, QQ
+settings entry, platform-aware keyboard shortcut hints. The auto-updater
+now reads `latest.json` from the R2 mirror so an npm-only `v*` release
+can no longer brick the in-app update banner; the banner also surfaces
+download progress while the bundle pulls. Universal Node is bundled on
+macOS so Intel Macs stop blank-screening at launch.
+
+**TUI — composer round two.** Composer keys and visuals re-align with
+Claude Code: rounded border, status row at the bottom, input-box
+background fill, left stripe on user card. `ctrl+r` toggles verbose
+(reasoning + raw tool I/O); `esc-esc` opens a rewind picker over the
+last 5s; `u` undo is now gated to the same 5s window so stale taps
+can't revert. SGR mouse wheel is on by default again, IME cursor stays
+glued to `▌`, WelcomeBanner centers vertically on empty chats.
+
+**Search hardening.** Regex now runs in a worker thread so a ReDoS
+pattern can be terminated cleanly; worker deadline 5s → 60s and walk
+deadline 15s → 120s for legitimately large repos. Tavily added as a
+`web_search` backend — escape hatch when Mojeek 403s. `search_content`
+gets a walk-level deadline and ESC preempts queued tool calls.
+
+**Claude-ecosystem compat.** Reasonix now reads `.mcp.json` and
+`.claude/skills/` from the repo so existing Claude Code setups work
+without a second copy; common skill fields (`type`/`context`/`agent`)
+are aliased.
+
+**Other:**
+- `feat(embedding)` batch OpenAI-compat embedding requests to respect
+  provider batch limits
+- `feat(memory)` inject ancestor `AGENTS.md` into `list_directory`,
+  not only `read_file`
+- `perf(session)` skip cross-workspace jsonls + byte-scan line count
+  — sidebar list ~10× faster
+- `feat(config)` support pricing overrides and per-model rpm limits
+- `feat(dashboard)` new / switch / delete sessions in-place, no CLI
+  bounce
+- `fix(mcp)` runtime schema validation for MCP server responses; ESC
+  aborts hung handshakes during startup; surface the real bridge-
+  failure reason in the dashboard
+- `fix(cli)` preserve flash-preset auto-escalate semantics
+- `ci` split desktop + npm releases into separate tag namespaces:
+  `v*` → npm, `desktop-v*` → Tauri bundles
+
 ## [0.46.0] — 2026-05-17
 
 **Breaking — Rust renderer removed.** Reasonix is back to a pure Ink/Node
