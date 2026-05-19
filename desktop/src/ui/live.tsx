@@ -93,7 +93,7 @@ export function ToolRunningCard({
         <span className="kind">{kind}</span>
         <span style={{ color: "var(--fg)", fontWeight: 500 }}>{name}</span>
         <span className="grow" />
-        <span className="pill-tag run">{t("live.running")}</span>
+        <span className="spin-meta" role="img" aria-label={t("live.running")} title={t("live.running")} />
         <span className="timer">{fmtElapsed(elapsedMs)}</span>
       </div>
       {logLines && logLines.length > 0 ? (
