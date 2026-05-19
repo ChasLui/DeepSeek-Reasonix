@@ -3316,21 +3316,47 @@ html:not([data-platform="macos"]) .cmdk-row .kb .shortcut kbd[data-key="mod"] {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.pill-tag.run {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
 .pill-tag.ok {
   background: var(--success-soft);
   color: var(--success);
 }
-.pill-tag.warn {
-  background: var(--warning-soft);
-  color: var(--warning);
-}
 .pill-tag.err {
   background: var(--danger-soft);
   color: var(--danger);
+}
+
+/* status icons for card meta — replaces most text pill labels */
+.spin-meta {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent-soft);
+  border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite;
+  display: inline-block;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.status-dot.warn { background: var(--warning); }
+
+.meta-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.meta-dur {
+  font-size: 10px;
+  color: var(--muted-2);
+  font-variant-numeric: tabular-nums;
 }
 
 /* spinner */
@@ -3532,7 +3558,7 @@ html:not([data-platform="macos"]) .cmdk-row .kb .shortcut kbd[data-key="mod"] {
 .skel-card .h .timer {
   font-variant-numeric: tabular-nums;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 12px;
 }
 .skel-card .body {
   padding: 10px 12px 12px;
