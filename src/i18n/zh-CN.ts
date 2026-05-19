@@ -690,8 +690,7 @@ export const zhCN: TranslationSchema = {
       helpShellConsent: "                             用户输入 = 明确同意。",
       helpShellExample: "                             示例：!git status   !ls src/   !npm test",
       helpShellGateTitle: "模型发起的 shell 命令（按次审批）：",
-      helpShellGate:
-        "  ↑↓ + ⏎                   每次都会弹出 `allow once` / `allow always` /",
+      helpShellGate: "  ↑↓ + ⏎                   每次都会弹出 `allow once` / `allow always` /",
       helpShellGateDetail:
         "                             `deny` 三选一。选 `allow always` 可将该命令前缀",
       helpShellGatePolicy:
