@@ -1,6 +1,6 @@
 {
   "name": "reasonix",
-  "version": "0.47.1",
+  "version": "0.47.2",
   "description": "DeepSeek-native coding agent: cache-first loop, flash-first cost control, tool-call repair.",
   "type": "module",
   "bin": {
@@ -80,12 +80,12 @@
     "react": "^19.2.6",
     "string-width": "^7.2.0",
     "undici": "^8.2.0",
-    "@reasonix/core-utils": "workspace:*",
     "ws": "^8.20.1",
     "zod": "^4.4.1"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "@reasonix/core-utils": "workspace:*",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
     "@types/node": "^22.9.0",

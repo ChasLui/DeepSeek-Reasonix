@@ -3,6 +3,17 @@
 All notable changes to Reasonix. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.47.2] — 2026-05-19
+
+**Hotfix — `npx reasonix@latest` install.** `0.47.1` shipped with
+`@reasonix/core-utils` listed under runtime `dependencies` as
+`workspace:*`. Because the workspace package is `private: true`,
+`npm publish` did not rewrite the protocol, so consumers hit
+`EUNSUPPORTEDPROTOCOL: Unsupported URL Type "workspace:"` during
+install. The bundled `dist/` already inlines core-utils at build
+time, so the dependency belongs under `devDependencies`. Moved.
+`0.47.1` is deprecated on npm; please install `0.47.2`.
+
 ## [0.47.1] — 2026-05-19
 
 **Desktop shakeout.** Follow-ups to the 0.47.0 desktop launch:
