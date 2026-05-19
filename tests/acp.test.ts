@@ -437,7 +437,7 @@ describe("ACP outbound requests + gate bridge", () => {
       };
       expect(
         verdictFor(req, { outcome: { outcome: "selected", optionId: "allow_always" } }),
-      ).toEqual({ type: "always_allow", prefix: "git *" });
+      ).toEqual({ type: "always_allow", prefix: "git status" });
     });
 
     it("shell cancelled / reject → deny", () => {
@@ -514,7 +514,7 @@ describe("ACP outbound requests + gate bridge", () => {
         result: { outcome: { outcome: "selected", optionId: "allow_always" } },
       })}\n`,
     );
-    expect(await verdictPromise).toEqual({ type: "always_allow", prefix: "pnpm *" });
+    expect(await verdictPromise).toEqual({ type: "always_allow", prefix: "pnpm test" });
     server.close();
   });
 });

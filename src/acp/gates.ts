@@ -8,6 +8,7 @@ import type {
   PlanVerdict,
   RevisionVerdict,
 } from "../core/pause-gate.js";
+import { derivePrefix } from "../tools/shell/parse.js";
 import type {
   PermissionOption,
   PermissionRequestParams,
@@ -65,11 +66,6 @@ export function permissionOptionsFor(req: PauseRequest): PermissionOption[] {
   }
 }
 
-function commandPrefix(command: string): string {
-  const first = command.trim().split(/\s+/)[0] ?? command.trim();
-  return `${first} *`;
-}
-
 function pathPrefix(p: string): string {
   return p;
 }
@@ -87,7 +83,7 @@ export function verdictFor(
       if (cancelled || optionId === ID_REJECT) return { type: "deny" };
       if (optionId === ID_ALLOW_ALWAYS) {
         const payload = req.payload as { command?: string };
-        return { type: "always_allow", prefix: commandPrefix(payload.command ?? "") };
+        return { type: "always_allow", prefix: derivePrefix(payload.command ?? "") };
       }
       return { type: "run_once" };
     }

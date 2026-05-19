@@ -6,6 +6,20 @@ import type { AssistantSegment, ActivePlan, PendingPlan, PendingCheckpoint, Pend
 import { AssistantText, PlanCardView, ReasoningCard, ShellCard, ToolCard, type PlanItem } from "./cards";
 import { ApprovalCard, TaskCard, type TaskStepView } from "./extra-cards";
 
+/** First two tokens for known wrappers (`npm install`, `git commit`, …); else first token only. */
+function derivePrefix(command: string): string {
+  const tokens = command.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return "";
+  if (tokens.length === 1) return tokens[0]!;
+  const first = tokens[0]!;
+  const TWO_TOKEN_WRAPPERS = new Set([
+    "npm", "npx", "pnpm", "yarn", "bun", "git", "cargo", "go",
+    "docker", "kubectl", "python", "python3", "deno", "pip", "pip3",
+    "make", "rake", "bundle", "gem",
+  ]);
+  return TWO_TOKEN_WRAPPERS.has(first) ? `${first} ${tokens[1]}` : first;
+}
+
 export function TurnDivider({ label }: { label: string }) {
   return (
     <div className="turn-divider">
@@ -399,7 +413,7 @@ export function ConfirmApprovalCard({
 }) {
   useLang();
   const isBackground = c.kind === "run_background";
-  const firstWord = c.command.split(/\s+/)[0] ?? c.command;
+  const prefix = derivePrefix(c.command);
   return (
     <ApprovalCard
       kind={t("thread.shellConfirmationKind")}
@@ -414,10 +428,10 @@ export function ConfirmApprovalCard({
       meta={t("thread.riskMedium", { kind: c.kind })}
       primaryLabel={t("thread.execute")}
       secondaryLabel={t("thread.reject")}
-      tertiaryLabel={t("thread.alwaysAllow", { prefix: `${firstWord} *` })}
+      tertiaryLabel={t("thread.alwaysAllow", { prefix })}
       onPrimary={onAllow}
       onSecondary={onDeny}
-      onTertiary={() => onAlwaysAllow(`${firstWord} *`)}
+      onTertiary={() => onAlwaysAllow(prefix)}
     />
   );
 }

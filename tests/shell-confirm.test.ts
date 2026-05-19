@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { derivePrefix } from "../src/cli/ui/ShellConfirm.js";
+import { derivePrefix } from "../src/tools/shell/parse.js";
 
 describe("derivePrefix", () => {
   it("returns the sole token for single-word commands", () => {
