@@ -40,6 +40,7 @@ import {
   saveSemanticEmbeddingConfig,
   saveTheme,
   searchEnabled,
+  webSearchEngine,
   writeConfig,
 } from "../src/config.js";
 
@@ -586,6 +587,21 @@ describe("config", () => {
       saveDesktopOpenTabs([{ dir: "/a" }, { dir: "/b" }, { dir: "/c" }], path);
       saveDesktopOpenTabs([{ dir: "/c" }, { dir: "/a" }, { dir: "/b" }], path);
       expect(loadDesktopOpenTabs(path)).toEqual([{ dir: "/c" }, { dir: "/a" }, { dir: "/b" }]);
+    });
+  });
+
+  describe("webSearchEngine", () => {
+    it("preserves each known engine end-to-end (no silent tavily→mojeek fall-through, #1309)", () => {
+      for (const engine of ["mojeek", "searxng", "metaso", "tavily"] as const) {
+        writeConfig({ webSearchEngine: engine }, path);
+        expect(webSearchEngine(path)).toBe(engine);
+      }
+    });
+
+    it("defaults to mojeek when unset or unknown", () => {
+      expect(webSearchEngine(path)).toBe("mojeek");
+      writeConfig({ webSearchEngine: "garbage" as unknown as "mojeek" }, path);
+      expect(webSearchEngine(path)).toBe("mojeek");
     });
   });
 });

@@ -6,8 +6,6 @@ import {
   loadResolvedSkillPaths,
   readConfig,
   searchEnabled,
-  webSearchEndpoint,
-  webSearchEngine,
 } from "../config.js";
 import { bootstrapSemanticSearchInCodeMode } from "../index/semantic/tool.js";
 import { ToolRegistry } from "../tools.js";
@@ -69,10 +67,7 @@ export async function buildCodeToolset(opts: CodeToolsetOpts): Promise<CodeTools
   registerTodoTool(tools);
   registerScaffoldTools(tools, { projectRoot: opts.rootDir });
   if (searchEnabled()) {
-    registerWebTools(tools, {
-      webSearchEngine: webSearchEngine(),
-      webSearchEndpoint: webSearchEndpoint(),
-    });
+    registerWebTools(tools);
   }
   // Lazy: constructing DeepSeekClient throws when DEEPSEEK_API_KEY is unset,
   // which would kill `reasonix code` before the setup wizard can prompt for

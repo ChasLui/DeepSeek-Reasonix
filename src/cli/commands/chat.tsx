@@ -1,12 +1,6 @@
 import { render } from "ink";
 import React, { useMemo, useState } from "react";
-import {
-  loadApiKey,
-  readConfig,
-  searchEnabled,
-  webSearchEndpoint,
-  webSearchEngine,
-} from "../../config.js";
+import { loadApiKey, readConfig, searchEnabled } from "../../config.js";
 import { loadDotenv } from "../../env.js";
 import { t } from "../../i18n/index.js";
 import {
@@ -291,10 +285,7 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
   // a question needs info fresher than its training data.
   if (searchEnabled()) {
     if (!tools) tools = new ToolRegistry();
-    registerWebTools(tools, {
-      webSearchEngine: webSearchEngine(),
-      webSearchEndpoint: webSearchEndpoint(),
-    });
+    registerWebTools(tools);
   }
 
   // Memory tools — available in every session, not just code mode.

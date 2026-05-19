@@ -630,10 +630,11 @@ export function searchEnabled(path: string = defaultConfigPath()): boolean {
 
 export function webSearchEngine(
   path: string = defaultConfigPath(),
-): "mojeek" | "searxng" | "metaso" {
+): "mojeek" | "searxng" | "metaso" | "tavily" {
   const cfg = readConfig(path).webSearchEngine;
   if (cfg === "searxng") return "searxng";
   if (cfg === "metaso") return "metaso";
+  if (cfg === "tavily") return "tavily";
   return "mojeek";
 }
 

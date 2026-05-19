@@ -581,10 +581,6 @@ export interface WebToolsOptions {
   defaultTopK?: number;
   /** Byte cap for `web_fetch` extracted text. */
   maxFetchChars?: number;
-  /** Backend engine: "mojeek" (default, scrapes Mojeek), "searxng" (self-hosted SearXNG), "metaso" (Metaso API), or "tavily" (LLM-friendly API). */
-  webSearchEngine?: "mojeek" | "searxng" | "metaso" | "tavily";
-  /** Base URL for SearXNG (default http://localhost:8080). */
-  webSearchEndpoint?: string;
 }
 
 export function registerWebTools(registry: ToolRegistry, opts: WebToolsOptions = {}): ToolRegistry {
@@ -610,8 +606,9 @@ export function registerWebTools(registry: ToolRegistry, opts: WebToolsOptions =
       required: ["query"],
     },
     fn: async (args: { query: string; topK?: number }, ctx) => {
-      const engine = opts.webSearchEngine ?? loadWebSearchEngine();
-      const endpoint = opts.webSearchEndpoint ?? loadWebSearchEndpoint();
+      // Read at call time, not registration time — `/search-engine` mutates config mid-session (#1309).
+      const engine = loadWebSearchEngine();
+      const endpoint = loadWebSearchEndpoint();
       const results = await webSearch(args.query, {
         topK: args.topK ?? defaultTopK,
         signal: ctx?.signal,
