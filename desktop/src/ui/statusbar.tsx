@@ -1,8 +1,9 @@
+import { useEffect, useRef, useState } from "react";
 import { I } from "../icons";
 import { t } from "../i18n";
 import type { Balance, Settings, UsageStats } from "../App";
 import type { JobInfo } from "../protocol";
-import { THEME, type Theme } from "../theme";
+import { THEME, THEME_STYLES, type Theme, type ThemeStyle, themeForStyle } from "../theme";
 import { localizeShortcutText } from "./shortcut";
 
 function formatMoney(amount: number, currency: "CNY" | "USD"): string {
@@ -23,10 +24,11 @@ export function StatusBar({
   ready,
   currency,
   theme,
+  themeStyle,
   jobs,
   jobsOpen,
   onToggleJobs,
-  onToggleTheme,
+  onSetThemeStyle,
   onToggleCurrency,
   onOpenSettings,
   onOpenWorkdir,
@@ -38,10 +40,11 @@ export function StatusBar({
   ready: boolean;
   currency: "CNY" | "USD";
   theme: Theme;
+  themeStyle: ThemeStyle;
   jobs: JobInfo[];
   jobsOpen: boolean;
   onToggleJobs: () => void;
-  onToggleTheme: () => void;
+  onSetThemeStyle: (style: ThemeStyle) => void;
   onToggleCurrency: () => void;
   onOpenSettings: () => void;
   onOpenWorkdir?: (anchor: { bottom: number; left: number }) => void;
@@ -54,6 +57,21 @@ export function StatusBar({
     ? `${balance.currency === "USD" ? "$" : "¥"} ${balance.total.toFixed(2)}`
     : "—";
   const connState = !ready ? "off" : busy ? "running" : "online";
+  const [themeOpen, setThemeOpen] = useState(false);
+  const themePopRef = useRef<HTMLDivElement | null>(null);
+  const themeButtonRef = useRef<HTMLSpanElement | null>(null);
+
+  useEffect(() => {
+    if (!themeOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (themePopRef.current?.contains(target) || themeButtonRef.current?.contains(target)) return;
+      setThemeOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [themeOpen]);
+
   return (
     <footer className="statusbar">
       <span className="seg" title={`API · ${settings?.baseUrl ?? "api.deepseek.com"}`}>
@@ -120,12 +138,57 @@ export function StatusBar({
         <span>{t("statusbar.balance")}</span>
         <span className="v ok">{balanceLabel}</span>
       </span>
-      <span className="seg" title={t("statusbar.switchTheme")} onClick={onToggleTheme}>
+      <span
+        ref={themeButtonRef}
+        className={`seg theme-trigger ${themeOpen ? "active" : ""}`}
+        title={t("statusbar.switchTheme")}
+        onClick={() => setThemeOpen((open) => !open)}
+      >
         {theme === THEME.DARK ? <I.moon size={11} /> : <I.sun size={11} />}
         <span className="v">
-          {theme === THEME.DARK ? t("statusbar.themeDark") : t("statusbar.themeLight")}
+          {t(`statusbar.themeStyle${themeStyle[0]!.toUpperCase()}${themeStyle.slice(1)}` as any)}
         </span>
       </span>
+      {themeOpen ? (
+        <div ref={themePopRef} className="theme-pop" role="menu" aria-label={t("settings.themeStyle")}>
+          <div className="theme-pop-head">
+            <div className="tt">{t("settings.themeStyle")}</div>
+            <div className="ss">{t("statusbar.switchTheme")}</div>
+          </div>
+          <div className="theme-pop-list">
+            {THEME_STYLES.map((style) => (
+              <button
+                key={style}
+                type="button"
+                className="theme-pop-item"
+                data-on={themeStyle === style}
+                data-style={style}
+                onClick={() => {
+                  onSetThemeStyle(style);
+                  setThemeOpen(false);
+                }}
+              >
+                <span className="style-swatches" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+                <span className="txt">
+                  <span className="nm">
+                    {t(`statusbar.themeStyle${style[0]!.toUpperCase()}${style.slice(1)}` as any)}
+                  </span>
+                  <span className="md">
+                    {themeForStyle(style) === THEME.DARK
+                      ? t("statusbar.themeDark")
+                      : t("statusbar.themeLight")}
+                  </span>
+                </span>
+                {themeStyle === style ? <I.check size={13} /> : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </footer>
   );
 }

@@ -51,7 +51,8 @@ body[data-drag-over="1"]::after {
 /* ---------- THEME TOKENS ---------- */
 
 :root,
-[data-theme="dark"] {
+[data-theme="dark"],
+[data-theme-style="graphite"] {
   --bg: oklch(17% 0.005 280);
   --bg-2: oklch(20% 0.006 275);
   --panel: oklch(21.5% 0.007 275);
@@ -85,7 +86,8 @@ body[data-drag-over="1"]::after {
   --radius-lg: 12px;
 }
 
-[data-theme="light"] {
+[data-theme="light"],
+[data-theme-style="sandstone"] {
   --bg: oklch(97.5% 0.008 80);
   --bg-2: oklch(95.5% 0.011 78);
   --panel: oklch(98.5% 0.005 80);
@@ -116,6 +118,70 @@ body[data-drag-over="1"]::after {
   --shadow-sm: 0 1px 0 oklch(30% 0.05 50 / 0.05);
   --shadow-md: 0 8px 24px -10px oklch(30% 0.05 50 / 0.13);
   --shadow-lg: 0 24px 60px -20px oklch(30% 0.05 50 / 0.20);
+}
+
+[data-theme-style="porcelain"] {
+  --bg: oklch(99.2% 0.001 100);
+  --bg-2: oklch(96.8% 0.001 100);
+  --panel: oklch(99.8% 0 0);
+  --panel-2: oklch(95.6% 0.001 100);
+  --card: oklch(100% 0 0);
+  --card-hover: oklch(97.6% 0.001 100);
+  --border: oklch(91% 0.002 100);
+  --border-strong: oklch(84% 0.003 100);
+  --fg: oklch(24% 0.006 260);
+  --fg-2: oklch(37% 0.006 260);
+  --muted: oklch(54% 0.005 260);
+  --muted-2: oklch(68% 0.004 260);
+
+  --accent: oklch(58% 0.18 36);
+  --accent-soft: oklch(58% 0.18 36 / 0.1);
+  --accent-strong: oklch(52% 0.2 34);
+
+  --success: oklch(48% 0.13 155);
+  --success-soft: oklch(48% 0.13 155 / 0.1);
+  --warning: oklch(58% 0.14 78);
+  --warning-soft: oklch(58% 0.14 78 / 0.12);
+  --danger: oklch(54% 0.2 22);
+  --danger-soft: oklch(54% 0.2 22 / 0.1);
+  --violet: oklch(56% 0.12 285);
+  --violet-soft: oklch(56% 0.12 285 / 0.1);
+
+  --shadow-sm: 0 1px 0 oklch(20% 0.01 260 / 0.04);
+  --shadow-md: 0 8px 24px -12px oklch(20% 0.01 260 / 0.1);
+  --shadow-lg: 0 24px 60px -22px oklch(20% 0.01 260 / 0.18);
+}
+
+[data-theme-style="midnight"] {
+  --bg: oklch(19% 0.024 265);
+  --bg-2: oklch(17% 0.026 260);
+  --panel: oklch(21.5% 0.028 265);
+  --panel-2: oklch(25% 0.03 265);
+  --card: oklch(23% 0.03 265);
+  --card-hover: oklch(27% 0.032 265);
+  --border: oklch(32% 0.032 265);
+  --border-strong: oklch(40% 0.035 265);
+  --fg: oklch(91% 0.02 265);
+  --fg-2: oklch(78% 0.028 265);
+  --muted: oklch(64% 0.03 265);
+  --muted-2: oklch(50% 0.03 265);
+
+  --accent: oklch(73% 0.12 285);
+  --accent-soft: oklch(73% 0.12 285 / 0.16);
+  --accent-strong: oklch(80% 0.13 286);
+
+  --success: oklch(70% 0.13 150);
+  --success-soft: oklch(70% 0.13 150 / 0.14);
+  --warning: oklch(78% 0.13 86);
+  --warning-soft: oklch(78% 0.13 86 / 0.16);
+  --danger: oklch(66% 0.17 25);
+  --danger-soft: oklch(66% 0.17 25 / 0.16);
+  --violet: oklch(76% 0.12 285);
+  --violet-soft: oklch(76% 0.12 285 / 0.16);
+
+  --shadow-sm: 0 1px 0 oklch(0% 0 0 / 0.38);
+  --shadow-md: 0 8px 24px -8px oklch(0% 0 0 / 0.52);
+  --shadow-lg: 0 24px 60px -16px oklch(0% 0 0 / 0.68);
 }
 
 button,
@@ -3243,6 +3309,10 @@ html:not([data-platform="macos"]) .cmdk-row .kb .shortcut kbd[data-key="mod"] {
   background: var(--panel);
   color: var(--fg);
 }
+.statusbar .seg.theme-trigger.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
 .statusbar .seg .v {
   color: var(--fg);
 }
@@ -3286,6 +3356,77 @@ html:not([data-platform="macos"]) .cmdk-row .kb .shortcut kbd[data-key="mod"] {
   color: var(--fg);
   font-size: 14px;
   z-index: 20;
+}
+.theme-pop {
+  position: fixed;
+  right: 10px;
+  bottom: 32px;
+  width: 280px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  z-index: 30;
+  overflow: hidden;
+  animation: rise 0.16s ease-out;
+}
+.theme-pop-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.theme-pop-head .tt {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.theme-pop-head .ss {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+.theme-pop-list {
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+}
+.theme-pop-item {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 52px 1fr 16px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 8px;
+  color: var(--fg);
+  text-align: left;
+}
+.theme-pop-item:hover,
+.theme-pop-item[data-on="true"] {
+  background: var(--panel);
+}
+.theme-pop-item[data-on="true"] {
+  color: var(--accent);
+}
+.theme-pop-item .style-swatches {
+  height: 22px;
+}
+.theme-pop-item .txt {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+.theme-pop-item .nm {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg);
+}
+.theme-pop-item .md {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
 }
 
 /* utility */
@@ -4013,6 +4154,121 @@ html:not([data-platform="macos"]) .cmdk-row .kb .shortcut kbd[data-key="mod"] {
   background: var(--card);
   color: var(--fg);
   box-shadow: var(--shadow-sm);
+}
+
+.theme-style-row {
+  align-items: start;
+}
+.style-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  gap: 8px;
+  width: min(360px, 42vw);
+}
+.style-card {
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  color: var(--fg);
+  min-height: 108px;
+}
+.style-card[data-on="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+  background: var(--card);
+}
+.style-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.style-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+.style-mode {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.style-swatches {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 0.7fr;
+  gap: 4px;
+  height: 24px;
+}
+.style-swatches span {
+  border: 1px solid oklch(0% 0 0 / 0.12);
+  border-radius: 5px;
+}
+.style-desc {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.style-card[data-style="graphite"] .style-swatches span:nth-child(1),
+.theme-pop-item[data-style="graphite"] .style-swatches span:nth-child(1) {
+  background: oklch(17% 0.005 280);
+}
+.style-card[data-style="graphite"] .style-swatches span:nth-child(2),
+.theme-pop-item[data-style="graphite"] .style-swatches span:nth-child(2) {
+  background: oklch(24.5% 0.008 275);
+}
+.style-card[data-style="graphite"] .style-swatches span:nth-child(3),
+.theme-pop-item[data-style="graphite"] .style-swatches span:nth-child(3) {
+  background: oklch(68% 0.16 38);
+}
+.style-card[data-style="sandstone"] .style-swatches span:nth-child(1),
+.theme-pop-item[data-style="sandstone"] .style-swatches span:nth-child(1) {
+  background: oklch(97.5% 0.008 80);
+}
+.style-card[data-style="sandstone"] .style-swatches span:nth-child(2),
+.theme-pop-item[data-style="sandstone"] .style-swatches span:nth-child(2) {
+  background: oklch(93.5% 0.014 76);
+}
+.style-card[data-style="sandstone"] .style-swatches span:nth-child(3),
+.theme-pop-item[data-style="sandstone"] .style-swatches span:nth-child(3) {
+  background: oklch(60% 0.19 38);
+}
+.style-card[data-style="porcelain"] .style-swatches span:nth-child(1),
+.theme-pop-item[data-style="porcelain"] .style-swatches span:nth-child(1) {
+  background: oklch(99.2% 0.001 100);
+}
+.style-card[data-style="porcelain"] .style-swatches span:nth-child(2),
+.theme-pop-item[data-style="porcelain"] .style-swatches span:nth-child(2) {
+  background: oklch(95.6% 0.001 100);
+}
+.style-card[data-style="porcelain"] .style-swatches span:nth-child(3),
+.theme-pop-item[data-style="porcelain"] .style-swatches span:nth-child(3) {
+  background: oklch(56% 0.12 285);
+}
+.style-card[data-style="midnight"] .style-swatches span:nth-child(1),
+.theme-pop-item[data-style="midnight"] .style-swatches span:nth-child(1) {
+  background: oklch(17% 0.026 260);
+}
+.style-card[data-style="midnight"] .style-swatches span:nth-child(2),
+.theme-pop-item[data-style="midnight"] .style-swatches span:nth-child(2) {
+  background: oklch(25% 0.03 265);
+}
+.style-card[data-style="midnight"] .style-swatches span:nth-child(3),
+.theme-pop-item[data-style="midnight"] .style-swatches span:nth-child(3) {
+  background: oklch(73% 0.12 285);
+}
+@media (max-width: 760px) {
+  .theme-style-row,
+  .setting-row {
+    grid-template-columns: 1fr;
+  }
+
+  .style-grid {
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
 }
 
 .field {

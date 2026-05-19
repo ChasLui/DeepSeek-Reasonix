@@ -10,7 +10,17 @@ import {
   getQQStatusLabel,
   type QQDesktopSettingsState,
 } from "../qq-settings";
-import { FONT_FAMILY, FONT_SCALE, type FontFamily, type FontScale, THEME, type Theme } from "../theme";
+import {
+  FONT_FAMILY,
+  FONT_SCALE,
+  type FontFamily,
+  type FontScale,
+  THEME,
+  THEME_STYLES,
+  type Theme,
+  type ThemeStyle,
+  themeForStyle,
+} from "../theme";
 import { Shortcut, type ShortcutKey } from "./shortcut";
 
 export type PageId =
@@ -40,7 +50,9 @@ export function SettingsModal({
   usage,
   currency,
   theme,
+  themeStyle,
   onSetTheme,
+  onSetThemeStyle,
   fontScale,
   onSetFontScale,
   fontFamily,
@@ -67,7 +79,9 @@ export function SettingsModal({
   usage: UsageStats;
   currency: "CNY" | "USD";
   theme: Theme;
+  themeStyle: ThemeStyle;
   onSetTheme: (theme: Theme) => void;
+  onSetThemeStyle: (style: ThemeStyle) => void;
   fontScale: FontScale;
   onSetFontScale: (scale: FontScale) => void;
   fontFamily: FontFamily;
@@ -133,7 +147,9 @@ export function SettingsModal({
               <PageGeneral
                 settings={settings}
                 theme={theme}
+                themeStyle={themeStyle}
                 onSetTheme={onSetTheme}
+                onSetThemeStyle={onSetThemeStyle}
                 fontScale={fontScale}
                 onSetFontScale={onSetFontScale}
                 fontFamily={fontFamily}
@@ -363,7 +379,9 @@ export function QQChannelSection({
 function PageGeneral({
   settings,
   theme,
+  themeStyle,
   onSetTheme,
+  onSetThemeStyle,
   fontScale,
   onSetFontScale,
   fontFamily,
@@ -373,7 +391,9 @@ function PageGeneral({
 }: {
   settings: SettingsType;
   theme: Theme;
+  themeStyle: ThemeStyle;
   onSetTheme: (theme: Theme) => void;
+  onSetThemeStyle: (style: ThemeStyle) => void;
   fontScale: FontScale;
   onSetFontScale: (scale: FontScale) => void;
   fontFamily: FontFamily;
@@ -407,6 +427,43 @@ function PageGeneral({
             >
               {t("settings.themeLight")}
             </button>
+          </div>
+        </div>
+        <div className="setting-row theme-style-row">
+          <div className="l">
+            <div className="n">{t("settings.themeStyle")}</div>
+            <div className="h">{t("settings.themeStyleHint")}</div>
+          </div>
+          <div className="style-grid">
+            {THEME_STYLES.map((style) => (
+              <button
+                key={style}
+                type="button"
+                className="style-card"
+                data-on={themeStyle === style}
+                data-style={style}
+                onClick={() => onSetThemeStyle(style)}
+              >
+                <span className="style-card-head">
+                  <span className="style-name">
+                    {t(`settings.themeStyle${style[0]!.toUpperCase()}${style.slice(1)}` as any)}
+                  </span>
+                  <span className="style-mode">
+                    {themeForStyle(style) === THEME.DARK
+                      ? t("settings.themeDark")
+                      : t("settings.themeLight")}
+                  </span>
+                </span>
+                <span className="style-swatches" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+                <span className="style-desc">
+                  {t(`settings.themeStyle${style[0]!.toUpperCase()}${style.slice(1)}Desc` as any)}
+                </span>
+              </button>
+            ))}
           </div>
         </div>
         <div className="setting-row">

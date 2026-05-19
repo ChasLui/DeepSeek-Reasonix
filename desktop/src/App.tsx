@@ -18,8 +18,13 @@ import {
   type FontScale,
   THEME,
   type Theme,
+  type ThemeStyle,
+  defaultStyleForTheme,
   isFontFamily,
   isFontScale,
+  isTheme,
+  isThemeStyle,
+  themeForStyle,
 } from "./theme";
 import type {
   CheckpointVerdict,
@@ -989,7 +994,9 @@ interface TabRuntimeProps {
   onCloseTab: () => void;
   canCloseTab: boolean;
   theme: Theme;
+  themeStyle: ThemeStyle;
   onSetTheme: (theme: Theme) => void;
+  onSetThemeStyle: (style: ThemeStyle) => void;
   onToggleTheme: () => void;
   fontScale: FontScale;
   onSetFontScale: (scale: FontScale) => void;
@@ -1019,7 +1026,9 @@ function TabRuntime({
   onCloseTab,
   canCloseTab,
   theme,
+  themeStyle,
   onSetTheme,
+  onSetThemeStyle,
   onToggleTheme,
   fontScale,
   onSetFontScale,
@@ -1636,6 +1645,7 @@ function TabRuntime({
       <div
         className="app"
         data-theme={theme}
+        data-theme-style={themeStyle}
         data-side-collapsed={sideCollapsed}
         data-ctx-collapsed={ctxCollapsed}
         style={{ display: active ? undefined : "none" }}
@@ -1943,10 +1953,11 @@ function TabRuntime({
           ready={state.ready}
           currency={currency}
           theme={theme}
+          themeStyle={themeStyle}
           jobs={state.jobs}
           jobsOpen={jobsOpen}
           onToggleJobs={() => setJobsOpen((v) => !v)}
-          onToggleTheme={onToggleTheme}
+          onSetThemeStyle={onSetThemeStyle}
           onToggleCurrency={onToggleCurrency}
           onOpenSettings={() => openSettingsAt("general")}
           onOpenWorkdir={(anchor) => {
@@ -1980,7 +1991,9 @@ function TabRuntime({
             usage={state.usage}
             currency={currency}
             theme={theme}
+            themeStyle={themeStyle}
             onSetTheme={onSetTheme}
+            onSetThemeStyle={onSetThemeStyle}
             fontScale={fontScale}
             onSetFontScale={onSetFontScale}
             fontFamily={fontFamily}
@@ -2672,7 +2685,15 @@ export function App() {
   });
   const [theme, setTheme] = useState<Theme>(() => {
     const v = localStorage.getItem("reasonix.theme");
-    return v === THEME.LIGHT ? THEME.LIGHT : THEME.DARK;
+    const style = localStorage.getItem("reasonix.themeStyle");
+    if (isThemeStyle(style)) return themeForStyle(style);
+    return isTheme(v) ? v : THEME.DARK;
+  });
+  const [themeStyle, setThemeStyle] = useState<ThemeStyle>(() => {
+    const style = localStorage.getItem("reasonix.themeStyle");
+    if (isThemeStyle(style)) return style;
+    const storedTheme = localStorage.getItem("reasonix.theme");
+    return defaultStyleForTheme(isTheme(storedTheme) ? storedTheme : THEME.DARK);
   });
   const [fontScale, setFontScale] = useState<FontScale>(() => {
     const v = localStorage.getItem("reasonix.fontScale");
@@ -2691,8 +2712,10 @@ export function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.themeStyle = themeStyle;
     localStorage.setItem("reasonix.theme", theme);
-  }, [theme]);
+    localStorage.setItem("reasonix.themeStyle", themeStyle);
+  }, [theme, themeStyle]);
 
   useEffect(() => {
     localStorage.setItem("reasonix.sideCollapsed", sideCollapsed ? "1" : "0");
@@ -2975,11 +2998,19 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [openTab, closeTab, activeTabId, tabs]);
 
-  const onToggleTheme = useCallback(() => {
-    setTheme((currentTheme) =>
-      currentTheme === THEME.DARK ? THEME.LIGHT : THEME.DARK,
-    );
+  const onSetTheme = useCallback((nextTheme: Theme) => {
+    setTheme(nextTheme);
+    setThemeStyle(defaultStyleForTheme(nextTheme));
   }, []);
+
+  const onSetThemeStyle = useCallback((nextStyle: ThemeStyle) => {
+    setThemeStyle(nextStyle);
+    setTheme(themeForStyle(nextStyle));
+  }, []);
+
+  const onToggleTheme = useCallback(() => {
+    onSetTheme(theme === THEME.DARK ? THEME.LIGHT : THEME.DARK);
+  }, [onSetTheme, theme]);
 
   const onToggleCurrency = useCallback(() => {
     setCurrency((c) => {
@@ -3008,7 +3039,9 @@ export function App() {
           onCloseTab={() => closeTab(t.id)}
           canCloseTab={tabs.length > 1}
           theme={theme}
-          onSetTheme={setTheme}
+          themeStyle={themeStyle}
+          onSetTheme={onSetTheme}
+          onSetThemeStyle={onSetThemeStyle}
           onToggleTheme={onToggleTheme}
           fontScale={fontScale}
           onSetFontScale={setFontScale}

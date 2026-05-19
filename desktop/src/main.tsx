@@ -13,11 +13,21 @@ import "katex/dist/katex.min.css";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { applyProductionLockdown } from "./prod-guard";
-import { isTheme } from "./theme";
+import {
+  defaultStyleForTheme,
+  isTheme,
+  isThemeStyle,
+  themeForStyle,
+} from "./theme";
 
 const stored = localStorage.getItem("reasonix.theme");
-if (isTheme(stored)) {
+const storedStyle = localStorage.getItem("reasonix.themeStyle");
+if (isThemeStyle(storedStyle)) {
+  document.documentElement.dataset.themeStyle = storedStyle;
+  document.documentElement.dataset.theme = themeForStyle(storedStyle);
+} else if (isTheme(stored)) {
   document.documentElement.dataset.theme = stored;
+  document.documentElement.dataset.themeStyle = defaultStyleForTheme(stored);
 }
 
 const platform = /Mac|macOS/i.test(navigator.userAgent)
