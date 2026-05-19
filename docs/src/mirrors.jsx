@@ -167,7 +167,7 @@ function MirrorGrid({ os, setOs }) {
 
       <div className="mirrors">
         {MIRRORS.map(m => {
-          const r = results.find(x => x.id === m.id);
+          const r = results.find(x => x.id === m.id) || { lat: null, done: false, ok: false };
           const isFastest = m.id === fastest && r.done && r.ok;
           const isTesting = !r.done;
           const failed = r.done && !r.ok;
