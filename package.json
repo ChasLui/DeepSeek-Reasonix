@@ -24,6 +24,7 @@
     "README.md",
     "LICENSE"
   ],
+  "workspaces": ["packages/*"],
   "scripts": {
     "build": "tsup && node scripts/copy-dashboard-vendor-css.mjs",
     "dev": "tsx src/cli/index.ts",
@@ -79,6 +80,7 @@
     "react": "^19.2.6",
     "string-width": "^7.2.0",
     "undici": "^8.2.0",
+    "@reasonix/core-utils": "workspace:*",
     "ws": "^8.20.1",
     "zod": "^4.4.1"
   },

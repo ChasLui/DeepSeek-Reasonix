@@ -333,32 +333,4 @@ export function isCommandAllowed(
   return chainAllowed(chain, (seg) => isAllowed(seg, extra, projectRoot, sensitivePathConfig));
 }
 
-/** First two tokens for known wrappers (`npm install`, `git commit`, …); else first token only. */
-export function derivePrefix(command: string): string {
-  const tokens = command.trim().split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return "";
-  if (tokens.length === 1) return tokens[0]!;
-  const first = tokens[0]!;
-  const TWO_TOKEN_WRAPPERS = new Set([
-    "npm",
-    "npx",
-    "pnpm",
-    "yarn",
-    "bun",
-    "git",
-    "cargo",
-    "go",
-    "docker",
-    "kubectl",
-    "python",
-    "python3",
-    "deno",
-    "pip",
-    "pip3",
-    "make",
-    "rake",
-    "bundle",
-    "gem",
-  ]);
-  return TWO_TOKEN_WRAPPERS.has(first) ? `${first} ${tokens[1]}` : first;
-}
+export { derivePrefix } from "@reasonix/core-utils";

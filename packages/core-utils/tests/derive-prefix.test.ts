@@ -1,5 +1,5 @@
-import { derivePrefix } from "@reasonix/core-utils";
 import { describe, expect, it } from "vitest";
+import { derivePrefix } from "../src/derive-prefix.js";
 
 describe("derivePrefix", () => {
   it("returns the sole token for single-word commands", () => {
@@ -16,15 +16,13 @@ describe("derivePrefix", () => {
   });
 
   it("falls back to the first token for non-wrapper commands", () => {
-    // `node script.js` — the script name is specific to this invocation,
-    // so "node" alone is the useful prefix to persist.
     expect(derivePrefix("node script.js")).toBe("node");
-    expect(derivePrefix("curl https://api.example.com")).toBe("curl");
+    expect(derivePrefix("./build.sh --release")).toBe("./build.sh");
   });
 
-  it("normalizes whitespace and returns empty on empty input", () => {
-    expect(derivePrefix("   npm   install  ")).toBe("npm install");
+  it("handles empty / whitespace input", () => {
     expect(derivePrefix("")).toBe("");
     expect(derivePrefix("   ")).toBe("");
+    expect(derivePrefix("  ls  ")).toBe("ls");
   });
 });

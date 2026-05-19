@@ -1,4 +1,4 @@
-import { homedir } from "node:os";
+import { tildeify } from "@reasonix/core-utils";
 import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React, { useState } from "react";
@@ -19,16 +19,6 @@ export interface PathConfirmProps {
   /** Directory prefix that would be persisted if the user picks "always allow". */
   allowPrefix: string;
   onChoose: (choice: PathConfirmChoice, denyContext?: string) => void;
-}
-
-function tildeify(p: string): string {
-  const home = homedir();
-  if (!home) return p;
-  const normalized = home.replace(/[\\/]+$/, "");
-  if (p === normalized) return "~";
-  if (p.startsWith(`${normalized}/`)) return `~/${p.slice(normalized.length + 1)}`;
-  if (p.startsWith(`${normalized}\\`)) return `~\\${p.slice(normalized.length + 1)}`;
-  return p;
 }
 
 export function PathConfirm({

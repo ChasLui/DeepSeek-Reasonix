@@ -1,5 +1,6 @@
 import { type WriteStream, statSync } from "node:fs";
 import { relative, resolve } from "node:path";
+import { derivePrefix } from "@reasonix/core-utils";
 import { Box, Text, useStdin, useStdout } from "ink";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -95,7 +96,6 @@ import type { ChoiceOption } from "../../tools/choice.js";
 import { looksLikeAbsoluteSystemPath, pathIsUnder } from "../../tools/filesystem.js";
 import type { PlanStep, StepCompletion } from "../../tools/plan.js";
 import { formatCommandResult, runCommand } from "../../tools/shell.js";
-import { derivePrefix } from "../../tools/shell/parse.js";
 import { registerSkillTools } from "../../tools/skills.js";
 import { formatSubagentResult, spawnSubagent } from "../../tools/subagent.js";
 import { webFetch } from "../../tools/web.js";

@@ -4,11 +4,11 @@ import type {
   CheckpointVerdict,
   ChoiceVerdict,
   ConfirmationChoice,
-  PauseRequest,
   PlanVerdict,
   RevisionVerdict,
-} from "../core/pause-gate.js";
-import { derivePrefix } from "../tools/shell/parse.js";
+} from "@reasonix/core-utils";
+import { derivePrefix } from "@reasonix/core-utils";
+import type { PauseRequest } from "../core/pause-gate.js";
 import type {
   PermissionOption,
   PermissionRequestParams,

@@ -9,6 +9,7 @@ export default defineConfig([
     sourcemap: true,
     target: "node22",
     outDir: "dist",
+    noExternal: ["@reasonix/core-utils"],
   },
   {
     entry: ["src/cli/index.ts"],

@@ -1,8 +1,9 @@
 /** ACP (Agent Client Protocol) server — NDJSON framing + JSON-RPC method dispatch. */
 
 import { PassThrough } from "node:stream";
+import { toolKindFor } from "@reasonix/core-utils";
 import { describe, expect, it } from "vitest";
-import { dispatchKernelEvent, toolKindFor } from "../src/acp/dispatch.js";
+import { dispatchKernelEvent } from "../src/acp/dispatch.js";
 import { permissionOptionsFor, requestPermissionForGate, verdictFor } from "../src/acp/gates.js";
 import {
   ACP_PROTOCOL_VERSION,

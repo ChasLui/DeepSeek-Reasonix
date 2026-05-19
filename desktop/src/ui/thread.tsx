@@ -1,3 +1,4 @@
+import { derivePrefix } from "@reasonix/core-utils/derive-prefix";
 import { memo, useState, type ReactNode } from "react";
 import { Copy } from "lucide-react";
 import { I } from "../icons";
@@ -5,20 +6,6 @@ import { t, useLang } from "../i18n";
 import type { AssistantSegment, ActivePlan, PendingPlan, PendingCheckpoint, PendingRevision, PendingConfirm, PendingChoice, SkillOrigin } from "../App";
 import { AssistantText, PlanCardView, ReasoningCard, ShellCard, ToolCard, type PlanItem } from "./cards";
 import { ApprovalCard, TaskCard, type TaskStepView } from "./extra-cards";
-
-/** First two tokens for known wrappers (`npm install`, `git commit`, …); else first token only. */
-function derivePrefix(command: string): string {
-  const tokens = command.trim().split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return "";
-  if (tokens.length === 1) return tokens[0]!;
-  const first = tokens[0]!;
-  const TWO_TOKEN_WRAPPERS = new Set([
-    "npm", "npx", "pnpm", "yarn", "bun", "git", "cargo", "go",
-    "docker", "kubectl", "python", "python3", "deno", "pip", "pip3",
-    "make", "rake", "bundle", "gem",
-  ]);
-  return TWO_TOKEN_WRAPPERS.has(first) ? `${first} ${tokens[1]}` : first;
-}
 
 export function TurnDivider({ label }: { label: string }) {
   return (
@@ -163,8 +150,7 @@ export const AssistantMsg = memo(function AssistantMsg({
                 onAlwaysAllow={
                   pendingConfirm
                     ? () => {
-                        const prefix = cmd.split(/\s+/)[0] ?? cmd;
-                        onAlwaysAllowConfirm(pendingConfirm.id, `${prefix} *`);
+                        onAlwaysAllowConfirm(pendingConfirm.id, derivePrefix(cmd));
                       }
                     : undefined
                 }
