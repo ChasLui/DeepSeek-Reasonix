@@ -266,6 +266,11 @@ export class CacheFirstLoop {
     return this.context.fold(this.model, opts);
   }
 
+  /** Real-time token count of the current log — forwarded to Desktop for meter refresh. */
+  getCurrentLogTokens(): number {
+    return this.context.getLogTokens();
+  }
+
   appendAndPersist(message: ChatMessage): void {
     this.log.append(message);
     if (this.sessionName) {

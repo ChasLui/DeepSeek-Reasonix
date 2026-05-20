@@ -167,6 +167,8 @@ export type SkillsEvent = {
 export type CtxBreakdownEvent = {
   type: "$ctx_breakdown";
   reservedTokens: number;
+  /** Current log token count (real-time) — sent after /compact to refresh the meter. */
+  logTokens?: number;
 };
 
 export type MemoryEntryInfo = {

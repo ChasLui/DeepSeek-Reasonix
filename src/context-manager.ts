@@ -103,6 +103,21 @@ function extractPinnedSkills(head: ChatMessage[]): {
 export class ContextManager {
   constructor(private deps: ContextManagerDeps) {}
 
+  /** Real-time token count of the current log — used by Desktop to refresh the
+   *  context meter after /compact when no API usage event is available. */
+  getLogTokens(): number {
+    const entries = this.deps.log.toMessages();
+    let total = 0;
+    for (const e of entries) {
+      const content = typeof e.content === "string" ? e.content : "";
+      total += countTokensBounded(content);
+      if (e.role === "assistant" && Array.isArray(e.tool_calls) && e.tool_calls.length > 0) {
+        total += countTokensBounded(JSON.stringify(e.tool_calls));
+      }
+    }
+    return total;
+  }
+
   /** Decision after a turn's response — fold, exit with summary, or carry on. */
   decideAfterUsage(
     usage: Usage | null,

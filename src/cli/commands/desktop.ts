@@ -341,6 +341,8 @@ interface McpSpecsEvent {
 interface CtxBreakdownEvent {
   type: "$ctx_breakdown";
   reservedTokens: number;
+  /** Current log token count (real-time) — sent after /compact to refresh the meter. */
+  logTokens?: number;
 }
 
 interface MemoryEntryInfo {
@@ -631,7 +633,8 @@ function emitCtxBreakdown(tab: Tab): void {
   try {
     const sys = countTokensBounded(tab.runtime.loop.prefix.system);
     const tools = countTokensBounded(JSON.stringify(tab.runtime.loop.prefix.toolSpecs));
-    emit({ type: "$ctx_breakdown", reservedTokens: sys + tools }, tab.id);
+    const logTokens = tab.runtime.loop.getCurrentLogTokens();
+    emit({ type: "$ctx_breakdown", reservedTokens: sys + tools, logTokens }, tab.id);
   } catch {
     // tokenizer warmup can throw on first call before the data file loads
   }
@@ -2260,9 +2263,12 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
     }
     if (msg.cmd === "compact_history") {
       if (!tab.runtime) return;
-      void tab.runtime.loop.compactHistory().catch((err: Error) => {
-        emit({ type: "$error", message: `/compact failed: ${err.message}` }, tab.id);
-      });
+      void tab.runtime.loop
+        .compactHistory()
+        .then(() => emitCtxBreakdown(tab))
+        .catch((err: Error) => {
+          emit({ type: "$error", message: `/compact failed: ${err.message}` }, tab.id);
+        });
       return;
     }
     if (msg.cmd === "retry") {

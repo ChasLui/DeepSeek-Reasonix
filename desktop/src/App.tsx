@@ -671,8 +671,16 @@ export function applyIncoming(state: State, ev: IncomingEvent): State {
       };
     case "$skills":
       return { ...state, skills: ev.items };
-    case "$ctx_breakdown":
-      return { ...state, usage: { ...state.usage, reservedTokens: ev.reservedTokens } };
+    case "$ctx_breakdown": {
+      const next: UsageStats = { ...state.usage, reservedTokens: ev.reservedTokens };
+      if (typeof ev.logTokens === "number") {
+        // After /compact the backend sends a real-time log token count;
+        // reset the meter so it reflects the actual current context size.
+        next.cacheHitTokens = 0;
+        next.cacheMissTokens = ev.logTokens;
+      }
+      return { ...state, usage: next };
+    }
     case "$memory":
       return { ...state, memory: ev.entries };
     case "$jobs":
