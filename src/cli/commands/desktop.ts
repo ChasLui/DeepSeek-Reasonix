@@ -564,7 +564,7 @@ function emitSessions(tab: Tab): void {
   }
 }
 
-function summarizeMcpSpec(raw: string): McpSpecInfo {
+export function summarizeMcpSpec(raw: string): McpSpecInfo {
   try {
     const parsed = parseMcpSpec(raw);
     if (parsed.transport === "stdio") {
@@ -585,11 +585,12 @@ function summarizeMcpSpec(raw: string): McpSpecInfo {
       status: "configured",
     };
   } catch (err) {
+    const safe = typeof raw === "string" ? raw : (JSON.stringify(raw) ?? String(raw));
     return {
-      raw,
+      raw: safe,
       name: null,
       transport: "stdio",
-      summary: raw,
+      summary: safe,
       parseError: (err as Error).message,
       status: "failed",
       statusReason: (err as Error).message,
@@ -599,12 +600,14 @@ function summarizeMcpSpec(raw: string): McpSpecInfo {
 
 function emitMcpSpecs(tab: Tab): void {
   const cfg = readConfig();
-  const specs = (cfg.mcp ?? []).map((raw) => {
-    const base = summarizeMcpSpec(raw);
-    const live = tab.mcpStatuses.get(raw);
-    if (!live) return base;
-    return { ...base, status: live.kind, statusReason: live.reason, toolCount: live.toolCount };
-  });
+  const specs = (cfg.mcp ?? [])
+    .filter((raw): raw is string => typeof raw === "string")
+    .map((raw) => {
+      const base = summarizeMcpSpec(raw);
+      const live = tab.mcpStatuses.get(raw);
+      if (!live) return base;
+      return { ...base, status: live.kind, statusReason: live.reason, toolCount: live.toolCount };
+    });
   const bridged = specs.length > 0 && specs.every((s) => s.status === "connected");
   emit({ type: "$mcp_specs", specs, bridged }, tab.id);
 }
