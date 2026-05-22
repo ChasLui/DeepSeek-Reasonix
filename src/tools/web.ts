@@ -44,6 +44,10 @@ export interface WebSearchOptions {
   engine?: "mojeek" | "searxng" | "metaso" | "tavily" | "perplexity" | "exa";
   /** Base URL for SearXNG. Default http://localhost:8080. */
   endpoint?: string;
+  /** Max Mojeek fetch attempts before giving up (default 3). Other engines ignore this. */
+  maxAttempts?: number;
+  /** Base ms between Mojeek retries (default 400, grows linearly per attempt). 0 disables the wait. */
+  retryBackoffMs?: number;
 }
 
 const DEFAULT_FETCH_MAX_CHARS = 32_000;
@@ -60,6 +64,48 @@ const METASO_ENDPOINT = "https://metaso.cn/api/v1";
 const TAVILY_ENDPOINT = "https://api.tavily.com/search";
 const PERPLEXITY_ENDPOINT = "https://api.perplexity.ai/chat/completions";
 const EXA_ENDPOINT = "https://api.exa.ai/answer";
+
+// Full browser fingerprint. Mojeek gates obvious scrapers; matching a real
+// Chrome's client-hint + fetch-metadata headers avoids the fast-path 403.
+const MOJEEK_HEADERS: Readonly<Record<string, string>> = nullPrototype({
+  "User-Agent": USER_AGENT,
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  "sec-ch-ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": '"Windows"',
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none",
+  "Sec-Fetch-User": "?1",
+  "Upgrade-Insecure-Requests": "1",
+});
+
+// Mojeek occasionally 403/429s a fresh client or returns a transient 5xx;
+// a few short linear-backoff retries clear the intermittent cases.
+const MOJEEK_MAX_ATTEMPTS = 3;
+const MOJEEK_BACKOFF_MS = 400;
+const MOJEEK_RETRY_STATUS = new Set([202, 403, 429, 500, 502, 503, 504]);
+
+/** Resolves after `ms`, or rejects early if `signal` aborts. No-op when `ms <= 0`. */
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new Error("aborted"));
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason ?? new Error("aborted"));
+      },
+      { once: true },
+    );
+  });
+}
 
 /** Pick a status-specific webErrors key so the model gets an actionable hint, not a bare status. */
 function searchStatusError(status: number): string {
@@ -101,31 +147,50 @@ export async function webSearch(
 
 async function searchMojeek(query: string, opts: WebSearchOptions = {}): Promise<SearchResult[]> {
   const topK = Math.max(1, Math.min(10, opts.topK ?? DEFAULT_TOPK));
-  const resp = await fetch(`${MOJEEK_ENDPOINT}?q=${encodeURIComponent(query)}`, {
-    headers: {
-      "User-Agent": USER_AGENT,
-      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9",
-      "Accept-Language": "en-US,en;q=0.9",
-    },
-    signal: opts.signal,
-    redirect: "follow",
-  });
-  if (!resp.ok) throw new Error(searchStatusError(resp.status));
-  const html = await resp.text();
-  const results = parseMojeekResults(html).slice(0, topK);
-  if (results.length === 0) {
-    if (/no results found|did not match any documents/i.test(html)) return [];
-    if (/captcha|verify you are human|access denied|forbidden/i.test(html)) {
-      throw new Error(t("webErrors.mojeekBlocked"));
+  const url = `${MOJEEK_ENDPOINT}?q=${encodeURIComponent(query)}`;
+  const maxAttempts = Math.max(1, Math.trunc(opts.maxAttempts ?? MOJEEK_MAX_ATTEMPTS));
+  const backoffMs = opts.retryBackoffMs ?? MOJEEK_BACKOFF_MS;
+  let lastStatus = 0;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let resp: Response;
+    try {
+      resp = await fetch(url, {
+        headers: MOJEEK_HEADERS,
+        signal: opts.signal,
+        redirect: "follow",
+      });
+    } catch (err) {
+      if (opts.signal?.aborted || (err as { name?: string }).name === "AbortError") {
+        throw err;
+      }
+      if (attempt >= maxAttempts) throw err;
+      await sleep(backoffMs * attempt, opts.signal);
+      continue;
     }
-    throw new Error(
-      t("webErrors.mojeekNoResults", {
-        chars: html.length,
-        preview: html.slice(0, 120).replace(/\s+/g, " "),
-      }),
-    );
+    if (resp.ok) return parseMojeekHtml(await resp.text(), topK);
+    lastStatus = resp.status;
+    if (attempt >= maxAttempts || !MOJEEK_RETRY_STATUS.has(resp.status)) {
+      throw new Error(searchStatusError(resp.status));
+    }
+    await sleep(backoffMs * attempt, opts.signal);
   }
-  return results;
+  throw new Error(searchStatusError(lastStatus));
+}
+
+/** Parse Mojeek HTML; tell a genuinely empty page from a blocked/changed one. */
+function parseMojeekHtml(html: string, topK: number): SearchResult[] {
+  const results = parseMojeekResults(html).slice(0, topK);
+  if (results.length > 0) return results;
+  if (/no results found|did not match any documents/i.test(html)) return [];
+  if (/captcha|verify you are human|access denied|forbidden/i.test(html)) {
+    throw new Error(t("webErrors.mojeekBlocked"));
+  }
+  throw new Error(
+    t("webErrors.mojeekNoResults", {
+      chars: html.length,
+      preview: html.slice(0, 120).replace(/\s+/g, " "),
+    }),
+  );
 }
 
 /** Parse + validate a SearXNG endpoint. Returns origin (protocol + host). */

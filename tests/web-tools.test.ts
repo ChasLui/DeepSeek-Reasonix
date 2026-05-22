@@ -169,7 +169,11 @@ describe("webSearch", () => {
     <p class="s">snippet B</p>`;
 
   it("GETs Mojeek with a browser UA and query string", async () => {
-    const captured: { url: string; method: string; ua: string } = { url: "", method: "", ua: "" };
+    const captured: { url: string; method: string; ua: string } = {
+      url: "",
+      method: "",
+      ua: "",
+    };
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(async (url: string | URL, init?: RequestInit) => {
       captured.url = String(url);
@@ -215,7 +219,7 @@ describe("webSearch", () => {
       async () => new Response("blocked", { status: 429 }),
     ) as unknown as typeof fetch;
     try {
-      await expect(webSearch("q")).rejects.toThrow(/web_search 429/);
+      await expect(webSearch("q", { maxAttempts: 1 })).rejects.toThrow(/web_search 429/);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -227,7 +231,9 @@ describe("webSearch", () => {
       async () => new Response("blocked", { status: 429 }),
     ) as unknown as typeof fetch;
     try {
-      await expect(webSearch("q")).rejects.toThrow(/web_search 429.*try:.*wait/);
+      await expect(webSearch("q", { maxAttempts: 1 })).rejects.toThrow(
+        /web_search 429.*try:.*wait/,
+      );
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -239,7 +245,7 @@ describe("webSearch", () => {
       async () => new Response("forbidden", { status: 403 }),
     ) as unknown as typeof fetch;
     try {
-      await expect(webSearch("q")).rejects.toThrow(/web_search 403.*try:/);
+      await expect(webSearch("q", { maxAttempts: 1 })).rejects.toThrow(/web_search 403.*try:/);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -251,7 +257,58 @@ describe("webSearch", () => {
       async () => new Response("broken", { status: 503 }),
     ) as unknown as typeof fetch;
     try {
-      await expect(webSearch("q")).rejects.toThrow(/web_search 503.*try:.*retry in 30s/);
+      await expect(webSearch("q", { maxAttempts: 1 })).rejects.toThrow(
+        /web_search 503.*try:.*retry in 30s/,
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("retries a transient 403, then succeeds on the next attempt", async () => {
+    const originalFetch = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = vi.fn(async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response("forbidden", { status: 403 })
+        : new Response(twoResultsHtml, { status: 200 });
+    }) as unknown as typeof fetch;
+    try {
+      const out = await webSearch("q", { retryBackoffMs: 0 });
+      expect(calls).toBe(2);
+      expect(out).toHaveLength(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("exhausts retries, then throws on a persistent 403", async () => {
+    const originalFetch = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = vi.fn(async () => {
+      calls += 1;
+      return new Response("forbidden", { status: 403 });
+    }) as unknown as typeof fetch;
+    try {
+      await expect(webSearch("q", { retryBackoffMs: 0 })).rejects.toThrow(/web_search 403/);
+      expect(calls).toBe(3);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("sends browser fingerprint headers (sec-fetch + client hints)", async () => {
+    const captured: Record<string, string> = {};
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+      Object.assign(captured, (init?.headers ?? {}) as Record<string, string>);
+      return new Response(twoResultsHtml, { status: 200 });
+    }) as unknown as typeof fetch;
+    try {
+      await webSearch("q");
+      expect(captured["Sec-Fetch-Mode"]).toBe("navigate");
+      expect(captured["sec-ch-ua"]).toContain("Chromium");
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -277,7 +334,9 @@ describe("webSearch", () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(
       async () =>
-        new Response("<html>Please solve the captcha to continue.</html>", { status: 200 }),
+        new Response("<html>Please solve the captcha to continue.</html>", {
+          status: 200,
+        }),
     ) as unknown as typeof fetch;
     try {
       await expect(webSearch("q")).rejects.toThrow(/anti-bot|rate-limited|blocked/);
@@ -290,7 +349,9 @@ describe("webSearch", () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(
       async () =>
-        new Response("<html><body>totally unexpected shape</body></html>", { status: 200 }),
+        new Response("<html><body>totally unexpected shape</body></html>", {
+          status: 200,
+        }),
     ) as unknown as typeof fetch;
     try {
       await expect(webSearch("q")).rejects.toThrow(/doesn't look like a real empty page/);
@@ -323,8 +384,12 @@ describe("searchMetaso", () => {
   };
 
   it("POSTs to metaso API with JSON body and auth header", async () => {
-    const captured: { url: string; method: string; headers: Record<string, string>; body: string } =
-      { url: "", method: "", headers: {}, body: "" };
+    const captured: {
+      url: string;
+      method: string;
+      headers: Record<string, string>;
+      body: string;
+    } = { url: "", method: "", headers: {}, body: "" };
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(async (url: string | URL, init?: RequestInit) => {
       captured.url = String(url);
@@ -619,7 +684,12 @@ describe("searchPerplexity", () => {
   it("POSTs to Perplexity with bearer auth and sonar model", async () => {
     const origKey = process.env.PERPLEXITY_API_KEY;
     process.env.PERPLEXITY_API_KEY = "pplx-test-key";
-    const captured: { url: string; method: string; auth: string; body: string } = {
+    const captured: {
+      url: string;
+      method: string;
+      auth: string;
+      body: string;
+    } = {
       url: "",
       method: "",
       auth: "",
@@ -637,7 +707,10 @@ describe("searchPerplexity", () => {
       });
     }) as unknown as typeof fetch;
     try {
-      const out = await webSearch("test query", { engine: "perplexity", topK: 5 });
+      const out = await webSearch("test query", {
+        engine: "perplexity",
+        topK: 5,
+      });
       expect(captured.url).toBe("https://api.perplexity.ai/chat/completions");
       expect(captured.method).toBe("POST");
       expect(captured.auth).toBe("Bearer pplx-test-key");
@@ -761,7 +834,12 @@ describe("searchExa", () => {
   it("POSTs to Exa /answer with x-api-key header", async () => {
     const origKey = process.env.EXA_API_KEY;
     process.env.EXA_API_KEY = "exa-test-key";
-    const captured: { url: string; method: string; auth: string; body: string } = {
+    const captured: {
+      url: string;
+      method: string;
+      auth: string;
+      body: string;
+    } = {
       url: "",
       method: "",
       auth: "",
@@ -916,7 +994,11 @@ describe("registerWebTools", () => {
       <p class="s">snippet B</p>`;
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(
-      async () => new Response(html, { status: 200, headers: { "Content-Type": "text/html" } }),
+      async () =>
+        new Response(html, {
+          status: 200,
+          headers: { "Content-Type": "text/html" },
+        }),
     ) as unknown as typeof fetch;
     try {
       const registry = new ToolRegistry();
@@ -939,7 +1021,10 @@ describe("registerWebTools", () => {
       async () =>
         new Response(
           "<html><head><title>Demo</title></head><body><p>Hello world.</p></body></html>",
-          { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } },
+          {
+            status: 200,
+            headers: { "Content-Type": "text/html; charset=utf-8" },
+          },
         ),
     ) as unknown as typeof fetch;
     try {
@@ -965,7 +1050,10 @@ describe("webFetch", () => {
       async () =>
         new Response(
           "<html><head><title>Demo</title></head><body><p>Hello world.</p></body></html>",
-          { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } },
+          {
+            status: 200,
+            headers: { "Content-Type": "text/html; charset=utf-8" },
+          },
         ),
     ) as unknown as typeof fetch;
     try {
@@ -983,10 +1071,16 @@ describe("webFetch", () => {
     const originalFetch = globalThis.fetch;
     const big = `<html><body><p>${"a".repeat(50_000)}</p></body></html>`;
     globalThis.fetch = vi.fn(
-      async () => new Response(big, { status: 200, headers: { "Content-Type": "text/html" } }),
+      async () =>
+        new Response(big, {
+          status: 200,
+          headers: { "Content-Type": "text/html" },
+        }),
     ) as unknown as typeof fetch;
     try {
-      const page = await webFetch("https://example.com/big", { maxChars: 1000 });
+      const page = await webFetch("https://example.com/big", {
+        maxChars: 1000,
+      });
       expect(page.truncated).toBe(true);
       expect(page.text).toMatch(/\[… truncated \d+ chars …\]$/);
     } finally {
@@ -1014,7 +1108,10 @@ describe("webFetch", () => {
       async () =>
         new Response("ignored", {
           status: 200,
-          headers: { "Content-Type": "text/html", "Content-Length": String(50 * 1024 * 1024) },
+          headers: {
+            "Content-Type": "text/html",
+            "Content-Length": String(50 * 1024 * 1024),
+          },
         }),
     ) as unknown as typeof fetch;
     try {
