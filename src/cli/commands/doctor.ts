@@ -8,6 +8,7 @@ import { DeepSeekClient, pickPrimaryBalance } from "../../client.js";
 import {
   defaultConfigPath,
   loadBaseUrl,
+  loadCodeRelationsEnabled,
   loadFilesystemDedupEnabled,
   loadProxyConfig,
   loadToonMode,
@@ -70,6 +71,7 @@ export async function runDoctorChecks(projectRoot: string): Promise<DoctorCheck[
     r[7],
     checkVfsLite(),
     checkReadDedup(),
+    checkCodeRelations(),
     checkToon(),
     checkBudget(),
     checkToolset(),
@@ -86,6 +88,17 @@ function checkReadDedup(): Check {
         ? "disabled via config.filesystem.dedupEnabled=false"
         : "enabled — unchanged re-reads return a stub (hit counts are per-session, shown in the TUI)";
   return { id: "read-dedup", label: "read-dedup   ", level: "ok", detail };
+}
+
+function checkCodeRelations(): Check {
+  const enabled = loadCodeRelationsEnabled();
+  const env = process.env.REASONIX_CODEREL?.trim();
+  const detail = enabled
+    ? "enabled — lightweight on-demand find_references/impact/detect_changes"
+    : env
+      ? `disabled via REASONIX_CODEREL=${env}`
+      : "disabled via config.codeRelations";
+  return { id: "code-rel", label: "code-rel     ", level: "ok", detail };
 }
 
 function checkToon(): Check {

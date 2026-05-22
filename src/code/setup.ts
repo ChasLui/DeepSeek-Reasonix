@@ -1,6 +1,7 @@
 import { DeepSeekClient } from "../client.js";
 import {
   loadBaseUrl,
+  loadCodeRelationsEnabled,
   loadEditMode,
   loadFilesystemDedupEnabled,
   loadFilesystemOutlineThresholdBytes,
@@ -65,7 +66,10 @@ export async function buildCodeToolset(opts: CodeToolsetOpts): Promise<CodeTools
       sensitivePaths: cfg.sensitivePaths,
     });
     registerMemoryTools(tools, { projectRoot: root });
-    registerCodeQueryTools(tools, { rootDir: root });
+    registerCodeQueryTools(tools, {
+      rootDir: root,
+      codeRelationsEnabled: loadCodeRelationsEnabled(),
+    });
   };
 
   const reBootstrapSemantic = async (root: string): Promise<{ enabled: boolean }> => {

@@ -13,6 +13,7 @@ import {
   isPlausibleKey,
   loadApiKey,
   loadBaseUrl,
+  loadCodeRelationsEnabled,
   loadDesktopOpenTabs,
   loadEditMode,
   loadEngineeringLifecycleMode,
@@ -34,6 +35,7 @@ import {
   redactSemanticEmbeddingConfig,
   removeProjectPathAllowed,
   removeProjectShellAllowed,
+  resolveCodeRelationsEnabled,
   resolveSemanticEmbeddingConfig,
   resolveThemePreference,
   resolveToonMode,
@@ -56,6 +58,7 @@ describe("config", () => {
   const originalEnv = process.env.DEEPSEEK_API_KEY;
   const originalSearch = process.env.REASONIX_SEARCH;
   const originalBaseUrl = process.env.DEEPSEEK_BASE_URL;
+  const originalCodeRel = process.env.REASONIX_CODEREL;
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "reasonix-test-"));
@@ -66,6 +69,8 @@ describe("config", () => {
     delete process.env.REASONIX_SEARCH;
     // biome-ignore lint/performance/noDelete: same reason
     delete process.env.DEEPSEEK_BASE_URL;
+    // biome-ignore lint/performance/noDelete: same reason
+    delete process.env.REASONIX_CODEREL;
   });
 
   afterEach(() => {
@@ -88,6 +93,12 @@ describe("config", () => {
     } else {
       process.env.DEEPSEEK_BASE_URL = originalBaseUrl;
     }
+    if (originalCodeRel === undefined) {
+      // biome-ignore lint/performance/noDelete: same reason
+      delete process.env.REASONIX_CODEREL;
+    } else {
+      process.env.REASONIX_CODEREL = originalCodeRel;
+    }
   });
 
   it("readConfig returns {} when file is missing", () => {
@@ -105,6 +116,15 @@ describe("config", () => {
     expect(resolveToonMode({ enabled: false }, undefined)).toBe("off");
     expect(resolveToonMode({ mode: "results" }, undefined)).toBe("results");
     expect(resolveToonMode({ mode: "prefix" }, "0")).toBe("off");
+  });
+
+  it("defaults code relation tools on while allowing config/env opt-out", () => {
+    expect(resolveCodeRelationsEnabled(undefined, undefined)).toBe(true);
+    expect(loadCodeRelationsEnabled(path)).toBe(true);
+    expect(resolveCodeRelationsEnabled(false, undefined)).toBe(false);
+    expect(resolveCodeRelationsEnabled({ enabled: false }, undefined)).toBe(false);
+    expect(resolveCodeRelationsEnabled({ enabled: true }, "0")).toBe(false);
+    expect(resolveCodeRelationsEnabled(false, "1")).toBe(true);
   });
 
   it("writeConfig + readConfig round-trip", () => {

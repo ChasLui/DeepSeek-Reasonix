@@ -1,5 +1,12 @@
 import { release } from "node:os";
-import { loadRateLimit, loadTheme, loadToonMode, resolveThemePreference } from "@/config.js";
+import { getCodeRelationStats } from "@/code-query/stats.js";
+import {
+  loadCodeRelationsEnabled,
+  loadRateLimit,
+  loadTheme,
+  loadToonMode,
+  resolveThemePreference,
+} from "@/config.js";
 import { getLanguage, t } from "@/i18n/index.js";
 import { DEEPSEEK_CONTEXT_TOKENS, DEFAULT_CONTEXT_TOKENS, pricingFor } from "@/telemetry/stats.js";
 import { countTokensBounded } from "@/tokenizer.js";
@@ -103,6 +110,7 @@ const status: SlashHandler = (_args, loop, ctx) => {
   const workspaceLine = ctx.codeRoot
     ? t("handlers.observability.statusWorkspace", { path: ctx.codeRoot })
     : "";
+  const codeRelLine = renderCodeRelationStatusLine();
   const toonLine = renderToonStatusLine();
   const lines = [
     t("handlers.observability.statusModel", { model: loop.model }),
@@ -116,6 +124,7 @@ const status: SlashHandler = (_args, loop, ctx) => {
     mcpLine,
     sessionLine,
   ];
+  if (codeRelLine) lines.push(codeRelLine);
   if (toonLine) lines.push(toonLine);
   if (workspaceLine) lines.push(workspaceLine);
   if (budgetLine) lines.push(budgetLine);
@@ -125,6 +134,13 @@ const status: SlashHandler = (_args, loop, ctx) => {
   if (dashLine) lines.push(dashLine);
   return { info: lines.join("\n") };
 };
+
+function renderCodeRelationStatusLine(): string {
+  const stats = getCodeRelationStats();
+  const enabled = loadCodeRelationsEnabled();
+  if (!enabled && stats.queries === 0) return "";
+  return `code-rel: ${enabled ? "on" : "off"} queries=${stats.queries} candidates=${compactNum(stats.candidatesScanned)} changed=${stats.changedFiles} saved≈${compactNum(stats.savedRoundsEstimate)}r fallback=${stats.fallbacks}`;
+}
 
 function renderToonStatusLine(): string {
   const mode = loadToonMode();

@@ -88,10 +88,10 @@ export async function findInCode(
     try {
       const sourceLines = source.split(/\r?\n/);
       const matches: CodeMatch[] = [];
-      walk(tree.rootNode, (node) => {
-        if (!IDENTIFIER_TYPES.has(node.type)) return;
+      walkCodeNodes(tree.rootNode, (node) => {
+        if (!isIdentifierNode(node)) return;
         if (node.text !== name) return;
-        const kind = classify(node);
+        const kind = classifyIdentifierNode(node);
         const filter = opts.kind ?? "any";
         if (filter !== "any" && filter !== kind) return;
         const line = node.startPosition.row + 1;
@@ -112,7 +112,11 @@ export async function findInCode(
   }
 }
 
-function classify(node: Node): CodeMatchKind {
+export function isIdentifierNode(node: Node): boolean {
+  return IDENTIFIER_TYPES.has(node.type);
+}
+
+export function classifyIdentifierNode(node: Node): CodeMatchKind {
   const parent = node.parent;
   if (!parent) return "reference";
   if (DECLARATION_NAME_PARENTS.has(parent.type)) {
@@ -143,7 +147,7 @@ function fieldMatches(parent: Node, child: Node, fields: readonly string[]): boo
   return false;
 }
 
-function walk(root: Node, visit: (node: Node) => void): void {
+export function walkCodeNodes(root: Node, visit: (node: Node) => void): void {
   const cursor = root.walk();
   try {
     let visitedChildren = false;

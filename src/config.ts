@@ -123,6 +123,10 @@ export interface ToonConfig {
   mode?: ToonMode;
 }
 
+export interface CodeRelationsConfig {
+  enabled?: boolean;
+}
+
 export interface ProxyConfig {
   /** Skip proxy detection entirely — equivalent to launching with `--no-proxy`. */
   disabled?: boolean;
@@ -259,6 +263,8 @@ export interface ReasonixConfig {
   };
   /** TOON payload encoding. Defaults to all payload layers; env REASONIX_TOON overrides this. */
   toon?: boolean | ToonConfig;
+  /** Lightweight on-demand code relation tools. REASONIX_CODEREL=0 disables registration. */
+  codeRelations?: boolean | CodeRelationsConfig;
   /** QQ Bot configuration */
   qq?: QQBotConfig;
 }
@@ -485,6 +491,25 @@ export function resolveToonMode(
 
 export function loadToonMode(path: string = defaultConfigPath()): ToonMode {
   return resolveToonMode(readConfig(path).toon);
+}
+
+export function resolveCodeRelationsEnabled(
+  cfg?: ReasonixConfig["codeRelations"],
+  env: string | undefined = process.env.REASONIX_CODEREL,
+): boolean {
+  const normalized = env?.trim().toLowerCase();
+  if (normalized) {
+    if (normalized === "0" || normalized === "false" || normalized === "off") return false;
+    if (normalized === "none" || normalized === "disabled") return false;
+    if (normalized === "1" || normalized === "true" || normalized === "on") return true;
+  }
+  if (typeof cfg === "boolean") return cfg;
+  if (!cfg) return true;
+  return cfg.enabled !== false;
+}
+
+export function loadCodeRelationsEnabled(path: string = defaultConfigPath()): boolean {
+  return resolveCodeRelationsEnabled(readConfig(path).codeRelations);
 }
 
 function parseToonMode(value: string | undefined): ToonMode | null {
