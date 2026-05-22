@@ -831,6 +831,10 @@ function extractTitle(html: string): string | undefined {
 export interface WebToolsOptions {
   /** Default top-K for `web_search` when the model doesn't specify. */
   defaultTopK?: number;
+  /** Override the configured search engine. Used by tests to avoid local config bleed-through. */
+  searchEngine?: WebSearchOptions["engine"];
+  /** Override the configured SearXNG endpoint alongside `searchEngine: "searxng"`. */
+  searchEndpoint?: string;
   /** Byte cap for `web_fetch` extracted text. */
   maxFetchChars?: number;
 }
@@ -861,8 +865,8 @@ export function registerWebTools(registry: ToolRegistry, opts: WebToolsOptions =
     },
     fn: async (args: { query: string; topK?: number }, ctx) => {
       // Read at call time, not registration time — `/search-engine` mutates config mid-session (#1309).
-      const engine = loadWebSearchEngine();
-      const endpoint = loadWebSearchEndpoint();
+      const engine = opts.searchEngine ?? loadWebSearchEngine();
+      const endpoint = opts.searchEndpoint ?? loadWebSearchEndpoint();
       const results = await webSearch(args.query, {
         topK: args.topK ?? defaultTopK,
         signal: ctx?.signal,

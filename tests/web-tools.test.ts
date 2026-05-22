@@ -1002,7 +1002,7 @@ describe("registerWebTools", () => {
     ) as unknown as typeof fetch;
     try {
       const registry = new ToolRegistry();
-      registerWebTools(registry);
+      registerWebTools(registry, { searchEngine: "mojeek" });
       const out = await registry.dispatch(
         "web_search",
         JSON.stringify({ query: "flutter 3.19", topK: 2 }),

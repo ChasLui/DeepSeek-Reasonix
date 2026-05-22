@@ -37,7 +37,7 @@ describe("code relation tools", () => {
   });
 
   afterEach(() => {
-    rmSync(tmp, { recursive: true, force: true });
+    rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   });
 
   it("registers the relation tools unless the code relation layer is disabled", () => {
