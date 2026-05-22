@@ -8,6 +8,8 @@
  */
 
 import { mkdirSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { Box, Text, useApp, useInput } from "ink";
 import TextInput from "ink-text-input";
 // biome-ignore lint/style/useImportType: JSX (jsx: "react") needs React as a value at runtime
@@ -275,7 +277,11 @@ export function Wizard({
                 setStep("saved");
                 onComplete(next);
               } catch (e) {
-                setError(t("wizard.reviewSaveError", { message: (e as Error).message }));
+                setError(
+                  t("wizard.reviewSaveError", {
+                    message: (e as Error).message,
+                  }),
+                );
               }
             }}
           />
@@ -476,7 +482,9 @@ function ApiKeyStep({
                 onError(
                   result.reason === "rejected"
                     ? t("wizard.apiKeyRejected")
-                    : t("wizard.apiKeyCheckFailed", { message: result.message ?? "unknown" }),
+                    : t("wizard.apiKeyCheckFailed", {
+                        message: result.message ?? "unknown",
+                      }),
                 );
                 setValue("");
                 return;
@@ -619,7 +627,7 @@ function McpArgsStep({
             value={value}
             onChange={setValue}
             onSubmit={(raw) => {
-              const trimmed = raw.trim();
+              const trimmed = expandTilde(raw.trim());
               if (!trimmed) {
                 onError(t("wizard.mcpArgsEmpty", { name: entry.name }));
                 return;
@@ -651,7 +659,16 @@ function McpArgsStep({
   );
 }
 
-function checkFilesystemPath(p: string): { kind: "ok" | "missing" | "not-a-dir" } {
+/** Expand a leading `~`/`~/` to homedir — MCP servers spawn without a shell, so the OS won't do it. */
+export function expandTilde(p: string): string {
+  if (p === "~") return homedir();
+  if (p.startsWith("~/")) return join(homedir(), p.slice(2));
+  return p;
+}
+
+function checkFilesystemPath(p: string): {
+  kind: "ok" | "missing" | "not-a-dir";
+} {
   try {
     return { kind: statSync(p).isDirectory() ? "ok" : "not-a-dir" };
   } catch {
@@ -729,8 +746,8 @@ function mcpItems(): SelectItem<string>[] {
   });
 }
 
-function placeholderFor(entry: CatalogEntry): string {
-  if (entry.name === "filesystem") return "e.g. /tmp/reasonix-sandbox";
+export function placeholderFor(entry: CatalogEntry): string {
+  if (entry.name === "filesystem") return "e.g. ~/.reasonix/sandbox";
   if (entry.name === "sqlite") return "e.g. ./notes.sqlite";
   return entry.userArgs ?? "";
 }

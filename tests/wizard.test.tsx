@@ -1,9 +1,17 @@
 /** Wizard data-transform — buildSpec → parseMcpSpec round-trip; bugs here = silent config-save failures. */
 
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { render } from "ink-testing-library";
 import React from "react";
 import { afterEach, describe, expect, it } from "vitest";
-import { Wizard, buildSpec, validateDeepSeekApiKey } from "../src/cli/ui/Wizard.js";
+import {
+  Wizard,
+  buildSpec,
+  expandTilde,
+  placeholderFor,
+  validateDeepSeekApiKey,
+} from "../src/cli/ui/Wizard.js";
 import { setLanguageRuntime, t } from "../src/i18n/index.js";
 import { parseMcpSpec } from "../src/mcp/spec.js";
 
@@ -26,7 +34,9 @@ describe("Wizard.buildSpec → parseMcpSpec round-trip", () => {
   });
 
   it("quotes directory paths that contain spaces", () => {
-    const spec = buildSpec("filesystem", { filesystem: "/Users/me/My Documents" });
+    const spec = buildSpec("filesystem", {
+      filesystem: "/Users/me/My Documents",
+    });
     // Inside quotes, the parser should re-join the path as a single arg.
     const parsed = parseMcpSpec(spec);
     if (parsed.transport !== "stdio") throw new Error("expected stdio");
@@ -91,7 +101,9 @@ describe("Wizard API-key validation", () => {
     const fetcher = async () => new Response(JSON.stringify({ data: [] }), { status: 200 });
 
     await expect(
-      validateDeepSeekApiKey("sk-valid1234567890", { fetch: fetcher as typeof fetch }),
+      validateDeepSeekApiKey("sk-valid1234567890", {
+        fetch: fetcher as typeof fetch,
+      }),
     ).resolves.toEqual({ ok: true });
   });
 
@@ -99,7 +111,9 @@ describe("Wizard API-key validation", () => {
     const fetcher = async () => new Response("unauthorized", { status: 401 });
 
     await expect(
-      validateDeepSeekApiKey("sk-invalid12345678", { fetch: fetcher as typeof fetch }),
+      validateDeepSeekApiKey("sk-invalid12345678", {
+        fetch: fetcher as typeof fetch,
+      }),
     ).resolves.toEqual({ ok: false, reason: "rejected" });
   });
 
@@ -107,8 +121,14 @@ describe("Wizard API-key validation", () => {
     const fetcher = async () => new Response("maintenance", { status: 503 });
 
     await expect(
-      validateDeepSeekApiKey("sk-valid1234567890", { fetch: fetcher as typeof fetch }),
-    ).resolves.toMatchObject({ ok: false, reason: "failed", message: "HTTP 503" });
+      validateDeepSeekApiKey("sk-valid1234567890", {
+        fetch: fetcher as typeof fetch,
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      reason: "failed",
+      message: "HTTP 503",
+    });
   });
 
   it("hits /models, not /user/balance — third-party endpoints (DashScope etc.) accept it", async () => {
@@ -126,5 +146,34 @@ describe("Wizard API-key validation", () => {
     ).resolves.toEqual({ ok: true });
 
     expect(calls).toEqual(["https://dashscope.aliyuncs.com/compatible-mode/v1/models"]);
+  });
+});
+
+describe("expandTilde — MCP sandbox path expansion (servers spawn without a shell)", () => {
+  it("expands a bare ~ to the home directory", () => {
+    expect(expandTilde("~")).toBe(homedir());
+  });
+  it("expands a ~/ prefix to a home-relative absolute path", () => {
+    expect(expandTilde("~/.reasonix/sandbox")).toBe(join(homedir(), ".reasonix/sandbox"));
+  });
+  it("leaves absolute and relative paths untouched", () => {
+    expect(expandTilde("/tmp/x")).toBe("/tmp/x");
+    expect(expandTilde("./rel")).toBe("./rel");
+  });
+  it("does not expand ~user (only ~ and ~/)", () => {
+    expect(expandTilde("~bob/x")).toBe("~bob/x");
+  });
+});
+
+describe("placeholderFor — filesystem suggests a persistent sandbox, not volatile /tmp", () => {
+  it("does not suggest /tmp (cleared on macOS reboot, so preflight fails next launch)", () => {
+    const ph = placeholderFor({
+      name: "filesystem",
+      summary: "",
+      package: "@modelcontextprotocol/server-filesystem",
+      userArgs: "<dir>",
+    });
+    expect(ph).not.toContain("/tmp");
+    expect(ph).toContain("~/");
   });
 });
