@@ -14,6 +14,18 @@ import {
   spawnSubagent,
   subagentBudgetHint,
 } from "../src/tools/subagent.js";
+import { decodeToolResultObject } from "../src/toon/decode-result.js";
+
+interface DecodedSubagentPayload {
+  success?: boolean;
+  partial?: boolean;
+  output?: string;
+  turns?: number;
+  tool_iters?: number;
+  elapsed_ms?: number;
+  rejectedReason?: string;
+  error?: string;
+}
 
 interface FakeResponseShape {
   content?: string;
@@ -102,6 +114,12 @@ function makeSink(): { sink: SubagentSink; events: SubagentEvent[] } {
   return { sink, events };
 }
 
+function decodeDispatchResult(out: string): DecodedSubagentPayload {
+  const decoded = decodeToolResultObject(out);
+  expect(decoded).not.toBeNull();
+  return decoded ?? {};
+}
+
 describe("registerSubagentTool", () => {
   it("registers spawn_subagent into the parent registry", () => {
     const parent = new ToolRegistry();
@@ -118,7 +136,7 @@ describe("registerSubagentTool", () => {
       "spawn_subagent",
       JSON.stringify({ task: "what is the answer?" }),
     );
-    const parsed = JSON.parse(out);
+    const parsed = decodeDispatchResult(out);
     expect(parsed.success).toBe(true);
     expect(parsed.output).toBe("the answer is 42");
     expect(parsed.turns).toBe(1);
@@ -131,7 +149,7 @@ describe("registerSubagentTool", () => {
     const client = makeClient([{ content: "won't be called" }]);
     registerSubagentTool(parent, { client });
     const out = await parent.dispatch("spawn_subagent", JSON.stringify({ task: "   \n  " }));
-    const parsed = JSON.parse(out);
+    const parsed = decodeDispatchResult(out);
     expect(parsed.error).toMatch(/non-empty 'task'/);
   });
 
@@ -202,7 +220,7 @@ describe("registerSubagentTool", () => {
     const { sink, events } = makeSink();
     registerSubagentTool(parent, { client, sink });
     const out = await parent.dispatch("spawn_subagent", JSON.stringify({ task: "fail please" }));
-    const parsed = JSON.parse(out);
+    const parsed = decodeDispatchResult(out);
     expect(parsed.success).toBe(false);
     expect(parsed.error).toBeTruthy();
     const end = events[events.length - 1]!;
@@ -217,8 +235,8 @@ describe("registerSubagentTool", () => {
     const client = makeClient([{ content: huge }]);
     registerSubagentTool(parent, { client, maxResultChars: 100 });
     const out = await parent.dispatch("spawn_subagent", JSON.stringify({ task: "spew" }));
-    const parsed = JSON.parse(out);
-    expect(parsed.output.length).toBeLessThan(huge.length);
+    const parsed = decodeDispatchResult(out);
+    expect(parsed.output?.length).toBeLessThan(huge.length);
     expect(parsed.output).toMatch(/truncated/);
   });
 
@@ -354,7 +372,7 @@ describe("registerSubagentTool", () => {
     const out = await parent.dispatch("spawn_subagent", JSON.stringify({ task: "slow" }), {
       signal: ctrl.signal,
     });
-    const parsed = JSON.parse(out);
+    const parsed = decodeDispatchResult(out);
     expect(parsed.success).toBe(false);
   });
 
@@ -393,7 +411,7 @@ describe("registerSubagentTool", () => {
     const out = await parent.dispatch("spawn_subagent", JSON.stringify({ task: "x" }), {
       signal: ctrl.signal,
     });
-    const parsed = JSON.parse(out);
+    const parsed = decodeDispatchResult(out);
     // Central dispatch now refuses an already-aborted call before the tool
     // runs (issue #1236); the subagent's own iter-0 bail is the fallback
     // for late aborts. Either shape proves no API call was made.
@@ -489,7 +507,7 @@ describe("registerSubagentTool", () => {
       },
     });
     const out = await parent.dispatch("spawn_subagent", JSON.stringify({ task: "anything" }));
-    const parsed = JSON.parse(out);
+    const parsed = decodeDispatchResult(out);
     expect(parsed.success).toBe(true);
     expect(parsed.output).toBe("ok");
   });

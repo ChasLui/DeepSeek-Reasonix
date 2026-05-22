@@ -1,4 +1,4 @@
-/** Pure tool-result summarizer — shared by ToolCard, replay, and transcript export. */
+import { decodeToolResultObject } from "../../toon/decode-result.js";
 
 const MAX_SUMMARY_CHARS = 80;
 const TRAILING_ELLIPSIS = "…";
@@ -48,41 +48,34 @@ function formatLineCount(text: string): string {
 }
 
 function summarizeStructured(content: string): ToolSummary | null {
-  const trimmed = content.trim();
-  if (!trimmed.startsWith("{")) return null;
-  try {
-    const parsed = JSON.parse(trimmed);
-    if (!parsed || typeof parsed !== "object") return null;
-    const obj = parsed as Record<string, unknown>;
-    // Plan / choice signals come through as errors carrying structured
-    // payloads — the App-level handlers extract the structured part.
-    // For the tool row here we just want the tag.
-    if (typeof obj.error === "string") {
-      const tag = obj.error.split(":", 1)[0]?.trim() ?? "error";
-      const detail = obj.error.slice(tag.length + 1).trim();
-      // The tag-only case (no colon body) — show the bare tag.
-      const summary = detail ? `${tag} — ${detail}` : tag;
-      // Plan / Choice errors are control-flow signals, not real errors.
-      const isControlSignal =
-        tag === "PlanProposedError" ||
-        tag === "PlanRevisionProposedError" ||
-        tag === "ChoiceRequestedError" ||
-        tag === "NeedsConfirmationError";
-      return { summary: clip(summary, MAX_SUMMARY_CHARS), isError: !isControlSignal };
-    }
-    // step_completed payload (when used outside the error path, kept
-    // for forward-compat with non-throwing variants).
-    if (obj.kind === "step_completed" && typeof obj.stepId === "string") {
-      const result = typeof obj.result === "string" ? obj.result : "";
-      return {
-        summary: clip(`✓ ${obj.stepId}: ${result}`, MAX_SUMMARY_CHARS),
-        isError: false,
-      };
-    }
-    return null;
-  } catch {
-    return null;
+  const obj = decodeToolResultObject(content);
+  if (!obj) return null;
+  // Plan / choice signals come through as errors carrying structured
+  // payloads — the App-level handlers extract the structured part.
+  // For the tool row here we just want the tag.
+  if (typeof obj.error === "string") {
+    const tag = obj.error.split(":", 1)[0]?.trim() ?? "error";
+    const detail = obj.error.slice(tag.length + 1).trim();
+    // The tag-only case (no colon body) — show the bare tag.
+    const summary = detail ? `${tag} — ${detail}` : tag;
+    // Plan / Choice errors are control-flow signals, not real errors.
+    const isControlSignal =
+      tag === "PlanProposedError" ||
+      tag === "PlanRevisionProposedError" ||
+      tag === "ChoiceRequestedError" ||
+      tag === "NeedsConfirmationError";
+    return { summary: clip(summary, MAX_SUMMARY_CHARS), isError: !isControlSignal };
   }
+  // step_completed payload (when used outside the error path, kept
+  // for forward-compat with non-throwing variants).
+  if (obj.kind === "step_completed" && typeof obj.stepId === "string") {
+    const result = typeof obj.result === "string" ? obj.result : "";
+    return {
+      summary: clip(`✓ ${obj.stepId}: ${result}`, MAX_SUMMARY_CHARS),
+      isError: false,
+    };
+  }
+  return null;
 }
 
 /** Suffix-match so MCP-prefixed tools (`filesystem_read_file`) pick up the same specialized summary. */

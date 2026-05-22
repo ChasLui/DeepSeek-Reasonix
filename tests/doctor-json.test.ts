@@ -84,6 +84,11 @@ describe("doctorCommand --json (integration)", () => {
       fail: expect.any(Number),
     });
     expect(Array.isArray(parsed.checks)).toBe(true);
+    expect(parsed.checks).toContainEqual({
+      id: "toon",
+      status: "ok",
+      message: expect.stringContaining("enabled mode=all"),
+    });
     for (const c of parsed.checks) {
       expect(typeof c.id).toBe("string");
       expect(["ok", "warn", "fail"]).toContain(c.status);

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToolRegistry } from "../src/tools.js";
 import { lineDiff, registerFilesystemTools } from "../src/tools/filesystem.js";
 import { compileNameFilter, displayRel } from "../src/tools/filesystem.js";
+import { parseToolResult } from "./helpers/tool-result.js";
 
 describe("filesystem tools (built-in, sandbox-enforced)", () => {
   let root: string;
@@ -594,7 +595,7 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
         signal: ctrl.signal,
       });
       expect(out).toMatch(/aborted before dispatch/);
-      expect(JSON.parse(out)).toMatchObject({ rejectedReason: "aborted" });
+      expect(parseToolResult(out)).toMatchObject({ rejectedReason: "aborted" });
     });
 
     it("honors AbortSignal during recursive content search", async () => {
@@ -783,7 +784,7 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
   describe("get_file_info", () => {
     it("returns type + size + mtime as JSON", async () => {
       const out = await tools.dispatch("get_file_info", JSON.stringify({ path: "hello.txt" }));
-      const parsed = JSON.parse(out);
+      const parsed = parseToolResult(out);
       expect(parsed.type).toBe("file");
       expect(parsed.size).toBeGreaterThan(0);
       expect(parsed.mtime).toMatch(/\d{4}-\d{2}-\d{2}/);
@@ -791,7 +792,7 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
 
     it("reports directories", async () => {
       const out = await tools.dispatch("get_file_info", JSON.stringify({ path: "src" }));
-      expect(JSON.parse(out).type).toBe("directory");
+      expect(parseToolResult(out).type).toBe("directory");
     });
   });
 

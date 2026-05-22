@@ -1,5 +1,6 @@
 import type { ToolInterceptor } from "../tools.js";
 import type { PlanStep, StepEvidence } from "../tools/plan.js";
+import { decodeToolResultObject } from "../toon/decode-result.js";
 
 export type EngineeringLifecycleMode = "off" | "strict";
 export type EngineeringLifecycleState =
@@ -259,12 +260,8 @@ export class EngineeringLifecycleRuntime {
 function toolResultLooksSuccessful(result: string): boolean {
   const text = result.trim();
   if (!text) return false;
-  try {
-    const parsed = JSON.parse(text) as unknown;
-    if (parsed && typeof parsed === "object" && "error" in parsed) return false;
-  } catch {
-    // Non-JSON tool results are normal.
-  }
+  const parsed = decodeToolResultObject(text);
+  if (parsed && "error" in parsed) return false;
   if (/\b0\/\d+\s+applied\b/i.test(text)) return false;
   return !/(user rejected|rejected this edit|discarded|unavailable in plan mode|interceptor failed|\berror\b|failed)/i.test(
     text,

@@ -3,6 +3,11 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import {
+  legacyJsonPathFor,
+  readStructuredFileSync,
+  writeStructuredFileSync,
+} from "../toon/persistence.js";
 
 /** One file's state at the time of snapshot. `content === null` → didn't exist. */
 export interface CheckpointFile {
@@ -44,20 +49,18 @@ function storeRoot(rootDir: string): string {
 }
 
 function indexPath(rootDir: string): string {
-  return join(storeRoot(rootDir), "index.json");
+  return join(storeRoot(rootDir), "index.toon");
 }
 
 function snapshotPath(rootDir: string, id: string): string {
-  return join(storeRoot(rootDir), `${id}.json`);
+  return join(storeRoot(rootDir), `${id}.toon`);
 }
 
 /** Load the index of checkpoint metadata for a workspace. Empty when missing. */
 export function listCheckpoints(rootDir: string): CheckpointMeta[] {
   const path = indexPath(rootDir);
-  if (!existsSync(path)) return [];
   try {
-    const raw = readFileSync(path, "utf8");
-    const parsed = JSON.parse(raw);
+    const parsed = readStructuredFileSync<unknown>(path);
     if (!Array.isArray(parsed)) return [];
     // Defensive: filter out malformed entries rather than throwing on
     // a single bad row. A stale entry is annoying; a thrown listCheckpoints
@@ -80,18 +83,16 @@ export function listCheckpoints(rootDir: string): CheckpointMeta[] {
 
 function writeIndex(rootDir: string, items: CheckpointMeta[]): void {
   const path = indexPath(rootDir);
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(items, null, 2), "utf8");
+  writeStructuredFileSync(path, items);
 }
 
 /** Read a single checkpoint by id. Returns null when missing or corrupt. */
 export function loadCheckpoint(rootDir: string, id: string): Checkpoint | null {
   const path = snapshotPath(rootDir, id);
-  if (!existsSync(path)) return null;
   try {
-    const raw = readFileSync(path, "utf8");
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object" && Array.isArray(parsed.files)) {
+    const parsed = readStructuredFileSync<unknown>(path);
+    const candidate = parsed as { files?: unknown } | null;
+    if (candidate && typeof candidate === "object" && Array.isArray(candidate.files)) {
       return parsed as Checkpoint;
     }
     return null;
@@ -148,8 +149,7 @@ export function createCheckpoint(opts: CreateCheckpointOptions): CheckpointMeta 
     bytes,
   };
   const cpPath = snapshotPath(absRoot, id);
-  mkdirSync(dirname(cpPath), { recursive: true });
-  writeFileSync(cpPath, JSON.stringify(checkpoint), "utf8");
+  writeStructuredFileSync(cpPath, checkpoint);
 
   const meta: CheckpointMeta = {
     id,
@@ -223,6 +223,15 @@ export function deleteCheckpoint(rootDir: string, id: string): boolean {
   if (existsSync(cpPath)) {
     try {
       rmSync(cpPath);
+      removed = true;
+    } catch {
+      return false;
+    }
+  }
+  const legacyPath = legacyJsonPathFor(cpPath);
+  if (legacyPath !== cpPath && existsSync(legacyPath)) {
+    try {
+      rmSync(legacyPath);
       removed = true;
     } catch {
       return false;

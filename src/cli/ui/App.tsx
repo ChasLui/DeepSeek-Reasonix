@@ -41,6 +41,7 @@ import {
   loadEngineeringLifecycleMode,
   loadReasoningEffort,
   loadTheme,
+  loadToonMode,
   markEditModeHintShown,
   markMouseClipboardHintShown,
   mouseClipboardHintShown,
@@ -3197,7 +3198,7 @@ function AppInner({
       // so the display doesn't balloon.
       let modelInput = text;
       if (codeMode) {
-        const expanded = expandAtMentions(text, currentRootDir);
+        const expanded = expandAtMentions(text, currentRootDir, { toonMode: loadToonMode() });
         if (expanded.expansions.length > 0) {
           modelInput = expanded.text;
           const inlined = expanded.expansions

@@ -200,7 +200,9 @@ describe("custom memory types (#709)", () => {
       expect(out).toContain("# HIGH PRIORITY constraints (must observe)");
       expect(out).toContain("!!! [global/security/no-prod-writes]");
       expect(out).toContain("never run write queries against prod DBs");
-      expect(out).toContain("# User memory — global");
+      expect(out).toContain("# User memory index");
+      expect(out).toContain("name: naming-style");
+      expect(out).toContain("description: use kebab-case for filenames");
       // Regular naming-style entry is in the regular index, not the high-priority block:
       const high = out.split("# User memory")[0] ?? "";
       expect(high).not.toContain("naming-style");

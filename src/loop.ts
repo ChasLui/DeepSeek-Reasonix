@@ -60,6 +60,7 @@ import { SessionStats, type TurnStats } from "./telemetry/stats.js";
 import { defaultUsageLogPath, readUsageSince } from "./telemetry/usage.js";
 import { ToolRegistry } from "./tools.js";
 import { ReadDedupState } from "./tools/fs/read-dedup.js";
+import { serializeToolResult } from "./toon/encode-result.js";
 import type { ChatMessage, ToolCall } from "./types.js";
 
 const ESCALATION_MODEL = "deepseek-v4-pro";
@@ -1319,7 +1320,10 @@ export class CacheFirstLoop {
             result = s.value.result;
           } else {
             const err = s.reason instanceof Error ? s.reason : new Error(String(s.reason));
-            result = JSON.stringify({ error: `${err.name}: ${err.message}` });
+            result = serializeToolResult(
+              { error: `${err.name}: ${err.message}` },
+              { mode: this.tools.toonMode },
+            );
           }
 
           for (const w of preWarnings) yield w;

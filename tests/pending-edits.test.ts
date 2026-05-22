@@ -37,10 +37,10 @@ describe("pending-edits checkpoint", () => {
     if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
   });
 
-  it("pendingEditsPath is a .pending.json sibling of the session file", () => {
+  it("pendingEditsPath is a .pending.toon sibling of the session file", () => {
     const p = pendingEditsPath("demo");
     expect(p).toContain("sessions");
-    expect(p.endsWith("demo.pending.json")).toBe(true);
+    expect(p.endsWith("demo.pending.toon")).toBe(true);
   });
 
   it("save → load round-trips the queue", () => {
@@ -84,6 +84,14 @@ describe("pending-edits checkpoint", () => {
     );
     const loaded = loadPendingEdits("mixed");
     expect(loaded?.map((b) => b.path)).toEqual(["good.ts", "also-good.ts"]);
+  });
+
+  it("loads legacy .pending.json sidecars during migration", () => {
+    const path = pendingEditsPath("legacy").replace(/\.toon$/, ".json");
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify([block({ path: "legacy.ts" })]), "utf8");
+
+    expect(loadPendingEdits("legacy")).toEqual([block({ path: "legacy.ts" })]);
   });
 
   it("clearPendingEdits removes the checkpoint file", () => {

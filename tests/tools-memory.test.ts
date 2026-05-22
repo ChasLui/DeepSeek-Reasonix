@@ -1,4 +1,4 @@
-/** remember / forget / recall_memory — dispatches through ToolRegistry; refusals surface as JSON-encoded `{ error }`. */
+/** remember / forget / recall_memory — dispatches through ToolRegistry; refusals surface as structured `{ error }`. */
 
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MemoryStore } from "../src/memory/user.js";
 import { ToolRegistry } from "../src/tools.js";
 import { registerMemoryTools } from "../src/tools/memory.js";
+import { parseToolResult } from "./helpers/tool-result.js";
 
 describe("memory tools", () => {
   let home: string;
@@ -51,7 +52,7 @@ describe("memory tools", () => {
         description: "d",
         content: "c",
       });
-      const parsed = JSON.parse(out);
+      const parsed = parseToolResult(out);
       expect(parsed.error).toMatch(/scope='project'/);
     });
 
@@ -78,7 +79,7 @@ describe("memory tools", () => {
         description: "d",
         content: "c",
       });
-      const parsed = JSON.parse(out);
+      const parsed = parseToolResult(out);
       expect(parsed.error).toMatch(/invalid memory name/);
     });
 
@@ -92,7 +93,7 @@ describe("memory tools", () => {
         description: "",
         content: "body",
       });
-      const parsed = JSON.parse(out);
+      const parsed = parseToolResult(out);
       expect(parsed.error).toMatch(/description/);
     });
   });
@@ -146,7 +147,7 @@ describe("memory tools", () => {
       const reg = new ToolRegistry();
       registerMemoryTools(reg, { homeDir: home });
       const out = await reg.dispatch("recall_memory", { scope: "global", name: "ghost_one" });
-      const parsed = JSON.parse(out);
+      const parsed = parseToolResult(out);
       expect(parsed.error).toMatch(/recall failed/);
     });
 

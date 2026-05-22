@@ -1,6 +1,12 @@
 import { render } from "ink";
 import React, { useMemo, useState } from "react";
-import { loadApiKey, readConfig, resolveSessionToolset, searchEnabled } from "../../config.js";
+import {
+  loadApiKey,
+  loadToonMode,
+  readConfig,
+  resolveSessionToolset,
+  searchEnabled,
+} from "../../config.js";
 import { loadDotenv } from "../../env.js";
 import { t } from "../../i18n/index.js";
 import {
@@ -250,6 +256,7 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
   markPhase("config_loaded");
 
   const requestedSpecs = opts.mcp ?? [];
+  const toonMode = loadToonMode();
   // Shared progress sink: the bridge's onProgress callback writes
   // through `progressSink.current`, which App.tsx sets to its UI
   // updater on mount. Started null so early progress frames (before
@@ -262,7 +269,7 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
   // replacing. When no seed AND no MCP, tools stays undefined and
   // the loop runs as a bare chat.
   let tools: ToolRegistry | undefined = opts.seedTools;
-  if (requestedSpecs.length > 0 && !tools) tools = new ToolRegistry();
+  if (requestedSpecs.length > 0 && !tools) tools = new ToolRegistry({ toonMode });
 
   const runtime = createMcpRuntime({
     getTools: () => tools,
@@ -289,7 +296,7 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
   // backs them with no key required; the model invokes them whenever
   // a question needs info fresher than its training data.
   if (searchEnabled()) {
-    if (!tools) tools = new ToolRegistry();
+    if (!tools) tools = new ToolRegistry({ toonMode });
     registerWebTools(tools);
   }
 
@@ -301,7 +308,7 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
   // exists) so it can wire the subagent runner for runAs:subagent
   // skills.
   if (!opts.seedTools) {
-    if (!tools) tools = new ToolRegistry();
+    if (!tools) tools = new ToolRegistry({ toonMode });
     registerMemoryTools(tools, {});
     // `ask_choice` — branching primitive, useful in chat too (stylistic
     // preferences, doc language, library picks). Independent of plan

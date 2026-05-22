@@ -4,6 +4,7 @@ import { t } from "../../../i18n/index.js";
 import type { LoopEvent } from "../../../loop.js";
 import type { ChoiceOption } from "../../../tools/choice.js";
 import type { PlanStep, StepCompletion, StepEvidence } from "../../../tools/plan.js";
+import { decodeToolResultObject } from "../../../toon/decode-result.js";
 import type { TurnTranslator } from "../state/TurnTranslator.js";
 import type { Scrollback } from "./useScrollback.js";
 
@@ -48,7 +49,8 @@ export function handleToolEvent(ev: LoopEvent, ctx: ToolEventContext): void {
 
   if (ev.toolName === "mark_step_complete") {
     try {
-      const parsed = JSON.parse(ev.content) as Partial<StepCompletion>;
+      const parsed = decodeToolResultObject(ev.content) as Partial<StepCompletion> | null;
+      if (!parsed) return;
       const stepId = parsed.stepId;
       if (parsed.kind === "step_completed" && typeof stepId === "string") {
         const fullCompletion = ctx.pendingStepCompletionsRef?.current.get(stepId);

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ToolRegistry } from "../src/tools.js";
 import { registerCodeQueryTools } from "../src/tools/code-query.js";
+import { parseToolResult } from "./helpers/tool-result.js";
 
 describe("code-query tools", () => {
   let tmp: string;
@@ -26,10 +27,10 @@ describe("code-query tools", () => {
         "export function add(a: number, b: number) { return a + b; }\nexport class C {}\n",
       );
       const raw = await registry.dispatch("get_symbols", JSON.stringify({ path: "foo.ts" }));
-      const parsed = JSON.parse(raw) as {
+      const parsed = parseToolResult<{
         path: string;
         symbols: Array<{ name: string; kind: string }>;
-      };
+      }>(raw);
       expect(parsed.path).toBe("foo.ts");
       expect(parsed.symbols.map((s) => `${s.kind}:${s.name}`)).toEqual(["function:add", "class:C"]);
     });
@@ -37,21 +38,21 @@ describe("code-query tools", () => {
     it("reports unsupported language for non-JS/TS/Python/Go/Rust/Java files", async () => {
       writeFileSync(join(tmp, "a.cpp"), "int main(){}\n");
       const raw = await registry.dispatch("get_symbols", JSON.stringify({ path: "a.cpp" }));
-      const parsed = JSON.parse(raw) as { error?: string };
+      const parsed = parseToolResult<{ error?: string }>(raw);
       expect(parsed.error).toMatch(/language not supported/);
     });
 
     it("extracts symbols for Python files", async () => {
       writeFileSync(join(tmp, "a.py"), "def hello():\n    pass\n");
       const raw = await registry.dispatch("get_symbols", JSON.stringify({ path: "a.py" }));
-      const parsed = JSON.parse(raw) as { symbols: Array<{ name: string; kind: string }> };
+      const parsed = parseToolResult<{ symbols: Array<{ name: string; kind: string }> }>(raw);
       expect(parsed.symbols.map((s) => `${s.kind}:${s.name}`)).toEqual(["function:hello"]);
     });
 
     it("treats leading slash as project-root-relative", async () => {
       writeFileSync(join(tmp, "x.ts"), "function f(){}");
       const raw = await registry.dispatch("get_symbols", JSON.stringify({ path: "/x.ts" }));
-      const parsed = JSON.parse(raw) as { symbols: Array<{ name: string }> };
+      const parsed = parseToolResult<{ symbols: Array<{ name: string }> }>(raw);
       expect(parsed.symbols.map((s) => s.name)).toEqual(["f"]);
     });
   });
@@ -63,9 +64,9 @@ describe("code-query tools", () => {
         "find_in_code",
         JSON.stringify({ path: "a.ts", name: "foo" }),
       );
-      const parsed = JSON.parse(raw) as {
+      const parsed = parseToolResult<{
         matches: Array<{ kind: string; line: number }>;
-      };
+      }>(raw);
       const kinds = parsed.matches.map((m) => m.kind).sort();
       expect(kinds).toEqual(["call", "definition", "reference"]);
     });
@@ -79,7 +80,7 @@ describe("code-query tools", () => {
         "find_in_code",
         JSON.stringify({ path: "a.ts", name: "helper", kind: "call" }),
       );
-      const parsed = JSON.parse(raw) as { matches: Array<{ kind: string }> };
+      const parsed = parseToolResult<{ matches: Array<{ kind: string }> }>(raw);
       expect(parsed.matches.length).toBe(2);
       expect(parsed.matches.every((m) => m.kind === "call")).toBe(true);
     });
@@ -90,7 +91,7 @@ describe("code-query tools", () => {
         "find_in_code",
         JSON.stringify({ path: "a.cpp", name: "main" }),
       );
-      const parsed = JSON.parse(raw) as { error?: string };
+      const parsed = parseToolResult<{ error?: string }>(raw);
       expect(parsed.error).toMatch(/language not supported/);
     });
 
@@ -100,7 +101,7 @@ describe("code-query tools", () => {
         "find_in_code",
         JSON.stringify({ path: "a.rs", name: "helper", kind: "call" }),
       );
-      const parsed = JSON.parse(raw) as { matches: Array<{ kind: string }> };
+      const parsed = parseToolResult<{ matches: Array<{ kind: string }> }>(raw);
       expect(parsed.matches.length).toBe(2);
     });
   });

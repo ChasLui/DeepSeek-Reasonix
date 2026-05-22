@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -8,6 +8,7 @@ import {
   addProjectShellAllowed,
   clearProjectPathAllowed,
   clearProjectShellAllowed,
+  defaultConfigPath,
   editModeHintShown,
   isPlausibleKey,
   loadApiKey,
@@ -26,6 +27,7 @@ import {
   loadReasoningEffort,
   loadSemanticEmbeddingUserConfig,
   loadTheme,
+  loadToonMode,
   markEditModeHintShown,
   readConfig,
   redactKey,
@@ -34,6 +36,7 @@ import {
   removeProjectShellAllowed,
   resolveSemanticEmbeddingConfig,
   resolveThemePreference,
+  resolveToonMode,
   saveApiKey,
   saveBaseUrl,
   saveDesktopOpenTabs,
@@ -91,9 +94,40 @@ describe("config", () => {
     expect(readConfig(path)).toEqual({});
   });
 
+  it("uses config.toon as the default config path", () => {
+    expect(defaultConfigPath()).toMatch(/config\.toon$/);
+  });
+
+  it("defaults TOON to all while allowing explicit config/env opt-out", () => {
+    expect(resolveToonMode(undefined, undefined)).toBe("all");
+    expect(loadToonMode(path)).toBe("all");
+    expect(resolveToonMode(false, undefined)).toBe("off");
+    expect(resolveToonMode({ enabled: false }, undefined)).toBe("off");
+    expect(resolveToonMode({ mode: "results" }, undefined)).toBe("results");
+    expect(resolveToonMode({ mode: "prefix" }, "0")).toBe("off");
+  });
+
   it("writeConfig + readConfig round-trip", () => {
     writeConfig({ apiKey: "sk-test123abcdefghijkl" }, path);
     expect(readConfig(path).apiKey).toBe("sk-test123abcdefghijkl");
+  });
+
+  it("writeConfig + readConfig supports .toon config files", () => {
+    const toonPath = path.replace(/\.json$/, ".toon");
+    writeConfig({ toon: { enabled: true, mode: "prefix" } }, toonPath);
+
+    expect(readConfig(toonPath).toon).toEqual({ enabled: true, mode: "prefix" });
+    expect(readFileSync(toonPath, "utf8")).toContain("mode: prefix");
+  });
+
+  it("readConfig prefers an existing .toon sibling while keeping .json as migration fallback", () => {
+    writeConfig({ preset: "flash" }, path);
+    const toonPath = path.replace(/\.json$/, ".toon");
+    writeConfig({ preset: "pro" }, toonPath);
+
+    expect(readConfig(path).preset).toBe("pro");
+    rmSync(toonPath);
+    expect(readConfig(path).preset).toBe("flash");
   });
 
   it("saveApiKey trims whitespace", () => {

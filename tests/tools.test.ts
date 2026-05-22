@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { EngineeringLifecycleRuntime } from "../src/code/lifecycle.js";
 import { ToolRegistry } from "../src/tools.js";
+import { parseToolResult } from "./helpers/tool-result.js";
 
 describe("ToolRegistry", () => {
   it("registers and dispatches a tool with JSON args", async () => {
@@ -47,7 +48,7 @@ describe("ToolRegistry", () => {
   it("returns structured error for unknown tool", async () => {
     const reg = new ToolRegistry();
     const out = await reg.dispatch("nope", "{}");
-    expect(JSON.parse(out)).toEqual({ error: "unknown tool: nope" });
+    expect(parseToolResult(out)).toEqual({ error: "unknown tool: nope" });
   });
 
   it("handles invalid JSON arguments gracefully (truly unrecoverable, jsonrepair also fails)", async () => {
@@ -55,7 +56,7 @@ describe("ToolRegistry", () => {
     reg.register({ name: "noop", fn: () => "ok" });
     // bare `]` is rejected by strict parse AND jsonrepair throws → no rescue.
     const out = await reg.dispatch("noop", "]");
-    expect(JSON.parse(out).error).toMatch(/invalid tool arguments JSON/);
+    expect(parseToolResult(out).error).toMatch(/invalid tool arguments JSON/);
   });
 
   it("emits OpenAI-shaped specs", () => {
@@ -288,7 +289,7 @@ describe("ToolRegistry", () => {
       });
       reg.setPlanMode(true);
       const out = await reg.dispatch("edit_file", '{"path":"x"}');
-      expect(JSON.parse(out).error).toMatch(/unavailable in plan mode/);
+      expect(parseToolResult(out).error).toMatch(/unavailable in plan mode/);
       expect(interceptorCalled).toBe(false);
     });
 
@@ -345,8 +346,8 @@ describe("ToolRegistry", () => {
         }),
       );
 
-      const first = JSON.parse(await reg.dispatch("multi_edit", '{"edits":[]}'));
-      const second = JSON.parse(await reg.dispatch("multi_edit", '{"edits":[]}'));
+      const first = parseToolResult(await reg.dispatch("multi_edit", '{"edits":[]}'));
+      const second = parseToolResult(await reg.dispatch("multi_edit", '{"edits":[]}'));
 
       expect(first.consecutiveInterceptorRejection).toBeUndefined();
       expect(second.consecutiveInterceptorRejection).toBe(true);
@@ -359,10 +360,10 @@ describe("ToolRegistry", () => {
       reg.register({ name: "run_command", fn: () => "should not run" });
       reg.addToolInterceptor("engineering-lifecycle", lifecycle.guardToolCall);
 
-      const first = JSON.parse(
+      const first = parseToolResult(
         await reg.dispatch("run_command", '{"command":"rm -rf dist","cwd":"/repo"}'),
       );
-      const second = JSON.parse(
+      const second = parseToolResult(
         await reg.dispatch("run_command", '{"cwd":"/repo","command":"rm -rf dist"}'),
       );
 
@@ -395,8 +396,8 @@ describe("ToolRegistry", () => {
         reg.addToolInterceptor("engineering-lifecycle", lifecycle.guardToolCall);
 
         const rawArgs = JSON.stringify(item.args);
-        const first = JSON.parse(await reg.dispatch(item.name, rawArgs));
-        const second = JSON.parse(await reg.dispatch(item.name, rawArgs));
+        const first = parseToolResult(await reg.dispatch(item.name, rawArgs));
+        const second = parseToolResult(await reg.dispatch(item.name, rawArgs));
 
         expect(first.rejectedReason).toBe("engineering-lifecycle");
         expect(first.consecutiveInterceptorRejection).toBeUndefined();
@@ -419,7 +420,7 @@ describe("ToolRegistry", () => {
         replace: "newValue",
       });
       const first = await reg.dispatch("edit_file", rawArgs);
-      const second = JSON.parse(await reg.dispatch("edit_file", rawArgs));
+      const second = parseToolResult(await reg.dispatch("edit_file", rawArgs));
 
       expect(first).toMatch(/User rejected this edit to src\/app\.ts/);
       expect(second.rejectedReason).toBe("edit-gate");
@@ -435,7 +436,7 @@ describe("ToolRegistry", () => {
         throw new Error("boom");
       });
       const out = await reg.dispatch("edit_file", "{}");
-      expect(JSON.parse(out).error).toMatch(/interceptor failed — boom/);
+      expect(parseToolResult(out).error).toMatch(/interceptor failed — boom/);
     });
   });
 
@@ -474,7 +475,7 @@ describe("ToolRegistry", () => {
         fn: ({ path }: { path: string }) => `read ${path}`,
       });
       const out = await reg.dispatch("read_file", "{}");
-      const parsed = JSON.parse(out);
+      const parsed = parseToolResult(out);
       expect(parsed.error).toMatch(/argument validation failed/);
       expect(parsed.error).toMatch(/path: expected string, got undefined/);
     });
@@ -571,7 +572,7 @@ describe("ToolRegistry", () => {
     it("first malformed call returns the structured issue-list error", async () => {
       const reg = readFileReg();
       const out = await reg.dispatch("read_file", "{}");
-      const parsed = JSON.parse(out);
+      const parsed = parseToolResult(out);
       expect(parsed.error).toMatch(/argument validation failed/);
       expect(parsed.error).toMatch(/path: expected string, got undefined/);
       expect(parsed.consecutiveMalformed).toBeUndefined();
@@ -581,7 +582,7 @@ describe("ToolRegistry", () => {
       const reg = readFileReg();
       await reg.dispatch("read_file", "{}");
       const out = await reg.dispatch("read_file", "{}");
-      const parsed = JSON.parse(out);
+      const parsed = parseToolResult(out);
       expect(parsed.consecutiveMalformed).toBe(true);
       expect(parsed.error).toMatch(/DO NOT retry with identical args/);
     });
@@ -591,7 +592,7 @@ describe("ToolRegistry", () => {
       await reg.dispatch("read_file", "{}"); // 1st malformed
       await reg.dispatch("read_file", '{"path": "ok.txt"}'); // success — clears
       const out = await reg.dispatch("read_file", "{}"); // 1st-again, NOT 2nd-consecutive
-      const parsed = JSON.parse(out);
+      const parsed = parseToolResult(out);
       expect(parsed.consecutiveMalformed).toBeUndefined();
     });
 
@@ -608,7 +609,7 @@ describe("ToolRegistry", () => {
       });
       await reg.dispatch("edit", '{"path": "x"}'); // missing body
       const out = await reg.dispatch("edit", '{"body": "y"}'); // missing path — different shape
-      const parsed = JSON.parse(out);
+      const parsed = parseToolResult(out);
       expect(parsed.consecutiveMalformed).toBeUndefined();
     });
 
@@ -617,7 +618,7 @@ describe("ToolRegistry", () => {
       // bare `]` is unrecoverable; jsonrepair throws → both calls fail strict + loose
       await reg.dispatch("read_file", "]");
       const out = await reg.dispatch("read_file", "]");
-      const parsed = JSON.parse(out);
+      const parsed = parseToolResult(out);
       expect(parsed.consecutiveMalformed).toBe(true);
       expect(parsed.error).toMatch(/invalid tool arguments JSON/);
     });
@@ -644,7 +645,7 @@ describe("ToolRegistry", () => {
       });
       await reg.dispatch("read_file", "{}");
       const out = await reg.dispatch("edit_file", "{}"); // first time for edit_file
-      const parsed = JSON.parse(out);
+      const parsed = parseToolResult(out);
       expect(parsed.consecutiveMalformed).toBeUndefined();
     });
   });
@@ -663,7 +664,7 @@ describe("ToolRegistry", () => {
       const writeSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
       try {
         const out = await reg.dispatch("buggy_tool", "{}");
-        expect(JSON.parse(out).error).toMatch(/unavailable in plan mode/);
+        expect(parseToolResult(out).error).toMatch(/unavailable in plan mode/);
         const writes = writeSpy.mock.calls.map((c) => String(c[0]));
         expect(
           writes.some((w) => w.includes("readOnlyCheck for buggy_tool threw: check is buggy")),

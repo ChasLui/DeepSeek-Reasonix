@@ -3,7 +3,6 @@
 import {
   existsSync,
   mkdirSync,
-  readFileSync,
   readdirSync,
   renameSync,
   statSync,
@@ -13,6 +12,11 @@ import {
 import { dirname, join } from "node:path";
 import { sanitizeName, sessionsDir } from "../memory/session.js";
 import type { PlanStep, StepCompletion, StepEvidence } from "../tools/plan.js";
+import {
+  legacyJsonPathFor,
+  readStructuredFileSync,
+  writeStructuredFileSync,
+} from "../toon/persistence.js";
 
 export interface PlanStateOnDisk {
   /** File format version — bump when shape changes. */
@@ -27,15 +31,13 @@ export interface PlanStateOnDisk {
 }
 
 export function planStatePath(sessionName: string): string {
-  return join(sessionsDir(), `${sanitizeName(sessionName)}.plan.json`);
+  return join(sessionsDir(), `${sanitizeName(sessionName)}.plan.toon`);
 }
 
 export function loadPlanState(sessionName: string): PlanStateOnDisk | null {
   const path = planStatePath(sessionName);
-  if (!existsSync(path)) return null;
   try {
-    const raw = readFileSync(path, "utf8");
-    const parsed = JSON.parse(raw) as Partial<PlanStateOnDisk>;
+    const parsed = readStructuredFileSync<Partial<PlanStateOnDisk>>(path);
     if (!parsed || typeof parsed !== "object") return null;
     if (parsed.version !== 1 && parsed.version !== 2) return null;
     if (!Array.isArray(parsed.steps)) return null;
@@ -105,7 +107,7 @@ export function savePlanState(
     if (stepCompletions) state.stepCompletions = stepCompletions;
     if (extras?.body) state.body = extras.body;
     if (extras?.summary) state.summary = extras.summary;
-    writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+    writeStructuredFileSync(path, state);
   } catch (err) {
     process.stderr.write(
       `▸ plan-store: failed to save plan for "${sessionName}": ${(err as Error).message}\n`,
@@ -118,6 +120,8 @@ export function clearPlanState(sessionName: string): void {
   const path = planStatePath(sessionName);
   try {
     if (existsSync(path)) unlinkSync(path);
+    const legacy = legacyJsonPathFor(path);
+    if (legacy !== path && existsSync(legacy)) unlinkSync(legacy);
   } catch {
     /* nothing to do — leftover file is harmless, will be overwritten next save */
   }
@@ -126,15 +130,23 @@ export function clearPlanState(sessionName: string): void {
 /** Random suffix avoids same-millisecond collision; `:`/`.` swapped for Windows-safe filenames. */
 export function archivePlanState(sessionName: string): string | null {
   const active = planStatePath(sessionName);
-  if (!existsSync(active)) return null;
+  const legacy = legacyJsonPathFor(active);
+  const source = existsSync(active) ? active : existsSync(legacy) ? legacy : null;
+  if (!source) return null;
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const suffix = Math.random().toString(36).slice(2, 6);
   const archive = join(
     sessionsDir(),
-    `${sanitizeName(sessionName)}.plan.${stamp}-${suffix}.done.json`,
+    `${sanitizeName(sessionName)}.plan.${stamp}-${suffix}.done.toon`,
   );
   try {
-    renameSync(active, archive);
+    const parsed = readStructuredFileSync<unknown>(source);
+    if (parsed !== null) {
+      writeStructuredFileSync(archive, parsed);
+      unlinkSync(source);
+    } else {
+      renameSync(source, archive);
+    }
     return archive;
   } catch (err) {
     process.stderr.write(
@@ -160,7 +172,7 @@ export function listPlanArchives(sessionName: string): PlanArchiveSummary[] {
   const dir = sessionsDir();
   if (!existsSync(dir)) return [];
   const prefix = `${sanitizeName(sessionName)}.plan.`;
-  const suffix = ".done.json";
+  const suffixes = [".done.toon", ".done.json"];
   let entries: string[];
   try {
     entries = readdirSync(dir);
@@ -169,11 +181,11 @@ export function listPlanArchives(sessionName: string): PlanArchiveSummary[] {
   }
   const summaries: PlanArchiveSummary[] = [];
   for (const name of entries) {
-    if (!name.startsWith(prefix) || !name.endsWith(suffix)) continue;
+    if (!name.startsWith(prefix) || !suffixes.some((suffix) => name.endsWith(suffix))) continue;
     const full = join(dir, name);
     try {
-      const raw = readFileSync(full, "utf8");
-      const parsed = JSON.parse(raw) as Partial<PlanStateOnDisk>;
+      const parsed = readStructuredFileSync<Partial<PlanStateOnDisk>>(full);
+      if (!parsed) continue;
       if (parsed.version !== 1 && parsed.version !== 2) continue;
       if (!Array.isArray(parsed.steps) || parsed.steps.length === 0) continue;
       const steps = parsed.steps.filter(
@@ -227,18 +239,18 @@ export function listAllPlanArchives(): PlanArchiveWithSession[] {
     return [];
   }
   const out: PlanArchiveWithSession[] = [];
-  const suffix = ".done.json";
+  const suffixes = [".done.toon", ".done.json"];
   const planMarker = ".plan.";
   for (const name of entries) {
-    if (!name.endsWith(suffix)) continue;
+    if (!suffixes.some((suffix) => name.endsWith(suffix))) continue;
     const planIdx = name.indexOf(planMarker);
     if (planIdx < 0) continue;
     const sessionName = name.slice(0, planIdx);
     if (!sessionName) continue;
     const full = join(dir, name);
     try {
-      const raw = readFileSync(full, "utf8");
-      const parsed = JSON.parse(raw) as Partial<PlanStateOnDisk>;
+      const parsed = readStructuredFileSync<Partial<PlanStateOnDisk>>(full);
+      if (!parsed) continue;
       if (parsed.version !== 1 && parsed.version !== 2) continue;
       if (!Array.isArray(parsed.steps) || parsed.steps.length === 0) continue;
       const steps = parsed.steps.filter(

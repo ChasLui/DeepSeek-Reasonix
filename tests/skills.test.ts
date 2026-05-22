@@ -344,8 +344,9 @@ describe("applySkillsIndex", () => {
     );
     const out = applySkillsIndex(BASE, { homeDir: home, projectRoot, disableBuiltins: true });
     expect(out).toContain("# Skills");
-    expect(out).toContain("- init — Initialize a CLAUDE.md");
-    expect(out).toContain("- review — Review a pull request");
+    expect(out).toContain("skills[2]{name,runAs,description}:");
+    expect(out).toContain("init,inline,Initialize a CLAUDE.md");
+    expect(out).toContain("review,inline,Review a pull request");
     expect(out).not.toContain("BODY-THAT-MUST-NOT-APPEAR");
     expect(out).not.toContain("ALSO-SECRET");
   });
@@ -354,17 +355,17 @@ describe("applySkillsIndex", () => {
     writeSkillDir(projectRoot, "global", "hello", { description: "global hello" }, "x", home);
     writeSkillDir(projectRoot, "project", "deploy", { description: "project deploy" }, "y", home);
     const out = applySkillsIndex(BASE, { homeDir: home, projectRoot, disableBuiltins: true });
-    expect(out).toContain("- deploy — project deploy");
-    expect(out).toContain("- hello — global hello");
+    expect(out).toContain("deploy,inline,project deploy");
+    expect(out).toContain("hello,inline,global hello");
   });
 
   it("surfaces skills with blank descriptions using a placeholder so the model can name + flag them (#583)", () => {
     writeSkillDir(projectRoot, "global", "has-desc", { description: "I have one" }, "body", home);
     writeSkillDir(projectRoot, "global", "no-desc", {}, "body", home);
     const out = applySkillsIndex(BASE, { homeDir: home, projectRoot, disableBuiltins: true });
-    expect(out).toContain("- has-desc — I have one");
-    expect(out).toContain("- no-desc");
-    expect(out).toContain('"description:"');
+    expect(out).toContain("has-desc,inline,I have one");
+    expect(out).toContain("no-desc,inline");
+    expect(out).toContain("description:");
   });
 
   it("is byte-stable across two calls with the same filesystem state", () => {
@@ -393,10 +394,8 @@ describe("applySkillsIndex", () => {
       home,
     );
     const out = applySkillsIndex(BASE, { homeDir: home, projectRoot, disableBuiltins: true });
-    // Name-first, tag-after: prevents the model from copying "🧬 lookup"
-    // as the skill name into `run_skill({ name: ... })`.
-    expect(out).toContain("- lookup [🧬 subagent] — Look something up");
-    expect(out).toContain("- fmt — Format the codebase");
+    expect(out).toContain("lookup,subagent,Look something up");
+    expect(out).toContain("fmt,inline,Format the codebase");
     // Old "🧬 name" format must not regress — there was a user bug where
     // the model copied the marker verbatim and run_skill failed lookup.
     expect(out).not.toMatch(/- 🧬 lookup\b/);
@@ -657,12 +656,12 @@ describe("Built-in skills", () => {
   it("builtins surface with the subagent tag after the name in applySkillsIndex", () => {
     const out = applySkillsIndex(BASE, { homeDir: home }); // builtins ON
     expect(out).toContain("# Skills");
-    expect(out).toContain("explore [🧬 subagent]");
-    expect(out).toContain("research [🧬 subagent]");
-    expect(out).toContain("review [🧬 subagent]");
-    expect(out).toContain("security-review [🧬 subagent]");
+    expect(out).toContain("explore,subagent");
+    expect(out).toContain("research,subagent");
+    expect(out).toContain("review,subagent");
+    expect(out).toContain("security-review,subagent");
     // /test is inline → no subagent tag
-    expect(out).toContain("test —");
-    expect(out).not.toContain("test [🧬 subagent]");
+    expect(out).toContain("test,inline");
+    expect(out).not.toContain("test,subagent");
   });
 });

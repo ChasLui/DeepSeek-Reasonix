@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,7 +11,7 @@ import {
   suggestSlashCommands,
 } from "../src/cli/ui/slash.js";
 import { DeepSeekClient, Usage } from "../src/client.js";
-import { loadTheme } from "../src/config.js";
+import { loadTheme, readConfig } from "../src/config.js";
 import {
   getLanguage,
   notifyLanguageChange,
@@ -791,7 +791,7 @@ describe("handleSlash", () => {
       expect(r.info).toMatch(/notion disabled/);
       expect(r.info).toMatch(/next launch/);
       const cfgPath = join(tempHome, ".reasonix", "config.json");
-      const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
+      const cfg = readConfig(cfgPath);
       expect(cfg.mcpDisabled).toEqual(["notion"]);
     });
 
@@ -803,7 +803,7 @@ describe("handleSlash", () => {
         mcpSpecs: ["notion=npx -y @scope/notion", "linear=npx -y @scope/linear"],
       });
       expect(r.info).toMatch(/notion re-enabled/);
-      const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
+      const cfg = readConfig(cfgPath);
       expect(cfg.mcpDisabled).toEqual(["linear"]);
     });
 
@@ -814,7 +814,7 @@ describe("handleSlash", () => {
       handleSlash("mcp", ["enable", "notion"], makeLoop(), {
         mcpSpecs: ["notion=npx -y @scope/notion"],
       });
-      const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
+      const cfg = readConfig(cfgPath);
       expect(cfg.mcpDisabled).toBeUndefined();
     });
 

@@ -540,7 +540,7 @@ export function forkRegistryExcluding(
   parent: ToolRegistry,
   exclude: ReadonlySet<string>,
 ): ToolRegistry {
-  const child = new ToolRegistry();
+  const child = new ToolRegistry({ toonMode: parent.toonMode });
   for (const spec of parent.specs()) {
     const name = spec.function.name;
     if (exclude.has(name)) continue;
@@ -561,7 +561,7 @@ export function forkRegistryWithAllowList(
   allow: ReadonlySet<string>,
   alsoExclude: ReadonlySet<string>,
 ): ToolRegistry {
-  const child = new ToolRegistry();
+  const child = new ToolRegistry({ toonMode: parent.toonMode });
   for (const spec of parent.specs()) {
     const name = spec.function.name;
     if (!allow.has(name)) continue;

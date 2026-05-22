@@ -1,8 +1,8 @@
 /** Checkpoint store tests — fresh temp workspace + redirected HOME so real `~/.reasonix` is untouched. */
 
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createCheckpoint,
@@ -17,6 +17,13 @@ import {
 let realHome: string | undefined;
 let workspace: string;
 let homeDir: string;
+
+function legacyCheckpointDir(rootDir: string): string {
+  const safeRoot = resolve(rootDir)
+    .replace(/[\\/:]+/g, "_")
+    .replace(/^_+/, "");
+  return join(homeDir, ".reasonix", "sessions", safeRoot, "checkpoints");
+}
 
 beforeEach(() => {
   realHome = process.env.HOME;
@@ -94,6 +101,32 @@ describe("createCheckpoint", () => {
     const items = listCheckpoints(workspace);
     expect(items).toHaveLength(2);
     expect(items.map((m) => m.name)).toEqual(["one", "two"]);
+  });
+
+  it("loads legacy .json index and snapshot files during migration", () => {
+    const dir = legacyCheckpointDir(workspace);
+    mkdirSync(dir, { recursive: true });
+    const meta = {
+      id: "cp-legacy",
+      name: "legacy",
+      createdAt: Date.now(),
+      source: "manual" as const,
+      fileCount: 1,
+      bytes: 3,
+    };
+    writeFileSync(join(dir, "index.json"), JSON.stringify([meta]), "utf8");
+    writeFileSync(
+      join(dir, "cp-legacy.json"),
+      JSON.stringify({
+        ...meta,
+        rootDir: workspace,
+        files: [{ path: "old.txt", content: "old" }],
+      }),
+      "utf8",
+    );
+
+    expect(listCheckpoints(workspace)).toEqual([meta]);
+    expect(loadCheckpoint(workspace, "cp-legacy")?.files[0]?.content).toBe("old");
   });
 });
 

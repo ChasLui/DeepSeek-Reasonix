@@ -1,7 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { type ToonMode, loadToonMode } from "../config.js";
 import { applyMemoryStack } from "../memory/user.js";
 import { TUI_FORMATTING_RULES, escalationContract } from "../prompt-fragments.js";
+import { formatPromptPayloadBlock, toonPrefixEnabled } from "../toon/prompt-payload.js";
 
 const DEFAULT_CODE_MODEL = "deepseek-v4-flash";
 
@@ -146,12 +148,14 @@ export interface CodeSystemPromptOptions {
   modelId?: string;
   /** Back-compat no-op: lifecycle is runtime-only so strict/off do not change the cache prefix. */
   engineeringLifecycleMode?: "off" | "strict";
+  toonMode?: ToonMode;
 }
 
 export function codeSystemPrompt(rootDir: string, opts: CodeSystemPromptOptions = {}): string {
+  const toonMode = opts.toonMode ?? loadToonMode();
   const codeBase = codeSystemBase(opts.modelId ?? DEFAULT_CODE_MODEL);
   const base = opts.hasSemanticSearch ? `${codeBase}${SEMANTIC_SEARCH_ROUTING}` : codeBase;
-  const withMemory = applyMemoryStack(base, rootDir);
+  const withMemory = applyMemoryStack(base, rootDir, { toonMode });
   const gitignorePath = join(rootDir, ".gitignore");
   let result = withMemory;
   if (existsSync(gitignorePath)) {
@@ -165,7 +169,19 @@ export function codeSystemPrompt(rootDir: string, opts: CodeSystemPromptOptions 
         content.length > MAX
           ? `${content.slice(0, MAX)}\n… (truncated ${content.length - MAX} chars)`
           : content;
-      result = `${result}\n\n# Project .gitignore\n\nThe user's repo ships this .gitignore — treat every pattern as "don't traverse or edit inside these paths unless explicitly asked":\n\n\`\`\`\n${truncated}\n\`\`\`\n`;
+      const block = toonPrefixEnabled(toonMode)
+        ? formatPromptPayloadBlock(
+            {
+              gitignore: {
+                truncated: content.length > MAX,
+                originalChars: content.length,
+                patterns: truncated.split(/\r?\n/).filter((line) => line.length > 0),
+              },
+            },
+            { mode: toonMode },
+          )
+        : `\`\`\`\n${truncated}\n\`\`\``;
+      result = `${result}\n\n# Project .gitignore\n\nThe user's repo ships this .gitignore — treat every pattern as "don't traverse or edit inside these paths unless explicitly asked":\n\n${block}\n`;
     }
   }
   const appendParts = [opts.systemAppend, opts.systemAppendFile].filter(Boolean);

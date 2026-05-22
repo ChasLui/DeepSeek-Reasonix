@@ -9,6 +9,7 @@ import {
   type StepCompletion,
   registerPlanTool,
 } from "../src/tools/plan.js";
+import { parseToolResult } from "./helpers/tool-result.js";
 
 /** A PauseGate that auto-resolves with a pre-configured choice.  */
 class AutoGate extends PauseGate {
@@ -50,7 +51,7 @@ describe("ToolRegistry plan mode", () => {
     reg.setPlanMode(true);
     const out = await reg.dispatch("mutate", "{}");
     expect(ran).toBe(false);
-    const payload = JSON.parse(out);
+    const payload = parseToolResult(out);
     expect(payload.error).toMatch(/unavailable in plan mode/);
     expect(payload.error).toMatch(/submit_plan/);
   });
@@ -80,7 +81,7 @@ describe("ToolRegistry plan mode", () => {
     expect(readOut).toBe("did-read");
     // Write call: refused.
     const writeOut = await reg.dispatch("maybe_read", '{"kind":"write"}');
-    expect(JSON.parse(writeOut).error).toMatch(/unavailable in plan mode/);
+    expect(parseToolResult(writeOut).error).toMatch(/unavailable in plan mode/);
   });
 
   it("readOnlyCheck takes precedence over readOnly when both are set", async () => {
@@ -119,7 +120,7 @@ describe("ToolRegistry plan mode", () => {
       },
     });
     const out = await reg.dispatch("structured_err", "{}");
-    const parsed = JSON.parse(out);
+    const parsed = parseToolResult(out);
     expect(parsed.error).toBe("StructuredError: oops");
     expect(parsed.extra).toBe("pinned-out-of-band");
   });
@@ -138,7 +139,7 @@ describe("ToolRegistry plan mode", () => {
       },
     });
     const out = await reg.dispatch("broken_serializer", "{}");
-    expect(JSON.parse(out).error).toBe("Broken: base-message");
+    expect(parseToolResult(out).error).toBe("Broken: base-message");
   });
 });
 
@@ -194,7 +195,7 @@ describe("registerPlanTool + submit_plan", () => {
     registerPlanTool(reg);
     reg.setPlanMode(true);
     const out = await reg.dispatch("submit_plan", JSON.stringify({ plan: "   \n\n  " }));
-    const parsed = JSON.parse(out);
+    const parsed = parseToolResult(out);
     expect(parsed.error).toMatch(/empty plan/);
     // Empty-plan is a regular Error, not PlanProposedError — so there's
     // no `plan` field.
@@ -406,7 +407,9 @@ describe("registerPlanTool + submit_plan", () => {
     const out = await reg.dispatch("submit_plan", JSON.stringify({ plan: "# Plan" }), {
       confirmationGate: gate,
     });
-    expect(JSON.parse(out).error).toMatch(/user requested refinement: use sqlite, not postgres/);
+    expect(parseToolResult(out).error).toMatch(
+      /user requested refinement: use sqlite, not postgres/,
+    );
   });
 
   it("falls back to bare 'user requested refinement' when no feedback is supplied", async () => {
@@ -416,7 +419,7 @@ describe("registerPlanTool + submit_plan", () => {
     const out = await reg.dispatch("submit_plan", JSON.stringify({ plan: "# Plan" }), {
       confirmationGate: gate,
     });
-    expect(JSON.parse(out).error).toMatch(/user requested refinement$/);
+    expect(parseToolResult(out).error).toMatch(/user requested refinement$/);
   });
 
   it("surfaces approve feedback as additional instructions in the tool result", async () => {
@@ -438,7 +441,7 @@ describe("registerPlanTool + submit_plan", () => {
     const out = await reg.dispatch("submit_plan", JSON.stringify({ plan: "# Plan" }), {
       confirmationGate: gate,
     });
-    expect(JSON.parse(out).error).toMatch(/plan cancelled: out of scope for this branch/);
+    expect(parseToolResult(out).error).toMatch(/plan cancelled: out of scope for this branch/);
   });
 });
 
@@ -465,7 +468,7 @@ describe("registerPlanTool + mark_step_complete", () => {
       }),
       { confirmationGate: gate },
     );
-    const parsed = JSON.parse(out);
+    const parsed = parseToolResult(out);
     expect(parsed.kind).toBe("step_completed");
     expect(parsed.stepId).toBe("step-1");
     expect(parsed.result).toBe("Moved tokens into src/auth/tokens.ts.");
@@ -488,7 +491,7 @@ describe("registerPlanTool + mark_step_complete", () => {
       JSON.stringify({ stepId: "step-1", result: "done" }),
       { confirmationGate: gate },
     );
-    const parsed = JSON.parse(out);
+    const parsed = parseToolResult(out);
     expect(parsed.title).toBeUndefined();
     expect(parsed.notes).toBeUndefined();
     expect(parsed.result).toBe("done");
@@ -516,7 +519,7 @@ describe("registerPlanTool + mark_step_complete", () => {
       }),
       { confirmationGate: gate },
     );
-    const parsed = JSON.parse(out);
+    const parsed = parseToolResult(out);
 
     expect(seen[0]?.evidence).toEqual([
       {
@@ -547,8 +550,8 @@ describe("registerPlanTool + mark_step_complete", () => {
       JSON.stringify({ stepId: "step-1", result: "updated lifecycle guard" }),
     );
 
-    expect(JSON.parse(out).error).toMatch(/evidence required/);
-    expect(JSON.parse(out).error).toMatch(/high-risk code/);
+    expect(parseToolResult(out).error).toMatch(/evidence required/);
+    expect(parseToolResult(out).error).toMatch(/high-risk code/);
   });
 
   it("rejects an empty stepId", async () => {
@@ -558,7 +561,7 @@ describe("registerPlanTool + mark_step_complete", () => {
       "mark_step_complete",
       JSON.stringify({ stepId: "  ", result: "done" }),
     );
-    expect(JSON.parse(out).error).toMatch(/stepId is required/);
+    expect(parseToolResult(out).error).toMatch(/stepId is required/);
   });
 
   it("rejects an empty result with a pointer at what to write", async () => {
@@ -568,7 +571,7 @@ describe("registerPlanTool + mark_step_complete", () => {
       "mark_step_complete",
       JSON.stringify({ stepId: "step-1", result: "   " }),
     );
-    expect(JSON.parse(out).error).toMatch(/result is required/);
+    expect(parseToolResult(out).error).toMatch(/result is required/);
   });
 
   it("surfaces revise feedback in the tool result when gate resolves with feedback", async () => {
@@ -593,7 +596,7 @@ describe("registerPlanTool + mark_step_complete", () => {
       JSON.stringify({ stepId: "step-3", result: "finished wiring" }),
       { confirmationGate: gate },
     );
-    expect(JSON.parse(out).error).toMatch(/user requested revision at checkpoint/);
+    expect(parseToolResult(out).error).toMatch(/user requested revision at checkpoint/);
   });
 });
 
@@ -664,7 +667,7 @@ describe("registerPlanTool + revise_plan", () => {
         remainingSteps: [{ id: "x", title: "y", action: "z" }],
       }),
     );
-    expect(JSON.parse(out).error).toMatch(/reason is required/);
+    expect(parseToolResult(out).error).toMatch(/reason is required/);
   });
 
   it("rejects empty remainingSteps array", async () => {
@@ -674,7 +677,7 @@ describe("registerPlanTool + revise_plan", () => {
       "revise_plan",
       JSON.stringify({ reason: "skip everything", remainingSteps: [] }),
     );
-    expect(JSON.parse(out).error).toMatch(/non-empty array/);
+    expect(parseToolResult(out).error).toMatch(/non-empty array/);
   });
 
   it("rejects when sanitization drops all steps", async () => {
@@ -692,7 +695,7 @@ describe("registerPlanTool + revise_plan", () => {
         ],
       }),
     );
-    expect(JSON.parse(out).error).toMatch(/non-empty array/);
+    expect(parseToolResult(out).error).toMatch(/non-empty array/);
   });
 
   it("preserves valid risk levels through revision", async () => {

@@ -284,6 +284,43 @@ registry 很重要。
 `Map<filterId, { hits, savedBytes }>`，在每次成功的 compact 调用时填充。
 `fallback` 有自己的 id，因此行为异常的过滤器可观测而不会让循环崩溃。
 
+### 结构化载荷编码 —— TOON
+
+TOON 紧邻支柱 4，作为载荷的结构化数据路径。协议信封保持 JSON（OpenAI
+兼容的请求体、JSON-RPC、JSONL 记录、原生工具 schema，以及模型生成的
+`arguments`），但这些信封内部的结构化载荷可以是 TOON。
+
+`src/toon/codec.ts` 钉住 TOON 选项（`indent=2`、逗号分隔符、
+`keyFolding=off`），使相同的值产生相同的字节。工具结果使用
+`src/toon/encode-result.ts`：`ToolRegistry` 编码对象返回值，以及本身是
+合法 JSON 对象/数组的字符串返回值；MCP 文本块在 `flattenMcpResult` 中
+经过同样的重编码步骤。纯文本仍是纯文本，且载荷在截断之前、进入只追加的
+`role:"tool"` 日志之前就被编码，因此后续轮次重发相同的字节。
+
+以前重新解析 JSON 工具结果的消费者，现在都走 `decodeToolResultObject`
+（`rejectedReason`、工具摘要、生命周期检查、计划步骤完成、计划模式拒绝
+卡片、子 agent markdown 解包，以及内核错误分类）。解码器优先接受 TOON，
+并对 `{` / `[` 前缀采用 JSON 优先处理，使旧的控制信封仍可读。
+
+前缀载荷在 `mode=prefix|all` 时使用 `src/toon/prompt-payload.ts`：
+`@mention` 展开、记忆摘要、skills 索引，以及 `.gitignore` 块都作为
+确定性的围栏 `toon` 块产出。`codeSystemPrompt()` 和聊天 prompt 构建器
+通过它们的 rebuild 闭包接收当前的 TOON 模式，因此 `/new` 和 `/cwd`
+重建相同的结构化区段，而非丢失或重复它们。
+`ImmutablePrefix.computeFingerprint()` 刻意保持基于 JSON，因为该哈希是
+内部的缓存漂移防护，而非面向模型的载荷。
+
+整体重写的内部状态也可以使用 TOON：计划状态、计划归档、待定编辑、检查点、
+语义索引元数据，以及 `.toon` 配置文件都优先读 `.toon` 并回退到旧的
+`.json`。JSONL 流和语义索引数据行保持 JSONL，因为它们是只追加的行协议。
+
+该层对载荷默认开启。`REASONIX_TOON=results|prefix|all` 或 `config.toon`
+（旧的 `config.json` 回退）可以收窄它，而 `REASONIX_TOON=0`、`toon: false`
+或 `toon: { enabled: false }` 是字节兼容的 kill switch。`doctor` 报告活跃的
+TOON 模式，`/status` 行从 `src/toon/stats.ts` 读取编码/解码遥测。基于
+prompt 的"工具 schema 即 TOON"仍受基准测试门控，因为它会绕过原生
+function calling；默认的载荷编码器不改变那条协议边界。
+
 ## 模块布局
 
 ```

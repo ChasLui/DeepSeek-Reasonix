@@ -312,6 +312,50 @@ layer can never break a turn.
 populated on every successful compact call. `fallback` is its own id, so a
 misbehaving filter is observable without crashing the loop.
 
+### Structured Payload Encoding — TOON
+
+TOON sits beside Pillar 4 as the structured-data path for payloads. Protocol
+envelopes stay JSON (OpenAI-compatible request bodies, JSON-RPC, JSONL records,
+native tool schemas, and model-generated `arguments`), but structured payloads
+inside those envelopes can be TOON.
+
+`src/toon/codec.ts` pins TOON options (`indent=2`, comma delimiter,
+`keyFolding=off`) so identical values produce identical bytes. Tool results use
+`src/toon/encode-result.ts`: `ToolRegistry` encodes object returns and string
+returns that are valid JSON objects/arrays; MCP text blocks go through the same
+re-encode step in `flattenMcpResult`. Plain text remains plain text, and payloads
+are encoded before truncation and before entering the append-only `role:"tool"`
+log, so later turns resend the same bytes.
+
+Consumers that previously reparsed JSON tool results go through
+`decodeToolResultObject` (`rejectedReason`, tool summaries, lifecycle checks,
+plan step completion, plan-mode rejection cards, subagent markdown unwrap, and
+kernel error classification). The decoder accepts TOON first, with JSON-first
+handling for `{` / `[` prefixes so the old control envelopes remain readable.
+
+Prefix payloads use `src/toon/prompt-payload.ts` when `mode=prefix|all`:
+`@mention` expansions, memory summaries, the skills index, and the `.gitignore`
+block are emitted as deterministic fenced `toon` blocks. `codeSystemPrompt()` and
+chat prompt builders receive the current TOON mode through their rebuild closures,
+so `/new` and `/cwd` rebuild the same structured sections instead of losing or
+duplicating them. `ImmutablePrefix.computeFingerprint()` deliberately remains
+JSON-based because the hash is an internal cache-drift guard, not model-facing
+payload.
+
+Full-rewrite internal state can also use TOON: plan state, plan archives,
+pending edits, checkpoints, semantic index metadata, and `.toon` config files all
+read `.toon` first and fall back to legacy `.json`. JSONL streams and semantic
+index data rows stay JSONL because they are append-only line protocols.
+
+The layer is on by default for payloads. `REASONIX_TOON=results|prefix|all` or
+`config.toon` (legacy `config.json` fallback) can narrow it, while
+`REASONIX_TOON=0`, `toon: false`, or `toon: { enabled: false }` are the
+byte-compatible kill switches. `doctor` reports the active TOON mode, and the
+`/status` line reads encode/decode telemetry from `src/toon/stats.ts`.
+Prompt-based tools-schema-as-TOON is still benchmark-gated because it would
+bypass native function calling; the default payload encoder does not change that
+protocol boundary.
+
 ## Module layout
 
 ```

@@ -10,6 +10,7 @@ import {
   loadBaseUrl,
   loadFilesystemDedupEnabled,
   loadProxyConfig,
+  loadToonMode,
   readConfig,
   resolveBudgetWindows,
   resolveSemanticEmbeddingConfig,
@@ -69,6 +70,7 @@ export async function runDoctorChecks(projectRoot: string): Promise<DoctorCheck[
     r[7],
     checkVfsLite(),
     checkReadDedup(),
+    checkToon(),
     checkBudget(),
     checkToolset(),
   ];
@@ -84,6 +86,18 @@ function checkReadDedup(): Check {
         ? "disabled via config.filesystem.dedupEnabled=false"
         : "enabled — unchanged re-reads return a stub (hit counts are per-session, shown in the TUI)";
   return { id: "read-dedup", label: "read-dedup   ", level: "ok", detail };
+}
+
+function checkToon(): Check {
+  const mode = loadToonMode();
+  const env = process.env.REASONIX_TOON?.trim();
+  const detail =
+    mode === "off"
+      ? env
+        ? `disabled via REASONIX_TOON=${env}`
+        : "disabled via config.toon"
+      : `enabled mode=${mode} — protocol envelopes stay JSON`;
+  return { id: "toon", label: "toon         ", level: "ok", detail };
 }
 
 /** Cross-session rolling budget status — reads the shared usage.jsonl aggregate
@@ -291,7 +305,9 @@ async function checkApiKey(): Promise<Check> {
 
 async function checkConfig(): Promise<Check> {
   const path = defaultConfigPath();
-  if (!existsSync(path)) {
+  const legacyPath = path.endsWith(".toon") ? `${path.slice(0, -5)}.json` : path;
+  const existingPath = existsSync(path) ? path : existsSync(legacyPath) ? legacyPath : null;
+  if (!existingPath) {
     return {
       id: "config",
       label: "config       ",
@@ -309,7 +325,7 @@ async function checkConfig(): Promise<Check> {
       id: "config",
       label: "config       ",
       level: "ok",
-      detail: `${path}${parts.length ? ` (${parts.join(", ")})` : ""}`,
+      detail: `${existingPath}${parts.length ? ` (${parts.join(", ")})` : ""}`,
     };
   } catch (err) {
     return {

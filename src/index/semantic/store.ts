@@ -3,6 +3,11 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { EmbeddingProvider } from "../../config.js";
+import {
+  legacyJsonPathFor,
+  readStructuredFile,
+  writeStructuredFile,
+} from "../../toon/persistence.js";
 import type { CodeChunk } from "./chunker.js";
 
 export interface IndexEntry extends CodeChunk {
@@ -30,13 +35,13 @@ export interface IndexMeta extends IndexIdentity {
 
 export const STORE_VERSION = 1;
 
-const META_FILE = "index.meta.json";
+const META_FILE = "index.meta.toon";
 const DATA_FILE = "index.jsonl";
 
 export async function readIndexMeta(indexDir: string): Promise<IndexMeta | null> {
   try {
-    const raw = await fs.readFile(path.join(indexDir, META_FILE), "utf8");
-    return normalizeMeta(JSON.parse(raw) as Partial<IndexMeta>);
+    const meta = await readStructuredFile<Partial<IndexMeta>>(path.join(indexDir, META_FILE));
+    return meta ? normalizeMeta(meta) : null;
   } catch {
     return null;
   }
@@ -53,7 +58,9 @@ export function compareIndexIdentity(
 
 export async function wipeStoreFiles(indexDir: string): Promise<void> {
   await fs.rm(path.join(indexDir, DATA_FILE), { force: true });
-  await fs.rm(path.join(indexDir, META_FILE), { force: true });
+  const metaPath = path.join(indexDir, META_FILE);
+  await fs.rm(metaPath, { force: true });
+  await fs.rm(legacyJsonPathFor(metaPath), { force: true });
 }
 
 export class SemanticStore {
@@ -171,11 +178,7 @@ export class SemanticStore {
       dim: this.dim,
       updatedAt: new Date().toISOString(),
     };
-    await fs.writeFile(
-      path.join(this.indexDir, META_FILE),
-      `${JSON.stringify(meta, null, 2)}\n`,
-      "utf8",
-    );
+    await writeStructuredFile(path.join(this.indexDir, META_FILE), meta);
   }
 
   async wipe(): Promise<void> {

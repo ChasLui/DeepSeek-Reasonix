@@ -21,6 +21,7 @@ import {
   tokenizeCommand,
 } from "../src/tools/shell.js";
 import { normalizeWindowsEnvVars } from "../src/tools/shell/exec.js";
+import { parseToolResult } from "./helpers/tool-result.js";
 
 /** A PauseGate that records call args and denies — denial keeps the spawn from actually running. */
 class SpyGate extends PauseGate {
@@ -484,12 +485,12 @@ describe("registerShellTools — dispatch integration", () => {
         "wait_for_job",
         JSON.stringify({ jobId: started.jobId, timeoutMs: 1500 }),
       );
-      const parsed = JSON.parse(out) as {
+      const parsed = parseToolResult<{
         jobId: number;
         exited: boolean;
         exitCode: number | null;
         latestOutput: string;
-      };
+      }>(out);
       expect(parsed.jobId).toBe(started.jobId);
       expect(parsed.exited).toBe(false);
       expect(parsed.exitCode).toBeNull();
@@ -540,7 +541,7 @@ describe("registerShellTools — dispatch integration", () => {
       const rawArgs = JSON.stringify(item.args);
 
       const first = await registry.dispatch(item.name, rawArgs, { confirmationGate: gate });
-      const second = JSON.parse(
+      const second = parseToolResult(
         await registry.dispatch(item.name, rawArgs, { confirmationGate: gate }),
       );
 

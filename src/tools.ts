@@ -1,3 +1,4 @@
+import { type ToonMode, resolveToonMode } from "./config.js";
 import type { PauseGate } from "./core/pause-gate.js";
 import { truncateForModel, truncateForModelByTokens } from "./mcp/registry.js";
 import {
@@ -10,6 +11,8 @@ import { analyzeSchema, flattenSchema, nestArguments } from "./repair/flatten.js
 import { tryParseLoose } from "./repair/json-coerce.js";
 import { formatIssues, validate } from "./repair/schema-walk.js";
 import type { ReadDedupState } from "./tools/fs/read-dedup.js";
+import { decodeToolResultObject } from "./toon/decode-result.js";
+import { serializeStringResult, serializeToolResult } from "./toon/encode-result.js";
 import type { JSONSchema, ToolSpec } from "./types.js";
 
 export interface ToolCallContext {
@@ -47,6 +50,7 @@ interface InternalTool extends ToolDefinition {
 export interface ToolRegistryOptions {
   /** Auto-flatten + re-nest at dispatch; default true. */
   autoFlatten?: boolean;
+  toonMode?: ToonMode;
 }
 
 export type ToolCallAuditEvent = {
@@ -77,6 +81,7 @@ export class ToolRegistry {
   private readonly _interceptors: Array<{ id: string; fn: ToolInterceptor }> = [];
   private _auditListener: ToolCallAuditListener | null = null;
   private _resultAugmenter: ToolResultAugmenter | null = null;
+  private readonly _toonMode: ToonMode | undefined;
   /** Per-tool fingerprint of the last call that failed schema validation. Cleared by any successful validation for that tool. */
   private readonly _lastMalformed = new Map<string, string>();
   /** Per-tool fingerprint of the last host-side gate rejection. */
@@ -85,6 +90,7 @@ export class ToolRegistry {
 
   constructor(opts: ToolRegistryOptions = {}) {
     this._autoFlatten = opts.autoFlatten !== false;
+    this._toonMode = opts.toonMode ?? resolveToonMode();
   }
 
   /** Enable / disable plan-mode enforcement at dispatch. */
@@ -127,6 +133,10 @@ export class ToolRegistry {
   /** True when an augmenter is already wired — lets late-installing callers skip clobbering an earlier one. */
   get hasResultAugmenter(): boolean {
     return this._resultAugmenter !== null;
+  }
+
+  get toonMode(): ToonMode {
+    return this._toonMode ?? "all";
   }
 
   register<A, R>(def: ToolDefinition<A, R>): this {
@@ -203,7 +213,7 @@ export class ToolRegistry {
   ): Promise<string> {
     const tool = this._tools.get(name);
     if (!tool) {
-      return JSON.stringify({ error: `unknown tool: ${name}` });
+      return this._serializeResult({ error: `unknown tool: ${name}` });
     }
     const rawFingerprint = rawFingerprintArgs(argumentsRaw);
     let args: Record<string, unknown>;
@@ -270,7 +280,7 @@ export class ToolRegistry {
     // runtime `readOnlyCheck` can inspect the actual args (e.g.
     // `run_command` is read-only iff the command matches its allowlist).
     if (this._planMode && !isReadOnlyCall(tool, args)) {
-      return JSON.stringify({
+      return this._serializeResult({
         error: `${name}: unavailable in plan mode — this is a read-only exploration phase. Use read_file / list_directory / search_files / directory_tree / web_search / allowlisted shell commands to investigate. Call submit_plan with your proposed plan when you're ready for the user's review.`,
         rejectedReason: "plan-mode",
       });
@@ -288,11 +298,15 @@ export class ToolRegistry {
       try {
         const short = await interceptor(name, args);
         if (typeof short === "string") {
-          const guarded = this._noteGateRejection(name, fingerprint, short);
+          const guarded = this._noteGateRejection(
+            name,
+            fingerprint,
+            this._serializeStringResult(short),
+          );
           return this._augmentResult(name, args, guarded);
         }
       } catch (err) {
-        return JSON.stringify({
+        return this._serializeResult({
           error: `${name}: interceptor failed — ${(err as Error).message}`,
         });
       }
@@ -303,7 +317,7 @@ export class ToolRegistry {
     // still own their own interrupt path; this just stops a queue of
     // pending calls from running to completion after the user gave up.
     if (opts.signal?.aborted) {
-      return JSON.stringify({
+      return this._serializeResult({
         error: `${name}: aborted before dispatch (user interrupt)`,
         rejectedReason: "aborted",
       });
@@ -322,7 +336,7 @@ export class ToolRegistry {
         readDedup: opts.readDedup,
         maxResultTokens: opts.maxResultTokens,
       });
-      const str = typeof result === "string" ? result : JSON.stringify(result);
+      const str = this._serializeResult(result);
       // Pre-clip at dispatch so a single fat result can't balloon the
       // log (and disk session file) on its way in. Healing at load time
       // still catches pre-existing oversize entries; this closes the
@@ -349,12 +363,12 @@ export class ToolRegistry {
       // but keeping payloads structured is cleaner for UI parsing).
       if (typeof e.toToolResult === "function") {
         try {
-          finalResult = JSON.stringify(e.toToolResult());
+          finalResult = this._serializeResult(e.toToolResult());
         } catch {
-          finalResult = JSON.stringify({ error: `${e.name}: ${e.message}` });
+          finalResult = this._serializeResult({ error: `${e.name}: ${e.message}` });
         }
       } else {
-        finalResult = JSON.stringify({ error: `${e.name}: ${e.message}` });
+        finalResult = this._serializeResult({ error: `${e.name}: ${e.message}` });
       }
     }
 
@@ -373,17 +387,25 @@ export class ToolRegistry {
     return result;
   }
 
+  private _serializeResult(value: unknown): string {
+    return serializeToolResult(value, { mode: this._toonMode });
+  }
+
+  private _serializeStringResult(value: string): string {
+    return serializeStringResult(value, { mode: this._toonMode });
+  }
+
   /** Records the failed call's fingerprint; on the 2nd consecutive identical malformed call to the same tool, returns a sharper error that tells the model to stop retrying. */
   private _noteMalformed(name: string, fingerprint: string, detail: string): string {
     const prev = this._lastMalformed.get(name);
     this._lastMalformed.set(name, fingerprint);
     if (prev === fingerprint) {
-      return JSON.stringify({
+      return this._serializeResult({
         error: `${name}: same call just failed validation (${detail}) — DO NOT retry with identical args. Either fix the call (read the schema in the tool spec) or pick a different tool.`,
         consecutiveMalformed: true,
       });
     }
-    return JSON.stringify({ error: `${name}: ${detail}` });
+    return this._serializeResult({ error: `${name}: ${detail}` });
   }
 
   private _noteGateRejection(name: string, fingerprint: string, result: string): string {
@@ -396,7 +418,7 @@ export class ToolRegistry {
     const prev = this._lastGateRejection.get(name);
     this._lastGateRejection.set(name, key);
     if (prev === key) {
-      return JSON.stringify({
+      return this._serializeResult({
         error: `${name}: same call was just rejected by ${reason} — do not retry identical args. ${rejectionRecoveryHint(reason)}`,
         rejectedReason: reason,
         consecutiveInterceptorRejection: true,
@@ -454,11 +476,11 @@ function rejectedReason(name: string, result: string): string | null {
   const textReason = plainTextRejectedReason(name, result);
   if (textReason) return textReason;
   try {
-    const parsed = JSON.parse(result) as unknown;
-    if (!parsed || typeof parsed !== "object") return null;
-    const reason = (parsed as { rejectedReason?: unknown }).rejectedReason;
+    const parsed = decodeToolResultObject(result);
+    if (!parsed) return null;
+    const reason = parsed.rejectedReason;
     if (typeof reason === "string" && reason) return reason;
-    const error = (parsed as { error?: unknown }).error;
+    const error = parsed.error;
     if (typeof error === "string") return plainTextRejectedReason(name, error);
     return null;
   } catch {

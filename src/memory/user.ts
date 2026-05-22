@@ -13,12 +13,14 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import {
   type ReasonixConfig,
+  type ToonMode,
   loadResolvedSkillPaths,
   memoryTypeDefaults,
   resolveSkillPaths,
 } from "../config.js";
 import { parseFrontmatter } from "../frontmatter.js";
 import { applySkillsIndex } from "../skills.js";
+import { formatPromptPayloadBlock, toonPrefixEnabled } from "../toon/prompt-payload.js";
 import { applyProjectMemory, memoryEnabled } from "./project.js";
 
 export const USER_MEMORY_DIR = "memory";
@@ -378,16 +380,43 @@ function highPriorityBlock(entries: MemoryEntry[], cfg?: ReasonixConfig): string
 /** Empty index → omit the whole block (otherwise we'd add bytes to the prefix hash for nothing). */
 export function applyUserMemory(
   basePrompt: string,
-  opts: { homeDir?: string; projectRoot?: string; cfg?: ReasonixConfig } = {},
+  opts: { homeDir?: string; projectRoot?: string; cfg?: ReasonixConfig; toonMode?: ToonMode } = {},
 ): string {
   if (!memoryEnabled()) return basePrompt;
   const store = new MemoryStore(opts);
   const global = store.loadIndex("global");
   const project = store.hasProjectScope() ? store.loadIndex("project") : null;
-  const high = highPriorityBlock(store.list(), opts.cfg);
+  const entries = store.list();
+  const high = highPriorityBlock(entries, opts.cfg);
   if (!global && !project && !high) return basePrompt;
   const parts: string[] = [basePrompt];
   if (high) parts.push("", high);
+  if (toonPrefixEnabled(opts.toonMode)) {
+    const summaries = entries
+      .map((entry) => {
+        const priority = effectivePriority(entry, opts.cfg);
+        return {
+          scope: entry.scope,
+          type: entry.type,
+          name: entry.name,
+          description: entry.description,
+          ...(priority ? { priority } : {}),
+          ...(entry.expires ? { expires: entry.expires } : {}),
+        };
+      })
+      .sort((a, b) => `${a.scope}/${a.name}`.localeCompare(`${b.scope}/${b.name}`));
+    if (summaries.length > 0) {
+      parts.push(
+        "",
+        "# User memory index",
+        "",
+        "Cross-project and project memory summaries. Treat as authoritative; call `recall_memory` when a summary is insufficient.",
+        "",
+        formatPromptPayloadBlock({ memories: summaries }, { mode: opts.toonMode }),
+      );
+      return parts.join("\n");
+    }
+  }
   if (global) {
     parts.push(
       "",
@@ -418,7 +447,7 @@ export function applyUserMemory(
 export function applyMemoryStack(
   basePrompt: string,
   rootDir: string,
-  opts: { homeDir?: string; cfg?: ReasonixConfig } = {},
+  opts: { homeDir?: string; cfg?: ReasonixConfig; toonMode?: ToonMode } = {},
 ): string {
   const homeDir = opts.homeDir;
   const cfg = opts.cfg;
@@ -427,9 +456,19 @@ export function applyMemoryStack(
     withProject,
     homeDir ? join(homeDir, ".reasonix") : undefined,
   );
-  const withMemory = applyUserMemory(withGlobal, { projectRoot: rootDir, homeDir, cfg });
+  const withMemory = applyUserMemory(withGlobal, {
+    projectRoot: rootDir,
+    homeDir,
+    cfg,
+    toonMode: opts.toonMode,
+  });
   const customSkillPaths = cfg?.skills?.paths
     ? resolveSkillPaths(cfg.skills.paths, rootDir)
     : loadResolvedSkillPaths(rootDir);
-  return applySkillsIndex(withMemory, { projectRoot: rootDir, homeDir, customSkillPaths });
+  return applySkillsIndex(withMemory, {
+    projectRoot: rootDir,
+    homeDir,
+    customSkillPaths,
+    toonMode: opts.toonMode,
+  });
 }

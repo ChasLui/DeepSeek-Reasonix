@@ -1,6 +1,6 @@
-/** Library reads only DEEPSEEK_API_KEY from env; the CLI bridges config.json → env var. */
+/** Library reads only DEEPSEEK_API_KEY from env; the CLI bridges config → env var. */
 
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { z } from "zod";
@@ -14,9 +14,10 @@ import {
 } from "./index/config.js";
 import { type McpServerSpec, parseMcpSpec } from "./mcp/spec.js";
 import { normalizeQQAllowlist, normalizeQQOpenId } from "./qq/access.js";
+import { decodeStructuredPayload, encodeToonPayload } from "./toon/codec.js";
 import { nullPrototype } from "./utils/safe-object.js";
 
-/** Legacy `fast|smart|max` kept for back-compat with existing config.json files. */
+/** Legacy `fast|smart|max` kept for back-compat with existing config files. */
 export type PresetName = "auto" | "flash" | "pro" | "fast" | "smart" | "max";
 
 /** Single trust dial: review queues edits + gates shell; auto applies + gates shell; yolo skips both gates. */
@@ -113,6 +114,13 @@ export interface PricingOverride {
 
 export interface RateLimitConfig {
   rpm?: number;
+}
+
+export type ToonMode = "off" | "results" | "prefix" | "all";
+
+export interface ToonConfig {
+  enabled?: boolean;
+  mode?: ToonMode;
 }
 
 export interface ProxyConfig {
@@ -249,6 +257,8 @@ export interface ReasonixConfig {
     /** Persist the raw output to a tee file the model can read back. REASONIX_TEE=0 forces this off. */
     tee?: boolean;
   };
+  /** TOON payload encoding. Defaults to all payload layers; env REASONIX_TOON overrides this. */
+  toon?: boolean | ToonConfig;
   /** QQ Bot configuration */
   qq?: QQBotConfig;
 }
@@ -352,7 +362,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_BATCH_SIZE = 10;
 
 export function defaultConfigPath(): string {
-  return join(homedir(), ".reasonix", "config.json");
+  return join(homedir(), ".reasonix", "config.toon");
 }
 
 const STRING_ARRAY_FIELDS: Array<readonly string[]> = [
@@ -396,30 +406,97 @@ function sanitizeStringArrayField(
 }
 
 export function readConfig(path: string = defaultConfigPath()): ReasonixConfig {
-  try {
-    const raw = readFileSync(path, "utf8");
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      const cfg = parsed as Record<string, unknown>;
-      for (const segments of STRING_ARRAY_FIELDS) {
-        sanitizeStringArrayField(cfg, segments, path);
+  for (const candidate of configCandidates(path)) {
+    try {
+      const raw = readFileSync(candidate, "utf8");
+      const parsed = candidate.endsWith(".toon")
+        ? decodeStructuredPayload(raw)
+        : (JSON.parse(raw) as unknown);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const cfg = parsed as Record<string, unknown>;
+        for (const segments of STRING_ARRAY_FIELDS) {
+          sanitizeStringArrayField(cfg, segments, candidate);
+        }
+        return cfg as ReasonixConfig;
       }
-      return cfg as ReasonixConfig;
+    } catch {
+      /* try the next candidate */
     }
-  } catch {
-    /* missing or malformed → empty config */
   }
   return {};
 }
 
 export function writeConfig(cfg: ReasonixConfig, path: string = defaultConfigPath()): void {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(cfg, null, 2), "utf8");
+  const target = shouldUseToonConfig(path) ? configToonPath(path) : path;
+  const cleanCfg = omitUndefinedFields(cfg);
+  mkdirSync(dirname(target), { recursive: true });
+  const content = target.endsWith(".toon")
+    ? `${encodeToonPayload(cleanCfg)}\n`
+    : JSON.stringify(cleanCfg, null, 2);
+  writeFileSync(target, content, "utf8");
   try {
-    chmodSync(path, 0o600);
+    chmodSync(target, 0o600);
   } catch {
     /* ignore on platforms without chmod */
   }
+}
+
+function omitUndefinedFields(cfg: ReasonixConfig): ReasonixConfig {
+  return Object.fromEntries(
+    Object.entries(cfg).filter((entry): entry is [string, Exclude<unknown, undefined>] => {
+      const [, value] = entry;
+      return value !== undefined;
+    }),
+  ) as ReasonixConfig;
+}
+
+function configCandidates(path: string): string[] {
+  if (path.endsWith(".toon")) {
+    const legacy = configJsonPath(path);
+    return legacy === path ? [path] : [path, legacy];
+  }
+  const toon = configToonPath(path);
+  return toon !== path && existsSync(toon) ? [toon, path] : [path];
+}
+
+function shouldUseToonConfig(path: string): boolean {
+  return path.endsWith(".toon") || existsSync(configToonPath(path));
+}
+
+function configToonPath(path: string): string {
+  return path.endsWith(".json") ? `${path.slice(0, -5)}.toon` : path;
+}
+
+function configJsonPath(path: string): string {
+  return path.endsWith(".toon") ? `${path.slice(0, -5)}.json` : path;
+}
+
+export function resolveToonMode(
+  cfg?: ReasonixConfig["toon"],
+  env: string | undefined = process.env.REASONIX_TOON,
+): ToonMode {
+  const fromEnv = parseToonMode(env);
+  if (fromEnv) return fromEnv;
+  if (typeof cfg === "boolean") return cfg ? "all" : "off";
+  if (!cfg) return "all";
+  if (cfg.enabled === false) return "off";
+  return cfg.mode ?? "all";
+}
+
+export function loadToonMode(path: string = defaultConfigPath()): ToonMode {
+  return resolveToonMode(readConfig(path).toon);
+}
+
+function parseToonMode(value: string | undefined): ToonMode | null {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === "0" || normalized === "false" || normalized === "off") return "off";
+  if (normalized === "none" || normalized === "disabled") return "off";
+  if (normalized === "1" || normalized === "true" || normalized === "on") return "all";
+  if (normalized === "all" || normalized === "results" || normalized === "prefix") {
+    return normalized;
+  }
+  return null;
 }
 
 /** Resolve the language from config file. */

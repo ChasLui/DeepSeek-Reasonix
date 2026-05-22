@@ -1,4 +1,4 @@
-/** Persists `mcpDisabled` to ~/.reasonix/config.json — shared between `/mcp disable / enable` slash and the McpBrowser `d` keybind. */
+/** Persists `mcpDisabled` to the user config — shared between `/mcp disable / enable` slash and the McpBrowser `d` keybind. */
 
 import { readConfig, writeConfig } from "../../config.js";
 

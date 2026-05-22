@@ -279,7 +279,7 @@ describe("user-memory", () => {
       expect(applyUserMemory(BASE, { homeDir: home, projectRoot })).toBe(BASE);
     });
 
-    it("appends only the global block when no project memory exists", () => {
+    it("appends only global summaries when no project memory exists", () => {
       const store = new MemoryStore({ homeDir: home, projectRoot });
       store.write({
         name: "pref_one",
@@ -289,9 +289,10 @@ describe("user-memory", () => {
         body: "b",
       });
       const out = applyUserMemory(BASE, { homeDir: home, projectRoot });
-      expect(out).toContain("# User memory — global");
-      expect(out).not.toContain("# User memory — this project");
-      expect(out).toContain("pref_one");
+      expect(out).toContain("# User memory index");
+      expect(out).toContain("memories[1]{scope,type,name,description}:");
+      expect(out).toContain("global,user,pref_one,prefers tabs");
+      expect(out).not.toContain("project,");
     });
 
     it("appends both blocks when both scopes populated", () => {
@@ -311,10 +312,9 @@ describe("user-memory", () => {
         body: "b",
       });
       const out = applyUserMemory(BASE, { homeDir: home, projectRoot });
-      expect(out).toContain("# User memory — global");
-      expect(out).toContain("# User memory — this project");
-      expect(out).toContain("global_one");
-      expect(out).toContain("project_one");
+      expect(out).toContain("# User memory index");
+      expect(out).toContain("global,user,global_one,g");
+      expect(out).toContain("project,project,project_one,p");
       // Global precedes project — stable ordering for cache hash.
       expect(out.indexOf("global_one")).toBeLessThan(out.indexOf("project_one"));
     });
@@ -356,8 +356,9 @@ describe("user-memory", () => {
         body: "b",
       });
       const out = applyUserMemory(BASE, { homeDir: home });
-      expect(out).toContain("# User memory — global");
-      expect(out).not.toContain("# User memory — this project");
+      expect(out).toContain("# User memory index");
+      expect(out).toContain("global,user,global_only,d");
+      expect(out).not.toContain("project,");
     });
   });
 

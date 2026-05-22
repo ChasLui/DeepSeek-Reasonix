@@ -3,12 +3,14 @@
 import { type Dirent, existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
+import type { ToonMode } from "./config.js";
 import {
   type GitignoreLayer,
   ignoredByLayers,
   loadGitignoreAt,
   loadGitignoreAtSync,
 } from "./gitignore.js";
+import { serializePromptPayload, toonPrefixEnabled } from "./toon/prompt-payload.js";
 
 /** Caps match tool-result dispatch truncation (0.5.2). */
 export const DEFAULT_AT_MENTION_MAX_BYTES = 64 * 1024;
@@ -501,6 +503,7 @@ export interface AtMentionOptions {
   maxBytes?: number;
   /** Cap on entries returned for a `@<dir>` listing. Default {@link DEFAULT_AT_DIR_MAX_ENTRIES}. */
   maxDirEntries?: number;
+  toonMode?: ToonMode;
   fs?: {
     exists: (path: string) => boolean;
     isFile: (path: string) => boolean;
@@ -525,6 +528,7 @@ export function expandAtMentions(
   const maxBytes = opts.maxBytes ?? DEFAULT_AT_MENTION_MAX_BYTES;
   const maxDirEntries = Math.max(1, opts.maxDirEntries ?? DEFAULT_AT_DIR_MAX_ENTRIES);
   const fs = opts.fs ?? defaultFs;
+  const toonMode = opts.toonMode;
   const root = resolve(rootDir);
   // De-dupe by token so `@file.ts` referenced twice inlines once.
   const seen = new Map<string, AtMentionExpansion>();
@@ -550,6 +554,37 @@ export function expandAtMentions(
   }
 
   if (expansions.length === 0) return { text, expansions };
+
+  if (toonPrefixEnabled(toonMode)) {
+    const payload = {
+      referencedFiles: expansions.map((ex) => {
+        if (ex.ok && ex.isDirectory) {
+          const files = dirListings.get(ex.path) ?? [];
+          return {
+            kind: "directory",
+            path: ex.path,
+            entryCount: ex.entries ?? files.length,
+            truncated: ex.truncated === true,
+            entries: files,
+          };
+        }
+        if (ex.ok) {
+          return {
+            kind: "file",
+            path: ex.path,
+            content: readSafe(root, ex.path, fs),
+          };
+        }
+        return {
+          kind: "file",
+          path: ex.path,
+          skipped: ex.skip,
+        };
+      }),
+    };
+    const augmented = `${text}\n\n[Referenced files]\n\`\`\`toon\n${serializePromptPayload(payload, { mode: toonMode })}\n\`\`\``;
+    return { text: augmented, expansions };
+  }
 
   // Build the trailing "Referenced files" block. Keep successful
   // inlines and skipped ones (with their reason) so the model sees

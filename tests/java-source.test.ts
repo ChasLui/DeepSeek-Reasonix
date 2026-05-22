@@ -9,6 +9,7 @@ import { ClassSourceFinder } from "../src/java/class-source-finder.js";
 import { listJarEntries, readJarEntry } from "../src/java/zip-reader.js";
 import { ToolRegistry } from "../src/tools.js";
 import { registerJavaSourceTool } from "../src/tools/java-source.js";
+import { parseToolResult } from "./helpers/tool-result.js";
 
 // Default throwing implementation, reused for mock resets in afterEach hooks.
 // hoisted: vitest lifts vi.mock factories above all imports — the variable
@@ -751,7 +752,7 @@ describe("registerJavaSourceTool", () => {
     registerJavaSourceTool(reg);
 
     const result = await reg.dispatch("java_source", JSON.stringify({}));
-    const parsed = JSON.parse(result);
+    const parsed = parseToolResult(result);
     expect(parsed).toHaveProperty("error");
     expect(parsed.error).toContain("className");
   });
@@ -764,7 +765,7 @@ describe("registerJavaSourceTool", () => {
       "java_source",
       JSON.stringify({ className: "  ", jarKeyword: "test" }),
     );
-    const parsed = JSON.parse(result);
+    const parsed = parseToolResult(result);
     expect(parsed).toHaveProperty("error");
     expect(parsed.error).toContain("className");
   });
@@ -786,7 +787,7 @@ describe("registerJavaSourceTool", () => {
         "java_source",
         JSON.stringify({ className: cls, jarKeyword: "test" }),
       );
-      const parsed = JSON.parse(result);
+      const parsed = parseToolResult(result);
       expect(parsed).toHaveProperty("error");
       expect(parsed.error).toContain("not a valid fully qualified Java class name");
     }
@@ -812,7 +813,7 @@ describe("registerJavaSourceTool", () => {
         "java_source",
         JSON.stringify({ className: cls, jarKeyword: "test" }),
       );
-      const parsed = JSON.parse(result);
+      const parsed = parseToolResult(result);
       // Should be a search result (not-found), not a validation error
       expect(parsed).not.toHaveProperty("error");
       expect(parsed).toHaveProperty("status");
@@ -832,7 +833,7 @@ describe("registerJavaSourceTool", () => {
       "java_source",
       JSON.stringify({ className: "com.test.Hello", jarKeyword: "test" }),
     );
-    const parsed = JSON.parse(result);
+    const parsed = parseToolResult(result);
     expect(parsed.status).toBe("found");
     expect(parsed.method).toBe("project");
     expect(parsed.source).toContain("public class Hello");
@@ -873,7 +874,7 @@ describe("registerJavaSourceTool", () => {
         jarPath,
       }),
     );
-    const parsed = JSON.parse(result);
+    const parsed = parseToolResult(result);
     expect(parsed.status).toBe("found");
     expect(parsed.method).toBe("jar");
     expect(parsed.source).toContain("public class Util");
@@ -899,7 +900,7 @@ describe("registerJavaSourceTool", () => {
         jarKeyword: "spring",
       }),
     );
-    const parsed = JSON.parse(result);
+    const parsed = parseToolResult(result);
     expect(parsed).toHaveProperty("status");
     expect(parsed.status).toBe("not-found");
     expect(parsed.className).toBe("org.springframework.SomeClass");
@@ -918,7 +919,7 @@ describe("registerJavaSourceTool", () => {
       "java_source",
       JSON.stringify({ className: "com.example.Missing" }),
     );
-    const parsed = JSON.parse(result);
+    const parsed = parseToolResult(result);
     expect(parsed.status).toBe("not-found");
     expect(parsed.className).toBe("com.example.Missing");
     // When jarKeyword is absent, the tip should suggest passing it
@@ -939,7 +940,7 @@ describe("registerJavaSourceTool", () => {
       "java_source",
       JSON.stringify({ className: "com.example.Nonexistent", jarKeyword: "test" }),
     );
-    const parsed = JSON.parse(result);
+    const parsed = parseToolResult(result);
     expect(parsed.status).toBe("not-found");
     expect(parsed.className).toBe("com.example.Nonexistent");
     expect(parsed.message).toContain("No source found");

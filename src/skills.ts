@@ -12,8 +12,11 @@ import {
 import { accessSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import type { ToonMode } from "./config.js";
 import { parseFrontmatter } from "./frontmatter.js";
 import { NEGATIVE_CLAIM_RULE, TUI_FORMATTING_RULES } from "./prompt-fragments.js";
+import { encodeToonPayload } from "./toon/encode-result.js";
+import { formatPromptPayloadBlock, toonPrefixEnabled } from "./toon/prompt-payload.js";
 
 export const SKILLS_DIRNAME = "skills";
 export const SKILL_FILE = "SKILL.md";
@@ -62,6 +65,7 @@ export interface SkillStoreOptions {
   customSkillPaths?: readonly string[];
   /** Suppress bundled built-ins — for tests asserting exact list contents. */
   disableBuiltins?: boolean;
+  toonMode?: ToonMode;
 }
 
 /** Reject skill files that would silently disappear from the prefix index — `description:` is what `applySkillsIndex` keys on. */
@@ -342,11 +346,15 @@ Tips:
 
 /** Subagent tag goes AFTER the name in brackets — leading-marker tags get copied into `name` arg verbatim. */
 function skillIndexLine(s: Pick<Skill, "name" | "description" | "runAs">): string {
-  const safeDesc = s.description.replace(/\n/g, " ").trim();
   const tag = s.runAs === "subagent" ? " [🧬 subagent]" : "";
-  const max = 130 - s.name.length - tag.length;
-  const clipped = safeDesc.length > max ? `${safeDesc.slice(0, Math.max(1, max - 1))}…` : safeDesc;
+  const clipped = compactSkillDescription(s, tag);
   return clipped ? `- ${s.name}${tag} — ${clipped}` : `- ${s.name}${tag}`;
+}
+
+function compactSkillDescription(s: Pick<Skill, "name" | "description">, tag = ""): string {
+  const safeDesc = s.description.replace(/\n/g, " ").trim();
+  const max = 130 - s.name.length - tag.length;
+  return safeDesc.length > max ? `${safeDesc.slice(0, Math.max(1, max - 1))}…` : safeDesc;
 }
 
 const MISSING_DESCRIPTION_PLACEHOLDER =
@@ -357,16 +365,12 @@ export function applySkillsIndex(basePrompt: string, opts: SkillStoreOptions = {
   const store = new SkillStore(opts);
   const skills = store.list();
   if (skills.length === 0) return basePrompt;
-  const lines = skills.map((s) =>
-    skillIndexLine(s.description ? s : { ...s, description: MISSING_DESCRIPTION_PLACEHOLDER }),
+  const indexed = skills.map((s) =>
+    s.description ? s : { ...s, description: MISSING_DESCRIPTION_PLACEHOLDER },
   );
-  const joined = lines.join("\n");
-  const truncated =
-    joined.length > SKILLS_INDEX_MAX_CHARS
-      ? `${joined.slice(0, SKILLS_INDEX_MAX_CHARS)}\n… (truncated ${
-          joined.length - SKILLS_INDEX_MAX_CHARS
-        } chars)`
-      : joined;
+  const body = toonPrefixEnabled(opts.toonMode)
+    ? formatSkillsToon(indexed, opts.toonMode)
+    : formatSkillsMarkdown(indexed);
   return [
     basePrompt,
     "",
@@ -374,10 +378,43 @@ export function applySkillsIndex(basePrompt: string, opts: SkillStoreOptions = {
     "",
     'One-liner index. Each entry is either a built-in or a user-authored playbook. Call `run_skill({ name: "<skill-name>", arguments: "<task>" })` — the `name` is JUST the skill identifier (e.g. `"explore"`), NOT the `[🧬 subagent]` tag that appears after it. Entries tagged `[🧬 subagent]` spawn an **isolated subagent** — its tool calls and reasoning never enter your context, only its final answer does. Use subagent skills for tasks that would otherwise flood your context (deep exploration, multi-step research, anything where you only need the conclusion). Plain skills are inlined: their body becomes a tool result you read and act on directly. The user can also invoke a skill via `/skill <name>`.',
     "",
-    "```",
-    truncated,
-    "```",
+    body,
   ].join("\n");
+}
+
+function formatSkillsMarkdown(
+  skills: Array<Pick<Skill, "name" | "description" | "runAs">>,
+): string {
+  const lines = skills.map(skillIndexLine);
+  const joined = lines.join("\n");
+  const truncated =
+    joined.length > SKILLS_INDEX_MAX_CHARS
+      ? `${joined.slice(0, SKILLS_INDEX_MAX_CHARS)}\n… (truncated ${
+          joined.length - SKILLS_INDEX_MAX_CHARS
+        } chars)`
+      : joined;
+  return ["```", truncated, "```"].join("\n");
+}
+
+function formatSkillsToon(
+  skills: Array<Pick<Skill, "name" | "description" | "runAs">>,
+  mode: ToonMode | undefined,
+): string {
+  const entries = skills.map((s) => ({
+    name: s.name,
+    runAs: s.runAs,
+    description: compactSkillDescription(s, s.runAs === "subagent" ? " [🧬 subagent]" : ""),
+  }));
+  for (let take = entries.length; take >= 0; take--) {
+    const payload =
+      take === entries.length
+        ? { skills: entries }
+        : { skills: entries.slice(0, take), omittedSkillCount: entries.length - take };
+    if (take === 0 || encodeToonPayload(payload).length <= SKILLS_INDEX_MAX_CHARS) {
+      return formatPromptPayloadBlock(payload, { mode });
+    }
+  }
+  return formatPromptPayloadBlock({ skills: [], omittedSkillCount: entries.length }, { mode });
 }
 
 const BUILTIN_EXPLORE_BODY = `You are running as an exploration subagent. Your job is to investigate the codebase the parent agent pointed you at, then return one focused, distilled answer.

@@ -2,6 +2,7 @@ import { Box, Text, useStdout } from "ink";
 import React from "react";
 import { clipToCells } from "../../../frame/width.js";
 import { t } from "../../../i18n/index.js";
+import { decodeToolResultObject } from "../../../toon/decode-result.js";
 import { Markdown } from "../markdown.js";
 import { Card } from "../primitives/Card.js";
 import { CardHeader, type MetaItem } from "../primitives/CardHeader.js";
@@ -101,16 +102,11 @@ export function ToolCard({ card }: { card: ToolCardData }): React.ReactElement {
 function unwrapSubagentMarkdown(name: string, output: string): string | null {
   if (name !== "spawn_subagent") return null;
   if (output.length === 0) return null;
-  try {
-    const parsed = JSON.parse(output) as unknown;
-    if (!parsed || typeof parsed !== "object") return null;
-    const obj = parsed as Record<string, unknown>;
-    if (obj.success !== true) return null;
-    if (typeof obj.output !== "string") return null;
-    return obj.output;
-  } catch {
-    return null;
-  }
+  const obj = decodeToolResultObject(output);
+  if (!obj) return null;
+  if (obj.success !== true) return null;
+  if (typeof obj.output !== "string") return null;
+  return obj.output;
 }
 
 type ToolStatus = "running" | "ok" | "rejected" | "error" | "aborted";

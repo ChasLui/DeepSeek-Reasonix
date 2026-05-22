@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { PauseGate } from "../src/core/pause-gate.js";
 import { ToolRegistry } from "../src/tools.js";
 import { ChoiceRequestedError, registerChoiceTool } from "../src/tools/choice.js";
+import { parseToolResult } from "./helpers/tool-result.js";
 
 class AutoGate extends PauseGate {
   private _choice: { type: string; optionId?: string; text?: string };
@@ -161,7 +162,7 @@ describe("registerChoiceTool + ask_choice", () => {
         ],
       }),
     );
-    expect(JSON.parse(out).error).toMatch(/question is required/);
+    expect(parseToolResult(out).error).toMatch(/question is required/);
   });
 
   it("rejects when fewer than 2 well-formed options remain", async () => {
@@ -174,7 +175,7 @@ describe("registerChoiceTool + ask_choice", () => {
         options: [{ id: "A", title: "only one" }],
       }),
     );
-    expect(JSON.parse(out).error).toMatch(/at least 2 well-formed options/);
+    expect(parseToolResult(out).error).toMatch(/at least 2 well-formed options/);
   });
 
   it("rejects runaway option lists (>6 entries)", async () => {
@@ -185,7 +186,7 @@ describe("registerChoiceTool + ask_choice", () => {
       title: `option ${i}`,
     }));
     const out = await reg.dispatch("ask_choice", JSON.stringify({ question: "too many", options }));
-    expect(JSON.parse(out).error).toMatch(/too many options/);
+    expect(parseToolResult(out).error).toMatch(/too many options/);
   });
 
   it("keeps the tool passable in plan mode (branching questions can fire mid-plan)", async () => {

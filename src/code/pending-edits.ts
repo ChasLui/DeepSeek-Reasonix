@@ -1,13 +1,18 @@
 /** Best-effort overwrite-on-write checkpoint; ephemeral sessions skip persistence. */
 
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
 import { sanitizeName, sessionsDir } from "../memory/session.js";
+import {
+  legacyJsonPathFor,
+  readStructuredFileSync,
+  writeStructuredFileSync,
+} from "../toon/persistence.js";
 import type { EditBlock } from "./edit-blocks.js";
 
 /** Absolute path for the checkpoint file that belongs to this session. */
 export function pendingEditsPath(sessionName: string): string {
-  return join(sessionsDir(), `${sanitizeName(sessionName)}.pending.json`);
+  return join(sessionsDir(), `${sanitizeName(sessionName)}.pending.toon`);
 }
 
 /** No-op for ephemeral sessions; empty `blocks` deletes the checkpoint file. */
@@ -16,11 +21,10 @@ export function savePendingEdits(sessionName: string | null, blocks: EditBlock[]
   const path = pendingEditsPath(sessionName);
   try {
     if (blocks.length === 0) {
-      if (existsSync(path)) unlinkSync(path);
+      clearPendingEdits(sessionName);
       return;
     }
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, JSON.stringify(blocks, null, 2), "utf8");
+    writeStructuredFileSync(path, blocks);
   } catch {
     /* best-effort — disk full / perms should not break the session */
   }
@@ -30,15 +34,8 @@ export function savePendingEdits(sessionName: string | null, blocks: EditBlock[]
 export function loadPendingEdits(sessionName: string | null): EditBlock[] | null {
   if (!sessionName) return null;
   const path = pendingEditsPath(sessionName);
-  if (!existsSync(path)) return null;
-  let raw: string;
   try {
-    raw = readFileSync(path, "utf8");
-  } catch {
-    return null;
-  }
-  try {
-    const parsed = JSON.parse(raw);
+    const parsed = readStructuredFileSync<unknown>(path);
     if (!Array.isArray(parsed)) return null;
     const out: EditBlock[] = [];
     for (const item of parsed) {
@@ -65,6 +62,8 @@ export function clearPendingEdits(sessionName: string | null): void {
   const path = pendingEditsPath(sessionName);
   try {
     if (existsSync(path)) unlinkSync(path);
+    const legacy = legacyJsonPathFor(path);
+    if (legacy !== path && existsSync(legacy)) unlinkSync(legacy);
   } catch {
     /* best-effort */
   }

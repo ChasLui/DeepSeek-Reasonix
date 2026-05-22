@@ -1,3 +1,4 @@
+import { decodeToolResultObject } from "../../../toon/decode-result.js";
 import type {
   Card,
   CardId,
@@ -457,10 +458,5 @@ function makeLiveCard(
 /** Detect the plan-mode bounce marker emitted by ToolRegistry.dispatch when refusing a write tool. */
 function isPlanModeRejection(output: string): boolean {
   if (!output) return false;
-  try {
-    const parsed = JSON.parse(output);
-    return parsed?.rejectedReason === "plan-mode";
-  } catch {
-    return false;
-  }
+  return decodeToolResultObject(output)?.rejectedReason === "plan-mode";
 }

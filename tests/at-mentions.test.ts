@@ -20,6 +20,15 @@ import {
   stripUrlTail,
   walkFilesStream,
 } from "../src/at-mentions.js";
+import { decodeToolResultObject } from "../src/toon/decode-result.js";
+
+function referencedFilesFrom(text: string): Array<Record<string, unknown>> {
+  const body = text.match(/```toon\n([\s\S]+)\n```/)?.[1] ?? "";
+  const decoded = decodeToolResultObject(body) as {
+    referencedFiles?: Array<Record<string, unknown>>;
+  };
+  return decoded.referencedFiles ?? [];
+}
 
 describe("AT_MENTION_PATTERN", () => {
   it("matches @path at start of string", () => {
@@ -82,25 +91,49 @@ describe("expandAtMentions", () => {
     expect(r.expansions[0]!.path).toBe("src/loop.ts");
     expect(r.text).toContain("look at @src/loop.ts");
     expect(r.text).toContain("[Referenced files]");
-    expect(r.text).toContain('<file path="src/loop.ts">');
-    expect(r.text).toContain("export const x = 1;");
-    expect(r.text).toContain("</file>");
+    expect(referencedFilesFrom(r.text)).toEqual([
+      { kind: "file", path: "src/loop.ts", content: "export const x = 1;\n" },
+    ]);
+  });
+
+  it("can emit referenced file payloads as TOON for prefix mode", () => {
+    const r = expandAtMentions("look at @src/loop.ts and @missing.md", root, {
+      toonMode: "prefix",
+    });
+    const body = r.text.match(/```toon\n([\s\S]+)\n```/)?.[1];
+
+    expect(body).toBeDefined();
+    expect(r.text).not.toContain('<file path="src/loop.ts">');
+    expect(decodeToolResultObject(body ?? "")).toEqual({
+      referencedFiles: [
+        {
+          kind: "file",
+          path: "src/loop.ts",
+          content: "export const x = 1;\n",
+        },
+        {
+          kind: "file",
+          path: "missing.md",
+          skipped: "missing",
+        },
+      ],
+    });
   });
 
   it("de-duplicates repeated mentions of the same file", () => {
     const r = expandAtMentions("compare @src/loop.ts with @src/loop.ts", root);
     expect(r.expansions).toHaveLength(1);
-    // Only one file block in the output.
-    const fileBlocks = r.text.match(/<file path="/g) ?? [];
-    expect(fileBlocks).toHaveLength(1);
+    expect(referencedFilesFrom(r.text)).toHaveLength(1);
   });
 
   it("expands multiple different files in the same prompt", () => {
     const r = expandAtMentions("read @src/loop.ts and @notes.md", root);
     expect(r.expansions).toHaveLength(2);
     expect(r.expansions.every((ex) => ex.ok)).toBe(true);
-    expect(r.text).toContain('<file path="src/loop.ts">');
-    expect(r.text).toContain('<file path="notes.md">');
+    expect(referencedFilesFrom(r.text).map((item) => item.path)).toEqual([
+      "src/loop.ts",
+      "notes.md",
+    ]);
   });
 
   it("marks missing files as skipped with a reason", () => {
@@ -108,7 +141,7 @@ describe("expandAtMentions", () => {
     expect(r.expansions).toHaveLength(1);
     expect(r.expansions[0]!.ok).toBe(false);
     expect(r.expansions[0]!.skip).toBe("missing");
-    expect(r.text).toContain('skipped="missing"');
+    expect(referencedFilesFrom(r.text)[0]).toMatchObject({ skipped: "missing" });
   });
 
   it("rejects paths that escape the root directory", () => {
@@ -132,7 +165,7 @@ describe("expandAtMentions", () => {
     expect(r.expansions[0]!.ok).toBe(false);
     expect(r.expansions[0]!.skip).toBe("too-large");
     expect(r.expansions[0]!.bytes).toBe(1000);
-    expect(r.text).toContain('skipped="too-large"');
+    expect(referencedFilesFrom(r.text)[0]).toMatchObject({ skipped: "too-large" });
   });
 
   it("strips a trailing sentence-terminator dot from the path", () => {
@@ -156,10 +189,13 @@ describe("expandAtMentions", () => {
     expect(ex.isDirectory).toBe(true);
     expect(ex.entries).toBe(1);
     expect(ex.truncated).toBe(false);
-    expect(r.text).toContain('<directory path="src" entries="1">');
-    expect(r.text).toContain("src/loop.ts");
-    expect(r.text).toContain("</directory>");
-    // The dir block must NOT be wrapped as a `<file>` block.
+    expect(referencedFilesFrom(r.text)[0]).toMatchObject({
+      kind: "directory",
+      path: "src",
+      entryCount: 1,
+      truncated: false,
+      entries: ["src/loop.ts"],
+    });
     expect(r.text).not.toContain('<file path="src">');
   });
 
@@ -177,7 +213,7 @@ describe("expandAtMentions", () => {
     expect(r.expansions[0]!.ok).toBe(true);
     expect(r.expansions[0]!.entries).toBe(2);
     expect(r.expansions[0]!.truncated).toBe(true);
-    expect(r.text).toContain('truncated="true"');
+    expect(referencedFilesFrom(r.text)[0]).toMatchObject({ truncated: true });
   });
 
   it("respects gitignore rules from the project root when listing a sub-dir", () => {

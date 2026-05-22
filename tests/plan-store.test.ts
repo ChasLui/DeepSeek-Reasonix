@@ -19,6 +19,7 @@ import {
   relativeTime,
   savePlanState,
 } from "../src/code/plan-store.js";
+import { readStructuredFileSync } from "../src/toon/persistence.js";
 
 // We point the test at a temp HOME so the real ~/.reasonix isn't
 // touched. sessionsDir() reads homedir() via os, which honors HOME on
@@ -182,6 +183,21 @@ describe("plan-store roundtrip", () => {
     expect(loaded?.steps).toEqual(steps);
   });
 
+  it("loads legacy .plan.json files during migration", () => {
+    const legacy = planStatePath("legacy-json").replace(/\.toon$/, ".json");
+    writeFixture(
+      legacy,
+      JSON.stringify({
+        version: 2,
+        steps: [{ id: "x", title: "legacy", action: "load" }],
+        completedStepIds: ["x"],
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    expect(loadPlanState("legacy-json")?.steps[0]?.title).toBe("legacy");
+  });
+
   it("filters out non-string entries from completedStepIds", () => {
     writeFixture(
       planStatePath("badcompleted"),
@@ -198,7 +214,7 @@ describe("plan-store roundtrip", () => {
 
   it("sanitizes session names so unsafe chars don't escape the dir", () => {
     const path = planStatePath("../etc/passwd");
-    expect(path).toMatch(/\.plan\.json$/);
+    expect(path).toMatch(/\.plan\.toon$/);
     expect(path).not.toMatch(/\.\.[\\/]etc/);
   });
 });
@@ -208,13 +224,13 @@ describe("archivePlanState", () => {
     expect(archivePlanState("never-touched")).toBeNull();
   });
 
-  it("renames the active plan to a timestamped .done.json", () => {
+  it("renames the active plan to a timestamped .done.toon", () => {
     savePlanState("done-test", [{ id: "x", title: "y", action: "z" }], ["x"]);
     const before = loadPlanState("done-test");
     expect(before).not.toBeNull();
     const archive = archivePlanState("done-test");
     expect(archive).not.toBeNull();
-    expect(archive).toMatch(/\.done\.json$/);
+    expect(archive).toMatch(/\.done\.toon$/);
     // Active plan is gone after archive
     expect(loadPlanState("done-test")).toBeNull();
   });
@@ -226,12 +242,10 @@ describe("archivePlanState", () => {
     savePlanState("payload-test", steps, ["step-1"]);
     const archive = archivePlanState("payload-test");
     expect(archive).not.toBeNull();
-    const fs = await import("node:fs");
-    const raw = fs.readFileSync(archive!, "utf8");
-    const parsed = JSON.parse(raw);
-    expect(parsed.steps).toEqual(steps);
-    expect(parsed.completedStepIds).toEqual(["step-1"]);
-    expect(parsed.version).toBe(2);
+    const parsed = readStructuredFileSync<Record<string, unknown>>(archive!);
+    expect(parsed?.steps).toEqual(steps);
+    expect(parsed?.completedStepIds).toEqual(["step-1"]);
+    expect(parsed?.version).toBe(2);
   });
 
   it("persists step completion evidence in active and archived plan state", () => {

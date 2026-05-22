@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ToolRegistry } from "../src/tools.js";
+import { parseToolResult } from "./helpers/tool-result.js";
 
 function makeReg() {
   const reg = new ToolRegistry();
@@ -83,7 +84,7 @@ describe("dispatch validate-then-repair", () => {
   it("returns issue-list detail when not repairable", async () => {
     const reg = makeReg();
     const result = await reg.dispatch("write_file", JSON.stringify({ content: 42 }));
-    const parsed = JSON.parse(result) as { error: string };
+    const parsed = parseToolResult<{ error: string }>(result);
     expect(parsed.error).toContain("argument validation failed");
     expect(parsed.error).toContain("path: expected string, got undefined");
     expect(parsed.error).toContain("content: expected string, got number");
@@ -134,7 +135,7 @@ describe("dispatch validate-then-repair", () => {
       fn: async (args: Record<string, unknown>) => JSON.stringify(args),
     });
     const result = await reg.dispatch("set_risk", JSON.stringify({ risk: "critical" }));
-    const parsed = JSON.parse(result) as { error: string };
+    const parsed = parseToolResult<{ error: string }>(result);
     expect(parsed.error).toContain("argument validation failed");
     expect(parsed.error).toContain("one of:");
     expect(parsed.error).toContain('"critical"');
@@ -206,7 +207,7 @@ describe("dispatch validate-then-repair", () => {
   it("jsonrepair fallback refuses bare-string args (not a tool args object)", async () => {
     const reg = makeReg();
     const result = await reg.dispatch("write_file", "just some text");
-    const parsed = JSON.parse(result) as { error: string };
+    const parsed = parseToolResult<{ error: string }>(result);
     expect(parsed.error).toMatch(/invalid tool arguments JSON/);
   });
 });

@@ -22,7 +22,9 @@ const SESSION_SIDECAR_EXTS = [
   ".events.jsonl",
   ".meta.json",
   ".pending.json",
+  ".pending.toon",
   ".plan.json",
+  ".plan.toon",
   ".jsonl.bak",
 ] as const;
 

@@ -4,7 +4,7 @@
 import "./heap-limit-launch.js";
 
 import { Command } from "commander";
-import { loadProxyConfig, readConfig } from "../config.js";
+import { loadProxyConfig, loadToonMode, readConfig } from "../config.js";
 import { t } from "../i18n/index.js";
 import { VERSION } from "../index.js";
 import { listSessions } from "../memory/session.js";
@@ -271,7 +271,8 @@ program
       const { chatCommand } = await import("./commands/chat.js");
       const chatBase = opts.system ?? defaultSystemPrompt(defaults.model);
       const chatCwd = process.cwd();
-      const chatRebuildSystem = () => applyMemoryStack(chatBase, chatCwd);
+      const chatRebuildSystem = () =>
+        applyMemoryStack(chatBase, chatCwd, { toonMode: loadToonMode() });
       await chatCommand({
         model: defaults.model,
         preset: defaults.preset,
@@ -328,7 +329,9 @@ program
     await runCommand({
       task,
       model: defaults.model,
-      system: applyMemoryStack(opts.system ?? defaultSystemPrompt(defaults.model), process.cwd()),
+      system: applyMemoryStack(opts.system ?? defaultSystemPrompt(defaults.model), process.cwd(), {
+        toonMode: loadToonMode(),
+      }),
       budgetUsd: parseBudgetFlag(opts.budget),
       transcript: opts.transcript,
       mcp: defaults.mcp,

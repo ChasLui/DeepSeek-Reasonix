@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { readConfig } from "../src/config.js";
 import { ToolRegistry } from "../src/tools.js";
 import { registerScaffoldTools, serializeSkill } from "../src/tools/scaffold.js";
+import { parseToolResult } from "./helpers/tool-result.js";
 
 interface Setup {
   home: string;
@@ -31,7 +32,7 @@ function teardown(s: Setup): void {
 
 async function call(reg: ToolRegistry, name: string, args: Record<string, unknown>): Promise<any> {
   const out = await reg.dispatch(name, JSON.stringify(args));
-  return JSON.parse(out);
+  return parseToolResult(out);
 }
 
 describe("create_skill", () => {

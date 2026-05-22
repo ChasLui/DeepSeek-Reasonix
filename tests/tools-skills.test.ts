@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { SkillStore } from "../src/skills.js";
 import { ToolRegistry } from "../src/tools.js";
 import { registerSkillTools } from "../src/tools/skills.js";
+import { parseToolResult } from "./helpers/tool-result.js";
 
 function writeSkill(baseDir: string, name: string, description: string, body: string): void {
   const dir = join(baseDir, ".reasonix", "skills", name);
@@ -107,7 +108,7 @@ describe("run_skill tool", () => {
       const reg = new ToolRegistry();
       registerSkillTools(reg, { homeDir: home, customSkillPaths: [custom], disableBuiltins: true });
       const out = await reg.dispatch("run_skill", { name: "missing" });
-      expect(JSON.parse(out).available).toContain("custom-known");
+      expect(parseToolResult(out).available).toContain("custom-known");
     } finally {
       rmSync(custom, { recursive: true, force: true });
     }
@@ -127,7 +128,7 @@ describe("run_skill tool", () => {
     const reg = new ToolRegistry();
     registerSkillTools(reg, { homeDir: home, disableBuiltins: true });
     const out = await reg.dispatch("run_skill", { name: "nope" });
-    const parsed = JSON.parse(out);
+    const parsed = parseToolResult(out);
     expect(parsed.error).toMatch(/unknown skill/);
     expect(parsed.available).toContain("review");
     expect(parsed.available).toContain("ship-it");
@@ -137,7 +138,7 @@ describe("run_skill tool", () => {
     const reg = new ToolRegistry();
     registerSkillTools(reg, { homeDir: home, disableBuiltins: true });
     const out = await reg.dispatch("run_skill", { name: "" });
-    expect(JSON.parse(out).error).toMatch(/requires a 'name'/);
+    expect(parseToolResult(out).error).toMatch(/requires a 'name'/);
   });
 
   it("normalizes decorated names (emoji / brackets) to the bare identifier", async () => {
@@ -190,7 +191,7 @@ describe("run_skill tool", () => {
     expect(received?.skillName).toBe("deepdive");
     expect(received?.skillBody).toContain("deep-dive agent");
     expect(received?.task).toBe("find all tests that touch the loop");
-    const parsed = JSON.parse(out);
+    const parsed = parseToolResult(out);
     expect(parsed.output).toBe("subagent-said-this");
   });
 
@@ -208,7 +209,7 @@ describe("run_skill tool", () => {
       name: "needs-runner",
       arguments: "do the thing",
     });
-    expect(JSON.parse(out).error).toMatch(/no subagent runner is configured/);
+    expect(parseToolResult(out).error).toMatch(/no subagent runner is configured/);
   });
 
   it("requires arguments for subagent skills (subagent has no other context)", async () => {
@@ -225,7 +226,7 @@ describe("run_skill tool", () => {
       subagentRunner: async () => "should-not-be-called",
     });
     const out = await reg.dispatch("run_skill", { name: "needs-args" });
-    expect(JSON.parse(out).error).toMatch(/requires 'arguments'/);
+    expect(parseToolResult(out).error).toMatch(/requires 'arguments'/);
   });
 
   it("inline skills don't go through subagentRunner even when one exists", async () => {
@@ -275,7 +276,7 @@ describe("install_skill tool", () => {
       description: "Summarize merged PRs from the last week",
       body: "Run gh pr list and group by author.",
     });
-    const parsed = JSON.parse(out);
+    const parsed = parseToolResult(out);
     expect(parsed.ok).toBe(true);
     expect(parsed.scope).toBe("project");
     expect(parsed.runAs).toBe("inline");
@@ -308,7 +309,7 @@ describe("install_skill tool", () => {
       description: "Available in every project",
       body: "do a thing",
     });
-    const parsed = JSON.parse(out);
+    const parsed = parseToolResult(out);
     expect(parsed.scope).toBe("global");
     expect(parsed.path).toContain(home);
   });
@@ -322,23 +323,26 @@ describe("install_skill tool", () => {
       body: "z",
       scope: "project",
     });
-    expect(JSON.parse(out).error).toMatch(/requires a workspace/);
+    expect(parseToolResult(out).error).toMatch(/requires a workspace/);
   });
 
   it("rejects an empty name / description / body", async () => {
     const reg = new ToolRegistry();
     registerSkillTools(reg, { homeDir: home, projectRoot, disableBuiltins: true });
     expect(
-      JSON.parse(await reg.dispatch("install_skill", { name: "", description: "d", body: "b" }))
-        .error,
+      parseToolResult(
+        await reg.dispatch("install_skill", { name: "", description: "d", body: "b" }),
+      ).error,
     ).toMatch(/'name'/);
     expect(
-      JSON.parse(await reg.dispatch("install_skill", { name: "ok", description: "", body: "b" }))
-        .error,
+      parseToolResult(
+        await reg.dispatch("install_skill", { name: "ok", description: "", body: "b" }),
+      ).error,
     ).toMatch(/'description'/);
     expect(
-      JSON.parse(await reg.dispatch("install_skill", { name: "ok", description: "d", body: "" }))
-        .error,
+      parseToolResult(
+        await reg.dispatch("install_skill", { name: "ok", description: "d", body: "" }),
+      ).error,
     ).toMatch(/'body'/);
   });
 
@@ -350,7 +354,7 @@ describe("install_skill tool", () => {
       description: "d",
       body: "b",
     });
-    expect(JSON.parse(out).error).toMatch(/invalid skill name/);
+    expect(parseToolResult(out).error).toMatch(/invalid skill name/);
   });
 
   it("refuses to overwrite an existing skill", async () => {
@@ -366,7 +370,7 @@ describe("install_skill tool", () => {
       description: "second",
       body: "second body",
     });
-    expect(JSON.parse(out).error).toMatch(/already exists/);
+    expect(parseToolResult(out).error).toMatch(/already exists/);
   });
 
   it("fires onSkillInstalled with the name + scope + path", async () => {
@@ -400,7 +404,7 @@ describe("install_skill tool", () => {
       model: "deepseek-chat",
       allowedTools: ["read_file", "search_content"],
     });
-    const parsed = JSON.parse(out);
+    const parsed = parseToolResult<{ runAs?: string; path: string }>(out);
     expect(parsed.runAs).toBe("subagent");
     const raw = readFileSync(parsed.path, "utf8");
     expect(raw).toContain("runAs: subagent");
@@ -424,7 +428,7 @@ describe("install_skill tool", () => {
       model: "deepseek-chat",
       allowedTools: ["read_file"],
     });
-    const raw = readFileSync(JSON.parse(out).path, "utf8");
+    const raw = readFileSync(parseToolResult<{ path: string }>(out).path, "utf8");
     expect(raw).not.toContain("runAs:");
     expect(raw).not.toContain("model:");
     expect(raw).not.toContain("allowed-tools:");
@@ -438,7 +442,7 @@ describe("install_skill tool", () => {
       description: "first line\nsecond line\nthird",
       body: "x",
     });
-    const raw = readFileSync(JSON.parse(out).path, "utf8");
+    const raw = readFileSync(parseToolResult<{ path: string }>(out).path, "utf8");
     expect(raw).toContain("description: first line second line third");
     expect(raw).not.toMatch(/description: first line\n/);
   });

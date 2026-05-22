@@ -240,13 +240,7 @@ export async function querySemantic(
 }
 
 export async function indexExists(root: string): Promise<boolean> {
-  const meta = path.join(root, INDEX_DIR_NAME, "index.meta.json");
-  try {
-    await fs.access(meta);
-    return true;
-  } catch {
-    return false;
-  }
+  return (await readIndexMeta(path.join(root, INDEX_DIR_NAME))) !== null;
 }
 
 export async function indexCompatible(

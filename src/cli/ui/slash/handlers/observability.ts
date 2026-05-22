@@ -1,8 +1,9 @@
 import { release } from "node:os";
-import { loadRateLimit, loadTheme, resolveThemePreference } from "@/config.js";
+import { loadRateLimit, loadTheme, loadToonMode, resolveThemePreference } from "@/config.js";
 import { getLanguage, t } from "@/i18n/index.js";
 import { DEEPSEEK_CONTEXT_TOKENS, DEFAULT_CONTEXT_TOKENS, pricingFor } from "@/telemetry/stats.js";
 import { countTokensBounded } from "@/tokenizer.js";
+import { getToonStats } from "@/toon/stats.js";
 import { VERSION } from "@/version.js";
 import { writeClipboard } from "../../clipboard.js";
 import { computeCtxBreakdown } from "../../ctx-breakdown.js";
@@ -102,6 +103,7 @@ const status: SlashHandler = (_args, loop, ctx) => {
   const workspaceLine = ctx.codeRoot
     ? t("handlers.observability.statusWorkspace", { path: ctx.codeRoot })
     : "";
+  const toonLine = renderToonStatusLine();
   const lines = [
     t("handlers.observability.statusModel", { model: loop.model }),
     t("handlers.observability.statusFlags", {
@@ -114,6 +116,7 @@ const status: SlashHandler = (_args, loop, ctx) => {
     mcpLine,
     sessionLine,
   ];
+  if (toonLine) lines.push(toonLine);
   if (workspaceLine) lines.push(workspaceLine);
   if (budgetLine) lines.push(budgetLine);
   if (pendingLine) lines.push(pendingLine);
@@ -122,6 +125,17 @@ const status: SlashHandler = (_args, loop, ctx) => {
   if (dashLine) lines.push(dashLine);
   return { info: lines.join("\n") };
 };
+
+function renderToonStatusLine(): string {
+  const mode = loadToonMode();
+  const stats = getToonStats();
+  const layers = Object.values(stats.layers);
+  const hits = layers.reduce((sum, layer) => sum + layer.hits, 0);
+  if (mode === "off" && hits === 0) return "";
+  const savedTokens = layers.reduce((sum, layer) => sum + layer.savedTokens, 0);
+  const fallbackCount = stats.fallbacks.encode + stats.fallbacks.decode;
+  return `toon: ${mode} hits=${hits} saved=${compactNum(savedTokens)}tok fallback=${fallbackCount}`;
+}
 
 function renderTinyBar(pct: number, width: number): string {
   const w = Math.max(4, width);

@@ -1,5 +1,7 @@
+import type { ToonMode } from "../config.js";
 import { countTokens } from "../tokenizer.js";
 import { ToolRegistry } from "../tools.js";
+import { serializeStringResult } from "../toon/encode-result.js";
 import type { JSONSchema } from "../types.js";
 import type { McpClient } from "./client.js";
 import { LatencyTracker, type SlowEvent } from "./latency.js";
@@ -105,7 +107,10 @@ export function registerSingleMcpTool(
         signal: ctx?.signal,
       });
       if (env.tracker) env.tracker.record(Date.now() - t0);
-      return flattenMcpResult(toolResult, { maxChars: env.maxResultChars });
+      return flattenMcpResult(toolResult, {
+        maxChars: env.maxResultChars,
+        toonMode: env.registry.toonMode,
+      });
     },
   });
   return registeredName;
@@ -222,11 +227,12 @@ export async function bridgeMcpTools(
 export interface FlattenOptions {
   /** Cap the flattened string at this many characters. Default: no cap. */
   maxChars?: number;
+  toonMode?: ToonMode;
 }
 
 export function flattenMcpResult(result: CallToolResult, opts: FlattenOptions = {}): string {
   validateResultShape(result);
-  const parts = result.content.map(blockToString);
+  const parts = result.content.map((block) => blockToString(block, opts));
   const joined = parts.join("\n").trim();
   const prefixed = result.isError ? `ERROR: ${joined || "(no error message from server)"}` : joined;
   return opts.maxChars ? truncateForModel(prefixed, opts.maxChars) : prefixed;
@@ -347,8 +353,8 @@ function sizeSuffixToTokens(s: string, budget: number): string {
   return s.slice(-Math.max(0, size));
 }
 
-function blockToString(block: McpContentBlock): string {
-  if (block.type === "text") return block.text;
+function blockToString(block: McpContentBlock, opts: FlattenOptions): string {
+  if (block.type === "text") return serializeStringResult(block.text, { mode: opts.toonMode });
   if (block.type === "image") return `[image ${block.mimeType}, ${block.data.length} chars base64]`;
   // Unknown block type — preserve for diagnostics.
   return `[unknown block: ${JSON.stringify(block)}]`;

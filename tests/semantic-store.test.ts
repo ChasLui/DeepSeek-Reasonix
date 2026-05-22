@@ -142,6 +142,8 @@ describe("SemanticStore", () => {
       expect(meta).not.toBeNull();
       expect(meta?.provider).toBe("openai-compat");
       expect(meta?.model).toBe("bge-m3");
+      const raw = await fs.readFile(join(dir, "index.meta.toon"), "utf8");
+      expect(raw).toContain("provider: openai-compat");
     });
 
     it("wipeStoreFiles removes persisted index identity before reopen", async () => {
