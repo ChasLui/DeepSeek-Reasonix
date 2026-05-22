@@ -328,6 +328,7 @@ export const zhCN: TranslationSchema = {
     },
     stop: { description: "中止当前模型回合（按 Esc 的替代方式）" },
     feedback: { description: "打开 GitHub Issue，诊断信息已复制到剪贴板" },
+    about: { description: "项目信息 — 版本、官网、仓库、协议" },
     plans: { description: "列出此会话的活跃 + 归档计划（最新在前）" },
     replay: {
       description: "加载归档计划为只读的时间旅行快照（默认：最新）",
@@ -607,6 +608,25 @@ export const zhCN: TranslationSchema = {
     planStoppedAt: "▸ 计划在 {label}{counter} 处停止",
     revisingAfter: "▸ 在 {label} 之后修订 — {feedback}",
     historyScrollHint: " ↑ 正在查看历史 · End / PgDn 返回底部 · ↓ 向下滚动一行",
+    editHistoryTitle: "编辑历史（从旧到新）：",
+    editHistoryNoCodeMode: "不在代码模式中",
+    editHistoryNoEdits: "此会话尚未记录任何编辑",
+    editHistoryNoShowId: "用法：/show [id] [path]   （省略 id 查看最新；path 来自文件摘要）",
+    editHistoryIdNotFound: "未找到编辑 #{id} — 运行 /history 查看有效 ID",
+    editHistoryLookupFailed: "意外错误：历史查找失败",
+    editHistoryBatchNoFile: '批次 #{id} 不包含 "{path}" — 此批次中的文件：{files}',
+    editHistoryNoEdits2: "此会话尚未记录编辑 — /history 为空",
+    editHistoryStatusApplied: "已应用",
+    editHistoryStatusPartial: "部分应用",
+    editHistoryStatusUndone: "已撤销",
+    editHistoryHelpShow:
+      "/show <id>            → 文件摘要    ·    /show <id> <path>  → 某个文件的完整 diff",
+    editHistoryHelpUndo:
+      "/undo                 → 最新的未撤销项   ·    /undo <id> [path]  → 指定批次或文件",
+    editHistoryAlreadyReverted: "（已撤销 — /history 显示批次级状态）",
+    editHistoryRevertFile: "/undo {id} {path}  → 仅还原此文件",
+    mcpFailed: "MCP {name} 失败",
+    mcpWarn: "MCP {name} 警告",
   },
   hooks: {
     head: "钩子 {tag} `{cmd}` {decision}{truncTag}",
@@ -633,11 +653,11 @@ export const zhCN: TranslationSchema = {
     toolUploadStatus: "工具结果已上传 · 模型在生成下一条响应前思考中…",
     preflightTruncateStatus: "预检：上下文接近上限，正在裁剪最早历史…",
     preflightTruncated:
-      "预检：请求约 {estimate}/{ctxMax} tokens（{pct}%）— 已裁剪 {beforeMessages} 条消息 → {afterMessages}。发送中。",
+      "预检：请求约 {estimate}/{ctxMax} tokens（{pct}%）· body {bodyKB} KB — 已裁剪 {beforeMessages} 条消息 → {afterMessages}。发送中。",
     preflightTruncatedStillFull:
-      "预检：裁剪 {beforeMessages} 条消息 → {afterMessages} 后，请求仍约 {estimate}/{ctxMax} tokens（{pct}%）— DeepSeek 大概率会返回 400。请运行 /clear 或 /new 重新开始。",
+      "预检：裁剪 {beforeMessages} 条消息 → {afterMessages} 后，请求仍约 {estimate}/{ctxMax} tokens（{pct}%）· body {bodyKB} KB — DeepSeek 大概率会返回 400。请运行 /clear 或 /new 重新开始。",
     preflightNoFold:
-      "预检：请求约 {estimate}/{ctxMax} tokens（{pct}%）且没有可裁剪的内容 — DeepSeek 大概率会返回 400。请运行 /clear 或 /new 重新开始。",
+      "预检：请求约 {estimate}/{ctxMax} tokens（{pct}%）· body {bodyKB} KB 且没有可裁剪的内容 — DeepSeek 大概率会返回 400。请运行 /clear 或 /new 重新开始。",
     flashEscalation: "⇧ flash 请求升级 — 本轮改用 {model}{reasonSuffix}",
     harvestStatus: "正在从推理过程提取计划状态…",
     repeatToolCallWarning: "拦截到重复工具调用 — 让模型察觉问题并换种方式重试。",
@@ -735,6 +755,10 @@ export const zhCN: TranslationSchema = {
       loopStarted:
         '▸ 循环已启动 — 每 {duration} 重新提交 "{prompt}"。输入任何内容（或 /loop stop）取消。',
       keysNeedsTui: "/keys 需要 TUI 上下文（postKeys 已连接）。",
+      aboutHeader: "Reasonix v{version} — 缓存优先的 DeepSeek 编码代理",
+      aboutWebsiteLabel: "官网",
+      aboutRepoLabel: "仓库",
+      aboutLicenseLabel: "协议",
       unknownCommand: "未知命令：/{cmd} — 你是不是想用 {list}？",
       unknownCommandShort: "未知命令：/{cmd}  （试试 /help）",
     },
@@ -971,6 +995,12 @@ export const zhCN: TranslationSchema = {
       statusMcp: "  MCP     {servers} 个服务器，注册表中 {tools} 个工具",
       statusEdits: "  编辑    {count} 个待处理（/apply 提交，/discard 丢弃）",
       statusPlan: "  计划    开启 — 写入受限（submit_plan + 审批）",
+      statusLifecycle: "  生命周期 {mode}/{state} · {progress}{evidence}",
+      lifecycleNoPlan: "暂无计划",
+      lifecycleEvidencePending: "等待 evidence",
+      lifecycleRejected: "lifecycle：{tool} 在 {state} 状态被拦截 — 下一步：{next}",
+      lifecycleEvidenceRejected: "lifecycle：步骤 {stepId} 需要 evidence — 下一步：{next}",
+      lifecycleRepeatedRejected: "lifecycle：{tool} 被重复拦截 — 不要用相同参数反复重试",
       statusModeYolo:
         "  模式    YOLO — 编辑 + shell 自动运行，无提示（/undo 仍可回滚 · Shift+Tab 切换）",
       statusModeAuto: "  模式    AUTO — 编辑立即应用（5 秒内按 u 撤消 · Shift+Tab 切换）",
@@ -983,6 +1013,10 @@ export const zhCN: TranslationSchema = {
       activeNone: "▸ 活跃计划：（无）",
       noArchives: "此会话尚无归档计划 — 当每个步骤完成时自动归档",
       archivedHeader: "已归档（{count}）：",
+      evidencePending:
+        "  ! 等待 evidence — 当前步骤需要 verification/diff/checkpoint/manual evidence",
+      evidenceLine: "  evidence {stepId}: {summary}",
+      archivedEvidenceLine: "    evidence: {summary}",
       replayNoSession:
         "未附加会话 — `/replay` 是按会话的。在项目中运行 `reasonix code` 以获取会话。",
       replayNoArchives:
@@ -1170,6 +1204,7 @@ export const zhCN: TranslationSchema = {
     editsLabel: "编辑:",
     mcpLoading: "MCP",
     ctx: "上下文",
+    shortcutsHint: "Ctrl+P 快捷键",
   },
   editMode: {
     plan: "计划",
@@ -1404,8 +1439,10 @@ export const zhCN: TranslationSchema = {
       "web_search: 无法访问 SearXNG 服务器 {endpoint} — try: 安装并启动 SearXNG（https://github.com/searxng/searxng，例如 `docker run -d -p 8080:8080 searxng/searxng`），或使用 /search-engine mojeek|searxng|metaso|tavily|perplexity|exa 切换引擎",
     searxngNoResults:
       "web_search: 返回 0 条结果但 SearXNG 响应看起来不是正常空结果页（{chars} 字符）— try: 使用更简单的关键词改写查询，或使用 /search-engine mojeek|searxng|metaso|tavily|perplexity|exa 切换引擎",
+    metasoMissingKey:
+      "web_search: Metaso 需要 API 密钥 — 设置 METASO_API_KEY，或使用 /search-engine metaso <key> 配置；可在 https://metaso.cn/search-api/playground 获取密钥",
     metasoDailyLimit:
-      "web_search: 默认 API 密钥的每日搜索次数已达上限 — 设置 METASO_API_KEY 环境变量，或在 https://metaso.cn/search-api/playground 获取自己的密钥",
+      "web_search: Metaso 每日搜索次数已达上限 — 设置 METASO_API_KEY，或在 https://metaso.cn/search-api/playground 获取密钥",
     metasoUnauthorized:
       "web_search: Metaso API 密钥被拒绝 — 检查 METASO_API_KEY，或在 https://metaso.cn/search-api/playground 获取密钥",
     metasoRateLimit:
@@ -1617,6 +1654,18 @@ export const zhCN: TranslationSchema = {
     serverCount: "{count} 个服务器",
     footer: "↑↓ 选择 · [r] 重连 · [d] 禁用 · Esc 退出",
   },
+  mcpBrowse: {
+    noResources: "没有任何已连接 MCP 服务器上的资源（或无服务器连接）。`/mcp` 显示当前列表。",
+    readOne: "读取：`/resource <uri>` — 或在选择器中使用 Tab 键。",
+    noPrompts: "没有任何已连接 MCP 服务器上的提示（或无服务器连接）。`/mcp` 显示当前列表。",
+    fetchOne: "获取：`/prompt <name>` — 暂不支持参数；带必需参数的提示将返回服务器错误。",
+    noServerForResource: '没有服务器暴露资源 "{name}"',
+    resourceHint: "`/resource` 不带参数可查看可用列表。",
+    readFailed: "读取资源失败",
+    noServerForPrompt: '没有服务器暴露 prompt "{name}"',
+    promptHint: "`/prompt` 不带参数可查看可用列表。",
+    fetchFailed: "获取 prompt 失败",
+  },
   mcpLifecycle: {
     handshake: "握手中…",
     connected: "已连接",
@@ -1629,6 +1678,8 @@ export const zhCN: TranslationSchema = {
     failedSetupHint: "→ 运行 `reasonix setup` 移除此条目，或修复底层问题（缺少 npm 包、网络等）。",
     failedSetupConfigHint: "→ 运行 `reasonix setup` 从已保存配置中移除损坏的条目。",
     abortedHint: "已中断 MCP 启动 — 跳过 {count} 个服务器。问题修复后用 /mcp 重新连接。",
+    toolsReady: "工具就绪",
+    warnLabel: "警告",
   },
   checkpointPicker: {
     title: "恢复检查点 \u2014 {workspace}",
@@ -1674,5 +1725,40 @@ export const zhCN: TranslationSchema = {
     noRecords: "无记录",
     untracked: "（未追踪）",
     churned: "（已变更 ×{count}）",
+  },
+  builtinSkills: {
+    explore: "在隔离子 agent 中探索代码库 — 只读宽网调查，返回一个精炼结论",
+    research: "结合代码阅读与网络搜索进行调研 — 在隔离子 agent 中综合信息并返回结论",
+    review: "审查当前分支变更 — 检查正确性、安全性、缺失测试、隐藏行为变更",
+    securityReview: "安全专项审查 — 标记注入/认证/密钥/反序列化/路径穿越/加密问题",
+    test: "运行测试套件并诊断失败 — 自动识别测试框架，修复后重跑直至通过",
+  },
+  shortcutsHelp: {
+    title: "快捷键",
+    groupInput: "输入",
+    groupNavigation: "导航",
+    groupSession: "会话",
+    groupSystem: "系统",
+    descEnter: "发送消息",
+    descShiftEnter: "换行",
+    descCtrlU: "清空输入",
+    descCtrlW: "删除单词",
+    descCtrlP: "打开/关闭快捷键面板",
+    descCtrlX: "在编辑器中打开",
+    descArrows: "浏览输入历史",
+    descPgUpDown: "翻页",
+    descCtrlL: "清屏",
+    descCtrlB: "切换侧边栏",
+    descNewSession: "新建会话",
+    descListSessions: "列出会话",
+    descSwitchModel: "切换模型",
+    descSwitchPreset: "切换预设",
+    descSwitchTheme: "切换主题",
+    descCtrlC: "退出",
+    descEsc: "停止/取消",
+    descCtrlR: "切换详细模式",
+    descCtrlO: "展开流式输出",
+    descHelp: "显示所有命令",
+    descShiftTab: "切换编辑模式",
   },
 };

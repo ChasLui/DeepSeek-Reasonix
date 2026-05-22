@@ -13,6 +13,11 @@ import {
 } from "./index/config.js";
 import { type McpServerSpec, parseMcpSpec } from "./mcp/spec.js";
 import { normalizeQQAllowlist, normalizeQQOpenId } from "./qq/access.js";
+import {
+  type NormalizedToolRateLimitConfig,
+  type ToolRateLimitConfig,
+  normalizeToolRateLimitConfig,
+} from "./tools/rate-limit.js";
 
 /** Legacy `fast|smart|max` kept for back-compat with existing config.json files. */
 export type PresetName = "auto" | "flash" | "pro" | "fast" | "smart" | "max";
@@ -155,7 +160,7 @@ export interface ReasonixConfig {
   webSearchEngine?: "mojeek" | "searxng" | "metaso" | "tavily" | "perplexity" | "exa";
   /** Base URL for SearXNG instance (default http://localhost:8080). */
   webSearchEndpoint?: string;
-  /** Metaso API key. Falls back to METASO_API_KEY env var, then a built-in default. */
+  /** Metaso API key. Falls back to METASO_API_KEY env var. */
   metasoApiKey?: string;
   /** Tavily API key. Falls back to TAVILY_API_KEY env var. No baked-in default — free tier is 1000/mo per account, sharing would burn out. */
   tavilyApiKey?: string;
@@ -187,6 +192,8 @@ export interface ReasonixConfig {
   projects?: {
     [absoluteRootDir: string]: {
       shellAllowed?: string[];
+      /** Project-scoped hooks are arbitrary shell commands; load only after explicit trust. */
+      hooksTrusted?: boolean;
       /** Absolute directory prefixes the user pre-approved for outside-sandbox file access (#684). */
       pathAllowed?: string[];
     };
@@ -214,6 +221,7 @@ export interface ReasonixConfig {
   /** Per-app proxy override. Layered on top of HTTPS_PROXY / NO_PROXY env vars + the default DeepSeek-bypass whitelist. */
   proxy?: ProxyConfig;
   rateLimit?: RateLimitConfig;
+  toolRateLimit?: ToolRateLimitConfig;
   /** Host-enforced engineering lifecycle. Defaults to off so opt-outs pay zero prefix cost. */
   engineeringLifecycle?: {
     mode?: EngineeringLifecycleMode;
@@ -286,13 +294,11 @@ export function memoryTypeDefaults(
   return out;
 }
 
-const DEFAULT_METASO_API_KEY = "mk-E384C1DD5E8501BB7EFE27C949AFDE5B";
-
-export function loadMetasoApiKey(path: string = defaultConfigPath()): string {
-  if (process.env.METASO_API_KEY) return process.env.METASO_API_KEY;
+export function loadMetasoApiKey(path: string = defaultConfigPath()): string | undefined {
+  if (process.env.METASO_API_KEY) return process.env.METASO_API_KEY.trim();
   const cfg = readConfig(path).metasoApiKey;
   if (cfg && typeof cfg === "string" && cfg.trim()) return cfg.trim();
-  return DEFAULT_METASO_API_KEY;
+  return undefined;
 }
 
 /** Tavily API key — env > config > undefined. Returning undefined means the caller must error out with a clear "go get one at tavily.com" message; we deliberately ship no default because the free 1000/mo quota wouldn't survive being shared. */
@@ -370,7 +376,13 @@ function sanitizeStringArrayField(
 
 export function readConfig(path: string = defaultConfigPath()): ReasonixConfig {
   try {
-    const raw = readFileSync(path, "utf8");
+    // Strip the UTF-8 BOM if a foreign writer left one in — Windows
+    // PowerShell 5's `Set-Content -Encoding UTF8` and several text
+    // editors emit `EF BB BF` at the head of the file. `JSON.parse`
+    // refuses BOM-prefixed input and throws, which used to fall
+    // through to `return {}` and silently nuke every saved field on
+    // the next read-modify-write.
+    const raw = readFileSync(path, "utf8").replace(/^\uFEFF/, "");
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       const cfg = parsed as Record<string, unknown>;
@@ -584,6 +596,12 @@ export function loadRateLimit(path: string = defaultConfigPath()): RateLimitConf
   const rpm = readConfig(path).rateLimit?.rpm;
   if (typeof rpm !== "number" || !Number.isInteger(rpm) || rpm <= 0) return undefined;
   return { rpm };
+}
+
+export function loadToolRateLimit(
+  path: string = defaultConfigPath(),
+): false | NormalizedToolRateLimitConfig {
+  return normalizeToolRateLimitConfig(readConfig(path).toolRateLimit);
 }
 
 export function saveBaseUrl(url: string, path: string = defaultConfigPath()): void {
@@ -837,6 +855,22 @@ export function clearProjectShellAllowed(
   cfg.projects[key].shellAllowed = [];
   writeConfig(cfg, path);
   return existing.length;
+}
+
+export function projectHooksTrusted(rootDir: string, path: string = defaultConfigPath()): boolean {
+  const cfg = readConfig(path);
+  const key = findProjectKey(cfg, rootDir);
+  return key !== undefined && cfg.projects?.[key]?.hooksTrusted === true;
+}
+
+export function trustProjectHooks(rootDir: string, path: string = defaultConfigPath()): void {
+  const cfg = readConfig(path);
+  if (!cfg.projects) cfg.projects = {};
+  const key = findProjectKey(cfg, rootDir) ?? rootDir;
+  if (!cfg.projects[key]) cfg.projects[key] = {};
+  if (cfg.projects[key].hooksTrusted === true) return;
+  cfg.projects[key].hooksTrusted = true;
+  writeConfig(cfg, path);
 }
 
 export function loadProjectPathAllowed(

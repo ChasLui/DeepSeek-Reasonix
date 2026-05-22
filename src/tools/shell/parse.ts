@@ -1,6 +1,11 @@
 import { homedir } from "node:os";
 import * as pathMod from "node:path";
-import { type CommandChain, chainAllowed, parseCommandChain } from "../shell-chain.js";
+import {
+  type CommandChain,
+  chainAllowed,
+  isNullDeviceAlias,
+  parseCommandChain,
+} from "../shell-chain.js";
 
 /** Read-only reports + test runners whose failure mode is "exit 1 with output". */
 export const BUILTIN_ALLOWLIST: ReadonlyArray<string> = [
@@ -270,6 +275,31 @@ export function hasSensitivePathArgs(
   return false;
 }
 
+function pathIsUnder(child: string, parent: string): boolean {
+  const rel = pathMod.relative(parent, child);
+  return rel === "" || (!rel.startsWith("..") && !pathMod.isAbsolute(rel));
+}
+
+function redirectTargets(chain: CommandChain): string[] {
+  const targets: string[] = [];
+  for (const seg of chain.segments) {
+    for (const r of seg.redirects) {
+      if (r.kind === "2>&1" || !r.target || isNullDeviceAlias(r.target)) continue;
+      targets.push(r.target);
+    }
+  }
+  return targets;
+}
+
+export function redirectsEscapeSandbox(chain: CommandChain, projectRoot: string): boolean {
+  const root = pathMod.resolve(projectRoot);
+  for (const target of redirectTargets(chain)) {
+    const resolved = pathMod.resolve(root, target);
+    if (!pathIsUnder(resolved, root)) return true;
+  }
+  return false;
+}
+
 /** Allowlist match on leading argv tokens; demoted by `RISKY_ARGS` when a destructive flag appears in the tail,
  *  or by `SENSITIVE_PATHS` when a path argument targets a sensitive location (#259). */
 export function isAllowed(
@@ -330,6 +360,20 @@ export function isCommandAllowed(
     return false;
   }
   if (chain === null) return isAllowed(cmd, extra, projectRoot, sensitivePathConfig);
+  const targets = redirectTargets(chain);
+  if (targets.length > 0 && !projectRoot) return false;
+  if (projectRoot) {
+    if (redirectsEscapeSandbox(chain, projectRoot)) return false;
+    if (
+      hasSensitivePathArgs(
+        targets,
+        projectRoot,
+        sensitivePathConfig?.prefixes,
+        sensitivePathConfig?.patterns,
+      )
+    )
+      return false;
+  }
   return chainAllowed(chain, (seg) => isAllowed(seg, extra, projectRoot, sensitivePathConfig));
 }
 

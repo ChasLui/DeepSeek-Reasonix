@@ -2,7 +2,7 @@
 
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   applyEditBlock,
@@ -117,6 +117,42 @@ describe("applyEditBlock", () => {
     expect(readFileSync(join(root, "a.txt"), "utf8")).toBe("goodbye world\n");
   });
 
+  it("treats leading slash paths as project-root relative", () => {
+    writeFileSync(join(root, "a.txt"), "hello world\n", "utf8");
+    const result = applyEditBlock(
+      { path: "/a.txt", search: "hello", replace: "goodbye", offset: 0 },
+      root,
+    );
+    expect(result.status).toBe("applied");
+    expect(readFileSync(join(root, "a.txt"), "utf8")).toBe("goodbye world\n");
+  });
+
+  it("allows real absolute paths when they stay inside rootDir", () => {
+    const absPath = join(root, "a.txt");
+    writeFileSync(absPath, "hello world\n", "utf8");
+    const result = applyEditBlock(
+      { path: absPath, search: "hello", replace: "goodbye", offset: 0 },
+      root,
+    );
+    expect(result.status).toBe("applied");
+    expect(readFileSync(absPath, "utf8")).toBe("goodbye world\n");
+  });
+
+  it("refuses real absolute paths outside rootDir", () => {
+    const outside = resolve(root, "..", "outside.txt");
+    writeFileSync(outside, "hello world\n", "utf8");
+    try {
+      const result = applyEditBlock(
+        { path: outside, search: "hello", replace: "goodbye", offset: 0 },
+        root,
+      );
+      expect(result.status).toBe("path-escape");
+      expect(readFileSync(outside, "utf8")).toBe("hello world\n");
+    } finally {
+      rmSync(outside, { force: true });
+    }
+  });
+
   it("creates a new file when SEARCH is empty and file doesn't exist", () => {
     const result = applyEditBlock(
       { path: "new/nested/file.ts", search: "", replace: "export const x = 1;\n", offset: 0 },
@@ -155,15 +191,15 @@ describe("applyEditBlock", () => {
     expect(existsSync(join(root, "..", "escape.txt"))).toBe(false);
   });
 
-  it("replaces only the first occurrence when SEARCH appears twice", () => {
+  it("refuses ambiguous SEARCH text that appears twice", () => {
     writeFileSync(join(root, "a.txt"), "foo bar foo\n", "utf8");
     const result = applyEditBlock(
       { path: "a.txt", search: "foo", replace: "FOO", offset: 0 },
       root,
     );
-    expect(result.status).toBe("applied");
-    // First "foo" replaced, second left alone.
-    expect(readFileSync(join(root, "a.txt"), "utf8")).toBe("FOO bar foo\n");
+    expect(result.status).toBe("not-found");
+    expect(result.message).toMatch(/multiple times/);
+    expect(readFileSync(join(root, "a.txt"), "utf8")).toBe("foo bar foo\n");
   });
 
   it("matches LF search against CRLF file content", () => {
@@ -223,11 +259,27 @@ describe("snapshotBeforeEdits + restoreSnapshots", () => {
     writeFileSync(join(root, "a.txt"), "one two three\n", "utf8");
     const blocks = [
       { path: "a.txt", search: "one", replace: "ONE", offset: 0 },
-      { path: "a.txt", search: "two", replace: "TWO", offset: 10 },
+      { path: "/a.txt", search: "two", replace: "TWO", offset: 10 },
     ];
     const snaps = snapshotBeforeEdits(blocks, root);
     expect(snaps).toHaveLength(1); // not 2 — same file
     expect(snaps[0]!.prevContent).toBe("one two three\n");
+  });
+
+  it("does not snapshot paths outside rootDir before apply rejects them", () => {
+    const outside = resolve(root, "..", "outside-secret.txt");
+    writeFileSync(outside, "SECRET_OUTSIDE_WORKSPACE", "utf8");
+    try {
+      const block = { path: outside, search: "SECRET", replace: "PUBLIC", offset: 0 };
+      const snaps = snapshotBeforeEdits([block], root);
+      const [result] = applyEditBlocks([block], root);
+
+      expect(snaps).toEqual([]);
+      expect(result!.status).toBe("path-escape");
+      expect(readFileSync(outside, "utf8")).toBe("SECRET_OUTSIDE_WORKSPACE");
+    } finally {
+      rmSync(outside, { force: true });
+    }
   });
 
   it("restores multiple files in a single batch independently", () => {

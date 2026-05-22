@@ -339,6 +339,7 @@ export const EN: TranslationSchema = {
     },
     stop: { description: "abort the current model turn (typed alternative to Esc)" },
     feedback: { description: "open a GitHub issue with diagnostic info copied to clipboard" },
+    about: { description: "project info — version, website, repo, license" },
     keys: { description: "keyboard + mouse + copy/paste reference" },
     plans: { description: "list this session's active + archived plans, newest first" },
     replay: {
@@ -626,6 +627,26 @@ export const EN: TranslationSchema = {
     planStoppedAt: "▸ plan stopped at {label}{counter}",
     revisingAfter: "▸ revising after {label} — {feedback}",
     historyScrollHint: " ↑ reading history · End / PgDn returns to bottom · ↓ advances one line",
+    editHistoryTitle: "Edit history (oldest first):",
+    editHistoryNoCodeMode: "not in code mode",
+    editHistoryNoEdits: "no edits recorded this session yet",
+    editHistoryNoShowId:
+      "usage: /show [id] [path]   (omit id for newest; path from the per-file summary)",
+    editHistoryIdNotFound: "no edit #{id} — run /history to see valid ids",
+    editHistoryLookupFailed: "unexpected: history lookup failed",
+    editHistoryBatchNoFile: 'batch #{id} doesn\'t include "{path}" — files in this batch: {files}',
+    editHistoryNoEdits2: "no edits recorded this session — /history is empty",
+    editHistoryStatusApplied: "applied",
+    editHistoryStatusPartial: "PARTIAL",
+    editHistoryStatusUndone: "UNDONE",
+    editHistoryHelpShow:
+      "/show <id>            \u2192 per-file summary    \u00b7    /show <id> <path>  \u2192 full diff of one file",
+    editHistoryHelpUndo:
+      "/undo                 \u2192 newest non-undone   \u00b7    /undo <id> [path]  \u2192 target a specific batch or file",
+    editHistoryAlreadyReverted: "(already reverted \u2014 /history shows the batch-level status)",
+    editHistoryRevertFile: "/undo {id} {path}  \u2192 revert just this file",
+    mcpFailed: "MCP {name} failed",
+    mcpWarn: "MCP {name} warn",
   },
   hooks: {
     head: "hook {tag} `{cmd}` {decision}{truncTag}",
@@ -653,11 +674,11 @@ export const EN: TranslationSchema = {
     toolUploadStatus: "tool result uploaded · model thinking before next response…",
     preflightTruncateStatus: "preflight: context near full, truncating oldest history…",
     preflightTruncated:
-      "preflight: request ~{estimate}/{ctxMax} tokens ({pct}%) — truncated {beforeMessages} messages → {afterMessages}. Sending.",
+      "preflight: request ~{estimate}/{ctxMax} tokens ({pct}%) · body {bodyKB} KB — truncated {beforeMessages} messages → {afterMessages}. Sending.",
     preflightTruncatedStillFull:
-      "preflight: request still ~{estimate}/{ctxMax} tokens ({pct}%) after truncating {beforeMessages} messages → {afterMessages}. DeepSeek will likely 400. Run /clear or /new to start fresh.",
+      "preflight: request still ~{estimate}/{ctxMax} tokens ({pct}%) · body {bodyKB} KB after truncating {beforeMessages} messages → {afterMessages}. DeepSeek will likely 400. Run /clear or /new to start fresh.",
     preflightNoFold:
-      "preflight: request ~{estimate}/{ctxMax} tokens ({pct}%) and nothing left to truncate — DeepSeek will likely 400. Run /clear or /new to start fresh.",
+      "preflight: request ~{estimate}/{ctxMax} tokens ({pct}%) · body {bodyKB} KB and nothing left to truncate — DeepSeek will likely 400. Run /clear or /new to start fresh.",
     flashEscalation: "⇧ flash requested escalation — retrying this turn on {model}{reasonSuffix}",
     harvestStatus: "extracting plan state from reasoning…",
     repeatToolCallWarning:
@@ -770,6 +791,10 @@ export const EN: TranslationSchema = {
       loopStarted:
         '▸ loop started — re-submitting "{prompt}" every {duration}. Type anything (or /loop stop) to cancel.',
       keysNeedsTui: "/keys needs a TUI context (postKeys wired).",
+      aboutHeader: "Reasonix v{version} — a cache-first DeepSeek coding agent",
+      aboutWebsiteLabel: "Website",
+      aboutRepoLabel: "GitHub ",
+      aboutLicenseLabel: "License",
       unknownCommand: "unknown command: /{cmd} — did you mean {list}?",
       unknownCommandShort: "unknown command: /{cmd}  (try /help)",
     },
@@ -1027,6 +1052,13 @@ export const EN: TranslationSchema = {
       statusMcp: "  mcp     {servers} server(s), {tools} tool(s) in registry",
       statusEdits: "  edits   {count} pending (/apply to commit, /discard to drop)",
       statusPlan: "  plan    ON — writes gated (submit_plan + approval)",
+      statusLifecycle: "  lifecycle {mode}/{state} · {progress}{evidence}",
+      lifecycleNoPlan: "no plan",
+      lifecycleEvidencePending: "evidence pending",
+      lifecycleRejected: "lifecycle: {tool} blocked in {state} — next: {next}",
+      lifecycleEvidenceRejected: "lifecycle: step {stepId} needs evidence — next: {next}",
+      lifecycleRepeatedRejected:
+        "lifecycle: repeated {tool} rejection — do not retry identical args",
       statusModeYolo:
         "  mode    YOLO — edits + shell auto-run with no prompt (/undo still rolls back · Shift+Tab to flip)",
       statusModeAuto:
@@ -1042,6 +1074,10 @@ export const EN: TranslationSchema = {
       noArchives:
         "no archived plans yet for this session — they auto-archive when every step is done",
       archivedHeader: "Archived ({count}):",
+      evidencePending:
+        "  ! evidence pending — current step needs verification/diff/checkpoint/manual evidence",
+      evidenceLine: "  evidence {stepId}: {summary}",
+      archivedEvidenceLine: "    evidence: {summary}",
       replayNoSession:
         "no session attached — `/replay` is per-session. Run `reasonix code` in a project to get a session.",
       replayNoArchives:
@@ -1237,6 +1273,7 @@ export const EN: TranslationSchema = {
     editsLabel: "edits:",
     mcpLoading: "MCP",
     ctx: "ctx",
+    shortcutsHint: "Ctrl+P shortcuts",
   },
   editMode: {
     plan: "PLAN MODE",
@@ -1481,8 +1518,10 @@ export const EN: TranslationSchema = {
       "web_search: Cannot reach SearXNG server at {endpoint} \u2014 try: install and start SearXNG (https://github.com/searxng/searxng, e.g. `docker run -d -p 8080:8080 searxng/searxng`), or switch to another engine with /search-engine mojeek|searxng|metaso|tavily|perplexity|exa",
     searxngNoResults:
       "web_search: 0 results but SearXNG response doesn't look like an empty results page ({chars} chars) \u2014 try: rephrase the query with simpler terms, or switch engine with /search-engine mojeek|searxng|metaso|tavily|perplexity|exa",
+    metasoMissingKey:
+      "web_search: Metaso requires an API key \u2014 set METASO_API_KEY or configure one with /search-engine metaso <key>. Get one at https://metaso.cn/search-api/playground",
     metasoDailyLimit:
-      "web_search: daily search limit reached for the default API key \u2014 set your own METASO_API_KEY env var or get one at https://metaso.cn/search-api/playground",
+      "web_search: Metaso daily search limit reached \u2014 set METASO_API_KEY or get a key at https://metaso.cn/search-api/playground",
     metasoUnauthorized:
       "web_search: Metaso API key rejected \u2014 check METASO_API_KEY or get one at https://metaso.cn/search-api/playground",
     metasoRateLimit:
@@ -1702,6 +1741,21 @@ export const EN: TranslationSchema = {
     serverCount: "{count} server{s}",
     footer: "\u2191\u2193 pick \u00b7 [r] reconnect \u00b7 [d] disable \u00b7 esc quit",
   },
+  mcpBrowse: {
+    noResources:
+      "No resources on any connected MCP server (or no servers connected). `/mcp` shows the current set.",
+    readOne: "Read one: `/resource <uri>` \u2014 or use Tab in the picker.",
+    noPrompts:
+      "No prompts on any connected MCP server (or no servers connected). `/mcp` shows the current set.",
+    fetchOne:
+      "Fetch one: `/prompt <name>` \u2014 args are not supported yet; prompts with required args will surface an error from the server.",
+    noServerForResource: 'no server exposes resource "{name}"',
+    resourceHint: "`/resource` with no arg lists what's available.",
+    readFailed: "readResource failed",
+    noServerForPrompt: 'no server exposes prompt "{name}"',
+    promptHint: "`/prompt` with no arg lists what's available.",
+    fetchFailed: "getPrompt failed",
+  },
   mcpLifecycle: {
     handshake: "handshake\u2026",
     connected: "connected",
@@ -1717,6 +1771,8 @@ export const EN: TranslationSchema = {
       "→ run `reasonix setup` to remove broken entries from your saved config.",
     abortedHint:
       "MCP startup aborted — {count} server(s) skipped. Run /mcp to retry once you've fixed the underlying issue.",
+    toolsReady: "tools ready",
+    warnLabel: "warn",
   },
   checkpointPicker: {
     title: "restore a checkpoint \u2014 {workspace}",
@@ -1762,5 +1818,44 @@ export const EN: TranslationSchema = {
     noRecords: "no records",
     untracked: "(untracked)",
     churned: "(churned \u00d7{count})",
+  },
+  builtinSkills: {
+    explore:
+      "Explore the codebase in an isolated subagent \u2014 wide-net read-only investigation that returns one distilled answer. Best for: 'find all places that\u2026', 'how does X work across the project', 'survey the code for Y'.",
+    research:
+      "Research a question by combining web search + code reading in an isolated subagent. Best for: 'is X feature supported by lib Y', 'what\u2019s the canonical way to do Z', 'compare our impl against the spec'.",
+    review:
+      "Review the pending changes (current branch diff by default) in an isolated subagent \u2014 flags correctness, security, missing tests, hidden behavior changes; reports verdict + per-issue file:line. Read-only; the parent decides what to act on.",
+    securityReview:
+      "Security-focused review of the current branch diff in an isolated subagent \u2014 flags injection/authz/secrets/deserialization/path-traversal/crypto issues, severity-tagged. Read-only. Use when shipping changes that touch auth, input parsing, file IO, or external requests.",
+    test: "Run the project\u2019s test suite, diagnose failures, propose SEARCH/REPLACE fixes, re-run until green (or stop after 2 fix attempts on the same failure). Inlined \u2014 runs in the parent loop so you see the edit blocks and can /apply them. Detects npm/pnpm/yarn/pytest/go/cargo.",
+  },
+  shortcutsHelp: {
+    title: "Shortcuts",
+    groupInput: "Input",
+    groupNavigation: "Navigation",
+    groupSession: "Session",
+    groupSystem: "System",
+    descEnter: "Send message",
+    descShiftEnter: "New line",
+    descCtrlU: "Clear input",
+    descCtrlW: "Delete word",
+    descCtrlP: "Toggle shortcut panel",
+    descCtrlX: "Open in editor",
+    descArrows: "Input history",
+    descPgUpDown: "Scroll page",
+    descCtrlL: "Clear screen",
+    descCtrlB: "Toggle sidebar",
+    descNewSession: "New session",
+    descListSessions: "List sessions",
+    descSwitchModel: "Switch model",
+    descSwitchPreset: "Switch preset",
+    descSwitchTheme: "Switch theme",
+    descCtrlC: "Quit",
+    descEsc: "Stop / Cancel",
+    descCtrlR: "Toggle verbose",
+    descCtrlO: "Expand stream",
+    descHelp: "Show all commands",
+    descShiftTab: "Switch edit mode",
   },
 };

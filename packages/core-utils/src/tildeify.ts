@@ -7,7 +7,7 @@ export function tildeify(p: string): string {
   if (!home) return p;
   const normalized = home.replace(/[\\/]+$/, "");
   if (p === normalized) return "~";
-  if (p.startsWith(`${normalized}/`)) return `~/${p.slice(normalized.length + 1)}`;
-  if (p.startsWith(`${normalized}\\`)) return `~\\${p.slice(normalized.length + 1)}`;
+  if (p.startsWith(`${normalized}/`)) return `~/${p.slice(normalized.length + 1).replace(/^[\\/]+/, "")}`;
+  if (p.startsWith(`${normalized}\\`)) return `~\\${p.slice(normalized.length + 1).replace(/^[\\/]+/, "")}`;
   return p;
 }

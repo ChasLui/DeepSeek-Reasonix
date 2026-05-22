@@ -24,11 +24,11 @@ import { normalizeWindowsEnvVars } from "../src/tools/shell/exec.js";
 
 /** A PauseGate that records call args and denies — denial keeps the spawn from actually running. */
 class SpyGate extends PauseGate {
-  lastCall: { kind: string; payload?: unknown } | null = null;
-  override ask(opts: { kind: string; payload?: unknown }): Promise<any> {
+  lastCall: Parameters<PauseGate["ask"]>[0] | null = null;
+  override ask = ((opts: Parameters<PauseGate["ask"]>[0]) => {
     this.lastCall = opts;
     return Promise.resolve({ type: "deny" } as ConfirmationChoice);
-  }
+  }) as PauseGate["ask"];
 }
 
 class AutoGate extends PauseGate {
@@ -37,9 +37,9 @@ class AutoGate extends PauseGate {
     super();
     this._choice = choice;
   }
-  override ask(_opts: { kind: string; payload?: unknown }): Promise<ConfirmationChoice> {
+  override ask = ((_opts: Parameters<PauseGate["ask"]>[0]) => {
     return Promise.resolve(this._choice);
-  }
+  }) as PauseGate["ask"];
 }
 
 describe("tokenizeCommand", () => {
@@ -369,6 +369,27 @@ describe("isAllowed", () => {
     it("works through isCommandAllowed for chain commands", () => {
       expect(isCommandAllowed("cat ~/.ssh/id_rsa | grep KEY", [], projectRoot)).toBe(false);
       expect(isCommandAllowed("cat src/index.ts && grep TODO src/", [], projectRoot)).toBe(true);
+    });
+
+    it("demotes allowlisted commands with sandbox-escaping redirects", () => {
+      expect(isCommandAllowed("git status > out.txt")).toBe(false);
+      expect(isCommandAllowed("git status > /tmp/evil", [], projectRoot)).toBe(false);
+      expect(isCommandAllowed("ls > ../../../etc/passwd", [], projectRoot)).toBe(false);
+    });
+
+    it("allows safe redirects in allowlisted chain commands", () => {
+      expect(isCommandAllowed("git status > ./output.txt", [], projectRoot)).toBe(true);
+      expect(
+        isCommandAllowed(`git status > ${join(projectRoot, "out.txt")}`, [], projectRoot),
+      ).toBe(true);
+      expect(isCommandAllowed("git status > /dev/null", [], projectRoot)).toBe(true);
+      expect(isCommandAllowed("git status 2>&1", [], projectRoot)).toBe(true);
+    });
+
+    it("demotes sensitive redirect targets", () => {
+      expect(isCommandAllowed("cat < .env", [], projectRoot)).toBe(false);
+      expect(isCommandAllowed("cat < ~/.ssh/id_rsa", [], projectRoot)).toBe(false);
+      expect(isCommandAllowed("cat < README.md", [], projectRoot)).toBe(true);
     });
   });
 });

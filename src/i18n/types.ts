@@ -216,6 +216,35 @@ export interface TranslationSchema {
     planStoppedAt: string;
     revisingAfter: string;
     historyScrollHint: string;
+    editHistoryTitle: string;
+    editHistoryNoCodeMode: string;
+    editHistoryNoEdits: string;
+    editHistoryNoShowId: string;
+    editHistoryIdNotFound: string;
+    editHistoryLookupFailed: string;
+    editHistoryBatchNoFile: string;
+    editHistoryNoEdits2: string;
+    editHistoryStatusApplied: string;
+    editHistoryStatusPartial: string;
+    editHistoryStatusUndone: string;
+    editHistoryHelpShow: string;
+    editHistoryHelpUndo: string;
+    editHistoryAlreadyReverted: string;
+    editHistoryRevertFile: string;
+    mcpFailed: string;
+    mcpWarn: string;
+  };
+  mcpBrowse: {
+    noResources: string;
+    readOne: string;
+    noPrompts: string;
+    fetchOne: string;
+    noServerForResource: string;
+    resourceHint: string;
+    readFailed: string;
+    noServerForPrompt: string;
+    promptHint: string;
+    fetchFailed: string;
   };
   hooks: {
     head: string;
@@ -408,6 +437,8 @@ export interface TranslationSchema {
     mcpLoading: string;
     /** Word used in the context-usage pill (rendered as `ctx 72% · 144K/200K`). */
     ctx: string;
+    /** Hint shown next to the ⚑ icon — triggers the shortcut help modal. */
+    shortcutsHint: string;
   };
   editMode: {
     plan: string;
@@ -630,6 +661,7 @@ export interface TranslationSchema {
     endpointMustBeHttp: string;
     cannotReach: string;
     searxngNoResults: string;
+    metasoMissingKey: string;
     metasoDailyLimit: string;
     metasoUnauthorized: string;
     metasoRateLimit: string;
@@ -830,6 +862,8 @@ export interface TranslationSchema {
     failedSetupHint: string;
     failedSetupConfigHint: string;
     abortedHint: string;
+    toolsReady: string;
+    warnLabel: string;
   };
   checkpointPicker: {
     title: string;
@@ -875,5 +909,40 @@ export interface TranslationSchema {
     noRecords: string;
     untracked: string;
     churned: string;
+  };
+  builtinSkills: {
+    explore: string;
+    research: string;
+    review: string;
+    securityReview: string;
+    test: string;
+  };
+  shortcutsHelp: {
+    title: string;
+    groupInput: string;
+    groupNavigation: string;
+    groupSession: string;
+    groupSystem: string;
+    descEnter: string;
+    descShiftEnter: string;
+    descCtrlU: string;
+    descCtrlW: string;
+    descCtrlP: string;
+    descCtrlX: string;
+    descArrows: string;
+    descPgUpDown: string;
+    descCtrlL: string;
+    descCtrlB: string;
+    descNewSession: string;
+    descListSessions: string;
+    descSwitchModel: string;
+    descSwitchPreset: string;
+    descSwitchTheme: string;
+    descCtrlC: string;
+    descEsc: string;
+    descCtrlR: string;
+    descCtrlO: string;
+    descHelp: string;
+    descShiftTab: string;
   };
 }

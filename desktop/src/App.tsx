@@ -97,12 +97,13 @@ export type ChatMessage =
       pending: boolean;
     }
   | { kind: "status"; text: string }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string; id: string; recoverable?: boolean };
 
 export type PendingConfirm = {
   id: number;
   kind: "run_command" | "run_background";
   command: string;
+  prompt: import("@reasonix/core-utils").ApprovalPrompt;
 };
 
 export type PendingPathAccess = {
@@ -112,6 +113,7 @@ export type PendingPathAccess = {
   toolName: string;
   sandboxRoot: string;
   allowPrefix: string;
+  prompt: import("@reasonix/core-utils").ApprovalPrompt;
 };
 
 export type PendingChoice = {
@@ -270,6 +272,7 @@ type Action =
   | { t: "resolve_checkpoint"; id: number; verdict: CheckpointVerdict }
   | { t: "resolve_revision"; id: number; verdict: RevisionVerdict }
   | { t: "dismiss_plan" }
+  | { t: "dismiss_error"; id: string }
   | { t: "mention_results"; results: MentionResults }
   | { t: "mention_preview"; preview: MentionPreviewState }
   | { t: "enqueue_send"; text: string }
@@ -297,6 +300,12 @@ function nextMessageTurn(messages: ChatMessage[]): number {
     return max;
   }, 0);
   return lastTurn + 1;
+}
+
+let _errSeq = 0;
+function nextErrorId(): string {
+  _errSeq += 1;
+  return `err-${Date.now().toString(36)}-${_errSeq}`;
 }
 
 export function reduce(state: State, action: Action): State {
@@ -338,7 +347,11 @@ export function reduce(state: State, action: Action): State {
         queuedSends: [],
         messages: [
           ...state.messages,
-          { kind: "error", message: `reasonix exited (code ${action.code ?? "?"})` },
+          {
+            kind: "error",
+            message: `reasonix exited (code ${action.code ?? "?"})`,
+            id: nextErrorId(),
+          },
         ],
       };
     case "incoming":
@@ -448,6 +461,13 @@ export function reduce(state: State, action: Action): State {
     }
     case "dismiss_plan":
       return { ...state, activePlan: null };
+    case "dismiss_error":
+      return {
+        ...state,
+        messages: state.messages.filter(
+          (m) => !(m.kind === "error" && m.id === action.id),
+        ),
+      };
     case "mention_results":
       return { ...state, mentionResults: action.results };
     case "mention_preview":
@@ -565,13 +585,30 @@ export function applyIncoming(state: State, ev: IncomingEvent): State {
     case "$needs_setup":
       return { ...state, needsSetup: true, ready: false };
     case "$turn_complete":
-      return { ...state, busy: false, activeSkill: null };
+      // Clear pause-gate-tied modals too. By the time the loop emits
+      // $turn_complete, anything still in these arrays is orphaned — the
+      // tool call that opened it has either resolved (so it's gone already)
+      // or the turn was aborted (so the model isn't coming back for it).
+      // Without this, an Esc/abort during plan approval leaves the plan
+      // card rendered AFTER state.messages forever; the queued user input
+      // that drains next then appears above the zombie card (#1456).
+      return {
+        ...state,
+        busy: false,
+        activeSkill: null,
+        pendingConfirms: [],
+        pendingPathAccess: [],
+        pendingChoices: [],
+        pendingPlans: [],
+        pendingCheckpoints: [],
+        pendingRevisions: [],
+      };
     case "$confirm_required":
       return {
         ...state,
         pendingConfirms: [
           ...state.pendingConfirms,
-          { id: ev.id, kind: ev.kind, command: ev.command },
+          { id: ev.id, kind: ev.kind, command: ev.command, prompt: ev.prompt! },
         ],
       };
     case "$path_access_required":
@@ -586,6 +623,7 @@ export function applyIncoming(state: State, ev: IncomingEvent): State {
             toolName: ev.toolName,
             sandboxRoot: ev.sandboxRoot,
             allowPrefix: ev.allowPrefix,
+            prompt: ev.prompt!,
           },
         ],
       };
@@ -814,18 +852,30 @@ export function applyIncoming(state: State, ev: IncomingEvent): State {
               `Session "${ev.name}" loaded with no messages (${sizeNote}). ` +
               `The file ~/.reasonix/sessions/${ev.name}.jsonl exists but couldn't be parsed — ` +
               `start a new chat or restore from .jsonl.bak if you have one.`,
+            id: nextErrorId(),
           },
         ],
       };
     }
     case "$error":
-    case "error":
+    case "error": {
+      // Kernel-level errors carry a `recoverable` flag — true for
+      // storm-repair / repeat-loop warnings the loop already worked
+      // around, false for hard failures. The desktop renders both as
+      // dismissable cards but uses softer tone for the recoverable
+      // ones so a session full of self-repaired loops doesn't look
+      // like everything's on fire (#1456-followup).
+      const recoverable = ev.type === "error" ? ev.recoverable : false;
       return {
         ...state,
         busy: false,
         activeSkill: null,
-        messages: [...state.messages, { kind: "error", message: ev.message }],
+        messages: [
+          ...state.messages,
+          { kind: "error", message: ev.message, id: nextErrorId(), recoverable },
+        ],
       };
+    }
     case "model.turn.started":
       if (state.messages.some((m) => m.kind === "assistant" && m.turn === ev.turn)) {
         return { ...state, model: ev.model };
@@ -955,6 +1005,7 @@ export function applyIncoming(state: State, ev: IncomingEvent): State {
     case "$btw_result":
       return {
         ...state,
+        busy: false,
         messages: [
           ...state.messages,
           { kind: "status", text: `≫ btw\n${ev.answer}` },
@@ -1277,6 +1328,9 @@ function TabRuntime({
       // /btw <question> — route to side-question RPC instead of user_input.
       // Empty payload used to silently swallow the keystroke (#1370); surface
       // the usage hint as a status message so the user knows what's expected.
+      // The full /btw line is echoed via send_user so the typed text appears
+      // immediately and busy=true gives a thinking indicator while the side
+      // call runs (#1470).
       const btwMatch = /^\/btw(?:\s+([\s\S]+))?$/.exec(text);
       if (btwMatch) {
         const question = btwMatch[1]?.trim() ?? "";
@@ -1285,6 +1339,8 @@ function TabRuntime({
           if (!override) setDraft("/btw ");
           return;
         }
+        const clientId = `btw-${Date.now()}`;
+        dispatch({ t: "send_user", text, clientId });
         sendRpc({ cmd: "btw", text: question });
         if (!override) setDraft("");
         return;
@@ -1624,14 +1680,16 @@ function TabRuntime({
     ? state.settings.workspaceDir.split(/[\\/]/).pop() || "workspace"
     : "Reasonix";
   const session = (() => {
+    if (state.currentSession) {
+      const s = state.sessions.find((x) => x.name === state.currentSession);
+      if (s?.summary?.trim()) return s.summary.trim();
+    }
     const firstUser = state.messages.find((m) => m.kind === "user");
     if (firstUser && firstUser.kind === "user") {
       const cleaned = firstUser.text.replace(/\s+/g, " ").trim();
       if (cleaned) return cleaned.length > 60 ? `${cleaned.slice(0, 60)}…` : cleaned;
     }
     if (state.currentSession) {
-      const s = state.sessions.find((x) => x.name === state.currentSession);
-      if (s?.summary?.trim()) return s.summary.trim();
       const m = state.currentSession.match(/^desktop-(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})/);
       if (m)
         return t("app.session.format", {
@@ -1727,6 +1785,7 @@ function TabRuntime({
           onNewChat={newChat}
           onLoadSession={(name) => sendRpc({ cmd: "session_load", name })}
           onDeleteSession={(name) => sendRpc({ cmd: "session_delete", name })}
+          onRenameSession={(name, title) => sendRpc({ cmd: "session_rename", name, title })}
           onOpenSettings={() => openSettingsAt("general")}
           onOpenRules={() => openSettingsAt("rules")}
           onOpenCommands={() => palette.setOpen(true)}
@@ -1825,22 +1884,40 @@ function TabRuntime({
                       );
                     }
                     if (m.kind === "error") {
+                      const toneVar = m.recoverable ? "var(--tone-warn)" : "var(--tone-err)";
+                      const bgVar = m.recoverable
+                        ? "var(--warn-soft, var(--danger-soft))"
+                        : "var(--danger-soft)";
+                      const labelKey = m.recoverable ? "app.warningLabel" : "app.errorLabel";
                       return (
                         <div
-                          key={`e-${i}`}
+                          key={m.id}
                           className="warn-card"
-                          style={{
-                            borderColor: "var(--tone-err)",
-                            background: "var(--danger-soft)",
-                          }}
+                          style={{ borderColor: toneVar, background: bgVar, position: "relative" }}
                         >
-                          <span className="ico" style={{ color: "var(--tone-err)" }}>
+                          <span className="ico" style={{ color: toneVar }}>
                             <I.warning size={16} />
                           </span>
-                          <div>
-                            <div className="tt">{t("app.errorLabel")}</div>
+                          <div style={{ flex: 1 }}>
+                            <div className="tt">{t(labelKey)}</div>
                             <div className="ds">{m.message}</div>
                           </div>
+                          <button
+                            type="button"
+                            className="warn-card-dismiss"
+                            title={t("app.dismissError")}
+                            onClick={() => dispatch({ t: "dismiss_error", id: m.id })}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: toneVar,
+                              cursor: "pointer",
+                              padding: "4px",
+                              alignSelf: "flex-start",
+                            }}
+                          >
+                            <I.x size={14} />
+                          </button>
                         </div>
                       );
                     }
@@ -1877,7 +1954,7 @@ function TabRuntime({
                   {state.pendingConfirms.map((c) => (
                     <ConfirmApprovalCard
                       key={`cc-${c.id}`}
-                      c={c}
+                      prompt={c.prompt}
                       onAllow={() => resolveConfirm(c.id, { type: "run_once" })}
                       onAlwaysAllow={(prefix) =>
                         resolveConfirm(c.id, { type: "always_allow", prefix })
@@ -1888,7 +1965,7 @@ function TabRuntime({
                   {state.pendingPathAccess.map((p) => (
                     <PathAccessApprovalCard
                       key={`pa-${p.id}`}
-                      p={p}
+                      prompt={p.prompt}
                       onAllow={() => resolvePathAccess(p.id, { type: "run_once" })}
                       onAlwaysAllow={(prefix) =>
                         resolvePathAccess(p.id, { type: "always_allow", prefix })
@@ -2985,6 +3062,14 @@ export function App() {
       cleanups.push(...subs);
       try {
         await invoke("rpc_spawn");
+        // WebView reload (DevTools F5, host respawn) keeps the Node child
+        // alive but loses every $tab_opened / $settings / $needs_setup that
+        // already fired. Ask the desktop server to re-emit them.
+        if (!cancelled) {
+          await invoke("rpc_send", {
+            line: JSON.stringify({ cmd: "desktop_resync" }),
+          });
+        }
       } catch (err) {
         if (!cancelled) console.error("rpc_spawn failed", err);
       }

@@ -10,7 +10,8 @@
     "./derive-prefix": "./src/derive-prefix.ts",
     "./tildeify": "./src/tildeify.ts",
     "./tool-kind": "./src/tool-kind.ts",
-    "./permission-types": "./src/permission-types.ts"
+    "./permission-types": "./src/permission-types.ts",
+    "./approval-prompt": "./src/approval-prompt.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

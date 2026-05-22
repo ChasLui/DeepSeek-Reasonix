@@ -1,6 +1,6 @@
 import { render } from "ink";
 import React, { useMemo, useState } from "react";
-import { loadApiKey, readConfig, searchEnabled } from "../../config.js";
+import { loadApiKey, loadToolRateLimit, readConfig, searchEnabled } from "../../config.js";
 import { loadDotenv } from "../../env.js";
 import { t } from "../../i18n/index.js";
 import {
@@ -23,6 +23,7 @@ import { Setup } from "../ui/Setup.js";
 import { drainTtyResponses } from "../ui/drain-tty.js";
 import { KeystrokeProvider } from "../ui/keystroke-context.js";
 import { disableMouseMode, enableMouseMode } from "../ui/mouse-mode.js";
+import { installResizeBroadcaster } from "../ui/resize-broadcaster.js";
 import type { McpServerSummary } from "../ui/slash.js";
 import {
   type McpLifecycleNotice,
@@ -260,7 +261,9 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
   // replacing. When no seed AND no MCP, tools stays undefined and
   // the loop runs as a bare chat.
   let tools: ToolRegistry | undefined = opts.seedTools;
-  if (requestedSpecs.length > 0 && !tools) tools = new ToolRegistry();
+  if (requestedSpecs.length > 0 && !tools) {
+    tools = new ToolRegistry({ rateLimit: loadToolRateLimit() });
+  }
 
   const runtime = createMcpRuntime({
     getTools: () => tools,
@@ -286,7 +289,7 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
   // backs them with no key required; the model invokes them whenever
   // a question needs info fresher than its training data.
   if (searchEnabled()) {
-    if (!tools) tools = new ToolRegistry();
+    if (!tools) tools = new ToolRegistry({ rateLimit: loadToolRateLimit() });
     registerWebTools(tools);
   }
 
@@ -298,7 +301,7 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
   // exists) so it can wire the subagent runner for runAs:subagent
   // skills.
   if (!opts.seedTools) {
-    if (!tools) tools = new ToolRegistry();
+    if (!tools) tools = new ToolRegistry({ rateLimit: loadToolRateLimit() });
     registerMemoryTools(tools, {});
     // `ask_choice` — branching primitive, useful in chat too (stylistic
     // preferences, doc language, library picks). Independent of plan
@@ -342,10 +345,9 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
     }
   }
 
-  // One stdout `resize` listener per card (Ink's useBoxMetrics); long
-  // chats legitimately hold dozens, so Node's default cap of 10 fires
-  // a spurious MaxListenersExceededWarning. Raise the ceiling.
-  process.stdout.setMaxListeners(200);
+  // Before render() — shims Ink's per-card useBoxMetrics resize subscribe
+  // path so N cards don't accumulate N native stdout listeners.
+  installResizeBroadcaster();
 
   // Wheel scrolling. Opt-out via `mouseTracking: false` for users who
   // prefer native drag-select copy (Shift+drag still selects with mouse

@@ -7,6 +7,7 @@ import { VERSION } from "@/version.js";
 import { writeClipboard } from "../../clipboard.js";
 import { computeCtxBreakdown } from "../../ctx-breakdown.js";
 import { buildFeedbackDiagnostic, buildFeedbackIssueUrl } from "../../feedback.js";
+import { formatLifecycleStatus } from "../../lifecycle-observability.js";
 import { openUrl } from "../../open-url.js";
 import type { SlashHandler } from "../dispatch.js";
 import { compactNum } from "../helpers.js";
@@ -89,6 +90,7 @@ const status: SlashHandler = (_args, loop, ctx) => {
   const pendingLine =
     pending > 0 ? t("handlers.observability.statusEdits", { count: pending }) : "";
   const planLine = ctx.planMode ? t("handlers.observability.statusPlan") : "";
+  const lifecycleLine = formatLifecycleStatus(ctx.getEngineeringLifecycleSnapshot?.() ?? null);
   const modeLine =
     ctx.editMode === "yolo"
       ? t("handlers.observability.statusModeYolo")
@@ -118,6 +120,7 @@ const status: SlashHandler = (_args, loop, ctx) => {
   if (budgetLine) lines.push(budgetLine);
   if (pendingLine) lines.push(pendingLine);
   if (planLine) lines.push(planLine);
+  if (lifecycleLine) lines.push(lifecycleLine);
   if (modeLine) lines.push(modeLine);
   if (dashLine) lines.push(dashLine);
   return { info: lines.join("\n") };
@@ -171,7 +174,11 @@ const cost: SlashHandler = (args, loop, ctx) => {
     reasonTokens: 0,
     outputTokens: turn.usage.completionTokens,
     promptCap: ctxMax,
-    cacheHit: turn.cacheHitRatio,
+    // Session-aggregate cache hit so this card matches the bottom status bar
+    // and the web dashboard (#1479). The bar already shows the rolling total
+    // (state/events.ts comment) — displaying a per-turn number here just for
+    // the slash card produced two different "cache hit %" values on screen.
+    cacheHit: summary.cacheHitRatio,
     cost: turn.cost,
     sessionCost: summary.totalCostUsd,
   });

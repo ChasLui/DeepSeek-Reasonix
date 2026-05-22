@@ -743,7 +743,7 @@ describe("registerJavaSourceTool", () => {
     expect(spec!.parameters).toBeDefined();
     expect(spec!.parameters!.properties).toHaveProperty("className");
     expect(spec!.parameters!.required).toContain("className");
-    expect(spec!.parameters!.required).not.toContain("jarKeyword");
+    expect(spec!.parameters!.required).toContain("jarKeyword");
   });
 
   it("validates className is required — returns error JSON", async () => {
@@ -839,47 +839,7 @@ describe("registerJavaSourceTool", () => {
     expect(parsed.sourcePath).toContain("Hello.java");
   });
 
-  it("mode 2: jarPath dispatch reads + decompiles (jarKeyword not required)", async () => {
-    const root = await tmpDir();
-    const jarPath = join(root, "lib.jar");
-    // Need execFile to return javap output
-    vi.mocked(execFile).mockImplementation(((
-      _cmd: unknown,
-      _args: unknown,
-      _opts: unknown,
-      cb: unknown,
-    ) => {
-      if (typeof cb === "function") {
-        (cb as (err: Error | null, stdout: string, stderr: string) => void)(
-          null,
-          'Compiled from "Util.java"\npublic class Util { public Util(); }\n',
-          "",
-        );
-      }
-    }) as any);
-    writeFileSync(
-      jarPath,
-      createZip([{ name: "com/example/Util.class", data: Buffer.from("fake") }]),
-    );
-
-    const reg = new ToolRegistry();
-    registerJavaSourceTool(reg, { projectRoot: root });
-
-    // jarPath mode should work without jarKeyword
-    const result = await reg.dispatch(
-      "java_source",
-      JSON.stringify({
-        className: "com.example.Util",
-        jarPath,
-      }),
-    );
-    const parsed = JSON.parse(result);
-    expect(parsed.status).toBe("found");
-    expect(parsed.method).toBe("jar");
-    expect(parsed.source).toContain("public class Util");
-  });
-
-  it("jarKeyword dispatch accepts keyword without error", async () => {
+  it("normal dispatch with jarKeyword returns not-found when no match", async () => {
     const root = await tmpDir();
     mkdirSync(join(root, "src"), { recursive: true });
     writeFileSync(join(root, "src", "main.ts"), "not java");
@@ -905,11 +865,10 @@ describe("registerJavaSourceTool", () => {
     expect(parsed.className).toBe("org.springframework.SomeClass");
   });
 
-  it("className-only dispatch (no jarKeyword, no jarPath) works", async () => {
+  it("rejects dispatch when jarKeyword is missing", async () => {
     const root = await tmpDir();
     mkdirSync(join(root, "src"), { recursive: true });
     writeFileSync(join(root, "src", "main.ts"), "not java");
-    vi.spyOn(ClassSourceFinder, "defaultRepoPaths").mockReturnValue([]);
 
     const reg = new ToolRegistry();
     registerJavaSourceTool(reg, { projectRoot: root });
@@ -919,10 +878,28 @@ describe("registerJavaSourceTool", () => {
       JSON.stringify({ className: "com.example.Missing" }),
     );
     const parsed = JSON.parse(result);
-    expect(parsed.status).toBe("not-found");
-    expect(parsed.className).toBe("com.example.Missing");
-    // When jarKeyword is absent, the tip should suggest passing it
-    expect(parsed.message).toContain("Tip: pass `jarKeyword`");
+    expect(parsed).toHaveProperty("error");
+    expect(parsed.error).toContain("missing required parameter");
+    expect(parsed.error).toContain("jarKeyword");
+  });
+
+  it("rejects dispatch when jarKeyword is empty or whitespace", async () => {
+    const root = await tmpDir();
+    mkdirSync(join(root, "src"), { recursive: true });
+    writeFileSync(join(root, "src", "main.ts"), "not java");
+
+    const reg = new ToolRegistry();
+    registerJavaSourceTool(reg, { projectRoot: root });
+
+    for (const kw of ["", "   ", "\t"]) {
+      const result = await reg.dispatch(
+        "java_source",
+        JSON.stringify({ className: "com.example.Foo", jarKeyword: kw }),
+      );
+      const parsed = JSON.parse(result);
+      expect(parsed).toHaveProperty("error");
+      expect(parsed.error).toContain("must not be empty");
+    }
   });
 
   it("returns proper not-found response format", async () => {

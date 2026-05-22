@@ -1,6 +1,6 @@
 import { type WriteStream, statSync } from "node:fs";
 import { relative, resolve } from "node:path";
-import { derivePrefix } from "@reasonix/core-utils";
+import { derivePrefix, toApprovalPrompt } from "@reasonix/core-utils";
 import { Box, Text, useStdin, useStdout } from "ink";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -122,6 +122,7 @@ import { PlanReviseEditor } from "./PlanReviseEditor.js";
 import { PromptInput } from "./PromptInput.js";
 import { SessionPicker } from "./SessionPicker.js";
 import { ShellConfirm, type ShellConfirmChoice } from "./ShellConfirm.js";
+
 import { SlashArgPicker } from "./SlashArgPicker.js";
 import { SlashSuggestions } from "./SlashSuggestions.js";
 import { type ThemeChoice, ThemePicker } from "./ThemePicker.js";
@@ -492,6 +493,7 @@ function AppInner({
   const isStreaming = useAgentState((s) => s.cards.some((c) => c.kind === "streaming" && !c.done));
   const cardCount = useAgentState((s) => s.cards.length);
   const sessionModel = useAgentState((s) => s.session.model);
+  const sessionPreset = useAgentState((s) => s.status.preset);
   const ctxTokens = useAgentState((s) => s.status.promptTokens);
   const ctxCap = useAgentState(
     (s) => s.status.promptCap ?? DEEPSEEK_CONTEXT_TOKENS[s.session.model] ?? DEFAULT_CONTEXT_TOKENS,
@@ -538,6 +540,7 @@ function AppInner({
     markPhase("first_paint");
     dumpStartupProfile();
   }, []);
+
   // Live MCP server list: initialized from the boot-time prop, then
   // updated immutably when append-drift adds tools mid-session.
   const [liveMcpServers, setLiveMcpServers] = useState<McpServerSummary[]>(() => mcpServers ?? []);
@@ -699,6 +702,7 @@ function AppInner({
   /** True while the ThemePicker is open mid-chat (triggered by bare `/theme`). */
   const [pendingThemePicker, setPendingThemePicker] = useState(false);
   const [pendingCopyMode, setPendingCopyMode] = useState(false);
+  const [pendingShortcuts, setPendingShortcuts] = useState(false);
   // Stashed plan + intent while the user types free-form feedback
   // (refinement or last instructions on approve). When the picker
   // returns "refine" or "approve", we defer the loop-resume and show
@@ -770,6 +774,7 @@ function AppInner({
     pendingModelPicker ||
     pendingThemePicker ||
     pendingCopyMode ||
+    pendingShortcuts ||
     !!stagedInput ||
     !!pendingEditReview ||
     walkthroughActive ||
@@ -1219,8 +1224,8 @@ function AppInner({
         bumpReady();
       } else if (notice.kind === "failed") {
         log.pushWarning(
-          `MCP ${notice.name} failed`,
-          `${notice.reason}\nrun \`reasonix setup\` to remove this entry, or fix the underlying issue (missing npm package, network, etc.).`,
+          t("app.mcpFailed", { name: notice.name }),
+          `${notice.reason}\n${t("mcpLifecycle.failedSetupHint")}`,
         );
         bumpReady();
       } else if (notice.kind === "tools-ready") {
@@ -1235,7 +1240,7 @@ function AppInner({
         bumpReady();
       } else if (notice.kind === "warn") {
         log.pushWarning(
-          `MCP ${notice.name} warn`,
+          t("app.mcpWarn", { name: notice.name }),
           formatMcpLifecycleEvent({
             state: "warn",
             name: notice.name,
@@ -1660,8 +1665,10 @@ function AppInner({
   // arrows here when the composer is hidden (chat is scrolled up and
   // InputAreaWithHistoryHint has replaced it).
   useKeystroke((ev) => {
-    if (ev.pageUp || ev.mouseScrollUp) chatScroll.scrollPageUp();
-    else if (ev.pageDown || ev.mouseScrollDown) chatScroll.scrollPageDown();
+    if (ev.pageUp) chatScroll.scrollPageUp();
+    else if (ev.pageDown) chatScroll.scrollPageDown();
+    else if (ev.mouseScrollUp) chatScroll.scrollWheelUp();
+    else if (ev.mouseScrollDown) chatScroll.scrollWheelDown();
     else if (ev.end) chatScroll.jumpToBottom();
     else if (!composerPinned && ev.upArrow) chatScroll.scrollUp();
     else if (!composerPinned && ev.downArrow) chatScroll.scrollDown();
@@ -1732,6 +1739,10 @@ function AppInner({
       });
       return;
     }
+    if (key.ctrl && key.input === "p" && !busy && (!modalOpen || pendingShortcuts)) {
+      setPendingShortcuts((prev) => !prev);
+      return;
+    }
     if (
       key.escape &&
       !submittingRef.current &&
@@ -1754,6 +1765,11 @@ function AppInner({
         loop,
         quitProcess,
       });
+      return;
+    }
+    // Esc dismisses the shortcuts help modal
+    if (key.escape && pendingShortcuts) {
+      setPendingShortcuts(false);
       return;
     }
     // Esc dismisses any composer-level picker (slash / @ / slash-arg)
@@ -2872,6 +2888,9 @@ function AppInner({
             status: qq.status,
           },
           sessionId: session,
+          getEngineeringLifecycleSnapshot: codeMode
+            ? () => engineeringLifecycleRef.current?.snapshot() ?? null
+            : undefined,
           jobs: codeMode?.jobs,
           postInfo: fromQQ ? qq.sendInfo : log.pushInfo,
           postDoctor: (checks) => log.showDoctor(checks),
@@ -3580,14 +3599,42 @@ function AppInner({
         return;
       }
 
-      if (choice === "refine" || choice === "approve") {
+      if (choice === "refine") {
         if (pendingPlan) {
           const questions = extractOpenQuestionsSection(pendingPlan) ?? undefined;
-          setStagedInput({ plan: pendingPlan, mode: choice, questions });
+          setStagedInput({ plan: pendingPlan, mode: "refine", questions });
           setPendingPlan(null);
-        } else if (choice === "approve") {
-          setStagedInput({ plan: "", mode: "approve" });
         }
+        return;
+      }
+
+      if (choice === "approve") {
+        if (pendingPlan) {
+          const questions = extractOpenQuestionsSection(pendingPlan) ?? undefined;
+          if (questions) {
+            // Plan flagged open questions — keep the staged input so the user
+            // can answer them before approve goes through.
+            setStagedInput({ plan: pendingPlan, mode: "approve", questions });
+            setPendingPlan(null);
+          } else {
+            // No open questions → Accept should execute the plan, not stop
+            // for an optional-guidance step. Resolve the gate directly via the
+            // same path handleStagedInputSubmit uses for explicit-feedback
+            // approvals so plan-card setup and lifecycle hooks stay in sync.
+            // #1475: the staged input was visually indistinguishable from the
+            // regular composer, trapping users after the picker reopened from
+            // a reject-flow Esc and breaking their "Accept = run it" mental
+            // model.
+            const plan = pendingPlan;
+            setPendingPlan(null);
+            await handlePlanFeedbackRef.current("", { plan, mode: "approve" });
+          }
+          return;
+        }
+        // `/apply-plan` slash fallback — model wrote a plan in assistant text
+        // instead of calling submit_plan, so there's no pending gate to resolve.
+        // Surface the staged input so we still capture the implement-now intent.
+        setStagedInput({ plan: "", mode: "approve" });
         return;
       }
 
@@ -4538,21 +4585,31 @@ function AppInner({
                   />
                 ) : pendingShell ? (
                   <ShellConfirm
-                    command={pendingShell.command}
-                    allowPrefix={derivePrefix(pendingShell.command)}
-                    kind={pendingShell.kind}
-                    cwd={pendingShell.cwd}
-                    timeoutSec={pendingShell.timeoutSec}
-                    waitSec={pendingShell.waitSec}
+                    prompt={toApprovalPrompt({
+                      id: pendingShell.id,
+                      kind: pendingShell.kind,
+                      payload: {
+                        command: pendingShell.command,
+                        cwd: pendingShell.cwd,
+                        timeoutSec: pendingShell.timeoutSec,
+                        waitSec: pendingShell.waitSec,
+                      },
+                    })}
                     onChoose={handleShellConfirm}
                   />
                 ) : pendingPath ? (
                   <PathConfirm
-                    path={pendingPath.path}
-                    intent={pendingPath.intent}
-                    toolName={pendingPath.toolName}
-                    sandboxRoot={pendingPath.sandboxRoot}
-                    allowPrefix={pendingPath.allowPrefix}
+                    prompt={toApprovalPrompt({
+                      id: pendingPath.id,
+                      kind: "path_access",
+                      payload: {
+                        path: pendingPath.path,
+                        intent: pendingPath.intent,
+                        toolName: pendingPath.toolName,
+                        sandboxRoot: pendingPath.sandboxRoot,
+                        allowPrefix: pendingPath.allowPrefix,
+                      },
+                    })}
                     onChoose={handlePathConfirm}
                   />
                 ) : pendingEditReview ? (
@@ -4586,6 +4643,26 @@ function AppInner({
                     jobs={codeMode ? codeMode.jobs : undefined}
                     activeLoop={activeLoop}
                     statusBar={statusBar}
+                    showShortcuts={pendingShortcuts}
+                    mode={
+                      editMode === "yolo"
+                        ? t("statsPanel.modeYolo")
+                        : editMode === "auto"
+                          ? t("statsPanel.modeAuto")
+                          : editMode === "review"
+                            ? t("statsPanel.modeReview")
+                            : editMode
+                    }
+                    model={
+                      (sessionPreset
+                        ? `${sessionPreset.charAt(0).toUpperCase() + sessionPreset.slice(1)} \u00b7 `
+                        : "") +
+                      (sessionModel === "deepseek-v4-pro"
+                        ? "Deepseek v4 pro"
+                        : sessionModel === "deepseek-v4-flash"
+                          ? "Deepseek v4 flash"
+                          : sessionModel)
+                    }
                     input={input}
                     setInput={setInput}
                     busy={busy}

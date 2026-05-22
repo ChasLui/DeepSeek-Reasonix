@@ -123,6 +123,15 @@ describe("handleSlash", () => {
     expect(info.indexOf("  SETUP")).toBeLessThan(info.indexOf("  CHAT"));
   });
 
+  it("/about prints version, website, repo, and MIT license", () => {
+    const r = handleSlash("about", [], makeLoop());
+    expect(r.info).toContain(VERSION);
+    expect(r.info).toContain("https://esengine.github.io/DeepSeek-Reasonix/");
+    expect(r.info).toContain("https://github.com/esengine/DeepSeek-Reasonix");
+    expect(r.info).toContain("MIT");
+    expect(SLASH_COMMANDS.find((s) => s.cmd === "about")?.group).toBe("info");
+  });
+
   it("/title starts AI session title regeneration", async () => {
     let called = 0;
     let posted = "";
@@ -569,7 +578,7 @@ describe("handleSlash", () => {
     // Case-insensitive.
     expect(suggestSlashCommands("HE").map((s) => s.cmd)).toEqual(["help"]);
     // Empty prefix returns the full non-advanced release list, including code commands.
-    expect(suggestSlashCommands("", true)).toHaveLength(42);
+    expect(suggestSlashCommands("", true)).toHaveLength(43);
     expect(suggestSlashCommands("", true).map((s) => s.cmd)).toContain("logs");
     expect(suggestSlashCommands("", true).map((s) => s.cmd)).toContain("language");
     expect(suggestSlashCommands("lan").map((s) => s.cmd)).toContain("language");
@@ -936,6 +945,31 @@ describe("handleSlash", () => {
     expect(r.info).toMatch(/no turn yet/);
   });
 
+  it("/cost posts the session-aggregate cacheHit so the card matches the status bar (#1479)", () => {
+    const loop = makeLoop();
+    // Two turns with very different per-turn cache hits — last turn is 10%
+    // but the session average is ~75% once both turns are summed. Without
+    // the fix the slash card would have shown 10% while the bottom status
+    // bar showed ~75%, which is exactly the bug.
+    loop.stats.record(1, loop.model, new Usage(10_000, 100, 10_100, 9_000, 1_000));
+    loop.stats.record(2, loop.model, new Usage(10_000, 100, 10_100, 1_000, 9_000));
+    const lastTurn = loop.stats.turns[loop.stats.turns.length - 1]!;
+    const summary = loop.stats.summary();
+    // Sanity: per-turn and session-aggregate must actually differ, otherwise
+    // the test passes for the wrong reason.
+    expect(lastTurn.cacheHitRatio).not.toBe(summary.cacheHitRatio);
+
+    let posted: { cacheHit: number; sessionCost: number } | null = null;
+    handleSlash("cost", [], loop, {
+      postUsage: (args) => {
+        posted = { cacheHit: args.cacheHit, sessionCost: args.sessionCost };
+      },
+    });
+    expect(posted).not.toBeNull();
+    expect(posted!.cacheHit).toBeCloseTo(summary.cacheHitRatio, 6);
+    expect(posted!.cacheHit).not.toBe(lastTurn.cacheHitRatio);
+  });
+
   it("/status with pendingEditCount=0 hides the edits line", () => {
     const r = handleSlash("status", [], makeLoop(), { pendingEditCount: 0 });
     expect(r.info).not.toMatch(/pending/);
@@ -1101,6 +1135,114 @@ describe("handleSlash", () => {
       expect(r.info).toMatch(/Refactor auth into signed tokens/);
       expect(r.info).toMatch(/1\/2/);
     });
+
+    it("/plans surfaces active step evidence and pending evidence state", () => {
+      const loop = loopWithSession("plans-active-evidence");
+      const fs = require("node:fs") as typeof import("node:fs");
+      const dir = join(tempHome, ".reasonix", "sessions");
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(
+        join(dir, "plans-active-evidence.plan.json"),
+        JSON.stringify({
+          version: 2,
+          steps: [
+            { id: "step-1", title: "Update router", action: "Update router references." },
+            { id: "step-2", title: "Run migration", action: "Run the migration." },
+          ],
+          completedStepIds: ["step-1"],
+          stepCompletions: {
+            "step-1": {
+              kind: "step_completed",
+              stepId: "step-1",
+              result: "Updated router references.",
+              evidence: [
+                {
+                  kind: "verification",
+                  summary: "focused router tests passed",
+                  command: "npm test -- tests/router.test.ts",
+                },
+                {
+                  kind: "diff",
+                  summary: "updated router imports",
+                  paths: ["src/router.ts", "src/routes.ts"],
+                },
+              ],
+            },
+          },
+          updatedAt: new Date().toISOString(),
+          summary: "Router migration",
+        }),
+      );
+
+      const r = handleSlash("plans", [], loop, {
+        getEngineeringLifecycleSnapshot: () => ({
+          mode: "strict",
+          state: "executing",
+          planSteps: [],
+          completedStepIds: ["step-1"],
+          mutatedSinceLastStep: true,
+        }),
+      });
+
+      expect(r.info).toContain("Router migration");
+      expect(r.info).toContain("evidence pending");
+      expect(r.info).toContain("step-1");
+      expect(r.info).toContain("verification - focused router tests passed");
+      expect(r.info).toContain("npm test -- tests/router.test.ts");
+      expect(r.info).toContain("diff - updated router imports");
+      expect(r.info).toContain("src/router.ts, src/routes.ts");
+    });
+
+    it("/plans surfaces archived plan evidence summaries", () => {
+      const loop = loopWithSession("plans-archived-evidence");
+      writeArchive("plans-archived-evidence", "2026-04-20-evidence", {
+        version: 2,
+        steps: [
+          { id: "step-1", title: "Migrate config", action: "Update dependency config." },
+          { id: "step-2", title: "Confirm rollout", action: "Confirm rollout notes." },
+        ],
+        completedStepIds: ["step-1", "step-2"],
+        stepCompletions: {
+          "step-1": {
+            kind: "step_completed",
+            stepId: "step-1",
+            result: "Updated dependency config.",
+            evidence: [
+              {
+                kind: "diff",
+                summary: "updated package and lockfile",
+                paths: ["package.json", "pnpm-lock.yaml"],
+              },
+              {
+                kind: "verification",
+                summary: "install completed",
+                command: "npm install",
+              },
+            ],
+          },
+          "step-2": {
+            kind: "step_completed",
+            stepId: "step-2",
+            result: "Confirmed rollout notes.",
+            evidence: [{ kind: "manual", summary: "owner approved rollout note" }],
+          },
+        },
+        updatedAt: "2026-04-20T00:00:00.000Z",
+        summary: "Config migration",
+      });
+
+      const r = handleSlash("plans", [], loop);
+
+      expect(r.info).toContain("Config migration");
+      expect(r.info).toContain("evidence:");
+      expect(r.info).toContain("step-1");
+      expect(r.info).toContain("diff - updated package and lockfile");
+      expect(r.info).toContain("package.json, pnpm-lock.yaml");
+      expect(r.info).toContain("verification - install completed");
+      expect(r.info).toContain("npm install");
+      expect(r.info).toContain("step-2");
+      expect(r.info).toContain("manual - owner approved rollout note");
+    });
   });
 
   describe("/memory", () => {
@@ -1248,6 +1390,54 @@ describe("handleSlash", () => {
     it("/status hides the plan line when plan mode is off", () => {
       const r = handleSlash("status", [], makeLoop(), { planMode: false });
       expect(r.info).not.toMatch(/plan\s+ON/);
+    });
+
+    it("/status surfaces strict lifecycle state when enabled", () => {
+      const r = handleSlash("status", [], makeLoop(), {
+        getEngineeringLifecycleSnapshot: () => ({
+          mode: "strict",
+          state: "armed",
+          planSteps: [],
+          completedStepIds: [],
+          mutatedSinceLastStep: false,
+        }),
+      });
+
+      expect(r.info).toMatch(/lifecycle\s+strict\/armed/);
+    });
+
+    it("/status surfaces lifecycle progress and evidence pending", () => {
+      const r = handleSlash("status", [], makeLoop(), {
+        getEngineeringLifecycleSnapshot: () => ({
+          mode: "strict",
+          state: "executing",
+          planSteps: [
+            { id: "step-1", title: "Refactor", action: "Move code." },
+            { id: "step-2", title: "Verify", action: "Run tests." },
+            { id: "step-3", title: "Document", action: "Write notes." },
+          ],
+          completedStepIds: ["step-1"],
+          mutatedSinceLastStep: true,
+        }),
+      });
+
+      expect(r.info).toMatch(/lifecycle\s+strict\/executing/);
+      expect(r.info).toMatch(/1\/3/);
+      expect(r.info).toMatch(/evidence pending/);
+    });
+
+    it("/status hides lifecycle when it is off", () => {
+      const r = handleSlash("status", [], makeLoop(), {
+        getEngineeringLifecycleSnapshot: () => ({
+          mode: "off",
+          state: "idle",
+          planSteps: [],
+          completedStepIds: [],
+          mutatedSinceLastStep: false,
+        }),
+      });
+
+      expect(r.info).not.toMatch(/lifecycle/);
     });
   });
 

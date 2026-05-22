@@ -9,3 +9,13 @@ export type {
   RevisionVerdict,
   ChoiceVerdict,
 } from "./permission-types.js";
+export {
+  toApprovalPrompt,
+  resolveApprovalPrompt,
+} from "./approval-prompt.js";
+export type {
+  ApprovalPrompt,
+  ApprovalAction,
+  ApprovalTone,
+  ApprovalPromptKind,
+} from "./approval-prompt.js";

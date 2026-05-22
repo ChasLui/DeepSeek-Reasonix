@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import { stdin } from "node:process";
 import { createInterface } from "node:readline";
+import { toApprovalPrompt } from "@reasonix/core-utils";
 import {
   type FileWithStats,
   listDirectory,
@@ -98,6 +99,7 @@ type InMessage = { tabId?: string } & (
   | { cmd: "session_list" }
   | { cmd: "session_delete"; name: string }
   | { cmd: "session_load"; name: string }
+  | { cmd: "session_rename"; name: string; title: string }
   | { cmd: "new_chat" }
   | { cmd: "setup_save_key"; key: string }
   | { cmd: "settings_get" }
@@ -137,6 +139,7 @@ type InMessage = { tabId?: string } & (
   | { cmd: "compact_history" }
   | { cmd: "retry" }
   | { cmd: "btw"; text: string }
+  | { cmd: "desktop_resync" }
 );
 
 interface NeedsSetupEvent {
@@ -261,6 +264,7 @@ interface ConfirmRequiredEvent {
   id: number;
   kind: "run_command" | "run_background";
   command: string;
+  prompt?: import("@reasonix/core-utils").ApprovalPrompt;
 }
 
 interface PathAccessRequiredEvent {
@@ -271,6 +275,7 @@ interface PathAccessRequiredEvent {
   toolName: string;
   sandboxRoot: string;
   allowPrefix: string;
+  prompt?: import("@reasonix/core-utils").ApprovalPrompt;
 }
 
 interface ChoiceRequiredEvent {
@@ -444,6 +449,13 @@ type EmittableEvent =
 const STDOUT_BACKPRESSURE_WAIT = new Int32Array(new SharedArrayBuffer(4));
 
 type SyncWriter = (fd: number, buffer: Buffer, offset: number, length: number) => number;
+
+const SESSION_TITLE_MAX_CHARS = 200;
+
+/** Trim + cap a user-provided session title; empty string means "clear summary". Exported for tests. */
+export function normalizeSessionTitle(raw: string): string {
+  return raw.replace(/\s+/g, " ").trim().slice(0, SESSION_TITLE_MAX_CHARS);
+}
 
 /** Drain `buffer` to `fd` across partial writes; retry EAGAIN after a 5 ms park. Exported for tests. */
 export function writeAllSync(
@@ -1580,9 +1592,24 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
       return;
     }
     if (req.kind === "run_command" || req.kind === "run_background") {
-      const payload = req.payload as { command?: string };
+      const payload = req.payload as {
+        command?: string;
+        cwd?: string;
+        timeoutSec?: number;
+        waitSec?: number;
+      };
       emit(
-        { type: "$confirm_required", id: req.id, kind: req.kind, command: payload.command ?? "" },
+        {
+          type: "$confirm_required",
+          id: req.id,
+          kind: req.kind,
+          command: payload.command ?? "",
+          prompt: toApprovalPrompt({
+            id: req.id,
+            kind: req.kind,
+            payload,
+          }),
+        },
         tabId,
       );
       if (tab) handleQQPauseRequest(tab, req.kind, payload as Record<string, unknown>);
@@ -1605,6 +1632,11 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
           toolName: payload.toolName,
           sandboxRoot: payload.sandboxRoot,
           allowPrefix: payload.allowPrefix,
+          prompt: toApprovalPrompt({
+            id: req.id,
+            kind: req.kind,
+            payload,
+          }),
         },
         tabId,
       );
@@ -1899,6 +1931,28 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
       return;
     }
 
+    if (msg.cmd === "desktop_resync") {
+      // WebView reloads (DevTools F5, host-side respawn) leave the Node child
+      // alive but the React app starts blank. Re-fire the bootstrap events
+      // so it can rehydrate without restarting the agent.
+      const hasKey = !!loadApiKey();
+      for (const t of tabs.values()) {
+        emit(
+          { type: "$tab_opened", workspaceDir: t.rootDir, active: t.id === lastActiveTabId },
+          t.id,
+        );
+        emitSessions(t);
+        emitSettings(t);
+        emitMcpSpecs(t);
+        emitSkills(t);
+        emitMemory(t);
+        emitQQSettings(t);
+        if (!hasKey) emit({ type: "$needs_setup", reason: "no_api_key" }, t.id);
+        else if (t.toolset) emit({ type: "$ready" }, t.id);
+        void emitBalance(t);
+      }
+      return;
+    }
     if (msg.cmd === "jobs_list") {
       emitJobs();
       return;
@@ -2017,6 +2071,19 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
     if (msg.cmd === "session_delete") {
       deleteSession(msg.name);
       emitSessions(tab);
+      return;
+    }
+    if (msg.cmd === "session_rename") {
+      try {
+        const trimmed = normalizeSessionTitle(msg.title);
+        patchSessionMeta(msg.name, { summary: trimmed || undefined });
+        emitSessions(tab);
+      } catch (err) {
+        emit(
+          { type: "$error", message: `session_rename failed: ${(err as Error).message}` },
+          tab.id,
+        );
+      }
       return;
     }
     if (msg.cmd === "session_load") {
@@ -2320,7 +2387,11 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
           const reply = await tab.runtime!.loop.client.chat({
             model: tab.currentModel,
             messages: [
-              { role: "system", content: tab.system },
+              {
+                role: "system",
+                content:
+                  "You are answering a side question that is unrelated to the current coding conversation. Answer concisely (1-3 sentences) in plain prose. Do not call tools, do not ask clarifying questions, and do not reference any prior turns.",
+              },
               { role: "user", content: question },
             ],
           });

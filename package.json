@@ -1,10 +1,11 @@
 {
   "name": "reasonix",
-  "version": "0.47.2",
+  "version": "0.48.1",
   "description": "DeepSeek-native coding agent: cache-first loop, flash-first cost control, tool-call repair.",
   "type": "module",
   "bin": {
-    "reasonix": "dist/cli/index.js"
+    "reasonix": "dist/cli/index.js",
+    "dsnix": "dist/cli/index.js"
   },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -91,6 +92,7 @@
     "@reasonix/core-utils": "workspace:*",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^22.9.0",
     "@types/picomatch": "^4.0.3",
     "@types/react": "^19.2.14",
@@ -100,6 +102,7 @@
     "highlight.js": "^11.10.0",
     "htm": "^3.1.1",
     "ink-testing-library": "^4.0.0",
+    "jsdom": "^29.1.1",
     "marked": "^15.0.12",
     "preact": "^10.22.0",
     "simple-git-hooks": "^2.13.1",

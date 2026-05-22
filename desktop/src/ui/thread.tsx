@@ -1,10 +1,27 @@
+import type { ApprovalPrompt } from "@reasonix/core-utils";
 import { derivePrefix } from "@reasonix/core-utils/derive-prefix";
-import { memo, useState, type ReactNode } from "react";
 import { Copy } from "lucide-react";
-import { I } from "../icons";
+import { type ReactNode, memo, useState } from "react";
+import type {
+  ActivePlan,
+  AssistantSegment,
+  PendingCheckpoint,
+  PendingChoice,
+  PendingConfirm,
+  PendingPlan,
+  PendingRevision,
+  SkillOrigin,
+} from "../App";
 import { t, useLang } from "../i18n";
-import type { AssistantSegment, ActivePlan, PendingPlan, PendingCheckpoint, PendingRevision, PendingConfirm, PendingChoice, SkillOrigin } from "../App";
-import { AssistantText, PlanCardView, ReasoningCard, ShellCard, ToolCard, type PlanItem } from "./cards";
+import { I } from "../icons";
+import {
+  AssistantText,
+  PlanCardView,
+  type PlanItem,
+  ReasoningCard,
+  ShellCard,
+  ToolCard,
+} from "./cards";
 import { ApprovalCard, TaskCard, type TaskStepView } from "./extra-cards";
 
 export function TurnDivider({ label }: { label: string }) {
@@ -45,7 +62,9 @@ export const UserMsg = memo(function UserMsg({
           {skill ? (
             <span className="skill-chip" title={`skill · ${skill.runAs}`}>
               <I.zap size={10} /> /{skill.name}
-              {skill.runAs === "subagent" ? <span className="sub">{t("thread.subagent")}</span> : null}
+              {skill.runAs === "subagent" ? (
+                <span className="sub">{t("thread.subagent")}</span>
+              ) : null}
             </span>
           ) : null}
           {time ? <span className="time">{time}</span> : null}
@@ -350,7 +369,9 @@ export function RevisionApprovalCard({
         <>
           <div style={{ marginBottom: 8 }}>{r.reason}</div>
           {r.summary ? (
-            <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8 }}>{r.summary}</div>
+            <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8 }}>
+              {r.summary}
+            </div>
           ) : null}
           <ul style={{ margin: 0, paddingLeft: 18 }}>
             {r.remainingSteps.map((s) => (
@@ -386,35 +407,50 @@ export function RevisionApprovalCard({
   );
 }
 
+function mapTone(tone: ApprovalPrompt["tone"]): import("./extra-cards").ApprovalTone {
+  switch (tone) {
+    case "error":
+      return "danger";
+    case "accent":
+      return "brand";
+    default:
+      return tone;
+  }
+}
+
 export function ConfirmApprovalCard({
-  c,
+  prompt,
   onAllow,
   onAlwaysAllow,
   onDeny,
 }: {
-  c: PendingConfirm;
+  prompt: ApprovalPrompt;
   onAllow: () => void;
   onAlwaysAllow: (prefix: string) => void;
   onDeny: () => void;
 }) {
   useLang();
-  const isBackground = c.kind === "run_background";
-  const prefix = derivePrefix(c.command);
+  const prefix = String(prompt.data?.prefix ?? "");
+  const allowAction = prompt.actions.find((a) => a.kind === "allow_once");
+  const alwaysAllowAction = prompt.actions.find((a) => a.kind === "allow_always");
+  const rejectAction = prompt.actions.find((a) => a.kind === "reject");
   return (
     <ApprovalCard
       kind={t("thread.shellConfirmationKind")}
-      tone="warn"
-      title={isBackground ? t("thread.runBackgroundCommand") : t("thread.runCommand")}
-      sub={c.command.length > 80 ? `${c.command.slice(0, 80)}…` : c.command}
+      tone={mapTone(prompt.tone)}
+      title={prompt.title}
+      sub={prompt.subtitle}
       preview={
         <>
-          <span style={{ color: "var(--accent)" }}>$</span> {c.command}
+          <span style={{ color: "var(--accent)" }}>$</span> {prompt.preview ?? prompt.subtitle}
         </>
       }
-      meta={t("thread.riskMedium", { kind: c.kind })}
-      primaryLabel={t("thread.execute")}
-      secondaryLabel={t("thread.reject")}
-      tertiaryLabel={t("thread.alwaysAllow", { prefix })}
+      meta={t("thread.riskMedium", {
+        kind: prompt.kind === "shell" ? "run_command" : "run_background",
+      })}
+      primaryLabel={allowAction?.label ?? t("thread.execute")}
+      secondaryLabel={rejectAction?.label ?? t("thread.reject")}
+      tertiaryLabel={alwaysAllowAction?.label ?? t("thread.alwaysAllow", { prefix })}
       onPrimary={onAllow}
       onSecondary={onDeny}
       onTertiary={() => onAlwaysAllow(prefix)}
@@ -423,46 +459,48 @@ export function ConfirmApprovalCard({
 }
 
 export function PathAccessApprovalCard({
-  p,
+  prompt,
   onAllow,
   onAlwaysAllow,
   onDeny,
 }: {
-  p: {
-    id: number;
-    path: string;
-    intent: "read" | "write";
-    toolName: string;
-    sandboxRoot: string;
-    allowPrefix: string;
-  };
+  prompt: ApprovalPrompt;
   onAllow: () => void;
   onAlwaysAllow: (prefix: string) => void;
   onDeny: () => void;
 }) {
   useLang();
-  const isWrite = p.intent === "write";
+  const prefix = String(prompt.data?.prefix ?? "");
+  const intent = String(prompt.data?.intent ?? "read");
+  const isWrite = intent === "write";
+  const allowAction = prompt.actions.find((a) => a.kind === "allow_once");
+  const alwaysAllowAction = prompt.actions.find((a) => a.kind === "allow_always");
+  const rejectAction = prompt.actions.find((a) => a.kind === "reject");
   return (
     <ApprovalCard
       kind={t("thread.pathAccessKind")}
-      tone="warn"
-      title={isWrite ? t("thread.writePathOutsideSandbox") : t("thread.readPathOutsideSandbox")}
-      sub={p.path}
+      tone={mapTone(prompt.tone)}
+      title={prompt.title}
+      sub={prompt.subtitle}
       preview={
         <>
-          <div>{p.toolName} → {p.path}</div>
-          <div style={{ color: "var(--muted)", marginTop: 4 }}>
-            workspace: {p.sandboxRoot}
-          </div>
+          <div>{prompt.preview ?? prompt.subtitle}</div>
+          {prompt.meta?.sandboxRoot ? (
+            <div style={{ color: "var(--muted)", marginTop: 4 }}>
+              workspace: {prompt.meta.sandboxRoot}
+            </div>
+          ) : null}
         </>
       }
-      meta={t("thread.riskMedium", { kind: p.intent })}
-      primaryLabel={isWrite ? t("thread.allowWrite") : t("thread.allowRead")}
-      secondaryLabel={t("thread.reject")}
-      tertiaryLabel={t("thread.alwaysAllowPrefix", { prefix: p.allowPrefix })}
+      meta={t("thread.riskMedium", { kind: intent })}
+      primaryLabel={
+        allowAction?.label ?? (isWrite ? t("thread.allowWrite") : t("thread.allowRead"))
+      }
+      secondaryLabel={rejectAction?.label ?? t("thread.reject")}
+      tertiaryLabel={alwaysAllowAction?.label ?? t("thread.alwaysAllowPrefix", { prefix })}
       onPrimary={onAllow}
       onSecondary={onDeny}
-      onTertiary={() => onAlwaysAllow(p.allowPrefix)}
+      onTertiary={() => onAlwaysAllow(prefix)}
     />
   );
 }
