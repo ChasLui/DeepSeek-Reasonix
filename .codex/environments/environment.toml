@@ -1,0 +1,116 @@
+# Codex local environment for DeepSeek-Reasonix
+# Schema reference: https://developers.openai.com/codex/app/local-environments
+# Sample: https://github.com/openai/codex/blob/main/.codex/environments/environment.toml
+#
+# This file is version-controlled. Edits propagate to every worktree the
+# Codex desktop app creates from this repo.
+
+version = 1
+name = "reasonix"
+
+[setup]
+# Runs once when a new worktree is created. Keep it idempotent.
+# `npm ci` enforces package-lock.json; falls back to `npm install` if the
+# lockfile is out of sync (e.g. on a feature branch with new deps).
+script = """
+set -euo pipefail
+corepack enable >/dev/null 2>&1 || true
+if [ -f package-lock.json ]; then
+  npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+else
+  npm install --no-audit --no-fund
+fi
+# Pre-warm the dashboard vendor copy used by `npm run build` outputs.
+node scripts/copy-dashboard-vendor-css.mjs >/dev/null 2>&1 || true
+"""
+
+[cleanup]
+# Runs BEFORE Codex deletes this worktree. Must be idempotent and MUST NOT
+# touch git state (Codex snapshots uncommitted changes on its own).
+# Real value: kill long-running watchers that hold file handles inside the
+# worktree, otherwise `rm -rf` fails with EBUSY on macOS / EACCES on Windows.
+script = """
+set -uo pipefail
+worktree="$(pwd)"
+
+# Kill node/ts watchers anchored to THIS worktree (match by cwd via pgrep -af).
+# We avoid blanket `pkill -f vitest` because it would nuke watchers in other
+# Codex worktrees the user has open in parallel.
+kill_in_worktree() {
+  local pattern="$1"
+  pgrep -af "$pattern" 2>/dev/null | while read -r pid rest; do
+    cwd=$(lsof -p "$pid" 2>/dev/null | awk '$4=="cwd"{print $NF; exit}')
+    case "$cwd" in
+      "$worktree"|"$worktree"/*) kill "$pid" 2>/dev/null || true ;;
+    esac
+  done
+}
+
+for pat in 'vitest' 'tsx watch' 'tsx src/cli' 'stryker' 'biome' 'tsc --watch' 'tauri dev' 'cargo run' 'cargo build' 'node scripts/' 'serena start-mcp-server'; do
+  kill_in_worktree "$pat"
+done
+
+# Drop heavy transient caches inside the worktree to speed up Codex rm -rf.
+# Skipped if it'd take more than a couple seconds (best-effort).
+rm -rf .turbo .stryker-tmp .npm-cache 2>/dev/null || true
+rm -rf desktop/src-tauri/target/debug/incremental 2>/dev/null || true
+rm -rf desktop/src-tauri/target/debug/deps/*.rlib 2>/dev/null || true
+
+# Surface uncommitted work loudly — Codex saves a snapshot, but tell the user.
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  dirty=$(git status --porcelain 2>/dev/null | head -20)
+  if [ -n "$dirty" ]; then
+    echo "⚠️  reasonix cleanup: uncommitted changes in this worktree:"
+    echo "$dirty"
+    echo "    Codex will snapshot before delete; restore via the thread page."
+  fi
+fi
+exit 0
+"""
+
+# --- Quick actions surface in the Codex app top bar ---
+
+[[actions]]
+name = "Dev"
+icon = "run"
+command = "npm run dev"
+
+[[actions]]
+name = "Chat"
+icon = "chat"
+command = "npm run chat"
+
+[[actions]]
+name = "Verify"
+icon = "check"
+command = "npm run verify"
+
+[[actions]]
+name = "Test"
+icon = "test"
+command = "npm run test"
+
+[[actions]]
+name = "Lint"
+icon = "lint"
+command = "npm run lint"
+
+[[actions]]
+name = "Typecheck"
+icon = "check"
+command = "npm run typecheck"
+
+[[actions]]
+name = "Build"
+icon = "build"
+command = "npm run build"
+
+[[actions]]
+name = "Desktop dev"
+icon = "run"
+command = "npm --prefix desktop run dev"
+
+[[actions]]
+name = "Tauri"
+icon = "run"
+command = "npm --prefix desktop run tauri -- dev"

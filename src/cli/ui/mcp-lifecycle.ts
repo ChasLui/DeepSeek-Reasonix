@@ -1,6 +1,7 @@
 /** Formats one-liner MCP lifecycle events per `docs/design/agent-tui-terminal.html` §37. */
 
 import { t } from "../../i18n/index.js";
+import { nullPrototype } from "../../utils/safe-object.js";
 
 export type McpLifecycleEvent =
   | { state: "handshake"; name: string }
@@ -18,15 +19,16 @@ export type McpLifecycleEvent =
   | { state: "tools-ready"; name: string; tools: number; ms: number }
   | { state: "warn"; name: string; reason: string };
 
-const STATE: Record<McpLifecycleEvent["state"], { glyph: string; label: () => string }> = {
-  handshake: { glyph: "↻", label: () => t("mcpLifecycle.handshake") },
-  connected: { glyph: "✓", label: () => t("mcpLifecycle.connected") },
-  failed: { glyph: "✖", label: () => t("mcpLifecycle.failed") },
-  disabled: { glyph: "○", label: () => t("mcpLifecycle.disabled") },
-  reconnect: { glyph: "↻", label: () => t("mcpLifecycle.reconnect") },
-  "tools-ready": { glyph: "⚡", label: () => "tools ready" },
-  warn: { glyph: "⚠", label: () => "warn" },
-};
+const STATE: Record<McpLifecycleEvent["state"], { glyph: string; label: () => string }> =
+  nullPrototype({
+    handshake: { glyph: "↻", label: () => t("mcpLifecycle.handshake") },
+    connected: { glyph: "✓", label: () => t("mcpLifecycle.connected") },
+    failed: { glyph: "✖", label: () => t("mcpLifecycle.failed") },
+    disabled: { glyph: "○", label: () => t("mcpLifecycle.disabled") },
+    reconnect: { glyph: "↻", label: () => t("mcpLifecycle.reconnect") },
+    "tools-ready": { glyph: "⚡", label: () => "tools ready" },
+    warn: { glyph: "⚠", label: () => "warn" },
+  });
 
 const NAME_COL = 22;
 const STATE_COL = 15;

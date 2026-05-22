@@ -1,5 +1,6 @@
 import { t } from "../../../i18n/index.js";
 import type { CacheFirstLoop } from "../../../loop.js";
+import { nullPrototype } from "../../../utils/safe-object.js";
 import { resolveSlashAlias } from "./commands.js";
 import { handlers as adminHandlers } from "./handlers/admin.js";
 import { handlers as basicHandlers } from "./handlers/basic.js";
@@ -25,7 +26,7 @@ import type { SlashContext, SlashResult } from "./types.js";
 /** Synchronous return — async work fires-and-forgets via `ctx.postInfo` to keep input non-blocking. */
 export type SlashHandler = (args: string[], loop: CacheFirstLoop, ctx: SlashContext) => SlashResult;
 
-const HANDLERS: Record<string, SlashHandler> = {
+const HANDLERS: Record<string, SlashHandler> = nullPrototype({
   ...adminHandlers,
   ...basicHandlers,
   ...dashboardHandlers,
@@ -44,7 +45,7 @@ const HANDLERS: Record<string, SlashHandler> = {
   ...themeHandlers,
   ...skillHandlers,
   ...webSearchEngineHandlers,
-};
+});
 
 export function handleSlash(
   cmd: string,
@@ -57,7 +58,13 @@ export function handleSlash(
   const suggestions = nearestCommands(cmd, Object.keys(HANDLERS));
   if (suggestions.length > 0) {
     const list = suggestions.map((name) => `/${name}`).join(", ");
-    return { unknown: true, info: t("handlers.basic.unknownCommand", { cmd, list }) };
+    return {
+      unknown: true,
+      info: t("handlers.basic.unknownCommand", { cmd, list }),
+    };
   }
-  return { unknown: true, info: t("handlers.basic.unknownCommandShort", { cmd }) };
+  return {
+    unknown: true,
+    info: t("handlers.basic.unknownCommandShort", { cmd }),
+  };
 }

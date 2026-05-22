@@ -265,6 +265,8 @@ export interface ChainResult {
   exitCode: number | null;
   output: string;
   timedOut: boolean;
+  /** Pre-truncation combined output; only set when truncation actually kicked in. */
+  rawOutput?: string;
 }
 
 interface ChainGroup {
@@ -323,11 +325,16 @@ export async function runChain(chain: CommandChain, opts: RunChainOptions): Prom
     if (opts.signal?.aborted) break;
   }
   const output = buf.toString();
-  const truncated =
-    output.length > opts.maxOutputChars
-      ? `${output.slice(0, opts.maxOutputChars)}\n\n[… truncated ${output.length - opts.maxOutputChars} chars …]`
-      : output;
-  return { exitCode: lastExit, output: truncated, timedOut };
+  const isTruncated = output.length > opts.maxOutputChars;
+  const truncated = isTruncated
+    ? `${output.slice(0, opts.maxOutputChars)}\n\n[… truncated ${output.length - opts.maxOutputChars} chars …]`
+    : output;
+  return {
+    exitCode: lastExit,
+    output: truncated,
+    timedOut,
+    rawOutput: isTruncated ? output : undefined,
+  };
 }
 
 interface PipeGroupResult {

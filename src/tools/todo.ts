@@ -78,6 +78,7 @@ export function registerTodoTool(registry: ToolRegistry, opts: TodoToolOptions =
     name: "todo_write",
     description: DESCRIPTION,
     readOnly: true,
+    lenientArgs: true,
     parameters: {
       type: "object",
       properties: {

@@ -1,4 +1,5 @@
 import type { PresetName } from "../../config.js";
+import { nullPrototype } from "../../utils/safe-object.js";
 
 export interface PresetSettings {
   model: string;
@@ -7,7 +8,7 @@ export interface PresetSettings {
 }
 
 /** Old names `fast`/`smart`/`max` aliased via `resolvePreset` so legacy configs still load. */
-export const PRESETS: Record<"auto" | "flash" | "pro", PresetSettings> = {
+export const PRESETS: Record<"auto" | "flash" | "pro", PresetSettings> = nullPrototype({
   auto: {
     model: "deepseek-v4-flash",
     reasoningEffort: "max",
@@ -23,12 +24,12 @@ export const PRESETS: Record<"auto" | "flash" | "pro", PresetSettings> = {
     reasoningEffort: "max",
     autoEscalate: false,
   },
-};
+});
 
 export const PRESET_DESCRIPTIONS: Record<
   "auto" | "flash" | "pro",
   { headline: string; cost: string }
-> = {
+> = nullPrototype({
   auto: {
     headline: "flash → pro on hard turns",
     cost: "default · ~96% turns stay on flash · pro kicks in only when needed",
@@ -41,7 +42,7 @@ export const PRESET_DESCRIPTIONS: Record<
     headline: "v4-pro always",
     cost: "~3× flash (5/31 discount) / ~12× full price · for hard multi-turn work",
   },
-};
+});
 
 /** Legacy aliases: fast→flash+high, smart→auto, max→pro. Unknown names fall through to auto. */
 export function resolvePreset(name: PresetName | undefined): PresetSettings {

@@ -1,4 +1,5 @@
 import { type Node, Query } from "web-tree-sitter";
+import { nullPrototype } from "../utils/safe-object.js";
 import { type GrammarName, getParser, grammarForPath } from "./parser.js";
 
 export type SymbolKind =
@@ -74,7 +75,7 @@ const JAVA_QUERY = `
 (field_declaration declarator: (variable_declarator name: (identifier) @name)) @property
 `;
 
-const QUERIES: Record<GrammarName, string> = {
+const QUERIES: Record<GrammarName, string> = nullPrototype({
   typescript: TS_QUERY,
   tsx: TS_QUERY,
   javascript: JS_QUERY,
@@ -82,7 +83,7 @@ const QUERIES: Record<GrammarName, string> = {
   go: GO_QUERY,
   rust: RUST_QUERY,
   java: JAVA_QUERY,
-};
+});
 
 const KIND_CAPTURE_NAMES = new Set<SymbolKind>([
   "function",

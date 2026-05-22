@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { t } from "./i18n/index.js";
+import { nullPrototype } from "./utils/safe-object.js";
 
 export type HookEvent = "PreToolUse" | "PostToolUse" | "UserPromptSubmit" | "Stop";
 
@@ -20,12 +21,12 @@ export const HOOK_EVENTS: readonly HookEvent[] = [
 const BLOCKING_EVENTS: ReadonlySet<HookEvent> = new Set(["PreToolUse", "UserPromptSubmit"]);
 
 /** Per-event default timeout. Tool/prompt hooks gate progress, so they're tight. */
-const DEFAULT_TIMEOUTS_MS: Record<HookEvent, number> = {
+const DEFAULT_TIMEOUTS_MS: Record<HookEvent, number> = nullPrototype({
   PreToolUse: 5_000,
   UserPromptSubmit: 5_000,
   PostToolUse: 30_000,
   Stop: 30_000,
-};
+});
 
 export type HookScope = "project" | "global";
 

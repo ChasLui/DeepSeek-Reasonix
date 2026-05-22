@@ -1,5 +1,6 @@
 /** Batches same-style runs into one SGR — per-cell escapes balloon 200x50 frames to 50KB+. */
 
+import { nullPrototype } from "../utils/safe-object.js";
 import type { Cell, Frame, FrameRow } from "./types.js";
 
 const ESC = "\u001b";
@@ -58,7 +59,7 @@ function parseColor(s: string): [number, number, number] | null {
   return [r, g, b];
 }
 
-const NAMED_FG: Record<string, number> = {
+const NAMED_FG: Record<string, number> = nullPrototype({
   black: 30,
   red: 31,
   green: 32,
@@ -76,9 +77,9 @@ const NAMED_FG: Record<string, number> = {
   brightmagenta: 95,
   brightcyan: 96,
   brightwhite: 97,
-};
+});
 
-const NAMED_BG: Record<string, number> = {
+const NAMED_BG: Record<string, number> = nullPrototype({
   black: 40,
   red: 41,
   green: 42,
@@ -89,7 +90,7 @@ const NAMED_BG: Record<string, number> = {
   white: 47,
   gray: 100,
   grey: 100,
-};
+});
 
 function styleToAnsi(s: Style): string {
   const codes: string[] = [];

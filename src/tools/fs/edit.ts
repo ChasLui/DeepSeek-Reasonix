@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import * as pathMod from "node:path";
+import { writeFileNoFollow as writeNoFollow } from "./gate.js";
 
 function displayRel(rootDir: string, full: string): string {
   return pathMod.relative(rootDir, full).replaceAll("\\", "/");
@@ -123,13 +124,13 @@ export async function applyMultiEdit(
   try {
     for (const [abs, state] of filesByPath) {
       attempted.push({ abs, before: state.before });
-      await fs.writeFile(abs, state.buf, "utf8");
+      await writeNoFollow(abs, state.buf);
     }
   } catch (writeErr) {
     const rollbackFailures: string[] = [];
     for (const item of [...attempted].reverse()) {
       try {
-        await fs.writeFile(item.abs, item.before, "utf8");
+        await writeNoFollow(item.abs, item.before);
       } catch (restoreErr) {
         rollbackFailures.push(`${displayRel(rootDir, item.abs)}: ${(restoreErr as Error).message}`);
       }

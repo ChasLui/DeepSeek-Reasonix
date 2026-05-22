@@ -90,7 +90,10 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
 
     it("switches to outline mode when file size exceeds outlineThresholdBytes", async () => {
       const reg = new ToolRegistry();
-      registerFilesystemTools(reg, { rootDir: root, outlineThresholdBytes: 200 });
+      registerFilesystemTools(reg, {
+        rootDir: root,
+        outlineThresholdBytes: 200,
+      });
       const bigLines = Array.from({ length: 250 }, (_, i) => `line ${i + 1}`);
       await fs.writeFile(join(root, "big.txt"), bigLines.join("\n"));
       const out = await reg.dispatch("read_file", JSON.stringify({ path: "big.txt" }));
@@ -105,7 +108,10 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
 
     it("outline mode surfaces TS exports as the symbol map", async () => {
       const reg = new ToolRegistry();
-      registerFilesystemTools(reg, { rootDir: root, outlineThresholdBytes: 200 });
+      registerFilesystemTools(reg, {
+        rootDir: root,
+        outlineThresholdBytes: 200,
+      });
       const filler = (n: number) => Array.from({ length: n }, () => "  // filler").join("\n");
       const src = [
         "export interface AppProps {}",
@@ -124,7 +130,10 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
 
     it("outline mode surfaces protobuf messages, services, and rpcs", async () => {
       const reg = new ToolRegistry();
-      registerFilesystemTools(reg, { rootDir: root, outlineThresholdBytes: 200 });
+      registerFilesystemTools(reg, {
+        rootDir: root,
+        outlineThresholdBytes: 200,
+      });
       const src = [
         'syntax = "proto3";',
         "package demo;",
@@ -154,7 +163,10 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
 
     it("outline mode surfaces chapter markers in a Chinese novel .txt", async () => {
       const reg = new ToolRegistry();
-      registerFilesystemTools(reg, { rootDir: root, outlineThresholdBytes: 200 });
+      registerFilesystemTools(reg, {
+        rootDir: root,
+        outlineThresholdBytes: 200,
+      });
       const filler = Array.from({ length: 20 }, (_, i) => `这是第${i + 1}段普通正文内容。`).join(
         "\n",
       );
@@ -182,7 +194,10 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
 
     it("outline mode skips the outline section when no symbols match the file type", async () => {
       const reg = new ToolRegistry();
-      registerFilesystemTools(reg, { rootDir: root, outlineThresholdBytes: 200 });
+      registerFilesystemTools(reg, {
+        rootDir: root,
+        outlineThresholdBytes: 200,
+      });
       const src = Array.from({ length: 50 }, (_, i) => `prose line ${i + 1}`).join("\n");
       await fs.writeFile(join(root, "plain.log"), src);
       const out = await reg.dispatch("read_file", JSON.stringify({ path: "plain.log" }));
@@ -220,7 +235,10 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
 
     it("triggers outline mode when file exceeds outlineThresholdBytes", async () => {
       const tiny = new ToolRegistry();
-      registerFilesystemTools(tiny, { rootDir: root, outlineThresholdBytes: 10 });
+      registerFilesystemTools(tiny, {
+        rootDir: root,
+        outlineThresholdBytes: 10,
+      });
       const out = await tiny.dispatch("read_file", JSON.stringify({ path: "hello.txt" }));
       expect(out).toMatch(/outline mode/);
       expect(out).toMatch(/threshold 10 B/);
@@ -831,7 +849,11 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
       await fs.writeFile(join(root, "a.txt"), "alpha\nbeta\nTARGET\ntail\n");
       const out = await tools.dispatch(
         "edit_file",
-        JSON.stringify({ path: "a.txt", search: "TARGET", replace: "TARGET\nextra" }),
+        JSON.stringify({
+          path: "a.txt",
+          search: "TARGET",
+          replace: "TARGET\nextra",
+        }),
       );
       expect(out).toMatch(/@@ -3,1 \+3,2 @@/);
     });
@@ -902,7 +924,11 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
       await fs.writeFile(join(root, "a.txt"), "hello world\r\ngoodbye world\r\n");
       const out = await tools.dispatch(
         "edit_file",
-        JSON.stringify({ path: "a.txt", search: "hello world", replace: "hello WORLD" }),
+        JSON.stringify({
+          path: "a.txt",
+          search: "hello world",
+          replace: "hello WORLD",
+        }),
       );
       expect(out).toMatch(/edited/);
       const disk = await fs.readFile(join(root, "a.txt"), "utf8");
@@ -1058,7 +1084,10 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
     it("copy_file creates parent directories of the destination", async () => {
       await tools.dispatch(
         "copy_file",
-        JSON.stringify({ source: "hello.txt", destination: "archive/copy.txt" }),
+        JSON.stringify({
+          source: "hello.txt",
+          destination: "archive/copy.txt",
+        }),
       );
       const copy = await fs.readFile(join(root, "archive", "copy.txt"), "utf8");
       expect(copy).toContain("line 1");
@@ -1196,27 +1225,27 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
       await fs.writeFile(join(root, "a.txt"), "alpha\n");
       await fs.writeFile(join(root, "b.txt"), "bravo\n");
 
-      const originalWriteFile = fs.writeFile.bind(fs);
-      // First attempt to write b.txt fails; rollback retry passes through.
+      // multi_edit writes via fs.open + FileHandle.writeFile (O_NOFOLLOW gate),
+      // not the top-level fs.writeFile — so intercept at the open boundary.
+      const originalOpen = fs.open.bind(fs);
       let bTxtFailed = false;
-      const spy = vi
-        .spyOn(fs, "writeFile")
-        .mockImplementation(
-          async (
-            path: string | URL | import("node:fs/promises").FileHandle,
-            data: any,
-            ...rest: any[]
-          ) => {
-            const resolved = typeof path === "string" ? path : path.toString();
-            if (resolved.endsWith("b.txt") && !bTxtFailed) {
+      const spy = vi.spyOn(fs, "open").mockImplementation(async (path: any, ...rest: any[]) => {
+        const handle = await originalOpen(path, ...rest);
+        const resolved = typeof path === "string" ? path : path.toString();
+        if (resolved.endsWith("b.txt")) {
+          const origWriteFile = handle.writeFile.bind(handle);
+          // Flip on first actual write (not on a read-open), partial-write then fail.
+          handle.writeFile = (async (data: any, ...wrest: any[]) => {
+            if (!bTxtFailed) {
               bTxtFailed = true;
-              // Simulate partial write before failure (truncation from writeFile open).
-              await originalWriteFile(path, "PARTIAL", ...rest);
+              await origWriteFile("PARTIAL", ...wrest);
               throw new Error("SIMULATED DISK FULL");
             }
-            return originalWriteFile(path, data, ...rest);
-          },
-        );
+            return origWriteFile(data, ...wrest);
+          }) as typeof handle.writeFile;
+        }
+        return handle;
+      });
 
       try {
         const out = await tools.dispatch(

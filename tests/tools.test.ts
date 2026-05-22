@@ -50,10 +50,11 @@ describe("ToolRegistry", () => {
     expect(JSON.parse(out)).toEqual({ error: "unknown tool: nope" });
   });
 
-  it("handles invalid JSON arguments gracefully", async () => {
+  it("handles invalid JSON arguments gracefully (truly unrecoverable, jsonrepair also fails)", async () => {
     const reg = new ToolRegistry();
     reg.register({ name: "noop", fn: () => "ok" });
-    const out = await reg.dispatch("noop", "{bad json");
+    // bare `]` is rejected by strict parse AND jsonrepair throws → no rescue.
+    const out = await reg.dispatch("noop", "]");
     expect(JSON.parse(out).error).toMatch(/invalid tool arguments JSON/);
   });
 
@@ -204,7 +205,9 @@ describe("ToolRegistry", () => {
         properties: {
           a: {
             type: "object",
-            properties: { b: { type: "object", properties: { c: { type: "string" } } } },
+            properties: {
+              b: { type: "object", properties: { c: { type: "string" } } },
+            },
           },
         },
       },
@@ -471,7 +474,9 @@ describe("ToolRegistry", () => {
         fn: ({ path }: { path: string }) => `read ${path}`,
       });
       const out = await reg.dispatch("read_file", "{}");
-      expect(JSON.parse(out).error).toMatch(/missing required parameter "path"/);
+      const parsed = JSON.parse(out);
+      expect(parsed.error).toMatch(/argument validation failed/);
+      expect(parsed.error).toMatch(/path: expected string, got undefined/);
     });
 
     it("lets the tool fn handle empty string — JSON Schema required only checks presence, not emptiness", async () => {
@@ -563,11 +568,12 @@ describe("ToolRegistry", () => {
       return reg;
     }
 
-    it("first malformed call returns the normal missing-param error", async () => {
+    it("first malformed call returns the structured issue-list error", async () => {
       const reg = readFileReg();
       const out = await reg.dispatch("read_file", "{}");
       const parsed = JSON.parse(out);
-      expect(parsed.error).toMatch(/missing required parameter "path"/);
+      expect(parsed.error).toMatch(/argument validation failed/);
+      expect(parsed.error).toMatch(/path: expected string, got undefined/);
       expect(parsed.consecutiveMalformed).toBeUndefined();
     });
 
@@ -608,8 +614,9 @@ describe("ToolRegistry", () => {
 
     it("invalid JSON, identical twice, also short-circuits", async () => {
       const reg = readFileReg();
-      await reg.dispatch("read_file", "{not json");
-      const out = await reg.dispatch("read_file", "{not json");
+      // bare `]` is unrecoverable; jsonrepair throws → both calls fail strict + loose
+      await reg.dispatch("read_file", "]");
+      const out = await reg.dispatch("read_file", "]");
       const parsed = JSON.parse(out);
       expect(parsed.consecutiveMalformed).toBe(true);
       expect(parsed.error).toMatch(/invalid tool arguments JSON/);

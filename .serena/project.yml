@@ -1,0 +1,65 @@
+project_name: DeepSeek-Reasonix
+
+languages:
+  - typescript
+  - rust
+
+encoding: utf-8
+line_ending: lf
+language_backend: LSP
+
+ignore_all_files_in_gitignore: true
+
+ignored_paths:
+  - .serena/cache/
+  - .reasonix/semantic/
+  - .reasonix/sessions/
+  - .stryker-tmp/
+  - .turbo/
+  - .tools/
+  - .npm-cache/
+  - node_modules/
+  - desktop/node_modules/
+  - dist/
+  - coverage/
+  - desktop/dist/
+  - desktop/src-tauri/target/
+  - desktop/src-tauri/gen/
+  - desktop/src-tauri/binaries/
+  - desktop/src-tauri/icons/
+  - sessions/
+  - transcripts/
+  - benchmarks/**/*.json
+  - data/deepseek-tokenizer.json.gz
+  - "*.cpuprofile"
+
+read_only: false
+
+ls_specific_settings: {}
+excluded_tools: []
+included_optional_tools: []
+fixed_tools: []
+
+base_modes: []
+default_modes:
+  - interactive
+  - editing
+
+initial_prompt: |
+  You are working in DeepSeek-Reasonix, a Node 22+ TypeScript ESM coding-agent project.
+  Prefer Serena symbol overview/search tools before reading whole source files.
+  Main source is in src/: cli/ for commands and Ink UI, tools/ for tool definitions,
+  mcp/ for MCP clients/transports, core/ for the event kernel, ports/ for interfaces,
+  and adapters/ for implementations. Tests are flat Vitest files in tests/*.test.ts.
+  dashboard/ is the web dashboard and desktop/ is the Tauri app, with Rust under
+  desktop/src-tauri/.
+  Use npm run verify as the normal completion gate; targeted commands include
+  npm run lint, npm run typecheck, npm run test, and npm run build.
+  Keep generated or local state out of edits: dist/, coverage/, .reasonix/semantic/,
+  sessions/, desktop src-tauri build outputs, and Serena cache.
+  Follow CONTRIBUTING.md: strict TypeScript, Biome formatting, named exports, sparse
+  comments that explain why only, and no CHANGELOG edits in ordinary PRs.
+
+symbol_info_budget: 10
+read_only_memory_patterns: []
+ignored_memory_patterns: []

@@ -2,6 +2,7 @@ import { DeepSeekClient } from "../client.js";
 import {
   loadBaseUrl,
   loadEditMode,
+  loadFilesystemDedupEnabled,
   loadFilesystemOutlineThresholdBytes,
   loadJavaSourceEnabled,
   loadProjectShellAllowed,
@@ -46,8 +47,13 @@ export async function buildCodeToolset(opts: CodeToolsetOpts): Promise<CodeTools
   const jobs = new JobRegistry();
 
   const outlineThresholdBytes = loadFilesystemOutlineThresholdBytes();
+  const dedupEnabled = loadFilesystemDedupEnabled();
   const registerRooted = (root: string): void => {
-    registerFilesystemTools(tools, { rootDir: root, outlineThresholdBytes });
+    registerFilesystemTools(tools, {
+      rootDir: root,
+      outlineThresholdBytes,
+      dedupEnabled,
+    });
     const cfg = readConfig();
     registerShellTools(tools, {
       rootDir: root,

@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { type DeepSeekClient, Usage } from "./client.js";
 import type { PauseGate } from "./core/pause-gate.js";
 import { pauseGate as defaultPauseGate } from "./core/pause-gate.js";
@@ -9,6 +10,12 @@ import {
   truncateForModelByTokens,
 } from "./mcp/registry.js";
 
+import {
+  type BudgetWindow,
+  type BudgetWindowState,
+  checkBudgetWindows,
+  periodWindowDays,
+} from "./budget/window.js";
 import { ContextManager } from "./context-manager.js";
 import { InflightSet } from "./core/inflight.js";
 import { t } from "./i18n/index.js";
@@ -50,7 +57,9 @@ import {
 } from "./memory/session.js";
 import { type RepairReport, ToolCallRepair } from "./repair/index.js";
 import { SessionStats, type TurnStats } from "./telemetry/stats.js";
+import { defaultUsageLogPath, readUsageSince } from "./telemetry/usage.js";
 import { ToolRegistry } from "./tools.js";
+import { ReadDedupState } from "./tools/fs/read-dedup.js";
 import type { ChatMessage, ToolCall } from "./types.js";
 
 const ESCALATION_MODEL = "deepseek-v4-pro";
@@ -81,6 +90,12 @@ export interface CacheFirstLoopOptions {
   autoEscalate?: boolean;
   /** Soft USD cap — warns at 80%, refuses next turn at 100%. Opt-in (default no cap). */
   budgetUsd?: number;
+  /** Cross-session rolling spend guardrails (daily/weekly/monthly, any combination). Reads the shared usage.jsonl aggregate (no separate ledger), so subagent + every session's spend counts. Empty/undefined → no window guardrail. */
+  budgetWindows?: BudgetWindow[];
+  /** Override the usage log path the window gate reads (tests). Defaults to the shared `~/.reasonix/usage.jsonl`. */
+  usageLogPath?: string;
+  /** Workspace root for `scope: "workspace"` budget windows. Resolved before use; absent ⟹ workspace windows are inert in this loop. */
+  workspace?: string;
   session?: string;
   /** PreToolUse + PostToolUse only — UserPromptSubmit / Stop live at the App boundary. */
   hooks?: ResolvedHook[];
@@ -109,6 +124,10 @@ export class CacheFirstLoop {
   readonly scratch = new VolatileScratch();
   readonly stats = new SessionStats();
   readonly repair: ToolCallRepair;
+  /** Session-scoped read-dedup — owned here so each loop (tab / ACP session /
+   * subagent) is isolated, and so the active log can invalidate stub-eligible
+   * entries the moment a fold/heal/shrink removes their output. */
+  readonly readDedup = new ReadDedupState();
 
   // Mutable via configure() — slash commands in the TUI / library callers tweak
   // these mid-session so users don't have to restart.
@@ -119,6 +138,14 @@ export class CacheFirstLoop {
   budgetUsd: number | null;
   /** One-shot 80% warning latch — cleared by setBudget so a bump re-arms at the new boundary. */
   private _budgetWarned = false;
+  /** Cross-session rolling spend guardrails (one per scope+period); empty disables. Mutable via setBudgetWindows (slash). */
+  budgetWindows: BudgetWindow[];
+  /** One-shot 80% warning latch, keyed `scope:period` so a global and a workspace window of the same period warn independently. */
+  private readonly _windowBudgetWarned = new Set<string>();
+  /** Usage log the window gate reads — shared across sessions; overridable for tests. */
+  private readonly usageLogPath: string;
+  /** Resolved workspace root for `scope: "workspace"` windows. Undefined ⟹ no workspace context, so workspace-scoped windows never block here. */
+  private readonly workspace: string | undefined;
   sessionName: string | null;
 
   hooks: ResolvedHook[];
@@ -181,6 +208,9 @@ export class CacheFirstLoop {
     if (opts.autoEscalate !== undefined) this.autoEscalate = opts.autoEscalate;
     this.budgetUsd =
       typeof opts.budgetUsd === "number" && opts.budgetUsd > 0 ? opts.budgetUsd : null;
+    this.budgetWindows = opts.budgetWindows ?? [];
+    this.usageLogPath = opts.usageLogPath ?? defaultUsageLogPath();
+    this.workspace = opts.workspace ? resolve(opts.workspace) : undefined;
 
     this.hooks = opts.hooks ?? [];
     this.hookCwd = opts.hookCwd ?? process.cwd();
@@ -189,6 +219,11 @@ export class CacheFirstLoop {
 
     this._streamPreference = opts.stream ?? true;
     this.stream = this._streamPreference;
+
+    // Any compaction (fold / heal / shrink) replaces the active log, so the
+    // exact prior read_file output a dedup stub points at may be gone. Drop
+    // all stub-eligible entries — next reads dump in full.
+    this.log.onCompact(() => this.readDedup.invalidateAll());
 
     const allowedNames = new Set([...this.prefix.toolSpecs.map((s) => s.function.name)]);
     // Storm breaker clears its window on mutating calls so read → edit → verify isn't a storm.
@@ -300,7 +335,11 @@ export class CacheFirstLoop {
   }
 
   /** "New chat" — drops in-memory messages, archives the on-disk transcript so it survives in Sessions, keeps sessionName so the prefix cache stays warm. Re-runs the system-prompt builder if one was wired (issue #778: REASONIX.md edits otherwise need a restart). */
-  clearLog(): { dropped: number; archived: string | null; systemRebuilt: boolean } {
+  clearLog(): {
+    dropped: number;
+    archived: string | null;
+    systemRebuilt: boolean;
+  } {
     const dropped = this.log.length;
     this.log.compactInPlace([]);
     let archived: string | null = null;
@@ -329,7 +368,10 @@ export class CacheFirstLoop {
   }
 
   /** `/cwd` follow-through — archives the previous session, drops in-memory state, repoints sessionName, and rebuilds the system prompt against whatever the rebuilder closure now resolves (the caller is expected to have already updated the root the closure reads). */
-  switchWorkspace(opts: { sessionName: string }): { dropped: number; archived: string | null } {
+  switchWorkspace(opts: { sessionName: string }): {
+    dropped: number;
+    archived: string | null;
+  } {
     const dropped = this.log.length;
     let archived: string | null = null;
     if (this.sessionName) {
@@ -368,6 +410,26 @@ export class CacheFirstLoop {
   setBudget(usd: number | null): void {
     this.budgetUsd = typeof usd === "number" && usd > 0 ? usd : null;
     this._budgetWarned = false;
+  }
+
+  /** Replace the active rolling guardrails (e.g. after a `/budget window` edit); re-arms every 80% warning. */
+  setBudgetWindows(windows: BudgetWindow[]): void {
+    this.budgetWindows = windows;
+    this._windowBudgetWarned.clear();
+  }
+
+  /** Each rolling window's spend vs cap (reads usage.jsonl once, widest lookback).
+   * Global windows count all spend; workspace windows only this loop's workspace.
+   * Used by the gate, `/budget` slash, doctor, and stats. */
+  budgetWindowStatuses(): BudgetWindowState[] {
+    if (this.budgetWindows.length === 0) return [];
+    const now = Date.now();
+    const maxDays = Math.max(...this.budgetWindows.map((w) => periodWindowDays(w.period)));
+    const records = readUsageSince(now - maxDays * 24 * 60 * 60 * 1000, this.usageLogPath);
+    return checkBudgetWindows(records, this.budgetWindows, {
+      now,
+      workspace: this.workspace,
+    });
   }
 
   /** Single-turn upgrade consumed at next step() — distinct from `/preset max` (persistent). */
@@ -424,7 +486,11 @@ export class CacheFirstLoop {
   private async runOneToolCall(
     call: ToolCall,
     signal: AbortSignal,
-  ): Promise<{ preWarnings: LoopEvent[]; postWarnings: LoopEvent[]; result: string }> {
+  ): Promise<{
+    preWarnings: LoopEvent[];
+    postWarnings: LoopEvent[];
+    result: string;
+  }> {
     const name = call.function?.name ?? "";
     const args = call.function?.arguments ?? "{}";
     const parsedArgs = safeParseToolArgs(args);
@@ -459,6 +525,7 @@ export class CacheFirstLoop {
         signal,
         maxResultTokens: DEFAULT_MAX_RESULT_TOKENS,
         confirmationGate: this.confirmationGate,
+        readDedup: this.readDedup,
       });
 
       const postReport = await runHooks({
@@ -599,6 +666,42 @@ export class CacheFirstLoop {
           content: t("loop.budget80Pct", {
             spent: spent.toFixed(4),
             cap: this.budgetUsd.toFixed(2),
+          }),
+        };
+      }
+    }
+    // Cross-session rolling guardrails. Post-hoc: budgetWindowStatuses reads spend
+    // already written to the shared usage.jsonl (no projected estimate, no log
+    // read, no buildMessages) so a refusal here cannot rewrite the append-only log.
+    // Any exhausted window blocks; each window warns once independently.
+    const windowStatuses = this.budgetWindowStatuses();
+    const exhausted = windowStatuses.find((s) => s.state === "exhausted");
+    if (exhausted) {
+      yield {
+        turn: this._turn,
+        role: "error",
+        content: "",
+        error: t("loop.windowBudgetExhausted", {
+          spent: exhausted.spentUsd.toFixed(4),
+          cap: exhausted.capUsd.toFixed(2),
+          period: exhausted.period,
+          scope: exhausted.scope,
+        }),
+      };
+      return;
+    }
+    for (const s of windowStatuses) {
+      const warnKey = `${s.scope}:${s.period}`;
+      if (s.state === "warn" && !this._windowBudgetWarned.has(warnKey)) {
+        this._windowBudgetWarned.add(warnKey);
+        yield {
+          turn: this._turn,
+          role: "warning",
+          content: t("loop.windowBudget80Pct", {
+            spent: s.spentUsd.toFixed(4),
+            cap: s.capUsd.toFixed(2),
+            period: s.period,
+            scope: s.scope,
           }),
         };
       }
@@ -989,7 +1092,10 @@ export class CacheFirstLoop {
         yield {
           turn: this._turn,
           role: "warning",
-          content: t("loop.flashEscalation", { model: ESCALATION_MODEL, reasonSuffix }),
+          content: t("loop.flashEscalation", {
+            model: ESCALATION_MODEL,
+            reasonSuffix,
+          }),
         };
         // Reset per-iter state. We don't record stats for the rejected
         // flash call (cost is small — a ~20-token lead-in that we broke
@@ -1086,7 +1192,9 @@ export class CacheFirstLoop {
 
       if (repairedCalls.length === 0) {
         if (allSuppressed) {
-          yield* forceSummaryAfterIterLimit(this.summaryContext(), { reason: "stuck" });
+          yield* forceSummaryAfterIterLimit(this.summaryContext(), {
+            reason: "stuck",
+          });
           return;
         }
         yield { turn: this._turn, role: "done", content: assistantContent };
@@ -1106,7 +1214,9 @@ export class CacheFirstLoop {
           role: "status",
           content: t("loop.compactingHistoryStatus", { aggressiveTag }),
         };
-        const result = await this.compactHistory({ keepRecentTokens: decision.tailBudget });
+        const result = await this.compactHistory({
+          keepRecentTokens: decision.tailBudget,
+        });
         if (result.folded) {
           yield {
             turn: this._turn,
@@ -1137,7 +1247,9 @@ export class CacheFirstLoop {
           }),
         };
         this.context.trimTrailingToolCalls();
-        yield* forceSummaryAfterIterLimit(this.summaryContext(), { reason: "context-guard" });
+        yield* forceSummaryAfterIterLimit(this.summaryContext(), {
+          reason: "context-guard",
+        });
         return;
       }
 
@@ -1149,6 +1261,7 @@ export class CacheFirstLoop {
           ? Math.min(parallelMaxParsed, 16)
           : 3;
 
+      const dedupBefore = this.readDedup.getStats();
       let callIdx = 0;
       while (callIdx < repairedCalls.length) {
         // Group consecutive parallel-safe calls; an unsafe call breaks
@@ -1228,6 +1341,19 @@ export class CacheFirstLoop {
             callId: this.inflightIdFor(call),
           };
         }
+      }
+
+      // Surface read-dedup savings on the event stream (transient status —
+      // never appended to the log, so it can't perturb the prompt cache).
+      const dedupAfter = this.readDedup.getStats();
+      if (dedupAfter.dumpsSaved > dedupBefore.dumpsSaved) {
+        const stubbed = dedupAfter.dumpsSaved - dedupBefore.dumpsSaved;
+        const bytes = dedupAfter.bytesSaved - dedupBefore.bytesSaved;
+        yield {
+          turn: this._turn,
+          role: "status",
+          content: `read-dedup: ${stubbed} unchanged re-read${stubbed === 1 ? "" : "s"} stubbed (~${bytes} bytes kept out of the prompt)`,
+        };
       }
     }
     // Unreachable — the for-loop above is unbounded. The model exits the

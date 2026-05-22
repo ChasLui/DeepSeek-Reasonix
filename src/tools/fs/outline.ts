@@ -1,6 +1,7 @@
 /** Per-language top-level symbol outline for read_file preview. Regex-anchored at column 0 — nested decls intentionally skipped. */
 
 import * as pathMod from "node:path";
+import { nullPrototype } from "../../utils/safe-object.js";
 
 export type OutlineEntry = { line: number; text: string };
 
@@ -41,7 +42,7 @@ const TXT_CHAPTER_PATTERNS: readonly RegExp[] = [
 
 type Lang = "ts" | "py" | "go" | "rust" | "md" | "proto" | "txt";
 
-const EXT_TO_LANG: Record<string, Lang> = {
+const EXT_TO_LANG: Record<string, Lang> = nullPrototype({
   ".ts": "ts",
   ".tsx": "ts",
   ".mts": "ts",
@@ -60,7 +61,7 @@ const EXT_TO_LANG: Record<string, Lang> = {
   ".proto": "proto",
   ".txt": "txt",
   ".text": "txt",
-};
+});
 
 export function extractOutline(filename: string, lines: readonly string[]): OutlineEntry[] {
   const ext = pathMod.extname(filename).toLowerCase();

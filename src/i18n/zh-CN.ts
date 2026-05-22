@@ -85,7 +85,10 @@ export const zhCN: TranslationSchema = {
         {
           rows: [
             { key: "y / n", text: "接受或放弃待处理的编辑" },
-            { key: "Shift+Tab", text: "切换 预览 ↔ 自动（持久化；自动模式立即应用）" },
+            {
+              key: "Shift+Tab",
+              text: "切换 预览 ↔ 自动（持久化；自动模式立即应用）",
+            },
             { key: "u", text: "撤销上次自动应用的批处理（5 秒横幅内）" },
           ],
         },
@@ -102,12 +105,18 @@ export const zhCN: TranslationSchema = {
               key: "右键",
               text: "终端原生菜单（Windows Terminal 等的复制 / 粘贴）",
             },
-            { key: "滚轮", text: "滚动聊天记录（Web / 云端 / SSH 终端也能用）" },
+            {
+              key: "滚轮",
+              text: "滚动聊天记录（Web / 云端 / SSH 终端也能用）",
+            },
             {
               key: "↑ / ↓",
               text: "输入历史（多行草稿时按行移动光标）— Ctrl+P / Ctrl+N 同义",
             },
-            { key: "PgUp / PgDn", text: "滚动聊天记录（鼠标滚轮也走这条路径）" },
+            {
+              key: "PgUp / PgDn",
+              text: "滚动聊天记录（鼠标滚轮也走这条路径）",
+            },
           ],
         },
       ],
@@ -129,19 +138,31 @@ export const zhCN: TranslationSchema = {
             { key: "Ctrl+A / Ctrl+E", text: "跳到当前行的开头 / 结尾" },
             { key: "Ctrl+W", text: "删除光标前的一个词" },
             { key: "Ctrl+U", text: "清空整个输入缓冲区" },
-            { key: "Tab", text: "补全 @-mention · 进入文件夹 · 接受 slash 命令" },
+            {
+              key: "Tab",
+              text: "补全 @-mention · 进入文件夹 · 接受 slash 命令",
+            },
             { key: "Shift+Tab", text: "编辑门控：切换 预览 ↔ 自动 模式" },
             { key: "Esc", text: "关闭弹出选择器 · 中止当前模型回合" },
-            { key: "Ctrl+C", text: "中止当前模型回合（不是复制 — 见剪贴板段）" },
+            {
+              key: "Ctrl+C",
+              text: "中止当前模型回合（不是复制 — 见剪贴板段）",
+            },
             { key: "PgUp / PgDn", text: "整页滚动聊天记录" },
             { key: "End", text: "跳到聊天的最新一行" },
-            { key: "Ctrl+R", text: "切换详细模式 — 显示完整推理 + 工具输出，不省略" },
+            {
+              key: "Ctrl+R",
+              text: "切换详细模式 — 显示完整推理 + 工具输出，不省略",
+            },
           ],
         },
         {
           title: "鼠标",
           rows: [
-            { key: "滚轮", text: "滚动聊天记录（Web / 云端 / SSH 终端也能用）" },
+            {
+              key: "滚轮",
+              text: "滚动聊天记录（Web / 云端 / SSH 终端也能用）",
+            },
             { key: "拖动", text: "原生选中文本 — 直接复制，不需要修饰键" },
             { key: "右键", text: "终端原生（Windows Terminal 等的粘贴菜单）" },
           ],
@@ -149,7 +170,10 @@ export const zhCN: TranslationSchema = {
         {
           title: "复制 / 粘贴",
           rows: [
-            { key: "选中文字", text: "直接拖动 — 终端原生（不需要任何修饰键）" },
+            {
+              key: "选中文字",
+              text: "直接拖动 — 终端原生（不需要任何修饰键）",
+            },
             {
               key: "/copy",
               text: "vim/tmux 风格复制模式 — SSH / mosh / tmux 下拖选越过可视区无效时用这个",
@@ -158,7 +182,10 @@ export const zhCN: TranslationSchema = {
               key: "复制",
               text: "Ctrl+Shift+C（Win/Linux）· Cmd+C（macOS）— 或选中即复制（看终端设置）",
             },
-            { key: "粘贴", text: "Ctrl+V 或 Ctrl+Shift+V（Win/Linux）· Cmd+V（macOS）" },
+            {
+              key: "粘贴",
+              text: "Ctrl+V 或 Ctrl+Shift+V（Win/Linux）· Cmd+V（macOS）",
+            },
             {
               key: "bracketed paste",
               text: "多行粘贴整体进入 — 中间换行不会触发提交",
@@ -375,7 +402,10 @@ export const zhCN: TranslationSchema = {
       description: "转储存储的编辑差异（省略 id 时为最新未撤消的）",
       argsHint: "[id]",
     },
-    commit: { description: "git add -A && git commit -m ...", argsHint: '"msg"' },
+    commit: {
+      description: "git add -A && git commit -m ...",
+      argsHint: '"msg"',
+    },
     checkpoint: {
       description: "快照会话涉及的每个文件（Cursor 风格内部存储，非 git）。单独 /checkpoint 列出。",
       argsHint: "[name|list|forget <id>]",
@@ -628,6 +658,9 @@ export const zhCN: TranslationSchema = {
     budgetExhausted:
       "会话预算已用完 — 已花费 ${spent} ≥ 上限 ${cap}。用 /budget <usd> 提高上限，/budget off 清除上限，或结束会话。",
     budget80Pct: "▲ 预算已用 80% — ${spent} / ${cap}。下一两轮可能就触顶。",
+    windowBudgetExhausted:
+      "${scope} ${period} 滚动预算已用完 — 窗口内已花 ${spent} ≥ 上限 ${cap}。等花费滑出窗口，或在 config.json 调高上限。",
+    windowBudget80Pct: "▲ ${scope} ${period} 滚动预算已用 80% — 窗口内 ${spent} / ${cap}。",
     proArmed: "⇧ /pro 已装备 — 本轮使用 deepseek-v4-pro（一次性 · 本轮后自动解除）",
     abortedAtIter: "在第 {iter} 次工具调用处中断 — 未生成总结即停止（按 ↑ + Enter 或 /retry 恢复）",
     toolUploadStatus: "工具结果已上传 · 模型在生成下一条响应前思考中…",
@@ -893,6 +926,14 @@ export const zhCN: TranslationSchema = {
         "▲ budget → ${cap} 但已花费 ${spent}。下一轮将被拒绝 — 提高上限以继续，或结束会话。",
       budgetSet:
         "budget → ${cap}  （迄今：${spent} · 80% 时警告，100% 时拒绝下一轮 · /budget off 清除）",
+      budgetWindowNone:
+        "未设置滚动预算 — 跨会话花费无上限。用 /budget window <daily|weekly|monthly> <usd> 设置（如 /budget window daily 5；加 workspace 前缀可限定到本项目：/budget window workspace daily 5）",
+      budgetWindowStatus:
+        "${scope} ${period} 滚动预算：本窗口已花 ${spent} / ${cap} · 剩 ${remaining} · /budget window off 清除",
+      budgetWindowOff: "滚动预算 → 关闭（已从 config 清除）",
+      budgetWindowUsage:
+        'usage: /budget window [global|workspace] <daily|weekly|monthly> <usd>  （收到 "{arg}" — period 须为 daily/weekly/monthly，cap 须为正数）',
+      budgetWindowSet: "滚动预算 → ${scope} ${period} ${cap}（已存 config · 本窗口已花 ${spent}）",
     },
     permissions: {
       mutateCodeOnly:

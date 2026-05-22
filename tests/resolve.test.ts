@@ -12,16 +12,24 @@ import { writeConfig } from "../src/config.js";
 // user's real config and we start each case with a clean slate.
 describe("resolveDefaults", () => {
   let home: string;
+  let cwd: string;
   const origHome = process.env.HOME;
   const origUserProfile = process.env.USERPROFILE;
+  const origCwd = process.cwd();
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), "reasonix-resolve-"));
     process.env.HOME = home;
     process.env.USERPROFILE = home; // node:os homedir() uses this on Windows
+    // Isolate cwd too: resolveDefaults merges <cwd>/.mcp.json, so a real
+    // project .mcp.json (e.g. serena) would otherwise leak into these cases.
+    cwd = mkdtempSync(join(tmpdir(), "reasonix-resolve-cwd-"));
+    process.chdir(cwd);
   });
 
   afterEach(() => {
+    process.chdir(origCwd);
+    rmSync(cwd, { recursive: true, force: true });
     rmSync(home, { recursive: true, force: true });
     if (origHome === undefined) {
       // biome-ignore lint/performance/noDelete: process.env must lose the key, not hold "undefined"
@@ -174,7 +182,9 @@ describe("resolveDefaults", () => {
     it("--no-config skips .mcp.json entirely", () => {
       writeFileSync(
         join(cwd, ".mcp.json"),
-        JSON.stringify({ mcpServers: { gh: { type: "stdio", command: "node" } } }),
+        JSON.stringify({
+          mcpServers: { gh: { type: "stdio", command: "node" } },
+        }),
         "utf8",
       );
       const r = resolveDefaults({ noConfig: true });
@@ -195,7 +205,9 @@ describe("resolveContinueFlag", () => {
   });
 
   it("flag set + sessions exist → picks newest + forceResume:true", () => {
-    const result = resolveContinueFlag(true, "default", () => ({ name: "code-myproj" }));
+    const result = resolveContinueFlag(true, "default", () => ({
+      name: "code-myproj",
+    }));
     expect(result).toEqual({ session: "code-myproj", forceResume: true });
   });
 

@@ -1,0 +1,18 @@
+{
+  "_about": "Project-level MCP for DeepSeek-Reasonix. Pairs with .wolf/ (openwolf hook-based memory) and .serena/memories/ (code-layer knowledge). Companion: .claude/settings.json activates this via enabledMcpjsonServers.",
+  "mcpServers": {
+    "serena": {
+      "command": "serena",
+      "args": [
+        "start-mcp-server",
+        "--context=claude-code",
+        "--project=DeepSeek-Reasonix",
+        "--enable-web-dashboard=false",
+        "--enable-gui-log-window=false"
+      ],
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}

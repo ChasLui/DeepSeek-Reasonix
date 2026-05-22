@@ -8,6 +8,8 @@ import {
   loadBaseUrl,
   normalizeMcpConfig,
   readConfig,
+  resolveBudgetWindows,
+  resolveSessionToolset,
   saveApiKey,
 } from "../../config.js";
 import { loadDotenv } from "../../env.js";
@@ -19,6 +21,7 @@ import { bridgeMcpTools } from "../../mcp/registry.js";
 import { buildTransportFromSpec } from "../../mcp/transport-from-spec.js";
 import { appendUsage } from "../../telemetry/usage.js";
 import { ToolRegistry } from "../../tools.js";
+import { applySessionToolset } from "../../tools/toolset.js";
 import { openTranscriptFile, recordFromLoopEvent, writeRecord } from "../../transcript/log.js";
 import { formatMcpLifecycleEvent } from "../ui/mcp-lifecycle.js";
 import { formatMcpSlowToast } from "../ui/mcp-toast.js";
@@ -137,6 +140,7 @@ export async function runCommand(opts: RunOptions): Promise<void> {
   }
 
   const client = new DeepSeekClient({ baseUrl: loadBaseUrl() });
+  applySessionToolset(tools, resolveSessionToolset());
   const prefix = new ImmutablePrefix({
     system: opts.system,
     toolSpecs: tools?.specs(),
@@ -147,6 +151,8 @@ export async function runCommand(opts: RunOptions): Promise<void> {
     tools,
     model: opts.model,
     budgetUsd: opts.budgetUsd,
+    budgetWindows: resolveBudgetWindows(),
+    workspace: process.cwd(),
   });
   const prefixHash = prefix.fingerprint;
 
@@ -178,7 +184,12 @@ export async function runCommand(opts: RunOptions): Promise<void> {
         // `reasonix run` is often used in CI / scripting — we want
         // those turns to show up in `reasonix stats` too so the
         // dashboard reflects all DeepSeek spend, not just TUI sessions.
-        appendUsage({ session: null, model: ev.stats.model, usage: ev.stats.usage });
+        appendUsage({
+          session: null,
+          model: ev.stats.model,
+          usage: ev.stats.usage,
+          workspace: process.cwd(),
+        });
       }
       // Persist every non-streaming event — deltas would flood the file and
       // aren't useful for replay (replay renders final content, not keystrokes).

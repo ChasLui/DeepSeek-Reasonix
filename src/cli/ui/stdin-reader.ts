@@ -1,6 +1,7 @@
 /** Sole stdin owner; 250 ms ESC-ambiguity timer (ConPTY splits sequences past parse-keypress's 100 ms). */
 
 import { stdin } from "node:process";
+import { nullPrototype } from "../../utils/safe-object.js";
 
 export interface KeyEvent {
   /** Empty for control keys (arrows / Enter / Esc); holds the letter for Ctrl+/Alt+. */
@@ -74,7 +75,10 @@ const CSI_TAIL_MAP: ReadonlyArray<{ tail: string; ev: KeyEvent }> = [
   { tail: "27;2;9~", ev: { input: "", tab: true, shift: true } },
   { tail: "27;2;13~", ev: { input: "", return: true, shift: true } },
   { tail: "27;5;13~", ev: { input: "", return: true, ctrl: true } },
-  { tail: "27;6;13~", ev: { input: "", return: true, ctrl: true, shift: true } },
+  {
+    tail: "27;6;13~",
+    ev: { input: "", return: true, ctrl: true, shift: true },
+  },
   // Kitty keyboard protocol — same idea, different envelope:
   // `\x1b[<keycode>;<mod>u`. Some terminals (kitty, recent Windows
   // Terminal previews) prefer this shape. Harmless to map here too.
@@ -85,14 +89,14 @@ const CSI_TAIL_MAP: ReadonlyArray<{ tail: string; ev: KeyEvent }> = [
 ];
 
 /** SS3 sequences (`\x1bO<letter>`) — some terminals send these for arrows. */
-const SS3_MAP: Record<string, KeyEvent> = {
+const SS3_MAP: Record<string, KeyEvent> = nullPrototype({
   A: { input: "", upArrow: true },
   B: { input: "", downArrow: true },
   C: { input: "", rightArrow: true },
   D: { input: "", leftArrow: true },
   H: { input: "", home: true },
   F: { input: "", end: true },
-};
+});
 
 /** ESC-stripped CSI lookahead — ConPTY occasionally drops the leading ESC. */
 function tryEscapelessCsi(chunk: string, i: number): { advance: number; ev: KeyEvent } | null {
@@ -170,7 +174,10 @@ function decodeModifiedKey(cp: number, mod: number): KeyEvent | null {
     return ev;
   }
   if (cp >= 0x41 && cp <= 0x7a && ctrl && !alt) {
-    const ev: KeyEvent = { input: String.fromCharCode(cp).toLowerCase(), ctrl: true };
+    const ev: KeyEvent = {
+      input: String.fromCharCode(cp).toLowerCase(),
+      ctrl: true,
+    };
     if (shift) ev.shift = true;
     return ev;
   }

@@ -6,6 +6,7 @@ import picomatch from "picomatch";
 import { addProjectPathAllowed, loadProjectPathAllowed } from "../config.js";
 import { type ConfirmationChoice, pauseGate as defaultPauseGate } from "../core/pause-gate.js";
 import { DEFAULT_INDEX_EXCLUDES } from "../index/config.js";
+import { truncateForModelByTokens } from "../mcp/registry.js";
 import { memoryEnabled } from "../memory/project.js";
 import {
   findDirMemory,
@@ -14,9 +15,18 @@ import {
   readSubdirMemoryContent,
 } from "../memory/subdir.js";
 import type { ToolCallContext, ToolRegistry } from "../tools.js";
+import { AGGRESSIVE_FOOTER, applyAggressive, isAggressiveSupported } from "./fs/aggressive.js";
 import { applyEdit, applyMultiEdit } from "./fs/edit.js";
+import { writeFileNoFollow } from "./fs/gate.js";
 import { globFiles } from "./fs/glob.js";
 import { extractOutline, formatOutline } from "./fs/outline.js";
+import {
+  type EmittedView,
+  type FileIdentity,
+  dedupKey,
+  emittedViewSignature,
+  hashContent,
+} from "./fs/read-dedup.js";
 import { searchContent, searchFiles } from "./fs/search.js";
 
 export { lineDiff } from "./fs/edit.js";
@@ -30,6 +40,8 @@ export interface FilesystemToolsOptions {
   outlineThresholdBytes?: number;
   /** Cap on total bytes from listing/grep tools — bounds tree-as-one-string accidents. */
   maxListBytes?: number;
+  /** false → disable read_file's session read-dedup. Default true. (Env REASONIX_DEDUP=0 also disables, per-call.) */
+  dedupEnabled?: boolean;
 }
 
 /** 64 KiB covers ~99% of source files; larger ones (generated bundles, lockfiles, novels) outline-mode by default to keep the cache prefix slim. */
@@ -116,6 +128,7 @@ export function registerFilesystemTools(
   const allowWriting = opts.allowWriting !== false;
   const outlineThresholdBytes = opts.outlineThresholdBytes ?? DEFAULT_OUTLINE_THRESHOLD_BYTES;
   const maxListBytes = opts.maxListBytes ?? DEFAULT_MAX_LIST_BYTES;
+  const dedupEnabled = opts.dedupEnabled !== false;
 
   const normRoot = pathMod.resolve(rootDir);
   /** Approved-this-session directory prefixes — `run_once` keeps the user from being asked twice for follow-up reads in the same dir. Wiped on process exit, not persisted. */
@@ -166,7 +179,13 @@ export function registerFilesystemTools(
       const gate = ctx?.confirmationGate ?? defaultPauseGate;
       pending = gate.ask({
         kind: "path_access",
-        payload: { path: abs, intent, toolName, sandboxRoot: normRoot, allowPrefix },
+        payload: {
+          path: abs,
+          intent,
+          toolName,
+          sandboxRoot: normRoot,
+          allowPrefix,
+        },
       });
       inflightGate.set(allowPrefix, pending);
       void pending.finally(() => inflightGate.delete(allowPrefix));
@@ -234,116 +253,231 @@ export function registerFilesystemTools(
     parameters: {
       type: "object",
       properties: {
-        path: { type: "string", description: "Path to read (relative to rootDir or absolute)." },
-        head: { type: "integer", description: "If set, return only the first N lines." },
-        tail: { type: "integer", description: "If set, return only the last N lines." },
+        path: {
+          type: "string",
+          description: "Path to read (relative to rootDir or absolute).",
+        },
+        head: {
+          type: "integer",
+          description: "If set, return only the first N lines.",
+        },
+        tail: {
+          type: "integer",
+          description: "If set, return only the last N lines.",
+        },
         range: {
           type: "string",
           description:
             'Inclusive line range like "50-100" or "50-50". 1-indexed. Takes precedence over head/tail when all three are set. Out-of-range requests clamp to file bounds.',
         },
+        level: {
+          type: "string",
+          enum: ["minimal", "aggressive"],
+          description:
+            'Filtering depth. "minimal" (default) returns the file verbatim. "aggressive" strips comments and function/class bodies so only signatures remain — useful for surveying a large source file cheaply. Supported langs: ts/tsx/js/jsx/mjs/cjs/py/go/rs; others fall back to minimal.',
+        },
+        force: {
+          type: "boolean",
+          description:
+            "Re-read in full even if the same unchanged file was already read this session. Use when you specifically need the content re-emitted (default false: an unchanged re-read returns a short stub pointing at the earlier output).",
+        },
       },
       required: ["path"],
     },
     fn: async (
-      args: { path: string; head?: number; tail?: number; range?: string },
+      args: {
+        path: string;
+        head?: number;
+        tail?: number;
+        range?: string;
+        level?: "minimal" | "aggressive";
+        force?: boolean;
+      },
       ctx?: ToolCallContext,
     ) => {
-      const abs = await safePath(args.path, "read_file", ctx);
-      const rel = displayRel(rootDir, abs);
-      // Open once and reuse the fd so the directory check and the read
-      // bind to the same inode — closes the stat→read TOCTOU race.
-      const fh = await fs.open(abs, "r");
-      let raw: Buffer;
-      let sizeBytes: number;
+      const dedupState =
+        !args.force && dedupEnabled && process.env.REASONIX_DEDUP !== "0" && ctx?.readDedup
+          ? ctx.readDedup
+          : null;
+      // Claim the in-flight slot SYNCHRONOUSLY, before the first await, so
+      // concurrent identical reads claim in declared order (the loop dispatches
+      // a parallel chunk in declared order). The first claimant runs the real
+      // lookup; later claimants force a full dump — deterministic regardless of
+      // which read's I/O settles first.
+      const inflightKey = dedupState
+        ? JSON.stringify([
+            looksLikeAbsoluteSystemPath(args.path)
+              ? pathMod.resolve(args.path)
+              : pathMod.resolve(rootDir, args.path.replace(/^[/\\]+/, "") || "."),
+            args.range ?? null,
+            args.head ?? null,
+            args.tail ?? null,
+            args.level ?? null,
+            Boolean(args.force),
+          ])
+        : "";
+      const owned = dedupState ? dedupState.beginRead(inflightKey) : false;
       try {
-        const stat = await fh.stat();
-        if (stat.isDirectory()) {
-          throw new Error(`not a file: ${args.path} (it's a directory)`);
+        const abs = await safePath(args.path, "read_file", ctx);
+        const rel = displayRel(rootDir, abs);
+        // Open once and reuse the fd so the directory check and the read
+        // bind to the same inode — closes the stat→read TOCTOU race.
+        const fh = await fs.open(abs, "r");
+        let raw: Buffer;
+        let sizeBytes: number;
+        let identity: FileIdentity;
+        try {
+          const stat = await fh.stat();
+          if (stat.isDirectory()) {
+            throw new Error(`not a file: ${args.path} (it's a directory)`);
+          }
+          sizeBytes = stat.size;
+          // Identity bound to the SAME fd that we read — symlink retarget /
+          // same-size content swap change dev/ino/mtime and miss the cache.
+          identity = {
+            dev: stat.dev,
+            ino: stat.ino,
+            size: stat.size,
+            mtimeMs: stat.mtimeMs,
+          };
+          if (sizeBytes > HARD_MAX_FILE_BYTES) {
+            return [
+              `[refused: ${rel} is ${formatBytes(sizeBytes)} (> ${formatBytes(HARD_MAX_FILE_BYTES)} hard ceiling) — too large to load]`,
+              "Use one of:",
+              `  - search_content path:"${rel}" pattern:"<your regex>"  — grep within the file`,
+              `  - read_file path:"${rel}" range:"A-B"                   — read a specific 1-indexed line range`,
+              `  - read_file path:"${rel}" head:N  /  tail:N             — read N lines at the start or end`,
+            ].join("\n");
+          }
+          raw = await fh.readFile();
+        } finally {
+          await fh.close();
         }
-        sizeBytes = stat.size;
-        if (sizeBytes > HARD_MAX_FILE_BYTES) {
-          return [
-            `[refused: ${rel} is ${formatBytes(sizeBytes)} (> ${formatBytes(HARD_MAX_FILE_BYTES)} hard ceiling) — too large to load]`,
-            "Use one of:",
-            `  - search_content path:"${rel}" pattern:"<your regex>"  — grep within the file`,
-            `  - read_file path:"${rel}" range:"A-B"                   — read a specific 1-indexed line range`,
-            `  - read_file path:"${rel}" head:N  /  tail:N             — read N lines at the start or end`,
-          ].join("\n");
+
+        if (looksBinary(raw)) {
+          return `[refused: ${rel} appears to be binary (${formatBytes(sizeBytes)}) — read_file returns text only. Use get_file_info for stat.]`;
         }
-        raw = await fh.readFile();
+
+        const text = raw.toString("utf8");
+        let lines = text.split(/\r?\n/);
+        // Most files end with '\n' which splits into an empty trailing
+        // entry; drop it so head/tail/range counts match the user's
+        // visible line numbers in an editor.
+        if (lines.length > 0 && lines[lines.length - 1] === "") lines = lines.slice(0, -1);
+        const totalLines = lines.length;
+        const wantAggressive = args.level === "aggressive" && isAggressiveSupported(abs);
+        const maybeAggressive = (body: string): string =>
+          wantAggressive ? applyAggressive(body, abs) + AGGRESSIVE_FOOTER : body;
+
+        const rangeValid = typeof args.range === "string" && /^\d+\s*-\s*\d+$/.test(args.range);
+        const useHead = !rangeValid && typeof args.head === "number" && args.head > 0;
+        const useTail = !rangeValid && !useHead && typeof args.tail === "number" && args.tail > 0;
+        const mode: EmittedView["mode"] = rangeValid
+          ? "range"
+          : useHead
+            ? "head"
+            : useTail
+              ? "tail"
+              : sizeBytes <= outlineThresholdBytes
+                ? "full"
+                : "outline";
+
+        // Build the exact body for the resolved view. Pure function of
+        // (raw, view params) — same inputs always yield the same string,
+        // which is what makes the dedup hash sound.
+        const renderBody = (): string => {
+          if (rangeValid) {
+            const [rawStart, rawEnd] = (args.range as string)
+              .split("-")
+              .map((s) => Number.parseInt(s, 10));
+            const start = Math.max(1, rawStart ?? 1);
+            const end = Math.min(totalLines, Math.max(start, rawEnd ?? totalLines));
+            const slice = lines.slice(start - 1, end);
+            const label = `[range ${start}-${end} of ${totalLines} lines]`;
+            return withSubdirMemory(abs, `${label}\n${maybeAggressive(slice.join("\n"))}`);
+          }
+          if (useHead) {
+            const count = Math.min(args.head as number, totalLines);
+            const slice = lines.slice(0, count);
+            const marker =
+              count < totalLines
+                ? `\n\n[…head ${count} of ${totalLines} lines — call again with range / tail for more]`
+                : "";
+            return withSubdirMemory(abs, slice.join("\n") + marker);
+          }
+          if (useTail) {
+            const count = Math.min(args.tail as number, totalLines);
+            const slice = lines.slice(totalLines - count);
+            const marker =
+              count < totalLines
+                ? `[…tail ${count} of ${totalLines} lines — call again with range / head for more]\n\n`
+                : "";
+            return withSubdirMemory(abs, marker + slice.join("\n"));
+          }
+          // No explicit scope + file fits the threshold → full content.
+          // Trust the prompt cache: a 100K-token file read once amortizes
+          // across every turn of the same conversation.
+          if (sizeBytes <= outlineThresholdBytes) return withSubdirMemory(abs, lines.join("\n"));
+
+          // No explicit scope + file is over the threshold → outline mode.
+          const head = lines.slice(0, Math.min(OUTLINE_HEAD_LINES, totalLines)).join("\n");
+          const outline = formatOutline(extractOutline(abs, lines));
+          const parts: string[] = [
+            `[large file: ${formatBytes(sizeBytes)}, ${totalLines} lines — outline mode (threshold ${formatBytes(outlineThresholdBytes)})]`,
+            "",
+            `[head ${Math.min(OUTLINE_HEAD_LINES, totalLines)} lines for orientation]`,
+            head,
+          ];
+          if (outline) parts.push("", outline);
+          parts.push(
+            "",
+            "[to read more, call one of:",
+            `  - read_file path:"${rel}" range:"A-B"          — 1-indexed line range`,
+            `  - read_file path:"${rel}" head:N  /  tail:N    — first/last N lines`,
+            `  - search_content path:"${rel}" pattern:"..."   — grep within this file]`,
+          );
+          return withSubdirMemory(abs, parts.join("\n"));
+        };
+
+        // ── Read-dedup gate ──────────────────────────────────────────────
+        // Contended concurrent reads (owned === false) force a full dump so
+        // output never depends on which read records first (Pillar 1). Disabled
+        // reads (dedupState === null) also dump.
+        if (!dedupState || !owned) return renderBody();
+
+        const view: EmittedView = {
+          mode,
+          range: rangeValid ? (args.range as string) : undefined,
+          head: useHead ? (args.head as number) : undefined,
+          tail: useTail ? (args.tail as number) : undefined,
+          aggressive: wantAggressive,
+          outlineThreshold: outlineThresholdBytes,
+        };
+        const key = dedupKey(abs, emittedViewSignature(view));
+        const sha = hashContent(raw);
+        const hit = dedupState.lookup(key, identity, sha);
+        if (hit) {
+          dedupState.markHit(hit.bytes);
+          // Deterministic stub — no timestamps / counters. The exact prior
+          // output is still in the active log (lookup checks liveness).
+          return `[read_file: ${rel} — unchanged since an earlier read this session; the same ${hit.lines}-line / ${hit.bytes}-byte view is still above. Pass force:true to re-read.]`;
+        }
+        const body = renderBody();
+        // Stub line/byte counts describe the EMITTED view (a slice for
+        // head/tail/range/outline), not the whole file.
+        const bodyLines = body.split("\n").length;
+        const bodyBytes = Buffer.byteLength(body, "utf8");
+        // Record only if the body enters the log intact — a stub must
+        // never claim "still above" for a result the dispatcher truncates.
+        // String identity, not length: a same-length rewrite is still a change.
+        const survives =
+          ctx?.maxResultTokens === undefined ||
+          truncateForModelByTokens(body, ctx.maxResultTokens) === body;
+        if (survives) dedupState.record(key, identity, sha, bodyLines, bodyBytes);
+        return body;
       } finally {
-        await fh.close();
+        if (dedupState && owned) dedupState.endRead(inflightKey);
       }
-
-      if (looksBinary(raw)) {
-        return `[refused: ${rel} appears to be binary (${formatBytes(sizeBytes)}) — read_file returns text only. Use get_file_info for stat.]`;
-      }
-
-      const text = raw.toString("utf8");
-      let lines = text.split(/\r?\n/);
-      // Most files end with '\n' which splits into an empty trailing
-      // entry; drop it so head/tail/range counts match the user's
-      // visible line numbers in an editor.
-      if (lines.length > 0 && lines[lines.length - 1] === "") lines = lines.slice(0, -1);
-      const totalLines = lines.length;
-
-      // range wins over head/tail when set — the most precise ask
-      // should dominate. Parse "A-B" strictly; bad formats fall through
-      // to head/tail / outline-mode instead of erroring.
-      if (typeof args.range === "string" && /^\d+\s*-\s*\d+$/.test(args.range)) {
-        const [rawStart, rawEnd] = args.range.split("-").map((s) => Number.parseInt(s, 10));
-        const start = Math.max(1, rawStart ?? 1);
-        const end = Math.min(totalLines, Math.max(start, rawEnd ?? totalLines));
-        const slice = lines.slice(start - 1, end);
-        const label = `[range ${start}-${end} of ${totalLines} lines]`;
-        return withSubdirMemory(abs, `${label}\n${slice.join("\n")}`);
-      }
-      if (typeof args.head === "number" && args.head > 0) {
-        const count = Math.min(args.head, totalLines);
-        const slice = lines.slice(0, count);
-        const marker =
-          count < totalLines
-            ? `\n\n[…head ${count} of ${totalLines} lines — call again with range / tail for more]`
-            : "";
-        return withSubdirMemory(abs, slice.join("\n") + marker);
-      }
-      if (typeof args.tail === "number" && args.tail > 0) {
-        const count = Math.min(args.tail, totalLines);
-        const slice = lines.slice(totalLines - count);
-        const marker =
-          count < totalLines
-            ? `[…tail ${count} of ${totalLines} lines — call again with range / head for more]\n\n`
-            : "";
-        return withSubdirMemory(abs, marker + slice.join("\n"));
-      }
-
-      // No explicit scope + file fits the threshold → full content.
-      // Trust the prompt cache: a 100K-token file read once amortizes
-      // across every turn of the same conversation.
-      if (sizeBytes <= outlineThresholdBytes) return withSubdirMemory(abs, lines.join("\n"));
-
-      // No explicit scope + file is over the threshold → outline mode.
-      // Return enough for the model to orient (head + symbol map) plus
-      // concrete next-step commands. Avoids dumping a 5 MB proto into
-      // every cached prefix while still surfacing what's inside.
-      const head = lines.slice(0, Math.min(OUTLINE_HEAD_LINES, totalLines)).join("\n");
-      const outline = formatOutline(extractOutline(abs, lines));
-      const parts: string[] = [
-        `[large file: ${formatBytes(sizeBytes)}, ${totalLines} lines — outline mode (threshold ${formatBytes(outlineThresholdBytes)})]`,
-        "",
-        `[head ${Math.min(OUTLINE_HEAD_LINES, totalLines)} lines for orientation]`,
-        head,
-      ];
-      if (outline) parts.push("", outline);
-      parts.push(
-        "",
-        "[to read more, call one of:",
-        `  - read_file path:"${rel}" range:"A-B"          — 1-indexed line range`,
-        `  - read_file path:"${rel}" head:N  /  tail:N    — first/last N lines`,
-        `  - search_content path:"${rel}" pattern:"..."   — grep within this file]`,
-      );
-      return withSubdirMemory(abs, parts.join("\n"));
     },
   });
 
@@ -357,7 +491,10 @@ export function registerFilesystemTools(
     parameters: {
       type: "object",
       properties: {
-        path: { type: "string", description: "Directory to list (default: root)." },
+        path: {
+          type: "string",
+          description: "Directory to list (default: root).",
+        },
       },
     },
     fn: async (args: { path?: string }, ctx?: ToolCallContext) => {
@@ -379,7 +516,10 @@ export function registerFilesystemTools(
     parameters: {
       type: "object",
       properties: {
-        path: { type: "string", description: "Root of the tree (default: sandbox root)." },
+        path: {
+          type: "string",
+          description: "Root of the tree (default: sandbox root).",
+        },
         maxDepth: {
           type: "integer",
           description:
@@ -469,7 +609,10 @@ export function registerFilesystemTools(
     parameters: {
       type: "object",
       properties: {
-        path: { type: "string", description: "Directory to start the search at (default: root)." },
+        path: {
+          type: "string",
+          description: "Directory to start the search at (default: root).",
+        },
         pattern: {
           type: "string",
           description: "Substring (or regex) to match against filenames.",
@@ -653,7 +796,9 @@ export function registerFilesystemTools(
     fn: async (args: { path: string; content: string }, ctx?: ToolCallContext) => {
       const abs = await safePath(args.path, "write_file", ctx, "write");
       await fs.mkdir(pathMod.dirname(abs), { recursive: true });
-      await fs.writeFile(abs, args.content, "utf8");
+      // O_NOFOLLOW: refuse to write through a symlink at the target path
+      // (same protection edit_file already has — closes a sandbox-escape hole).
+      await writeFileNoFollow(abs, args.content);
       return `wrote ${args.content.length} chars to ${displayRel(rootDir, abs)}`;
     },
   });
@@ -666,8 +811,14 @@ export function registerFilesystemTools(
       type: "object",
       properties: {
         path: { type: "string" },
-        search: { type: "string", description: "Exact text to find (must be unique)." },
-        replace: { type: "string", description: "Text to substitute in place of `search`." },
+        search: {
+          type: "string",
+          description: "Exact text to find (must be unique).",
+        },
+        replace: {
+          type: "string",
+          description: "Text to substitute in place of `search`.",
+        },
       },
       required: ["path", "search", "replace"],
     },
@@ -696,7 +847,10 @@ export function registerFilesystemTools(
                 type: "string",
                 description: "Exact text to find (must be unique in the file).",
               },
-              replace: { type: "string", description: "Text to substitute in place of `search`." },
+              replace: {
+                type: "string",
+                description: "Text to substitute in place of `search`.",
+              },
             },
             required: ["path", "search", "replace"],
           },
@@ -826,7 +980,11 @@ export function registerFilesystemTools(
       const src = await safePath(args.source, "copy_file", ctx);
       const dst = await safePath(args.destination, "copy_file", ctx, "write");
       await fs.mkdir(pathMod.dirname(dst), { recursive: true });
-      await fs.cp(src, dst, { recursive: true, force: false, errorOnExist: true });
+      await fs.cp(src, dst, {
+        recursive: true,
+        force: false,
+        errorOnExist: true,
+      });
       return `copied ${displayRel(rootDir, src)} → ${displayRel(rootDir, dst)}`;
     },
   });

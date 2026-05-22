@@ -1,3 +1,4 @@
+import { emptyMap, nullPrototype } from "../../../utils/safe-object.js";
 import type { SlashArgContext, SlashCommandSpec, SlashGroup } from "./types.js";
 
 export const SLASH_GROUP_ORDER = [
@@ -11,7 +12,7 @@ export const SLASH_GROUP_ORDER = [
   "advanced",
 ] as const satisfies readonly SlashGroup[];
 
-export const SLASH_GROUP_LABEL: Record<SlashGroup, string> = {
+export const SLASH_GROUP_LABEL: Record<SlashGroup, string> = nullPrototype({
   setup: "SETUP",
   info: "INFO",
   chat: "CHAT",
@@ -20,7 +21,7 @@ export const SLASH_GROUP_LABEL: Record<SlashGroup, string> = {
   code: "CODE",
   jobs: "JOBS",
   advanced: "ADVANCED",
-};
+});
 
 const SLASH_GROUP_RANK = new Map<SlashGroup, number>(
   SLASH_GROUP_ORDER.map((group, index) => [group, index]),
@@ -41,14 +42,23 @@ export function orderSlashCommandsByGroup<T extends Pick<SlashCommandSpec, "grou
 }
 
 export const SLASH_COMMANDS: readonly SlashCommandSpec[] = [
-  { cmd: "help", group: "chat", summary: "show the full command reference", aliases: ["?"] },
+  {
+    cmd: "help",
+    group: "chat",
+    summary: "show the full command reference",
+    aliases: ["?"],
+  },
   {
     cmd: "new",
     group: "chat",
     summary: "start a fresh conversation (clear context + scrollback)",
     aliases: ["reset", "clear"],
   },
-  { cmd: "retry", group: "chat", summary: "truncate & resend your last message (fresh sample)" },
+  {
+    cmd: "retry",
+    group: "chat",
+    summary: "truncate & resend your last message (fresh sample)",
+  },
   {
     cmd: "compact",
     group: "chat",
@@ -107,7 +117,11 @@ export const SLASH_COMMANDS: readonly SlashCommandSpec[] = [
     ],
   },
 
-  { cmd: "status", group: "info", summary: "current model, flags, context, session" },
+  {
+    cmd: "status",
+    group: "info",
+    summary: "current model, flags, context, session",
+  },
   {
     cmd: "cost",
     group: "info",
@@ -147,7 +161,11 @@ export const SLASH_COMMANDS: readonly SlashCommandSpec[] = [
     summary: "open a GitHub issue with diagnostic info copied to clipboard",
   },
 
-  { cmd: "sessions", group: "session", summary: "list saved sessions (current marked with ▸)" },
+  {
+    cmd: "sessions",
+    group: "session",
+    summary: "list saved sessions (current marked with ▸)",
+  },
   {
     cmd: "title",
     group: "session",
@@ -155,7 +173,11 @@ export const SLASH_COMMANDS: readonly SlashCommandSpec[] = [
     aliases: ["retitle"],
   },
 
-  { cmd: "mcp", group: "extend", summary: "list MCP servers + tools attached to this session" },
+  {
+    cmd: "mcp",
+    group: "extend",
+    summary: "list MCP servers + tools attached to this session",
+  },
   {
     cmd: "resource",
     group: "extend",
@@ -324,10 +346,10 @@ export const SLASH_COMMANDS: readonly SlashCommandSpec[] = [
   {
     cmd: "budget",
     group: "advanced",
-    argsHint: "[usd|off]",
+    argsHint: "[usd|off|window …]",
     summary:
-      "session USD cap — warns at 80%, refuses next turn at 100%. Off by default. /budget alone shows status",
-    argCompleter: ["off", "1", "5", "10", "20", "50"],
+      "session USD cap (warns 80%, refuses 100%). /budget window <daily|weekly|monthly> <usd> sets a cross-session rolling cap. Bare /budget shows status",
+    argCompleter: ["off", "window", "1", "5", "10", "20", "50"],
   },
   {
     cmd: "search-engine",
@@ -381,7 +403,12 @@ export const SLASH_COMMANDS: readonly SlashCommandSpec[] = [
     group: "advanced",
     summary: "show current vs latest version + the shell command to upgrade",
   },
-  { cmd: "exit", group: "advanced", summary: "quit the TUI", aliases: ["quit", "q"] },
+  {
+    cmd: "exit",
+    group: "advanced",
+    summary: "quit the TUI",
+    aliases: ["quit", "q"],
+  },
 ];
 
 export function suggestSlashCommands(
@@ -416,7 +443,7 @@ export function countAdvancedCommands(codeMode: boolean): number {
 
 /** alias → canonical cmd map, derived from SLASH_COMMANDS at module init. */
 const ALIAS_TO_CMD: Readonly<Record<string, string>> = (() => {
-  const m: Record<string, string> = {};
+  const m = emptyMap<string>();
   for (const spec of SLASH_COMMANDS) {
     if (!spec.aliases) continue;
     for (const a of spec.aliases) m[a] = spec.cmd;

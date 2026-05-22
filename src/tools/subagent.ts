@@ -1,6 +1,7 @@
 /** Isolated child loop. Inherits parent registry minus spawn_subagent + submit_plan; no hooks; non-streaming. */
 
 import { type DeepSeekClient, Usage } from "../client.js";
+import { resolveBudgetWindows } from "../config.js";
 import { CacheFirstLoop } from "../loop.js";
 import { applyProjectMemory } from "../memory/project.js";
 import { ImmutablePrefix } from "../memory/runtime.js";
@@ -59,6 +60,8 @@ export interface SpawnSubagentOptions {
   allowedTools?: readonly string[];
   /** Continue an earlier session instead of starting fresh — loads the prior messages from disk; `task` is treated as a continuation nudge. */
   resumeSession?: string;
+  /** Parent workspace root, forwarded so the child loop's per-workspace budget gate scopes to the same workspace as the parent. */
+  workspace?: string;
 }
 
 export interface SubagentResult {
@@ -215,6 +218,10 @@ export async function spawnSubagent(opts: SpawnSubagentOptions): Promise<Subagen
     hooks: [],
     stream: true,
     session: sessionName,
+    // Subagents must not bypass the global rolling guardrails — their spend
+    // shares the same usage.jsonl the windows aggregate over.
+    budgetWindows: resolveBudgetWindows(),
+    workspace: opts.workspace,
   });
 
   // Wire parent-abort → child-abort. Two pitfalls we have to handle:
@@ -244,7 +251,14 @@ export async function spawnSubagent(opts: SpawnSubagentOptions): Promise<Subagen
   let forcedSummaryFired = false;
   try {
     for await (const ev of childLoop.step(opts.task)) {
-      sink?.current?.({ kind: "inner", runId, task: taskPreview, skillName, model, inner: ev });
+      sink?.current?.({
+        kind: "inner",
+        runId,
+        task: taskPreview,
+        skillName,
+        model,
+        inner: ev,
+      });
 
       if (ev.role === "tool") {
         toolIter++;
@@ -426,6 +440,7 @@ export function registerSubagentTool(
   parentRegistry.register({
     name: SUBAGENT_TOOL_NAME,
     parallelSafe: true,
+    lenientArgs: true,
     description:
       "Spawn an isolated subagent to handle a self-contained subtask in a fresh context, returning only its final answer. **Prefer direct tools.** Spawn primarily for parallel fan-out (2+ independent investigations issued in one tool batch) or when the work would otherwise need >10 file reads/searches whose trail you don't need to keep. Single greps, 1-3 file cross-references, and 'keep my context clean for one question' are NOT good reasons to spawn — direct tools are cheaper and let you reference the evidence later. Each fresh spawn pays a prefix-cache miss plus a full child loop. The subagent inherits your tools but runs in its own isolated message log; only the final assistant message comes back. The subagent runs to completion — same stops as top-level chat (token-context guard, storm breaker, parent Esc cascade).",
     parameters: {
@@ -500,6 +515,7 @@ export function registerSubagentTool(
         sink,
         parentSignal: ctx?.signal,
         resumeSession,
+        workspace: opts.projectRoot,
       });
       sessionSpawnCount++;
       sessionSpawnTokens += result.usage.totalTokens;

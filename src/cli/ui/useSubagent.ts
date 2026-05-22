@@ -15,7 +15,10 @@ export function reduceSubagentInnerEvent(
     if (!ev.inner) return prev;
     const summary = summariseInner(ev.inner);
     if (!summary) return prev;
-    return mapMatchingRun(prev, ev.runId, (a) => ({ ...a, lastInner: summary }));
+    return mapMatchingRun(prev, ev.runId, (a) => ({
+      ...a,
+      lastInner: summary,
+    }));
   }
   if (ev.kind === "progress") {
     return mapMatchingRun(prev, ev.runId, (a) => {
@@ -81,7 +84,11 @@ function summariseInner(ev: LoopEvent): SubagentInnerSummary | null {
     };
   }
   if (ev.role === "error") {
-    return { glyph: "\u2716", color: TONE.err, label: ev.error ?? t("common.error") };
+    return {
+      glyph: "\u2716",
+      color: TONE.err,
+      label: ev.error ?? t("common.error"),
+    };
   }
   return null;
 }
@@ -113,6 +120,8 @@ export interface UseSubagentParams {
   log: Scrollback;
   /** Read live wallet currency at end-event time so the cost suffix follows the wallet symbol. */
   getWalletCurrency?: () => string | undefined;
+  /** Read the live workspace root at end-event time so subagent spend is attributed to the parent's per-workspace budget. */
+  getWorkspace?: () => string | undefined;
 }
 
 export interface UseSubagentResult {
@@ -125,15 +134,20 @@ export function useSubagent({
   session,
   log,
   getWalletCurrency,
+  getWorkspace,
 }: UseSubagentParams): UseSubagentResult {
   const [activities, setActivities] = useState<ReadonlyArray<SubagentActivity>>([]);
   const sinkRef = useRef<SubagentSink>({ current: null });
   // Subagent runs can outlive a balance refresh; the thunk lives in a ref so the
   // sink callback (installed once at mount) always reads the latest wallet currency.
   const getWalletCurrencyRef = useRef(getWalletCurrency);
+  const getWorkspaceRef = useRef(getWorkspace);
   useEffect(() => {
     getWalletCurrencyRef.current = getWalletCurrency;
   }, [getWalletCurrency]);
+  useEffect(() => {
+    getWorkspaceRef.current = getWorkspace;
+  }, [getWorkspace]);
 
   useEffect(() => {
     sinkRef.current.current = (ev: SubagentEvent) => {
@@ -171,6 +185,7 @@ export function useSubagent({
             session: session ?? null,
             model: ev.model,
             usage: ev.usage,
+            workspace: getWorkspaceRef.current?.(),
             kind: "subagent",
             subagent: {
               skillName: ev.skillName,

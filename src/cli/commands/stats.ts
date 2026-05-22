@@ -1,6 +1,8 @@
 /** `reasonix stats [path]` — path arg switches to per-transcript mode; default is the cross-session dashboard. */
 
 import { existsSync, readFileSync } from "node:fs";
+import { checkBudgetWindows } from "../../budget/window.js";
+import { resolveBudgetWindows } from "../../config.js";
 import { t } from "../../i18n/index.js";
 import {
   type UsageAggregate,
@@ -70,6 +72,20 @@ function dashboard(opts: StatsOptions): void {
 
   const agg = aggregateUsage(records, { now: opts.now });
   console.log(renderDashboard(agg, path));
+  const windows = resolveBudgetWindows();
+  if (windows.length > 0) {
+    console.log("");
+    const statuses = checkBudgetWindows(records, windows, {
+      now: opts.now,
+      workspace: process.cwd(),
+    });
+    for (const s of statuses) {
+      const flag = s.state === "ok" ? "" : ` (${s.state})`;
+      console.log(
+        `rolling budget:    ${s.scope} ${s.period} $${s.spentUsd.toFixed(4)} / $${s.capUsd.toFixed(2)} this window${flag}`,
+      );
+    }
+  }
 }
 
 /** Pure renderer — pulled out so tests can assert on the string directly. */

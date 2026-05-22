@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import * as pathMod from "node:path";
+import { nullPrototype } from "../../utils/safe-object.js";
 import { type CommandChain, chainAllowed, parseCommandChain } from "../shell-chain.js";
 
 /** Read-only reports + test runners whose failure mode is "exit 1 with output". */
@@ -151,7 +152,7 @@ export function detectShellOperator(cmd: string): string | null {
 }
 
 /** Per-prefix demotion: an otherwise-allowlisted match falls back to the confirm gate when one of these tokens appears in the tail. Issue #257: `git branch -D` skipped review. Each token also matches its `--flag=value` form. */
-const RISKY_ARGS: Readonly<Record<string, ReadonlyArray<string>>> = {
+const RISKY_ARGS: Readonly<Record<string, ReadonlyArray<string>>> = nullPrototype({
   // Branch / remote mutation
   "git branch": ["-d", "-D", "--delete", "-m", "-M", "--move", "-c", "-C", "--copy", "--force"],
   "git remote": ["add", "remove", "rm", "rename", "set-url", "set-head", "prune"],
@@ -177,7 +178,7 @@ const RISKY_ARGS: Readonly<Record<string, ReadonlyArray<string>>> = {
   "npx eslint": ["--fix", "--fix-dry-run"],
   "npx biome check": ["--write", "--apply", "--apply-unsafe"],
   ruff: ["--fix", "--unsafe-fixes", "format"],
-};
+});
 
 function tailHasRisky(tail: readonly string[], risky: readonly string[]): boolean {
   for (const a of tail) {
@@ -276,7 +277,10 @@ export function isAllowed(
   cmd: string,
   extra: readonly string[] = [],
   projectRoot?: string,
-  sensitivePathConfig?: { prefixes?: readonly string[]; patterns?: readonly string[] },
+  sensitivePathConfig?: {
+    prefixes?: readonly string[];
+    patterns?: readonly string[];
+  },
 ): boolean {
   let argv: string[];
   try {
@@ -321,7 +325,10 @@ export function isCommandAllowed(
   cmd: string,
   extra: readonly string[] = [],
   projectRoot?: string,
-  sensitivePathConfig?: { prefixes?: readonly string[]; patterns?: readonly string[] },
+  sensitivePathConfig?: {
+    prefixes?: readonly string[];
+    patterns?: readonly string[];
+  },
 ): boolean {
   let chain: CommandChain | null;
   try {

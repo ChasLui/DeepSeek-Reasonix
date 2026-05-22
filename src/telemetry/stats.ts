@@ -1,17 +1,34 @@
 import type { Usage } from "../client.js";
 import { loadPricingOverride } from "../config.js";
+import { nullPrototype } from "../utils/safe-object.js";
 
 /** USD per 1M tokens; display currency conversion happens at the UI boundary. */
 export const DEEPSEEK_PRICING: Record<
   string,
   { inputCacheHit: number; inputCacheMiss: number; output: number }
-> = {
-  "deepseek-v4-flash": { inputCacheHit: 0.0028, inputCacheMiss: 0.14, output: 0.28 },
-  "deepseek-v4-pro": { inputCacheHit: 0.003625, inputCacheMiss: 0.435, output: 0.87 },
+> = nullPrototype({
+  "deepseek-v4-flash": {
+    inputCacheHit: 0.0028,
+    inputCacheMiss: 0.14,
+    output: 0.28,
+  },
+  "deepseek-v4-pro": {
+    inputCacheHit: 0.003625,
+    inputCacheMiss: 0.435,
+    output: 0.87,
+  },
   // Compat aliases — priced as v4-flash per the deprecation notice.
-  "deepseek-chat": { inputCacheHit: 0.0028, inputCacheMiss: 0.14, output: 0.28 },
-  "deepseek-reasoner": { inputCacheHit: 0.0028, inputCacheMiss: 0.14, output: 0.28 },
-};
+  "deepseek-chat": {
+    inputCacheHit: 0.0028,
+    inputCacheMiss: 0.14,
+    output: 0.28,
+  },
+  "deepseek-reasoner": {
+    inputCacheHit: 0.0028,
+    inputCacheMiss: 0.14,
+    output: 0.28,
+  },
+});
 
 export type ModelPricing = (typeof DEEPSEEK_PRICING)[string];
 
@@ -34,12 +51,12 @@ export function pricingFor(model: string, path?: string): ModelPricing | undefin
 export const CLAUDE_SONNET_PRICING = { input: 3.0, output: 15.0 };
 
 /** Prompt-side window only; completion caps live server-side and don't affect this gauge. */
-export const DEEPSEEK_CONTEXT_TOKENS: Record<string, number> = {
+export const DEEPSEEK_CONTEXT_TOKENS: Record<string, number> = nullPrototype({
   "deepseek-v4-flash": 1_000_000,
   "deepseek-v4-pro": 1_000_000,
   "deepseek-chat": 1_000_000,
   "deepseek-reasoner": 1_000_000,
-};
+});
 
 /** Fallback when the caller's model id isn't in the table — safe lower bound. */
 export const DEFAULT_CONTEXT_TOKENS = 131_072;

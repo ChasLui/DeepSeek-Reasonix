@@ -15,7 +15,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { Usage } from "../client.js";
 import {
   CLAUDE_SONNET_PRICING,
@@ -41,6 +41,8 @@ export interface UsageRecord {
   costUsd: number;
   /** What the same turn would have cost at Claude Sonnet 4.6 rates. */
   claudeEquivUsd: number;
+  /** Resolved absolute workspace root the turn ran in. Absent on legacy records and on entry points with no workspace context — those rows can't back a per-workspace budget. */
+  workspace?: string;
   /** Absent on legacy records — treat as "turn" when missing. */
   kind?: "turn" | "subagent";
   /** Present when `kind === "subagent"`. Attribution metadata for the /stats roll-up. */
@@ -69,6 +71,8 @@ export interface AppendUsageInput {
   now?: number;
   /** Override the log path (tests). */
   path?: string;
+  /** Workspace root the turn ran in. Resolved to an absolute path before write so the per-workspace budget gate can match it exactly. Omit when there's no workspace context. */
+  workspace?: string;
   /** When appending a subagent summary row, set `kind: "subagent"` and populate `subagent`. */
   kind?: "turn" | "subagent";
   subagent?: UsageRecord["subagent"];
@@ -146,6 +150,7 @@ export function appendUsage(input: AppendUsageInput): UsageRecord {
     costUsd: costUsd(input.model, input.usage),
     claudeEquivUsd: claudeEquivalentCost(input.usage),
   };
+  if (input.workspace) record.workspace = resolve(input.workspace);
   if (input.kind === "subagent") record.kind = "subagent";
   if (input.subagent) record.subagent = input.subagent;
 
@@ -177,6 +182,17 @@ export function readUsageLog(path: string = defaultUsageLogPath()): UsageRecord[
     } catch {
       /* skip malformed */
     }
+  }
+  return out;
+}
+
+/** Records with `ts >= since`. For the per-turn budget gate — the file itself
+ * is size-bounded by `compactUsageLogIfLarge` (5 MiB / 365 d), so this stays a
+ * cheap bounded read; `since` just trims to the active rolling window. */
+export function readUsageSince(since: number, path: string = defaultUsageLogPath()): UsageRecord[] {
+  const out: UsageRecord[] = [];
+  for (const rec of readUsageLog(path)) {
+    if (rec.ts >= since) out.push(rec);
   }
   return out;
 }
@@ -252,6 +268,8 @@ function addToBucket(b: UsageBucket, r: UsageRecord): void {
 export interface AggregateOptions {
   /** Override `Date.now()` for deterministic tests. */
   now?: number;
+  /** When set, only records whose `workspace` matches (resolved-equal) are counted — the per-workspace budget gate's scoping. Legacy/no-workspace rows are excluded. */
+  workspace?: string;
 }
 
 export interface UsageAggregate {
@@ -275,7 +293,12 @@ export interface SubagentAggregate {
   costUsd: number;
   totalDurationMs: number;
   /** Per-skill breakdown. Records without `skillName` (raw spawn_subagent calls) group under `"(adhoc)"`. */
-  bySkill: Array<{ skillName: string; count: number; costUsd: number; durationMs: number }>;
+  bySkill: Array<{
+    skillName: string;
+    count: number;
+    costUsd: number;
+    durationMs: number;
+  }>;
 }
 
 /** Rolling 24h/7d/30d windows — avoids "it's 00:03, 'today' is empty" surprises. */
@@ -284,6 +307,7 @@ export function aggregateUsage(
   opts: AggregateOptions = {},
 ): UsageAggregate {
   const now = opts.now ?? Date.now();
+  const workspaceFilter = opts.workspace !== undefined ? resolve(opts.workspace) : undefined;
   const day = 24 * 60 * 60 * 1000;
   const today = emptyBucket("today", now - day);
   const week = emptyBucket("week", now - 7 * day);
@@ -300,6 +324,7 @@ export function aggregateUsage(
   let subagentDuration = 0;
 
   for (const r of records) {
+    if (workspaceFilter !== undefined && r.workspace !== workspaceFilter) continue;
     addToBucket(all, r);
     if (r.ts >= today.since) addToBucket(today, r);
     if (r.ts >= week.since) addToBucket(week, r);
@@ -318,7 +343,11 @@ export function aggregateUsage(
       const dur = r.subagent?.durationMs ?? 0;
       subagentDuration += dur;
       const key = r.subagent?.skillName?.trim() || "(adhoc)";
-      const prev = skillCounts.get(key) ?? { count: 0, costUsd: 0, durationMs: 0 };
+      const prev = skillCounts.get(key) ?? {
+        count: 0,
+        costUsd: 0,
+        durationMs: 0,
+      };
       prev.count += 1;
       prev.costUsd += r.costUsd;
       prev.durationMs += dur;

@@ -88,7 +88,9 @@ class FakeMcpTransport implements McpTransport {
           result: {
             protocolVersion: MCP_PROTOCOL_VERSION,
             serverInfo: { name: "fake-mcp", version: "0.0.0" },
-            capabilities: this.opts.capabilities ?? { tools: { listChanged: false } },
+            capabilities: this.opts.capabilities ?? {
+              tools: { listChanged: false },
+            },
           },
         };
       case "tools/list":
@@ -98,17 +100,25 @@ class FakeMcpTransport implements McpTransport {
           result: { tools: this.opts.tools },
         };
       case "tools/call": {
-        const params = req.params as { name: string; arguments?: Record<string, unknown> };
+        const params = req.params as {
+          name: string;
+          arguments?: Record<string, unknown>;
+        };
         if (this.opts.errorFor?.has(params.name)) {
           return {
             jsonrpc: "2.0",
             id: req.id,
-            error: { code: -32001, message: `server-side error for ${params.name}` },
+            error: {
+              code: -32001,
+              message: `server-side error for ${params.name}`,
+            },
           };
         }
         const result = this.opts.callHandler
           ? this.opts.callHandler(params.name, params.arguments ?? {})
-          : { content: [{ type: "text" as const, text: `called ${params.name}` }] };
+          : {
+              content: [{ type: "text" as const, text: `called ${params.name}` }],
+            };
         return { jsonrpc: "2.0", id: req.id, result };
       }
       case "resources/list":
@@ -116,20 +126,34 @@ class FakeMcpTransport implements McpTransport {
           return {
             jsonrpc: "2.0",
             id: req.id,
-            error: { code: -32601, message: "method not found: resources/list" },
+            error: {
+              code: -32601,
+              message: "method not found: resources/list",
+            },
           };
         }
-        return { jsonrpc: "2.0", id: req.id, result: this.opts.listResources() };
+        return {
+          jsonrpc: "2.0",
+          id: req.id,
+          result: this.opts.listResources(),
+        };
       case "resources/read": {
         if (!this.opts.readResource) {
           return {
             jsonrpc: "2.0",
             id: req.id,
-            error: { code: -32601, message: "method not found: resources/read" },
+            error: {
+              code: -32601,
+              message: "method not found: resources/read",
+            },
           };
         }
         const { uri } = req.params as { uri: string };
-        return { jsonrpc: "2.0", id: req.id, result: this.opts.readResource(uri) };
+        return {
+          jsonrpc: "2.0",
+          id: req.id,
+          result: this.opts.readResource(uri),
+        };
       }
       case "prompts/list":
         if (!this.opts.listPrompts) {
@@ -152,7 +176,11 @@ class FakeMcpTransport implements McpTransport {
           name: string;
           arguments?: Record<string, string>;
         };
-        return { jsonrpc: "2.0", id: req.id, result: this.opts.getPrompt(name, a) };
+        return {
+          jsonrpc: "2.0",
+          id: req.id,
+          result: this.opts.getPrompt(name, a),
+        };
       }
       default:
         return {
@@ -188,13 +216,17 @@ describe("McpClient: initialize handshake", () => {
   });
 
   it("refuses listTools before initialize", async () => {
-    const client = new McpClient({ transport: new FakeMcpTransport({ tools: [] }) });
+    const client = new McpClient({
+      transport: new FakeMcpTransport({ tools: [] }),
+    });
     await expect(client.listTools()).rejects.toThrow(/not initialized/);
     await client.close();
   });
 
   it("refuses a second initialize call", async () => {
-    const client = new McpClient({ transport: new FakeMcpTransport({ tools: [] }) });
+    const client = new McpClient({
+      transport: new FakeMcpTransport({ tools: [] }),
+    });
     await client.initialize();
     await expect(client.initialize()).rejects.toThrow(/already initialized/);
     await client.close();
@@ -266,6 +298,36 @@ describe("McpClient: tools/list + tools/call", () => {
 });
 
 describe("bridgeMcpTools (MCP → ToolRegistry)", () => {
+  it("toolFilter gates out unselected bridged tools (session toolset)", async () => {
+    const transport = new FakeMcpTransport({
+      tools: [
+        {
+          name: "keep",
+          description: "kept",
+          inputSchema: { type: "object", properties: {} },
+        },
+        {
+          name: "drop",
+          description: "dropped",
+          inputSchema: { type: "object", properties: {} },
+        },
+      ],
+    });
+    const client = new McpClient({ transport });
+    await client.initialize();
+
+    const { registry, registeredNames, skipped } = await bridgeMcpTools(client, {
+      namePrefix: "srv_",
+      toolFilter: (name) => name === "srv_keep",
+    });
+    expect(registeredNames).toEqual(["srv_keep"]);
+    expect(registry.has("srv_keep")).toBe(true);
+    expect(registry.has("srv_drop")).toBe(false);
+    expect(skipped.some((s) => s.name === "srv_drop")).toBe(true);
+
+    await client.close();
+  });
+
   it("registers every MCP tool into a ToolRegistry and dispatch calls through the client", async () => {
     const transport = new FakeMcpTransport({
       tools: [
@@ -310,7 +372,9 @@ describe("bridgeMcpTools (MCP → ToolRegistry)", () => {
     const client = new McpClient({ transport });
     await client.initialize();
 
-    const { registeredNames, registry } = await bridgeMcpTools(client, { namePrefix: "fs_" });
+    const { registeredNames, registry } = await bridgeMcpTools(client, {
+      namePrefix: "fs_",
+    });
     expect(registeredNames).toEqual(["fs_search"]);
     expect(registry.has("fs_search")).toBe(true);
     expect(registry.has("search")).toBe(false);
@@ -457,7 +521,9 @@ describe("bridgeMcpTools: result-size cap", () => {
           },
         ],
       }),
-      callTool: async () => ({ content: [{ type: "text" as const, text: big }] }),
+      callTool: async () => ({
+        content: [{ type: "text" as const, text: big }],
+      }),
     } as unknown as McpClient;
     // Default cap (32k): enough to confirm the feature bites.
     const { registry } = await bridgeMcpTools(client, { namePrefix: "x_" });
@@ -471,7 +537,10 @@ describe("bridgeMcpTools: result-size cap", () => {
 
 describe("McpClient: abort via AbortSignal", () => {
   /** Stalling transport — initialize ok, tools/call never replies; exercises client-side abort. */
-  function makeStallingTransport(): { transport: McpTransport; received: JsonRpcRequest[] } {
+  function makeStallingTransport(): {
+    transport: McpTransport;
+    received: JsonRpcRequest[];
+  } {
     const received: JsonRpcRequest[] = [];
     const queue: JsonRpcMessage[] = [];
     const waiters: Array<(m: JsonRpcMessage | null) => void> = [];
@@ -568,7 +637,11 @@ describe("McpClient: abort via AbortSignal", () => {
 describe("McpClient: progress notifications", () => {
   /** Multi-tick transport — emits notifications/progress frames keyed off `_meta.progressToken`. */
   function makeProgressTransport(
-    progressFrames: Array<{ progress: number; total?: number; message?: string }>,
+    progressFrames: Array<{
+      progress: number;
+      total?: number;
+      message?: string;
+    }>,
   ): { transport: McpTransport; received: JsonRpcRequest[] } {
     const received: JsonRpcRequest[] = [];
     const queue: JsonRpcMessage[] = [];
@@ -653,7 +726,11 @@ describe("McpClient: progress notifications", () => {
     const client = new McpClient({ transport });
     await client.initialize();
 
-    const received: Array<{ progress: number; total?: number; message?: string }> = [];
+    const received: Array<{
+      progress: number;
+      total?: number;
+      message?: string;
+    }> = [];
     const result = await client.callTool("scan", {}, { onProgress: (info) => received.push(info) });
     expect(result.content[0]).toEqual({ type: "text", text: "done" });
     expect(received).toEqual([
@@ -794,7 +871,13 @@ describe("bridgeMcpTools: progress pass-through", () => {
               jsonrpc: "2.0",
               id: req.id,
               result: {
-                tools: [{ name: "scan", description: "", inputSchema: { type: "object" } }],
+                tools: [
+                  {
+                    name: "scan",
+                    description: "",
+                    inputSchema: { type: "object" },
+                  },
+                ],
               },
             });
           } else if (req.method === "tools/call") {
@@ -838,7 +921,11 @@ describe("bridgeMcpTools: progress pass-through", () => {
 
     const client = new McpClient({ transport });
     await client.initialize();
-    const observed: Array<{ toolName: string; progress: number; total?: number }> = [];
+    const observed: Array<{
+      toolName: string;
+      progress: number;
+      total?: number;
+    }> = [];
     const { registry } = await bridgeMcpTools(client, {
       namePrefix: "fs_",
       onProgress: ({ toolName, progress, total }) => observed.push({ toolName, progress, total }),
@@ -938,7 +1025,10 @@ describe("McpClient: prompts", () => {
         messages: [
           {
             role: "user",
-            content: { type: "text", text: `please summarize in ${args?.lang ?? "?"}` },
+            content: {
+              type: "text",
+              text: `please summarize in ${args?.lang ?? "?"}`,
+            },
           },
         ],
       }),

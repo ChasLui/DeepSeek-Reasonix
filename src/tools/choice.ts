@@ -71,6 +71,7 @@ export function registerChoiceTool(
     description:
       "Render an arrow-key picker with 2–6 alternatives. Use when the user is supposed to pick — never enumerate choices as prose. Skip when one option is clearly best (just do it) or a free-form text answer fits. Max 6 options; set `allowCustom:true` when their real answer might not fit.",
     readOnly: true,
+    lenientArgs: true,
     parameters: {
       type: "object",
       properties: {
@@ -85,7 +86,10 @@ export function registerChoiceTool(
           items: {
             type: "object",
             properties: {
-              id: { type: "string", description: "Stable id (A, B, C or option-1)." },
+              id: {
+                type: "string",
+                description: "Stable id (A, B, C or option-1).",
+              },
               title: { type: "string", description: "One-line label." },
               summary: {
                 type: "string",

@@ -1,6 +1,6 @@
 import { render } from "ink";
 import React, { useMemo, useState } from "react";
-import { loadApiKey, readConfig, searchEnabled } from "../../config.js";
+import { loadApiKey, readConfig, resolveSessionToolset, searchEnabled } from "../../config.js";
 import { loadDotenv } from "../../env.js";
 import { t } from "../../i18n/index.js";
 import {
@@ -254,7 +254,9 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
   // through `progressSink.current`, which App.tsx sets to its UI
   // updater on mount. Started null so early progress frames (before
   // the App has mounted) are dropped rather than buffered.
-  const progressSink: { current: ((info: ProgressInfo) => void) | null } = { current: null };
+  const progressSink: { current: ((info: ProgressInfo) => void) | null } = {
+    current: null,
+  };
   // Seed registry from the caller (e.g. reasonix code's native
   // filesystem tools) — MCP bridges layer on top rather than
   // replacing. When no seed AND no MCP, tools stays undefined and
@@ -267,6 +269,7 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
     getMcpPrefix: () => opts.mcpPrefix,
     getRequestedCount: () => requestedSpecs.length,
     progressSink,
+    getToolSelection: () => resolveSessionToolset(),
   });
 
   // MCP bridging deferred to App.tsx mount — handshakes are 100ms–2s each
@@ -323,8 +326,12 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
   // Create QQ channel before the TUI mounts so connection setup stays
   // outside React lifecycle timing and the WebSocket handshake remains
   // deterministic.
-  const qqSubmitRef: { current: ((text: string) => void) | null } = { current: null };
-  const qqErrorRef: { current: ((msg: string) => void) | null } = { current: null };
+  const qqSubmitRef: { current: ((text: string) => void) | null } = {
+    current: null,
+  };
+  const qqErrorRef: { current: ((msg: string) => void) | null } = {
+    current: null,
+  };
   const qqRequested = cfg.qq?.enabled === true;
   let qqChannel: QQChannel | undefined;
   if (qqRequested) {

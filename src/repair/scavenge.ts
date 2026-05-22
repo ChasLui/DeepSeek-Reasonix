@@ -1,6 +1,7 @@
 /** R1 sometimes emits tool-call JSON inside reasoning_content and forgets `tool_calls`; recover those calls. */
 
 import type { ToolCall } from "../types.js";
+import { tryParseLoose } from "./json-coerce.js";
 
 export interface ScavengeOptions {
   /** Names of tools the model may legitimately call. Other names are ignored. */
@@ -155,7 +156,9 @@ function coerceToToolCall(
   try {
     parsed = JSON.parse(candidateJson);
   } catch {
-    return null;
+    const loose = tryParseLoose(candidateJson);
+    if (!loose) return null;
+    parsed = loose.value;
   }
   if (!parsed || typeof parsed !== "object") return null;
 

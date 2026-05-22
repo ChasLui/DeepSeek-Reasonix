@@ -41,4 +41,21 @@ describe("repairTruncatedJson", () => {
     expect(() => JSON.parse(r.repaired)).not.toThrow();
     expect(JSON.parse(r.repaired)).toEqual({ a: 1 });
   });
+
+  it("jsonrepair fallback rescues smart-quoted truncated JSON (Task 5)", () => {
+    const r = repairTruncatedJson("{“a”: “he");
+    expect(r.fallback).toBe(false);
+    expect(() => JSON.parse(r.repaired)).not.toThrow();
+    expect(JSON.parse(r.repaired)).toEqual({ a: "he" });
+    expect(r.notes.some((n) => n.includes("jsonrepair"))).toBe(true);
+  });
+
+  it("jsonrepair fallback rescues mixed trailing-comma + unterminated string", () => {
+    const r = repairTruncatedJson('{"a": [1, 2, 3,], "b": "hel');
+    expect(r.fallback).toBe(false);
+    expect(() => JSON.parse(r.repaired)).not.toThrow();
+    const parsed = JSON.parse(r.repaired);
+    expect(parsed.a).toEqual([1, 2, 3]);
+    expect(typeof parsed.b).toBe("string");
+  });
 });

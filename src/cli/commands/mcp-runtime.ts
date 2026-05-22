@@ -9,6 +9,7 @@ import { overlayMatchedSpec, parseMcpSpec, specToRaw } from "../../mcp/spec.js";
 import { buildMcpServerSummary } from "../../mcp/summary.js";
 import { buildTransportFromSpec } from "../../mcp/transport-from-spec.js";
 import type { ToolRegistry } from "../../tools.js";
+import { isToolSelected } from "../../tools/toolset.js";
 import type { ToolSpec } from "../../types.js";
 import { type McpLifecycleEvent, formatMcpLifecycleEvent } from "../ui/mcp-lifecycle.js";
 import { formatMcpSlowToast } from "../ui/mcp-toast.js";
@@ -36,6 +37,8 @@ export interface RuntimeContext {
   getMcpPrefix: () => string | undefined;
   getRequestedCount: () => number;
   progressSink: { current: ((info: ProgressInfo) => void) | null };
+  /** Session toolset selection — bridged MCP tools not in this set (and not essential) are gated out of the prefix. Absent / returns null ⟹ no gating. */
+  getToolSelection?: () => ReadonlySet<string> | null;
 }
 
 export type McpLifecycleNotice =
@@ -172,7 +175,12 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
       if (spec.disabled) {
         sink({ kind: "disabled", name: label });
         rejectReady(new Error(`MCP server "${label}" is disabled`));
-        failureMap.set(raw, { spec: raw, name: label, reason: "disabled by user", at: Date.now() });
+        failureMap.set(raw, {
+          spec: raw,
+          name: label,
+          reason: "disabled by user",
+          at: Date.now(),
+        });
         return { ok: false, reason: "disabled by user" };
       }
       sink({ kind: "handshake", name: label });
@@ -187,8 +195,10 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
       mcp = new McpClient({ transport });
       await mcp.initialize({ signal });
       const host: McpClientHost = { client: mcp };
+      const selection = ctx.getToolSelection?.() ?? null;
       const bridge = await bridgeMcpTools(mcp, {
         registry: tools,
+        toolFilter: selection === null ? undefined : (name) => isToolSelected(name, selection),
         namePrefix,
         serverName: label,
         host,

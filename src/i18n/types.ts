@@ -234,6 +234,8 @@ export interface TranslationSchema {
   loop: {
     budgetExhausted: string;
     budget80Pct: string;
+    windowBudgetExhausted: string;
+    windowBudget80Pct: string;
     proArmed: string;
     abortedAtIter: string;
     toolUploadStatus: string;

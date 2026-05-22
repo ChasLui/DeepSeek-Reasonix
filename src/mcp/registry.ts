@@ -10,6 +10,8 @@ export interface BridgeOptions {
   namePrefix?: string;
   /** Registry to populate. Creates a fresh one if omitted. */
   registry?: ToolRegistry;
+  /** Session toolset gate — when present, a bridged tool whose name returns false is unregistered and excluded from `registeredNames` (never enters the prefix). Absent ⟹ all bridged tools kept. */
+  toolFilter?: (registeredName: string) => boolean;
   /** Auto-flatten deep schemas (Pillar 3). Defaults to the registry's own default (true). */
   autoFlatten?: boolean;
   /** Cap on tool result chars; head+tail truncation. Floor against context-poisoning oversized reads. */
@@ -175,7 +177,10 @@ export async function bridgeMcpTools(
 
   const serverName = opts.serverName ?? prefix.replace(/_$/, "") ?? "anon";
   const tracker = opts.onSlow
-    ? new LatencyTracker(serverName, { thresholdMs: opts.slowThresholdMs, onSlow: opts.onSlow })
+    ? new LatencyTracker(serverName, {
+        thresholdMs: opts.slowThresholdMs,
+        onSlow: opts.onSlow,
+      })
     : null;
   // Synthesize a host on the fly when the caller didn't provide one. Older
   // callers (tests, single-shot non-reconnectable bridges) get the live
@@ -200,7 +205,16 @@ export async function bridgeMcpTools(
       continue;
     }
     const registeredName = registerSingleMcpTool(mcpTool, env);
-    if (registeredName) result.registeredNames.push(registeredName);
+    if (!registeredName) continue;
+    if (opts.toolFilter && !opts.toolFilter(registeredName)) {
+      registry.unregister(registeredName);
+      result.skipped.push({
+        name: registeredName,
+        reason: "not in session toolset",
+      });
+      continue;
+    }
+    result.registeredNames.push(registeredName);
   }
   return { ...result, env };
 }
@@ -222,7 +236,10 @@ export function flattenMcpResult(result: CallToolResult, opts: FlattenOptions = 
 function validateResultShape(result: CallToolResult): void {
   if (typeof result !== "object" || !result)
     throw new Error(`MCP server returned non-object result: ${typeof result}`);
-  const { content, isError: _isError } = result as { content: unknown; isError?: unknown };
+  const { content, isError: _isError } = result as {
+    content: unknown;
+    isError?: unknown;
+  };
   if (!Array.isArray(content))
     throw new Error(`MCP server returned result with non-array content: ${typeof content}`);
   for (let i = 0; i < content.length; i++) {

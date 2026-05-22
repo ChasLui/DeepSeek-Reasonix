@@ -146,7 +146,7 @@ npx reasonix code --dir /path/to/project
 
 <sub align="center">
 
-各支柱完整说明 → [Pillar 1 — 缓存优先循环](./docs/ARCHITECTURE.md#pillar-1--cache-first-loop) · [Pillar 2 — 工具调用修复](./docs/ARCHITECTURE.md#pillar-2--tool-call-repair) · [Pillar 3 — 成本控制](./docs/ARCHITECTURE.md#pillar-3--cost-control-v06)
+各支柱完整说明 → [Pillar 1 — 缓存优先循环](./docs/ARCHITECTURE.zh-CN.md#支柱-1--cache-first-loop) · [Pillar 2 — 工具调用修复](./docs/ARCHITECTURE.zh-CN.md#支柱-2--tool-call-repair) · [Pillar 3 — 成本控制](./docs/ARCHITECTURE.zh-CN.md#支柱-3--成本控制-v06)
 
 </sub>
 
@@ -210,7 +210,7 @@ npx reasonix code --dir /path/to/project
   </a>
 </p>
 
-**第一次提 PR 之前**：先读 [`CONTRIBUTING.md`](./CONTRIBUTING.md) —— 短小、严格的项目规则（注释、错误处理、用现成库不手写）。`tests/comment-policy.test.ts` 静态强制执行注释那部分，`npm run verify` 是 push 前的闸。参与本项目即同意 [行为准则](./CODE_OF_CONDUCT.md)。安全相关问题请走 [SECURITY.md](./SECURITY.md)。
+**第一次提 PR 之前**：先读 [`CONTRIBUTING.zh-CN.md`](./CONTRIBUTING.zh-CN.md) —— 短小、严格的项目规则（注释、错误处理、用现成库不手写）。`tests/comment-policy.test.ts` 静态强制执行注释那部分，`npm run verify` 是 push 前的闸。参与本项目即同意 [行为准则](./CODE_OF_CONDUCT.zh-CN.md)。安全相关问题请走 [SECURITY.zh-CN.md](./SECURITY.zh-CN.md)。
 
 <br/>
 

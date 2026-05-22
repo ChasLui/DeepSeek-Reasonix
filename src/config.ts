@@ -4,6 +4,7 @@ import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { z } from "zod";
+import type { BudgetPeriod, BudgetScope, BudgetWindow } from "./budget/window.js";
 import { type ThemeName, isThemeName, resolveThemeName } from "./cli/ui/theme/tokens.js";
 import type { LanguageCode } from "./i18n/types.js";
 import {
@@ -13,6 +14,7 @@ import {
 } from "./index/config.js";
 import { type McpServerSpec, parseMcpSpec } from "./mcp/spec.js";
 import { normalizeQQAllowlist, normalizeQQOpenId } from "./qq/access.js";
+import { nullPrototype } from "./utils/safe-object.js";
 
 /** Legacy `fast|smart|max` kept for back-compat with existing config.json files. */
 export type PresetName = "auto" | "flash" | "pro" | "fast" | "smart" | "max";
@@ -148,6 +150,10 @@ export interface ReasonixConfig {
   mcpEnv?: Record<string, Record<string, string>>;
   /** Canonical MCP server configuration — merges with and overrides legacy `mcp`/`mcpEnv`/`mcpDisabled`. */
   mcpServers?: Record<string, McpServerConfig>;
+  /** Named tool groups for session-level toolset gating, e.g. `{ "web": ["web_search","web_fetch"] }`. A group name expands to its tool names; an unknown token is treated as a literal tool name. */
+  toolsets?: Record<string, string[]>;
+  /** Session-start tool selection: a group name, a tool name, or a list of either. Absent ⟹ all tools load (current behavior); essential tools are always kept. Env `REASONIX_TOOLSET` overrides; `REASONIX_TOOLGATE=0` disables gating. */
+  defaultToolset?: string | string[];
   session?: string | null;
   setupCompleted?: boolean;
   search?: boolean;
@@ -221,6 +227,27 @@ export interface ReasonixConfig {
   filesystem?: {
     /** read_file flips to outline mode for files above this. Default 64 KiB — keeps the cache prefix slim while covering ~99% of source files. Raise to 524288 (512 KiB) for the pre-0.46.0 "trust the cache" behavior. */
     outlineThresholdBytes?: number;
+    /** read_file session read-dedup. Default true. false (or REASONIX_DEDUP=0) disables, so unchanged re-reads always dump in full. */
+    dedupEnabled?: boolean;
+  };
+  /** Cross-session rolling spend guardrails. Reads the existing usage.jsonl aggregate (no separate ledger); blocks the next turn once any window's spend reaches its cap. `windows` allows several periods at once (e.g. daily + monthly). `period`/`capUsd` is the legacy single-window form, still read. Absent → no guardrail. */
+  budget?: {
+    period?: BudgetPeriod;
+    capUsd?: number;
+    windows?: Array<{
+      period: BudgetPeriod;
+      capUsd: number;
+      scope?: BudgetScope;
+    }>;
+  };
+  /** Output compaction (rtk-inspired Tier-1 filters). Defaults: enabled, exclude empty, tee on. */
+  compact?: {
+    /** Master switch. false → bypass the entire layer for run_command. REASONIX_COMPACT=0 also flips this. */
+    enabled?: boolean;
+    /** Skip the matcher when argv[0] is in this list (e.g. ["git"] disables every git-* filter). */
+    exclude?: string[];
+    /** Persist the raw output to a tee file the model can read back. REASONIX_TEE=0 forces this off. */
+    tee?: boolean;
   };
   /** QQ Bot configuration */
   qq?: QQBotConfig;
@@ -241,12 +268,12 @@ export interface MemoryTypeRegistryEntry {
   expires?: "project_end";
 }
 
-const BUILTIN_TYPE_DOCS: Record<string, string> = {
+const BUILTIN_TYPE_DOCS: Record<string, string> = nullPrototype({
   user: "role / skills / preferences",
   feedback: "corrections or confirmed approaches",
   project: "facts / decisions about the current work",
   reference: "pointers to external systems the user uses",
-};
+});
 
 /** Resolve the merged registry of memory types — built-ins, overlaid by anything in `config.memory.customTypes`. */
 export function loadMemoryTypeRegistry(
@@ -683,7 +710,12 @@ export function addSkillPath(
   const seen = new Set(resolveSkillPaths(existing, baseDir).map(skillPathKey));
   const key = skillPathKey(entry.resolved);
   if (seen.has(key))
-    return { added: false, path: entry.raw, resolved: entry.resolved, paths: existing };
+    return {
+      added: false,
+      path: entry.raw,
+      resolved: entry.resolved,
+      paths: existing,
+    };
   const paths = saveSkillPaths([...existing, entry.raw], baseDir, path);
   return { added: true, path: entry.raw, resolved: entry.resolved, paths };
 }
@@ -932,6 +964,136 @@ export function loadFilesystemOutlineThresholdBytes(
   const v = readConfig(path).filesystem?.outlineThresholdBytes;
   if (typeof v !== "number" || !Number.isFinite(v) || v <= 0) return undefined;
   return Math.floor(v);
+}
+
+/** read_file session read-dedup. Default true; false only when explicitly disabled in config. (Env REASONIX_DEDUP=0 is checked per-call in read_file.) */
+export function loadFilesystemDedupEnabled(path: string = defaultConfigPath()): boolean {
+  return readConfig(path).filesystem?.dedupEnabled !== false;
+}
+
+/** Any value other than the literal "workspace" normalizes to "global" — lenient so hand-edited config never throws. */
+function normalizeBudgetScope(scope: unknown): BudgetScope {
+  return scope === "workspace" ? "workspace" : "global";
+}
+
+/** Both fields must be valid for a window to exist; cap must be a positive number. Scope defaults to "global". */
+function normalizeBudgetWindow(
+  period: unknown,
+  capUsd: unknown,
+  scope: unknown,
+): BudgetWindow | null {
+  if (period !== "daily" && period !== "weekly" && period !== "monthly") return null;
+  if (typeof capUsd !== "number" || !Number.isFinite(capUsd) || capUsd <= 0) return null;
+  return { period, capUsd, scope: normalizeBudgetScope(scope) };
+}
+
+const BUDGET_PERIOD_ORDER: BudgetPeriod[] = ["daily", "weekly", "monthly"];
+const BUDGET_SCOPE_ORDER: BudgetScope[] = ["global", "workspace"];
+
+function budgetWindowKey(scope: BudgetScope, period: BudgetPeriod): string {
+  return `${scope}:${period}`;
+}
+
+/** At most one cap per (scope, period). Legacy single-window form is lowest precedence (always global); explicit `windows[]` overrides it for the same key. */
+function collectBudgetWindows(cfg: ReasonixConfig["budget"]): Map<string, BudgetWindow> {
+  const m = new Map<string, BudgetWindow>();
+  const legacy = normalizeBudgetWindow(cfg?.period, cfg?.capUsd, "global");
+  if (legacy) m.set(budgetWindowKey("global", legacy.period), legacy);
+  for (const w of cfg?.windows ?? []) {
+    const n = normalizeBudgetWindow(w?.period, w?.capUsd, w?.scope);
+    if (n) m.set(budgetWindowKey(normalizeBudgetScope(n.scope), n.period), n);
+  }
+  return m;
+}
+
+function windowsFromMap(m: Map<string, BudgetWindow>): BudgetWindow[] {
+  const out: BudgetWindow[] = [];
+  for (const scope of BUDGET_SCOPE_ORDER) {
+    for (const period of BUDGET_PERIOD_ORDER) {
+      const w = m.get(budgetWindowKey(scope, period));
+      if (w) out.push(w);
+    }
+  }
+  return out;
+}
+
+/** Cross-session rolling budgets from config only. Empty when unset/invalid. */
+export function loadBudgetWindows(path: string = defaultConfigPath()): BudgetWindow[] {
+  return windowsFromMap(collectBudgetWindows(readConfig(path).budget));
+}
+
+/** Rolling budgets with env overriding config. `REASONIX_BUDGET_PERIOD` / `REASONIX_BUDGET_CAP` (+ optional `REASONIX_BUDGET_SCOPE`) define one extra/override window (fields fall back to the legacy single-window config). Returns global windows first, then workspace, each in daily→weekly→monthly order. */
+export function resolveBudgetWindows(path: string = defaultConfigPath()): BudgetWindow[] {
+  const cfg = readConfig(path).budget;
+  const m = collectBudgetWindows(cfg);
+  if (
+    process.env.REASONIX_BUDGET_PERIOD !== undefined ||
+    process.env.REASONIX_BUDGET_CAP !== undefined ||
+    process.env.REASONIX_BUDGET_SCOPE !== undefined
+  ) {
+    const period: unknown = process.env.REASONIX_BUDGET_PERIOD ?? cfg?.period;
+    const capRaw = process.env.REASONIX_BUDGET_CAP;
+    const capUsd: unknown = capRaw !== undefined ? Number.parseFloat(capRaw) : cfg?.capUsd;
+    const scope = normalizeBudgetScope(process.env.REASONIX_BUDGET_SCOPE);
+    const envWindow = normalizeBudgetWindow(period, capUsd, scope);
+    if (envWindow) m.set(budgetWindowKey(scope, envWindow.period), envWindow);
+  }
+  return windowsFromMap(m);
+}
+
+function toToolsetTokens(raw: string | string[] | undefined): string[] {
+  if (raw === undefined) return [];
+  const list = Array.isArray(raw) ? raw : raw.split(",");
+  return list.map((s) => s.trim()).filter((s) => s.length > 0);
+}
+
+/** Session-start tool selection (env > config). `REASONIX_TOOLGATE=0` disables gating (all tools). `REASONIX_TOOLSET` (comma-separated group/tool names) overrides `config.defaultToolset`. Group names expand via `config.toolsets`; unknown tokens are literal tool names. Returns the selected name set, or null ⟹ load all tools. Essential tools are merged in at the registry layer, not here. */
+export function resolveSessionToolset(path: string = defaultConfigPath()): Set<string> | null {
+  if (process.env.REASONIX_TOOLGATE === "0") return null;
+  const cfg = readConfig(path);
+  const envSel = process.env.REASONIX_TOOLSET;
+  const rawSel = envSel !== undefined && envSel.trim() !== "" ? envSel : cfg.defaultToolset;
+  const tokens = toToolsetTokens(rawSel);
+  if (tokens.length === 0) return null;
+  const groups = cfg.toolsets ?? {};
+  const out = new Set<string>();
+  for (const tok of tokens) {
+    const group = Object.hasOwn(groups, tok) ? groups[tok] : undefined;
+    if (Array.isArray(group)) {
+      for (const name of group) {
+        if (typeof name !== "string") continue;
+        const n = name.trim();
+        if (n) out.add(n);
+      }
+    } else {
+      out.add(tok);
+    }
+  }
+  return out.size > 0 ? out : null;
+}
+
+/** Set (or clear, when `capUsd` is null/≤0) one (scope, period)'s cap, leaving the others intact. Persists as the canonical `windows[]` form. The `/budget window` slash writes here. */
+export function saveBudgetWindow(
+  period: BudgetPeriod,
+  capUsd: number | null,
+  scope: BudgetScope = "global",
+  path: string = defaultConfigPath(),
+): void {
+  const cfg = readConfig(path);
+  const m = collectBudgetWindows(cfg.budget);
+  const key = budgetWindowKey(scope, period);
+  if (capUsd === null || !Number.isFinite(capUsd) || capUsd <= 0) m.delete(key);
+  else m.set(key, { period, capUsd, scope });
+  const windows = windowsFromMap(m);
+  cfg.budget = windows.length > 0 ? { windows } : undefined;
+  writeConfig(cfg, path);
+}
+
+/** Clear every rolling budget window. The `/budget window off` slash writes here. */
+export function clearBudgetWindows(path: string = defaultConfigPath()): void {
+  const cfg = readConfig(path);
+  cfg.budget = undefined;
+  writeConfig(cfg, path);
 }
 
 /** True when the onboarding tip for the review/AUTO gate has been shown. */

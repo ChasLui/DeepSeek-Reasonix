@@ -22,13 +22,21 @@ describe("todo_write — lightweight in-session task tracker", () => {
       "todo_write",
       JSON.stringify({
         todos: [
-          { content: "Read the spec", activeForm: "Reading the spec", status: "completed" },
+          {
+            content: "Read the spec",
+            activeForm: "Reading the spec",
+            status: "completed",
+          },
           {
             content: "Sketch the parser",
             activeForm: "Sketching the parser",
             status: "in_progress",
           },
-          { content: "Write tests", activeForm: "Writing tests", status: "pending" },
+          {
+            content: "Write tests",
+            activeForm: "Writing tests",
+            status: "pending",
+          },
         ],
       }),
     );

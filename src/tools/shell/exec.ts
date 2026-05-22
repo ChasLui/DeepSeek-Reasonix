@@ -3,6 +3,7 @@ import { existsSync, statSync } from "node:fs";
 import * as pathMod from "node:path";
 import { parseCommandChain, runChain } from "../shell-chain.js";
 import { tokenizeCommand } from "./parse.js";
+import { canRunInVfs, runInVfs } from "./vfs-lite.js";
 
 export const DEFAULT_TIMEOUT_SEC = 60;
 export const DEFAULT_MAX_OUTPUT_CHARS = 32_000;
@@ -40,6 +41,8 @@ export interface RunCommandResult {
   output: string;
   /** True when the process was killed for exceeding `timeoutSec`. */
   timedOut: boolean;
+  /** Full decoded combined output before truncation. Set only when truncation occurred. */
+  rawOutput?: string;
 }
 
 export async function runCommand(
@@ -63,6 +66,13 @@ export async function runCommand(
       maxOutputChars: maxChars,
       signal: opts.signal,
     });
+  }
+  // VFS-Lite: pure-Node reimpl for byte-identical commands (cat/head/tail/printf).
+  // Disabled when REASONIX_VFS=0 — env check is per-call, no module-level cache.
+  if (process.env.REASONIX_VFS !== "0" && canRunInVfs(argv)) {
+    const vfs = await runInVfs(cmd, { cwd: opts.cwd, rootDir: opts.cwd });
+    if (vfs !== null) return vfs;
+    // null = handler refused or threw → sticky-fallback to spawn below.
   }
   const timeoutMs = timeoutSec * 1000;
   const normalizedEnv = normalizeWindowsEnvVars(process.env);
@@ -99,7 +109,9 @@ export async function runCommand(
   //      with verbatim args + manual quoting, so shell metacharacters
   //      in arguments stay literal.
   // Unix path is unchanged.
-  const { bin, args, spawnOverrides } = prepareSpawn(argv, { env: normalizedEnv });
+  const { bin, args, spawnOverrides } = prepareSpawn(argv, {
+    env: normalizedEnv,
+  });
   const effectiveSpawnOpts = { ...spawnOpts, ...spawnOverrides };
 
   return await new Promise<RunCommandResult>((resolve, reject) => {
@@ -164,11 +176,16 @@ export async function runCommand(
       opts.signal?.removeEventListener("abort", onAbort);
       const merged = Buffer.concat(chunks);
       const buf = smartDecodeOutput(merged);
-      const output =
-        buf.length > maxChars
-          ? `${buf.slice(0, maxChars)}\n\n[… truncated ${buf.length - maxChars} chars …]`
-          : buf;
-      resolve({ exitCode: code, output, timedOut });
+      const truncated = buf.length > maxChars;
+      const output = truncated
+        ? `${buf.slice(0, maxChars)}\n\n[… truncated ${buf.length - maxChars} chars …]`
+        : buf;
+      resolve({
+        exitCode: code,
+        output,
+        timedOut,
+        rawOutput: truncated ? buf : undefined,
+      });
     });
   });
 }

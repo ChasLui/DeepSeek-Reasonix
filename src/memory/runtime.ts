@@ -90,6 +90,13 @@ export class ImmutablePrefix {
 
 export class AppendOnlyLog {
   private _entries: ChatMessage[] = [];
+  private _onCompact: (() => void) | null = null;
+
+  /** Subscribe to compaction (fold/heal/shrink). Read-dedup uses this to drop
+   * "content still above" entries whose output just left the active log. */
+  onCompact(cb: (() => void) | null): void {
+    this._onCompact = cb;
+  }
 
   append(message: ChatMessage): void {
     if (!message || typeof message !== "object" || !("role" in message)) {
@@ -105,6 +112,7 @@ export class AppendOnlyLog {
   /** The one append-only-breaking path — reserved for `/compact` + recovery. Use `append()` otherwise. */
   compactInPlace(replacement: ChatMessage[]): void {
     this._entries = [...replacement];
+    this._onCompact?.();
   }
 
   get entries(): readonly ChatMessage[] {

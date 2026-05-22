@@ -20,11 +20,20 @@ import type { Scrollback } from "./useScrollback.js";
 export interface AssistantFinalContext {
   flush: () => void;
   translator: TurnTranslator;
-  streamRef: { text: string; reasoning: string; toolCallBuild?: { name: string; chars: number } };
+  streamRef: {
+    text: string;
+    reasoning: string;
+    toolCallBuild?: { name: string; chars: number };
+  };
   contentBuf: { current: string };
   reasoningBuf: { current: string };
   toolCallBuildBuf: {
-    current: { name: string; chars: number; index?: number; readyCount?: number } | null;
+    current: {
+      name: string;
+      chars: number;
+      index?: number;
+      readyCount?: number;
+    } | null;
   };
   assistantId: string;
   setSummary: Dispatch<SetStateAction<SessionSummary>>;
@@ -68,6 +77,7 @@ export function handleAssistantFinal(ev: LoopEvent, ctx: AssistantFinalContext):
       session: ctx.session,
       model: ev.stats.model,
       usage: ev.stats.usage,
+      workspace: ctx.currentRootDir,
     });
     // Pass the session-aggregate cache-hit so the persistent status bar
     // mirrors what the web dashboard reads from `loop.stats.summary()`

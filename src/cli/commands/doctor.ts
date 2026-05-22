@@ -3,13 +3,17 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { checkBudgetWindows, periodWindowDays } from "../../budget/window.js";
 import { DeepSeekClient, pickPrimaryBalance } from "../../client.js";
 import {
   defaultConfigPath,
   loadBaseUrl,
+  loadFilesystemDedupEnabled,
   loadProxyConfig,
   readConfig,
+  resolveBudgetWindows,
   resolveSemanticEmbeddingConfig,
+  resolveSessionToolset,
 } from "../../config.js";
 import { loadDotenv } from "../../env.js";
 import { loadHooks } from "../../hooks.js";
@@ -18,7 +22,9 @@ import { indexExists } from "../../index/semantic/builder.js";
 import { checkOllamaStatus } from "../../index/semantic/ollama-launcher.js";
 import { listSessions } from "../../memory/session.js";
 import { detectProxyUrl, matchesNoProxy, resolveNoProxy } from "../../net/proxy.js";
+import { readUsageSince } from "../../telemetry/usage.js";
 import { resolveDataPath } from "../../tokenizer.js";
+import { getVfsStats } from "../../tools/shell/vfs-lite.js";
 import { VERSION } from "../../version.js";
 
 export type DoctorLevel = "ok" | "warn" | "fail";
@@ -51,7 +57,120 @@ export async function runDoctorChecks(projectRoot: string): Promise<DoctorCheck[
     checkOllama(projectRoot),
     checkProject(projectRoot),
   ]);
-  return [r[0], r[1], ...checkProxy(), r[2], r[3], r[4], r[5], r[6], r[7]];
+  return [
+    r[0],
+    r[1],
+    ...checkProxy(),
+    r[2],
+    r[3],
+    r[4],
+    r[5],
+    r[6],
+    r[7],
+    checkVfsLite(),
+    checkReadDedup(),
+    checkBudget(),
+    checkToolset(),
+  ];
+}
+
+/** Read-dedup config status. Hit counts are session-scoped (loop-owned), so a
+ * standalone `doctor` process can only report whether the layer is armed. */
+function checkReadDedup(): Check {
+  const detail =
+    process.env.REASONIX_DEDUP === "0"
+      ? "disabled via REASONIX_DEDUP=0"
+      : !loadFilesystemDedupEnabled()
+        ? "disabled via config.filesystem.dedupEnabled=false"
+        : "enabled — unchanged re-reads return a stub (hit counts are per-session, shown in the TUI)";
+  return { id: "read-dedup", label: "read-dedup   ", level: "ok", detail };
+}
+
+/** Cross-session rolling budget status — reads the shared usage.jsonl aggregate
+ * (real persistent data, unlike read-dedup). `warn` (not `fail`) at/over cap:
+ * being capped is the intended state, not a broken install. */
+function checkBudget(): Check {
+  const windows = resolveBudgetWindows();
+  if (windows.length === 0) {
+    return {
+      id: "budget-window",
+      label: "budget       ",
+      level: "ok",
+      detail: "no rolling budget set (config.budget or REASONIX_BUDGET_PERIOD/CAP)",
+    };
+  }
+  const now = Date.now();
+  const maxDays = Math.max(...windows.map((w) => periodWindowDays(w.period)));
+  const statuses = checkBudgetWindows(
+    readUsageSince(now - maxDays * 24 * 60 * 60 * 1000),
+    windows,
+    { now, workspace: process.cwd() },
+  );
+  const detail = statuses
+    .map(
+      (s) =>
+        `${s.scope} ${s.period} $${s.spentUsd.toFixed(4)}/$${s.capUsd.toFixed(2)} ($${s.remainingUsd.toFixed(4)} left)`,
+    )
+    .join(" · ");
+  return {
+    id: "budget-window",
+    label: "budget       ",
+    level: statuses.some((s) => s.state !== "ok") ? "warn" : "ok",
+    detail,
+  };
+}
+
+/** Session toolset gating — config state only (hit counts are loop-owned; doctor reports armed state + selection, not pruned tools). */
+function checkToolset(): Check {
+  if (process.env.REASONIX_TOOLGATE === "0") {
+    return {
+      id: "toolset",
+      label: "toolset      ",
+      level: "ok",
+      detail: "gating disabled via REASONIX_TOOLGATE=0 (all tools load)",
+    };
+  }
+  const groupCount = Object.keys(readConfig().toolsets ?? {}).length;
+  const groups = groupCount > 0 ? ` · ${groupCount} group(s) defined` : "";
+  const selection = resolveSessionToolset();
+  const detail =
+    selection === null
+      ? `no selection — all tools load (current behavior)${groups}`
+      : `${selection.size} selected + essential kept${groups}`;
+  return { id: "toolset", label: "toolset      ", level: "ok", detail };
+}
+
+/** VFS-Lite telemetry — pure-Node intercepts vs spawn fallbacks. Informational. */
+function checkVfsLite(): Check {
+  const stats = getVfsStats();
+  const hitNames = Object.keys(stats.hits).sort();
+  const fallbackNames = Object.keys(stats.fallbacks).sort();
+  if (hitNames.length === 0 && fallbackNames.length === 0) {
+    return {
+      id: "vfs",
+      label: "vfs-lite     ",
+      level: "ok",
+      detail:
+        process.env.REASONIX_VFS === "0"
+          ? "disabled via REASONIX_VFS=0"
+          : "no shell commands intercepted yet (cat/head/tail/printf byte-identical)",
+    };
+  }
+  const parts: string[] = [];
+  if (hitNames.length > 0) {
+    parts.push(`intercepted: ${hitNames.map((n) => `${n}=${stats.hits[n]}`).join(", ")}`);
+  }
+  if (fallbackNames.length > 0) {
+    parts.push(
+      `fallback→spawn: ${fallbackNames.map((n) => `${n}=${stats.fallbacks[n]}`).join(", ")}`,
+    );
+  }
+  return {
+    id: "vfs",
+    label: "vfs-lite     ",
+    level: fallbackNames.length > 0 ? "warn" : "ok",
+    detail: parts.join(" · "),
+  };
 }
 
 /** Probe hosts used to show users what's going through the proxy vs. direct. Cheap (no I/O), purely a routing simulation against the same NO_PROXY patterns the dispatcher uses. */
@@ -197,7 +316,10 @@ async function checkConfig(): Promise<Check> {
       id: "config",
       label: "config       ",
       level: "fail",
-      detail: t("doctorErrors.unreadable", { path, message: (err as Error).message }),
+      detail: t("doctorErrors.unreadable", {
+        path,
+        message: (err as Error).message,
+      }),
     };
   }
 }
@@ -346,7 +468,9 @@ async function checkHooks(projectRoot: string): Promise<Check> {
       id: "hooks",
       label: "hooks        ",
       level: "warn",
-      detail: t("doctorErrors.parseFailed", { message: (err as Error).message }),
+      detail: t("doctorErrors.parseFailed", {
+        message: (err as Error).message,
+      }),
     };
   }
 }
@@ -424,7 +548,9 @@ async function checkOllama(projectRoot: string): Promise<Check> {
       id: "semantic",
       label: "semantic     ",
       level: "warn",
-      detail: t("doctorErrors.probeFailed", { message: (err as Error).message }),
+      detail: t("doctorErrors.probeFailed", {
+        message: (err as Error).message,
+      }),
     };
   }
 }
@@ -473,7 +599,11 @@ export function formatDoctorJson(checks: DoctorCheck[], version: string): string
   return JSON.stringify({
     version,
     summary: { ok, warn, fail },
-    checks: checks.map((c) => ({ id: c.id, status: c.level, message: c.detail })),
+    checks: checks.map((c) => ({
+      id: c.id,
+      status: c.level,
+      message: c.detail,
+    })),
   });
 }
 

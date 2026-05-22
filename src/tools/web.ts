@@ -11,6 +11,7 @@ import {
 } from "../config.js";
 import { t } from "../i18n/index.js";
 import type { ToolRegistry } from "../tools.js";
+import { nullPrototype } from "../utils/safe-object.js";
 
 export interface SearchResult {
   title: string;
@@ -159,7 +160,9 @@ async function searchSearxng(query: string, opts: WebSearchOptions = {}): Promis
   } catch (err) {
     if (err instanceof TypeError && (err as Error).message.includes("fetch")) {
       throw new Error(
-        t("webErrors.cannotReach", { endpoint: opts.endpoint ?? "http://localhost:8080" }),
+        t("webErrors.cannotReach", {
+          endpoint: opts.endpoint ?? "http://localhost:8080",
+        }),
       );
     }
     throw err;
@@ -245,7 +248,10 @@ async function searchMetaso(query: string, opts: WebSearchOptions = {}): Promise
   }
   if (data.code && data.code !== 0) {
     throw new Error(
-      t("webErrors.metasoApiError", { code: data.code, message: data.message ?? "" }),
+      t("webErrors.metasoApiError", {
+        code: data.code,
+        message: data.message ?? "",
+      }),
     );
   }
 
@@ -611,7 +617,13 @@ export async function webFetch(url: string, opts: WebFetchOptions = {}): Promise
   // refuse upfront than to start streaming a 1GB ISO.
   const declaredLen = Number(resp.headers.get("content-length") ?? "");
   if (Number.isFinite(declaredLen) && declaredLen > FETCH_MAX_BYTES) {
-    throw new Error(t("webErrors.fetchTooLarge", { len: declaredLen, cap: FETCH_MAX_BYTES, url }));
+    throw new Error(
+      t("webErrors.fetchTooLarge", {
+        len: declaredLen,
+        cap: FETCH_MAX_BYTES,
+        url,
+      }),
+    );
   }
   const raw = await readBodyCapped(resp, FETCH_MAX_BYTES);
   const title = extractTitle(raw);
@@ -721,14 +733,14 @@ function stripHtml(s: string): string {
   return parseHtml(s).text;
 }
 
-const HTML_ENTITIES: Readonly<Record<string, string>> = {
+const HTML_ENTITIES: Readonly<Record<string, string>> = nullPrototype({
   amp: "&",
   lt: "<",
   gt: ">",
   quot: '"',
   apos: "'",
   nbsp: " ",
-};
+});
 
 /** Single-pass decode — the previous chained `replace`s decoded `&amp;lt;` into `<` because `&amp;` ran before `&lt;`. */
 function decodeHtmlEntities(s: string): string {
@@ -771,7 +783,10 @@ export function registerWebTools(registry: ToolRegistry, opts: WebToolsOptions =
     parameters: {
       type: "object",
       properties: {
-        query: { type: "string", description: "Natural-language search query." },
+        query: {
+          type: "string",
+          description: "Natural-language search query.",
+        },
         topK: {
           type: "integer",
           description: `Number of results to return. Default ${defaultTopK}.`,
@@ -802,7 +817,10 @@ export function registerWebTools(registry: ToolRegistry, opts: WebToolsOptions =
     parameters: {
       type: "object",
       properties: {
-        url: { type: "string", description: "Absolute http:// or https:// URL." },
+        url: {
+          type: "string",
+          description: "Absolute http:// or https:// URL.",
+        },
       },
       required: ["url"],
     },
@@ -810,7 +828,10 @@ export function registerWebTools(registry: ToolRegistry, opts: WebToolsOptions =
       if (!/^https?:\/\//i.test(args.url)) {
         throw new Error(t("webErrors.fetchInvalidUrl"));
       }
-      const page = await webFetch(args.url, { maxChars: maxFetchChars, signal: ctx?.signal });
+      const page = await webFetch(args.url, {
+        maxChars: maxFetchChars,
+        signal: ctx?.signal,
+      });
       const header = page.title ? `${page.title}\n${page.url}` : page.url;
       return `${header}\n\n${page.text}`;
     },

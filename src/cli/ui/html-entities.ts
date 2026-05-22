@@ -1,13 +1,15 @@
 /** Models sometimes emit HTML-escaped code (issue #657: `&quot;` instead of `"`). Terminals don't render entities, so decode at the markdown boundary. */
 
-const NAMED: Record<string, string> = {
+import { nullPrototype } from "../../utils/safe-object.js";
+
+const NAMED: Record<string, string> = nullPrototype({
   quot: '"',
   apos: "'",
   amp: "&",
   lt: "<",
   gt: ">",
   nbsp: "\u00a0",
-};
+});
 
 const ENTITY_RE = /&(?:#x([0-9A-Fa-f]+)|#(\d+)|([a-zA-Z]+));/g;
 

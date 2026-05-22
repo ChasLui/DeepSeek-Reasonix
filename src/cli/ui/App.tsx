@@ -45,6 +45,8 @@ import {
   markMouseClipboardHintShown,
   mouseClipboardHintShown,
   readConfig,
+  resolveBudgetWindows,
+  resolveSessionToolset,
   resolveThemePreference,
   saveEditMode,
   savePreset,
@@ -98,6 +100,7 @@ import type { PlanStep, StepCompletion } from "../../tools/plan.js";
 import { formatCommandResult, runCommand } from "../../tools/shell.js";
 import { registerSkillTools } from "../../tools/skills.js";
 import { formatSubagentResult, spawnSubagent } from "../../tools/subagent.js";
+import { applySessionToolset } from "../../tools/toolset.js";
 import { webFetch } from "../../tools/web.js";
 import { openTranscriptFile } from "../../transcript/log.js";
 import { listKnownWorkspaces, rememberWorkspace } from "../../workspaces.js";
@@ -244,7 +247,12 @@ export interface AppProps {
    */
   progressSink?: {
     current:
-      | ((info: { toolName: string; progress: number; total?: number; message?: string }) => void)
+      | ((info: {
+          toolName: string;
+          progress: number;
+          total?: number;
+          message?: string;
+        }) => void)
       | null;
   };
   /**
@@ -362,7 +370,12 @@ function HistoryTypingCapture({
 function LoopStatusRow({
   loop,
 }: {
-  loop: { prompt: string; intervalMs: number; nextFireAt: number; iter: number };
+  loop: {
+    prompt: string;
+    intervalMs: number;
+    nextFireAt: number;
+    iter: number;
+  };
 }) {
   const [, setTick] = React.useState(0);
   React.useEffect(() => {
@@ -573,6 +586,7 @@ function AppInner({
     session,
     log,
     getWalletCurrency: () => walletCurrencyRef.current,
+    getWorkspace: () => currentRootDirRef.current,
   });
   const { currentRootDir, setCurrentRootDir, currentRootDirRef } = useWorkspaceRoot(
     codeMode?.rootDir,
@@ -693,7 +707,9 @@ function AppInner({
   const [pendingCheckpointPicker, setPendingCheckpointPicker] = useState(false);
   const [checkpointPickerList, setCheckpointPickerList] = useState<CheckpointMeta[]>([]);
   /** Opens the unified McpHub modal —null when closed. `tab` selects the initial tab. */
-  const [pendingMcpHub, setPendingMcpHub] = useState<{ tab: "live" | "marketplace" } | null>(null);
+  const [pendingMcpHub, setPendingMcpHub] = useState<{
+    tab: "live" | "marketplace";
+  } | null>(null);
   /** True while the ModelPicker is open mid-chat (triggered by bare `/model`). */
   const [pendingModelPicker, setPendingModelPicker] = useState(false);
   /** True while the ThemePicker is open mid-chat (triggered by bare `/theme`). */
@@ -1004,6 +1020,7 @@ function AppInner({
         },
       });
     }
+    applySessionToolset(tools, resolveSessionToolset());
     const prefix = new ImmutablePrefix({
       system,
       toolSpecs: tools?.specs(),
@@ -1014,6 +1031,8 @@ function AppInner({
       tools,
       model,
       budgetUsd,
+      budgetWindows: resolveBudgetWindows(),
+      workspace: currentRootDir,
       session,
       hooks: hookList,
       hookCwd: currentRootDir,
@@ -1036,7 +1055,11 @@ function AppInner({
   }, [loop]);
 
   const generateCurrentSessionTitle = useCallback(
-    async (seed?: { userText?: string; assistantText?: string; auto?: boolean }) => {
+    async (seed?: {
+      userText?: string;
+      assistantText?: string;
+      auto?: boolean;
+    }) => {
       if (!session || !onSwitchSession) return t("app.sessionTitleNoSession");
       const userText = seed?.userText ?? lastMessageContent(loop.log.entries, "user");
       const assistantText =
@@ -1050,7 +1073,9 @@ function AppInner({
       });
       if (!title) return t("app.sessionTitleNoTitle");
 
-      const nextName = makeSessionNameFromTitle(title, { currentName: session });
+      const nextName = makeSessionNameFromTitle(title, {
+        currentName: session,
+      });
       if (!nextName) return t("app.sessionTitleNoTitle");
       if (sanitizeName(nextName) === sanitizeName(session)) {
         patchSessionMeta(session, { summary: title, autoTitleGenerated: true });
@@ -1106,7 +1131,11 @@ function AppInner({
             );
           },
           (err) => {
-            log.pushInfo(t("app.semanticRebootstrapFailed", { reason: (err as Error).message }));
+            log.pushInfo(
+              t("app.semanticRebootstrapFailed", {
+                reason: (err as Error).message,
+              }),
+            );
           },
         );
       }
@@ -1557,7 +1586,12 @@ function AppInner({
     if (!session) {
       log.pushInfo(t("ui.ephemeralSession"));
     } else if (loop.resumedMessageCount > 0) {
-      log.pushInfo(t("ui.resumedSession", { name: session, count: loop.resumedMessageCount }));
+      log.pushInfo(
+        t("ui.resumedSession", {
+          name: session,
+          count: loop.resumedMessageCount,
+        }),
+      );
     } else {
       log.pushInfo(t("ui.newSession", { name: session }));
     }
@@ -1618,19 +1652,31 @@ function AppInner({
     if (codeMode && !editModeHintShown()) {
       const tip = tObj<{
         topic: string;
-        sections: ReadonlyArray<{ rows: ReadonlyArray<{ key: string; text: string }> }>;
+        sections: ReadonlyArray<{
+          rows: ReadonlyArray<{ key: string; text: string }>;
+        }>;
         footer: string;
       }>("ui.tipEditBindings");
-      log.pushTip({ topic: tip.topic, sections: tip.sections, footer: tip.footer });
+      log.pushTip({
+        topic: tip.topic,
+        sections: tip.sections,
+        footer: tip.footer,
+      });
       markEditModeHintShown();
     }
     if (!mouseClipboardHintShown()) {
       const tip = tObj<{
         topic: string;
-        sections: ReadonlyArray<{ rows: ReadonlyArray<{ key: string; text: string }> }>;
+        sections: ReadonlyArray<{
+          rows: ReadonlyArray<{ key: string; text: string }>;
+        }>;
         footer: string;
       }>("ui.tipMouseClipboard");
-      log.pushTip({ topic: tip.topic, sections: tip.sections, footer: tip.footer });
+      log.pushTip({
+        topic: tip.topic,
+        sections: tip.sections,
+        footer: tip.footer,
+      });
       markMouseClipboardHintShown();
     }
   }, [session, loop, codeMode, syncPendingCount, log, pendingEdits, startupInfoHints]);
@@ -2169,7 +2215,10 @@ function AppInner({
               autoEscalate: settings.autoEscalate,
               reasoningEffort: settings.reasoningEffort,
             });
-            agentStore.dispatch({ type: "session.model.change", model: settings.model });
+            agentStore.dispatch({
+              type: "session.model.change",
+              model: settings.model,
+            });
             const canonical: "auto" | "flash" | "pro" =
               settings.model === "deepseek-v4-pro"
                 ? "pro"
@@ -2177,7 +2226,10 @@ function AppInner({
                   ? "auto"
                   : "flash";
             setPreset(canonical);
-            agentStore.dispatch({ type: "session.preset.change", preset: canonical });
+            agentStore.dispatch({
+              type: "session.preset.change",
+              preset: canonical,
+            });
             try {
               savePreset(canonical);
             } catch {
@@ -2568,7 +2620,10 @@ function AppInner({
           autoEscalate: preset.autoEscalate,
           reasoningEffort: preset.reasoningEffort,
         });
-        agentStore.dispatch({ type: "session.model.change", model: preset.model });
+        agentStore.dispatch({
+          type: "session.model.change",
+          model: preset.model,
+        });
         setPreset(target);
         agentStore.dispatch({ type: "session.preset.change", preset: target });
         try {
@@ -3035,7 +3090,11 @@ function AppInner({
       if (hookList.some((h) => h.event === "UserPromptSubmit")) {
         const promptReport = await runHooks({
           hooks: hookList,
-          payload: { event: "UserPromptSubmit", cwd: currentRootDir, prompt: text },
+          payload: {
+            event: "UserPromptSubmit",
+            cwd: currentRootDir,
+            prompt: text,
+          },
         });
         for (const o of promptReport.outcomes) {
           if (o.decision === "pass") continue;
@@ -3073,7 +3132,11 @@ function AppInner({
       }
 
       const assistantId = `a-${Date.now()}`;
-      const streamRef: StreamingState = { id: assistantId, text: "", reasoning: "" };
+      const streamRef: StreamingState = {
+        id: assistantId,
+        text: "",
+        reasoning: "",
+      };
       const contentBuf = { current: "" };
       const reasoningBuf = { current: "" };
       const translator = new TurnTranslator(log);
@@ -3835,7 +3898,11 @@ function AppInner({
           break;
         }
         case "plan_proposed": {
-          const p = payload as { plan: string; steps?: PlanStep[]; summary?: string };
+          const p = payload as {
+            plan: string;
+            steps?: PlanStep[];
+            summary?: string;
+          };
           setPendingPlan(p.plan);
           planStepsRef.current = p.steps ?? null;
           planSummaryRef.current = p.summary ?? null;
@@ -4083,7 +4150,10 @@ function AppInner({
   useEffect(() => {
     handleChoiceResolveRef.current = (resolution) => {
       if (resolution.type === "pick") {
-        void handleChoiceConfirmRef.current({ kind: "pick", optionId: resolution.optionId });
+        void handleChoiceConfirmRef.current({
+          kind: "pick",
+          optionId: resolution.optionId,
+        });
         return;
       }
       if (resolution.type === "text") {
@@ -4409,7 +4479,9 @@ function AppInner({
                       });
                       setInput(outcome.entry.text);
                       log.pushInfo(
-                        t("editPicker.forked", { turn: outcome.entry.userTurnIndex + 1 }),
+                        t("editPicker.forked", {
+                          turn: outcome.entry.userTurnIndex + 1,
+                        }),
                       );
                     }}
                   />
@@ -4442,8 +4514,14 @@ function AppInner({
                       if (outcome.kind === "select") {
                         // Manual model pick = explicit pin: turn off auto-escalate
                         // so flash doesn't get bumped, persist inferred preset.
-                        loop.configure({ model: outcome.id, autoEscalate: false });
-                        agentStore.dispatch({ type: "session.model.change", model: outcome.id });
+                        loop.configure({
+                          model: outcome.id,
+                          autoEscalate: false,
+                        });
+                        agentStore.dispatch({
+                          type: "session.model.change",
+                          model: outcome.id,
+                        });
                         const inferred =
                           outcome.id === "deepseek-v4-pro"
                             ? "pro"
@@ -4472,7 +4550,10 @@ function AppInner({
                           autoEscalate: p.autoEscalate,
                           reasoningEffort: p.reasoningEffort,
                         });
-                        agentStore.dispatch({ type: "session.model.change", model: p.model });
+                        agentStore.dispatch({
+                          type: "session.model.change",
+                          model: p.model,
+                        });
                         setPreset(outcome.name);
                         agentStore.dispatch({
                           type: "session.preset.change",

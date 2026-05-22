@@ -1,12 +1,25 @@
 import type { PauseGate } from "./core/pause-gate.js";
 import { truncateForModel, truncateForModelByTokens } from "./mcp/registry.js";
+import {
+  type RepairKind,
+  SHAPE_REPAIRS,
+  isRequiredAt,
+  unwrapDegenerateAutolinks,
+} from "./repair/arg-shape.js";
 import { analyzeSchema, flattenSchema, nestArguments } from "./repair/flatten.js";
+import { tryParseLoose } from "./repair/json-coerce.js";
+import { formatIssues, validate } from "./repair/schema-walk.js";
+import type { ReadDedupState } from "./tools/fs/read-dedup.js";
 import type { JSONSchema, ToolSpec } from "./types.js";
 
 export interface ToolCallContext {
   signal?: AbortSignal;
   /** Inject a mock PauseGate for tests. When absent, tools use the singleton. */
   confirmationGate?: PauseGate;
+  /** Session-scoped read-dedup state (loop-owned). Present iff dedup is live for this session. */
+  readDedup?: ReadDedupState;
+  /** Token budget the dispatcher will truncate this result to — read_file uses it to refuse dedup on bodies that won't survive intact. */
+  maxResultTokens?: number;
 }
 
 export interface ToolDefinition<A = any, R = any> {
@@ -21,6 +34,8 @@ export interface ToolDefinition<A = any, R = any> {
   parallelSafe?: boolean;
   /** Excluded from repeat-loop storm accounting; use only for cheap, state-inspection tools. */
   stormExempt?: boolean;
+  /** Skip the dispatch-time validate→repair gate; the tool's own runtime sanitizer is authoritative. Used by tools that intentionally accept mixed-shape arrays and drop bad entries themselves (plan, choice, todo). */
+  lenientArgs?: boolean;
   fn: (args: A, ctx?: ToolCallContext) => R | Promise<R>;
 }
 
@@ -66,6 +81,7 @@ export class ToolRegistry {
   private readonly _lastMalformed = new Map<string, string>();
   /** Per-tool fingerprint of the last host-side gate rejection. */
   private readonly _lastGateRejection = new Map<string, string>();
+  private readonly _repairStats = new Map<string, Map<RepairKind, number>>();
 
   constructor(opts: ToolRegistryOptions = {}) {
     this._autoFlatten = opts.autoFlatten !== false;
@@ -128,7 +144,15 @@ export class ToolRegistry {
 
   /** Drop a registered tool. Returns true if the name was present. Used by MCP hot-unbridge. */
   unregister(name: string): boolean {
+    this._repairStats.delete(name);
+    this._lastMalformed.delete(name);
+    this._lastGateRejection.delete(name);
     return this._tools.delete(name);
+  }
+
+  resetRepairStats(name?: string): void {
+    if (name === undefined) this._repairStats.clear();
+    else this._repairStats.delete(name);
   }
 
   has(name: string): boolean {
@@ -173,6 +197,8 @@ export class ToolRegistry {
       maxResultTokens?: number;
       /** Inject a mock PauseGate for tests. */
       confirmationGate?: PauseGate;
+      /** Session-scoped read-dedup state; forwarded to the tool fn's ctx. */
+      readDedup?: ReadDedupState;
     } = {},
   ): Promise<string> {
     const tool = this._tools.get(name);
@@ -181,19 +207,30 @@ export class ToolRegistry {
     }
     const rawFingerprint = rawFingerprintArgs(argumentsRaw);
     let args: Record<string, unknown>;
-    try {
-      args =
-        typeof argumentsRaw === "string"
-          ? argumentsRaw.trim()
-            ? (JSON.parse(argumentsRaw) ?? {})
-            : {}
-          : (argumentsRaw ?? {});
-    } catch (err) {
-      return this._noteMalformed(
-        name,
-        rawFingerprint,
-        `invalid tool arguments JSON: ${(err as Error).message}`,
-      );
+    if (typeof argumentsRaw === "string") {
+      const trimmed = argumentsRaw.trim();
+      if (!trimmed) {
+        args = {};
+      } else {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(trimmed);
+        } catch (strictErr) {
+          const loose = tryParseLoose(trimmed);
+          if (!loose || !isPlainObjectValue(loose.value)) {
+            return this._noteMalformed(
+              name,
+              rawFingerprint,
+              `invalid tool arguments JSON: ${(strictErr as Error).message}`,
+            );
+          }
+          parsed = loose.value;
+          if (loose.repaired) this._bumpRepair(name, "jsonrepair-fallback");
+        }
+        args = (parsed ?? {}) as Record<string, unknown>;
+      }
+    } else {
+      args = (argumentsRaw ?? {}) as Record<string, unknown>;
     }
 
     // Re-nest dot-notation args back to the original shape, but only when
@@ -206,15 +243,27 @@ export class ToolRegistry {
     }
     const fingerprint = fingerprintArgs(args);
 
-    const missing = tool.parameters ? missingRequiredParam(tool.parameters, args) : null;
-    if (missing) {
-      return this._noteMalformed(
-        name,
-        fingerprint,
-        `missing required parameter "${missing}". Retry with all required parameters filled.`,
-      );
+    // Autolink unwrap runs before validate: degenerate `[notes.md](http://notes.md)`
+    // is type=string so the walker wouldn't flag it, but it's still wrong.
+    const sweep = unwrapDegenerateAutolinks(args);
+    if (sweep.changed) {
+      for (let i = 0; i < sweep.unwrapped; i++) this._bumpRepair(name, "autolink-unwrapped");
     }
-    // Validation passed — this tool's malformed-args streak is broken.
+
+    if (tool.parameters && !tool.lenientArgs) {
+      let issues = validate(tool.parameters, args);
+      if (issues.length > 0) {
+        const repaired = this._tryRepair(name, tool.parameters, args, issues);
+        if (repaired) issues = validate(tool.parameters, args);
+      }
+      if (issues.length > 0) {
+        return this._noteMalformed(
+          name,
+          fingerprint,
+          `argument validation failed:\n${formatIssues(issues)}\nFix the listed paths and retry.`,
+        );
+      }
+    }
     this._lastMalformed.delete(name);
 
     // Plan-mode enforcement — runs AFTER arg parsing so a tool with a
@@ -270,6 +319,8 @@ export class ToolRegistry {
       const result = await tool.fn(args, {
         signal: opts.signal,
         confirmationGate: opts.confirmationGate,
+        readDedup: opts.readDedup,
+        maxResultTokens: opts.maxResultTokens,
       });
       const str = typeof result === "string" ? result : JSON.stringify(result);
       // Pre-clip at dispatch so a single fat result can't balloon the
@@ -353,6 +404,50 @@ export class ToolRegistry {
     }
     return result;
   }
+
+  private _tryRepair(
+    name: string,
+    schema: JSONSchema,
+    args: Record<string, unknown>,
+    issues: import("./repair/schema-walk.js").Issue[],
+  ): boolean {
+    let touched = false;
+    // Iterate deepest-first so a sibling repair earlier in the same array
+    // doesn't shift indices the next issue's path is pointing at.
+    const ordered = [...issues].sort((a, b) => b.path.length - a.path.length);
+    for (const issue of ordered) {
+      for (const repair of SHAPE_REPAIRS) {
+        const r = repair(args, issue, (p) => isRequiredAt(schema, p));
+        if (r.changed) {
+          touched = true;
+          if (r.kind) this._bumpRepair(name, r.kind);
+          break;
+        }
+      }
+    }
+    return touched;
+  }
+
+  private _bumpRepair(name: string, kind: RepairKind): void {
+    let perTool = this._repairStats.get(name);
+    if (!perTool) {
+      perTool = new Map();
+      this._repairStats.set(name, perTool);
+    }
+    perTool.set(kind, (perTool.get(kind) ?? 0) + 1);
+  }
+
+  getRepairStats(): Record<string, Record<RepairKind, number>> {
+    const out: Record<string, Record<RepairKind, number>> = {};
+    for (const [tool, perTool] of this._repairStats) {
+      out[tool] = Object.fromEntries(perTool) as Record<RepairKind, number>;
+    }
+    return out;
+  }
+}
+
+function isPlainObjectValue(v: unknown): boolean {
+  return v !== null && typeof v === "object" && !Array.isArray(v);
 }
 
 function rejectedReason(name: string, result: string): string | null {
@@ -441,14 +536,4 @@ function sortJson(value: unknown): unknown {
     if (item !== undefined) out[key] = sortJson(item);
   }
   return out;
-}
-
-/** If the schema declares required params, return the first one that's missing. */
-function missingRequiredParam(schema: JSONSchema, args: Record<string, unknown>): string | null {
-  const required = schema.required;
-  if (!required || required.length === 0) return null;
-  for (const key of required) {
-    if (args[key] === undefined) return key;
-  }
-  return null;
 }

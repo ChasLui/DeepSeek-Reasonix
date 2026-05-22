@@ -1,4 +1,10 @@
-import { savePreset } from "@/config.js";
+import type { BudgetScope } from "@/budget/window.js";
+import {
+  clearBudgetWindows,
+  resolveBudgetWindows,
+  saveBudgetWindow,
+  savePreset,
+} from "@/config.js";
 import { t } from "@/i18n/index.js";
 import { PRESETS } from "../../presets.js";
 import type { SlashHandler } from "../dispatch.js";
@@ -30,7 +36,10 @@ const model: SlashHandler = (args, loop, ctx) => {
   }
   if (known && known.length > 0 && !known.includes(id)) {
     return {
-      info: t("handlers.model.modelNotInCatalog", { id, list: known.join(", ") }),
+      info: t("handlers.model.modelNotInCatalog", {
+        id,
+        list: known.join(", "),
+      }),
     };
   }
   return { info: t("handlers.model.modelSet", { id }) };
@@ -97,6 +106,72 @@ const pro: SlashHandler = (args, loop, ctx) => {
 
 const budget: SlashHandler = (args, loop) => {
   const arg = args[0]?.trim() ?? "";
+  if (arg === "window") {
+    const a1 = args[1]?.trim() ?? "";
+    if (a1 === "") {
+      const statuses = loop.budgetWindowStatuses();
+      if (statuses.length === 0) return { info: t("handlers.model.budgetWindowNone") };
+      return {
+        info: statuses
+          .map((s) =>
+            t("handlers.model.budgetWindowStatus", {
+              scope: s.scope,
+              period: s.period,
+              spent: s.spentUsd.toFixed(4),
+              cap: s.capUsd.toFixed(2),
+              remaining: s.remainingUsd.toFixed(4),
+            }),
+          )
+          .join("\n"),
+      };
+    }
+    // Bare `off` clears every window (both scopes).
+    if (a1 === "off" || a1 === "none" || a1 === "0") {
+      clearBudgetWindows();
+      loop.setBudgetWindows([]);
+      return { info: t("handlers.model.budgetWindowOff") };
+    }
+    // Optional scope token: `/budget window workspace daily 5` (default global).
+    let scope: BudgetScope = "global";
+    let periodIdx = 1;
+    if (a1 === "global" || a1 === "workspace") {
+      scope = a1;
+      periodIdx = 2;
+    }
+    const period = (args[periodIdx] ?? "").trim();
+    if (period !== "daily" && period !== "weekly" && period !== "monthly") {
+      return {
+        info: t("handlers.model.budgetWindowUsage", {
+          arg: args.slice(1).join(" "),
+        }),
+      };
+    }
+    const capArg = (args[periodIdx + 1] ?? "").trim();
+    if (capArg === "off" || capArg === "none" || capArg === "0") {
+      saveBudgetWindow(period, null, scope);
+      loop.setBudgetWindows(resolveBudgetWindows());
+      return { info: t("handlers.model.budgetWindowOff") };
+    }
+    const capUsd = Number(capArg.replace(/^\$/, ""));
+    if (!Number.isFinite(capUsd) || capUsd <= 0) {
+      return {
+        info: t("handlers.model.budgetWindowUsage", {
+          arg: args.slice(1).join(" "),
+        }),
+      };
+    }
+    saveBudgetWindow(period, capUsd, scope);
+    loop.setBudgetWindows(resolveBudgetWindows());
+    const set = loop.budgetWindowStatuses().find((s) => s.period === period && s.scope === scope);
+    return {
+      info: t("handlers.model.budgetWindowSet", {
+        scope,
+        period,
+        cap: capUsd.toFixed(2),
+        spent: (set?.spentUsd ?? 0).toFixed(4),
+      }),
+    };
+  }
   if (arg === "") {
     if (loop.budgetUsd === null) {
       return { info: t("handlers.model.budgetNoCap") };

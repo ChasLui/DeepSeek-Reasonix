@@ -1,6 +1,9 @@
 /** cwd pinned to root; non-allowlisted commands throw to a UI confirm gate; spawn is `shell: false`, tokenized argv only. */
 
 import * as pathMod from "node:path";
+import { registerDefaultCompactors } from "../compact/defaults.js";
+import { type CompactorRuntime, DEFAULT_RUNTIME, applyCompactor } from "../compact/registry.js";
+import { teeRawOutput } from "../compact/tee.js";
 import { addProjectShellAllowed } from "../config.js";
 import { pauseGate } from "../core/pause-gate.js";
 import type { ToolRegistry } from "../tools.js";
@@ -22,7 +25,10 @@ export {
   isDqEscape,
   tokenizeCommand,
 } from "./shell/parse.js";
-export type { ResolveExecutableOptions, RunCommandResult } from "./shell/exec.js";
+export type {
+  ResolveExecutableOptions,
+  RunCommandResult,
+} from "./shell/exec.js";
 export {
   injectPowerShellUtf8,
   killProcessTree,
@@ -47,7 +53,12 @@ export interface ShellToolsOptions {
   jobs?: JobRegistry;
   /** Fired after `run_background` / `stop_job` mutate the registry — used by the desktop popover for near-real-time updates without polling. */
   onJobsChanged?: () => void;
-  sensitivePaths?: { prefixes?: readonly string[]; patterns?: readonly string[] };
+  sensitivePaths?: {
+    prefixes?: readonly string[];
+    patterns?: readonly string[];
+  };
+  /** Per-command output compaction. Falls back to env-var-driven default when omitted. */
+  compactRuntime?: CompactorRuntime | (() => CompactorRuntime);
 }
 
 /** Error thrown by `run_command` when the command isn't allowlisted. */
@@ -67,6 +78,9 @@ export function registerShellTools(registry: ToolRegistry, opts: ShellToolsOptio
   const timeoutSec = opts.timeoutSec ?? DEFAULT_TIMEOUT_SEC;
   const maxOutputChars = opts.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS;
   const jobs = opts.jobs ?? new JobRegistry();
+  // Side-effect: register built-in Tier-1 compactors on first tool-registry init.
+  // Idempotent — every shell tool registration triggers it but duplicates are ignored.
+  registerDefaultCompactors();
   // Resolved on every dispatch so newly-persisted "always allow"
   // prefixes take effect inside the session that added them, not just
   // on the next launch. Static arrays are wrapped into a constant
@@ -83,6 +97,13 @@ export function registerShellTools(registry: ToolRegistry, opts: ShellToolsOptio
   // are wrapped into a thunk for uniformity.
   const isAllowAll: () => boolean =
     typeof opts.allowAll === "function" ? opts.allowAll : () => opts.allowAll === true;
+  // CompactorRuntime resolution: function getter > static config > env-derived default.
+  const getCompactRuntime: () => CompactorRuntime =
+    typeof opts.compactRuntime === "function"
+      ? opts.compactRuntime
+      : opts.compactRuntime
+        ? () => opts.compactRuntime as CompactorRuntime
+        : () => envCompactRuntime();
 
   registry.register({
     name: "run_command",
@@ -142,7 +163,7 @@ export function registerShellTools(registry: ToolRegistry, opts: ShellToolsOptio
         maxOutputChars,
         signal: ctx?.signal,
       });
-      return formatCommandResult(cmd, result);
+      return await formatCommandResultWithCompact(cmd, result, getCompactRuntime());
     },
   });
 
@@ -164,7 +185,7 @@ export function registerShellTools(registry: ToolRegistry, opts: ShellToolsOptio
             "Working directory for the spawn. Workspace-relative or absolute. Defaults to the workspace root. Must resolve inside the workspace — paths escaping the root are rejected.",
         },
         waitSec: {
-          type: "integer",
+          type: "number",
           description:
             "Max seconds to wait for startup before returning. 0..30, default 3. A ready-signal match short-circuits this.",
         },
@@ -214,7 +235,10 @@ export function registerShellTools(registry: ToolRegistry, opts: ShellToolsOptio
     parameters: {
       type: "object",
       properties: {
-        jobId: { type: "integer", description: "Job id returned by run_background." },
+        jobId: {
+          type: "integer",
+          description: "Job id returned by run_background.",
+        },
         since: {
           type: "integer",
           description:
@@ -247,7 +271,10 @@ export function registerShellTools(registry: ToolRegistry, opts: ShellToolsOptio
     parameters: {
       type: "object",
       properties: {
-        jobId: { type: "integer", description: "Job id returned by run_background." },
+        jobId: {
+          type: "integer",
+          description: "Job id returned by run_background.",
+        },
         timeoutMs: {
           type: "integer",
           description:
@@ -387,4 +414,49 @@ export function formatCommandResult(cmd: string, r: RunCommandResult): string {
     ? `$ ${cmd}\n[killed after timeout]`
     : `$ ${cmd}\n[exit ${r.exitCode ?? "?"}]`;
   return r.output ? `${header}\n${r.output}` : header;
+}
+
+/** Env-driven default runtime — flipping REASONIX_COMPACT=0 disables the layer mid-session. */
+function envCompactRuntime(): CompactorRuntime {
+  const flag = process.env.REASONIX_COMPACT;
+  if (flag === "0" || flag === "false") {
+    return { enabled: false, exclude: new Set() };
+  }
+  const excludeRaw = process.env.REASONIX_COMPACT_EXCLUDE;
+  const exclude = excludeRaw
+    ? new Set(
+        excludeRaw
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      )
+    : DEFAULT_RUNTIME.exclude;
+  return { enabled: true, exclude };
+}
+
+/** Apply compactor + tee, then render the standard header + body. */
+export async function formatCommandResultWithCompact(
+  cmd: string,
+  r: RunCommandResult,
+  runtime: CompactorRuntime,
+): Promise<string> {
+  const header = r.timedOut
+    ? `$ ${cmd}\n[killed after timeout]`
+    : `$ ${cmd}\n[exit ${r.exitCode ?? "?"}]`;
+  if (!r.output) return header;
+  const compaction = applyCompactor(cmd, r.output, {
+    exitCode: r.exitCode,
+    timedOut: r.timedOut,
+    runtime,
+  });
+  const wasCompacted = compaction.filter !== "passthrough" && compaction.filter !== "disabled";
+  const wasTruncated = typeof r.rawOutput === "string";
+  let teePath: string | null = null;
+  if (wasCompacted || wasTruncated) {
+    const rawForTee = r.rawOutput ?? r.output;
+    teePath = await teeRawOutput(cmd, rawForTee);
+  }
+  let body = compaction.compact;
+  if (teePath) body = `${body}\n[full: ${teePath}]`;
+  return `${header}\n${body}`;
 }

@@ -90,7 +90,10 @@ export const EN: TranslationSchema = {
               key: "Shift+Tab",
               text: "switch review ↔ AUTO (persisted; AUTO applies instantly)",
             },
-            { key: "u", text: "undo the last auto-applied batch (within the 5s banner)" },
+            {
+              key: "u",
+              text: "undo the last auto-applied batch (within the 5s banner)",
+            },
           ],
         },
       ],
@@ -101,17 +104,26 @@ export const EN: TranslationSchema = {
       sections: [
         {
           rows: [
-            { key: "drag", text: "select text — terminal-native, no modifier needed" },
+            {
+              key: "drag",
+              text: "select text — terminal-native, no modifier needed",
+            },
             {
               key: "right-click",
               text: "your terminal's native menu (paste / copy on Windows Terminal etc.)",
             },
-            { key: "wheel", text: "scrolls chat history (works on web/cloud/SSH terminals too)" },
+            {
+              key: "wheel",
+              text: "scrolls chat history (works on web/cloud/SSH terminals too)",
+            },
             {
               key: "↑ / ↓",
               text: "prompt history (or per-line cursor in a multi-line draft) — Ctrl+P / Ctrl+N alias",
             },
-            { key: "PgUp / PgDn", text: "scroll chat history (mouse wheel routes here too)" },
+            {
+              key: "PgUp / PgDn",
+              text: "scroll chat history (mouse wheel routes here too)",
+            },
           ],
         },
       ],
@@ -130,14 +142,29 @@ export const EN: TranslationSchema = {
               text: "previous / next prompt history · cursor up / down in a multi-line draft",
             },
             { key: "Ctrl+P / Ctrl+N", text: "readline alias for ↑ / ↓" },
-            { key: "Ctrl+A / Ctrl+E", text: "jump to start / end of the current line" },
+            {
+              key: "Ctrl+A / Ctrl+E",
+              text: "jump to start / end of the current line",
+            },
             { key: "Ctrl+W", text: "delete the word before the cursor" },
             { key: "Ctrl+U", text: "clear the entire prompt buffer" },
-            { key: "Tab", text: "complete @-mention · drill folder · accept slash command" },
+            {
+              key: "Tab",
+              text: "complete @-mention · drill folder · accept slash command",
+            },
             { key: "Shift+Tab", text: "edit-gate: toggle review ↔ AUTO mode" },
-            { key: "Esc", text: "dismiss picker · abort the running model turn" },
-            { key: "Ctrl+C", text: "abort the running model turn (NOT copy — see clipboard)" },
-            { key: "PgUp / PgDn", text: "scroll chat history a page at a time" },
+            {
+              key: "Esc",
+              text: "dismiss picker · abort the running model turn",
+            },
+            {
+              key: "Ctrl+C",
+              text: "abort the running model turn (NOT copy — see clipboard)",
+            },
+            {
+              key: "PgUp / PgDn",
+              text: "scroll chat history a page at a time",
+            },
             { key: "End", text: "jump chat to the most recent line" },
             {
               key: "Ctrl+R",
@@ -148,15 +175,27 @@ export const EN: TranslationSchema = {
         {
           title: "mouse",
           rows: [
-            { key: "wheel", text: "scrolls chat history (works on web/cloud/SSH terminals too)" },
-            { key: "drag", text: "selects text natively — direct copy works, no modifier" },
-            { key: "right-click", text: "terminal-native (paste menu on Windows Terminal etc.)" },
+            {
+              key: "wheel",
+              text: "scrolls chat history (works on web/cloud/SSH terminals too)",
+            },
+            {
+              key: "drag",
+              text: "selects text natively — direct copy works, no modifier",
+            },
+            {
+              key: "right-click",
+              text: "terminal-native (paste menu on Windows Terminal etc.)",
+            },
           ],
         },
         {
           title: "copy / paste",
           rows: [
-            { key: "select text", text: "drag to select — terminal-native (no modifier needed)" },
+            {
+              key: "select text",
+              text: "drag to select — terminal-native (no modifier needed)",
+            },
             {
               key: "/copy",
               text: "vim/tmux-style copy mode — works in SSH/mosh/tmux where drag-select can't extend past the viewport",
@@ -165,7 +204,10 @@ export const EN: TranslationSchema = {
               key: "copy",
               text: "Ctrl+Shift+C (Win/Linux) · Cmd+C (macOS) — or auto-copy-on-select if your terminal does it",
             },
-            { key: "paste", text: "Ctrl+V or Ctrl+Shift+V (Win/Linux) · Cmd+V (macOS)" },
+            {
+              key: "paste",
+              text: "Ctrl+V or Ctrl+Shift+V (Win/Linux) · Cmd+V (macOS)",
+            },
             {
               key: "bracketed paste",
               text: "multi-line pastes stay one block — no auto-submit on intermediate newlines",
@@ -175,9 +217,18 @@ export const EN: TranslationSchema = {
         {
           title: "edit-gate (code mode)",
           rows: [
-            { key: "y / n", text: "accept or drop pending edits in the review modal" },
-            { key: "Shift+Tab", text: "toggle review ↔ AUTO (persisted across sessions)" },
-            { key: "u", text: "undo the last auto-applied batch (within the 5s banner)" },
+            {
+              key: "y / n",
+              text: "accept or drop pending edits in the review modal",
+            },
+            {
+              key: "Shift+Tab",
+              text: "toggle review ↔ AUTO (persisted across sessions)",
+            },
+            {
+              key: "u",
+              text: "undo the last auto-applied batch (within the 5s banner)",
+            },
           ],
         },
       ],
@@ -264,7 +315,9 @@ export const EN: TranslationSchema = {
       argsHint: "<auto|flash|pro>",
     },
     model: { description: "switch DeepSeek model id", argsHint: "<id>" },
-    models: { description: "list available models fetched from DeepSeek /models" },
+    models: {
+      description: "list available models fetched from DeepSeek /models",
+    },
     theme: {
       description: "show or persist the terminal theme preference. Bare opens picker.",
       argsHint: "[auto|default|dark|light|tokyo-night|github-dark|github-light|high-contrast]",
@@ -314,7 +367,9 @@ export const EN: TranslationSchema = {
       description: "launch the embedded web dashboard (127.0.0.1, token-gated)",
       argsHint: "[stop]",
     },
-    update: { description: "show current vs latest version + the shell command to upgrade" },
+    update: {
+      description: "show current vs latest version + the shell command to upgrade",
+    },
     stats: {
       description:
         "cross-session cost dashboard (today / week / month / all-time · cache hit · vs Claude)",
@@ -324,9 +379,15 @@ export const EN: TranslationSchema = {
         "bare → last turn's spend (Usage card); with text → estimate cost of sending it next (worst-case + likely-cache)",
       argsHint: "[text]",
     },
-    doctor: { description: "health check (api / config / api-reach / index / hooks / project)" },
-    context: { description: "show context-window breakdown (system / tools / log / input)" },
-    retry: { description: "truncate & resend your last message (fresh sample)" },
+    doctor: {
+      description: "health check (api / config / api-reach / index / hooks / project)",
+    },
+    context: {
+      description: "show context-window breakdown (system / tools / log / input)",
+    },
+    retry: {
+      description: "truncate & resend your last message (fresh sample)",
+    },
     compact: {
       description:
         "narrow oversized tool results + tool-call args in the log; cap at tokens, default 4000",
@@ -337,16 +398,24 @@ export const EN: TranslationSchema = {
         "switch the workspace root mid-session — re-points fs / shell / memory tools, reloads project hooks, refreshes the at-mention walker",
       argsHint: "[path]",
     },
-    stop: { description: "abort the current model turn (typed alternative to Esc)" },
-    feedback: { description: "open a GitHub issue with diagnostic info copied to clipboard" },
+    stop: {
+      description: "abort the current model turn (typed alternative to Esc)",
+    },
+    feedback: {
+      description: "open a GitHub issue with diagnostic info copied to clipboard",
+    },
     keys: { description: "keyboard + mouse + copy/paste reference" },
-    plans: { description: "list this session's active + archived plans, newest first" },
+    plans: {
+      description: "list this session's active + archived plans, newest first",
+    },
     replay: {
       description: "load an archived plan as a read-only Time Travel snapshot (default: newest)",
       argsHint: "[N]",
     },
     sessions: { description: "list saved sessions (current marked with ▸)" },
-    title: { description: "ask the model to rename this session from the conversation" },
+    title: {
+      description: "ask the model to rename this session from the conversation",
+    },
     qq: {
       description:
         "connect, inspect, or disconnect the QQ channel for this session (first connect guides App ID / App Secret setup)",
@@ -357,7 +426,9 @@ export const EN: TranslationSchema = {
       description: "show semantic_search status — built? Ollama installed? how to enable",
     },
     clear: { description: "clear visible scrollback only (log/context kept)" },
-    new: { description: "start a fresh conversation (clear context + scrollback)" },
+    new: {
+      description: "start a fresh conversation (clear context + scrollback)",
+    },
     loop: {
       description:
         "auto-resubmit <prompt> every <interval> until you type something / Esc / /loop stop",
@@ -383,12 +454,17 @@ export const EN: TranslationSchema = {
         "step through pending edits one block at a time (git-add-p style: y/n per block, a apply rest, A flip AUTO)",
     },
     undo: { description: "roll back the last applied edit batch" },
-    history: { description: "list every edit batch this session (ids for /show, undone markers)" },
+    history: {
+      description: "list every edit batch this session (ids for /show, undone markers)",
+    },
     show: {
       description: "dump a stored edit diff (omit id for newest non-undone)",
       argsHint: "[id]",
     },
-    commit: { description: "git add -A && git commit -m ...", argsHint: '"msg"' },
+    commit: {
+      description: "git add -A && git commit -m ...",
+      argsHint: '"msg"',
+    },
     checkpoint: {
       description:
         "snapshot every file the session has touched (Cursor-style internal store, not git). /checkpoint alone lists.",
@@ -647,6 +723,10 @@ export const EN: TranslationSchema = {
     budgetExhausted:
       "session budget exhausted — spent ${spent} ≥ cap ${cap}. Bump the cap with /budget <usd>, clear it with /budget off, or end the session.",
     budget80Pct: "▲ budget 80% used — ${spent} of ${cap}. Next turn or two likely trips the cap.",
+    windowBudgetExhausted:
+      "${scope} ${period} rolling budget exhausted — spent ${spent} ≥ cap ${cap} this window. Wait for spend to roll off the window, or raise the cap in config.json.",
+    windowBudget80Pct:
+      "▲ ${scope} ${period} rolling budget 80% used — ${spent} of ${cap} this window.",
     proArmed: "⇧ /pro armed — this turn runs on deepseek-v4-pro (one-shot · disarms after turn)",
     abortedAtIter:
       "aborted at iter {iter} — stopped without producing a summary (press ↑ + Enter or /retry to resume)",
@@ -942,6 +1022,15 @@ export const EN: TranslationSchema = {
         "▲ budget → ${cap} but already spent ${spent}. Next turn will be refused — bump the cap higher to keep going, or end the session.",
       budgetSet:
         "budget → ${cap}  (so far: ${spent} · warns at 80%, refuses next turn at 100% · /budget off to clear)",
+      budgetWindowNone:
+        "no rolling budget set — spend isn't capped across sessions. Set one with: /budget window <daily|weekly|monthly> <usd>   (e.g. /budget window daily 5; prefix 'workspace' to scope it to this project: /budget window workspace daily 5)",
+      budgetWindowStatus:
+        "${scope} ${period} rolling budget: ${spent} of ${cap} this window · ${remaining} left · /budget window off to clear",
+      budgetWindowOff: "rolling budget → off (cleared from config)",
+      budgetWindowUsage:
+        'usage: /budget window [global|workspace] <daily|weekly|monthly> <usd>   (got "{arg}" — period must be daily/weekly/monthly and cap a positive number)',
+      budgetWindowSet:
+        "rolling budget → ${scope} ${period} ${cap} (saved to config · spent this window: ${spent})",
     },
     permissions: {
       mutateCodeOnly:

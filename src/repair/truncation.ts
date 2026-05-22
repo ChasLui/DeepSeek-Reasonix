@@ -1,5 +1,7 @@
 /** Local-only repair (balance braces, close strings, fill nulls); continuation calls belong to the loop, which owns budgets. */
 
+import { tryParseLoose } from "./json-coerce.js";
+
 export interface TruncationRepairResult {
   repaired: string;
   changed: boolean;
@@ -91,6 +93,15 @@ export function repairTruncatedJson(input: string): TruncationRepairResult {
     JSON.parse(s);
     return { repaired: s, changed: s !== input, notes, fallback: false };
   } catch (err) {
+    // brace-balance pass produced something the strict parser still rejects.
+    // Hand it to jsonrepair before giving up — handles smart quotes, missing
+    // commas, half-escaped strings, fenced blocks, etc.
+    const loose = tryParseLoose(s);
+    if (loose && loose.value !== undefined) {
+      const repaired = JSON.stringify(loose.value);
+      notes.push("jsonrepair recovered residual after brace-balance");
+      return { repaired, changed: repaired !== input, notes, fallback: false };
+    }
     const preview =
       input.length <= 500 ? input : `${input.slice(0, 500)} …[+${input.length - 500} chars]`;
     notes.push(`fallback to {}: ${(err as Error).message}`);

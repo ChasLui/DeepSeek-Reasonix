@@ -1,6 +1,7 @@
 /** Built-in subagent personas — system prompt + iter budget pairs picked via the `type` arg. Skills override at the run_skill level; this is the inline shortcut for parents that don't want to author one. */
 
 import { NEGATIVE_CLAIM_RULE, TUI_FORMATTING_RULES } from "../prompt-fragments.js";
+import { nullPrototype } from "../utils/safe-object.js";
 
 export type SubagentTypeName = "explore" | "verify";
 
@@ -41,10 +42,10 @@ ${NEGATIVE_CLAIM_RULE}
 
 ${TUI_FORMATTING_RULES}`;
 
-const TYPES: Record<SubagentTypeName, SubagentTypeSpec> = {
+const TYPES: Record<SubagentTypeName, SubagentTypeSpec> = nullPrototype({
   explore: { system: EXPLORE_SYSTEM },
   verify: { system: VERIFY_SYSTEM },
-};
+});
 
 export const SUBAGENT_TYPE_NAMES: readonly SubagentTypeName[] = Object.freeze(
   Object.keys(TYPES) as SubagentTypeName[],

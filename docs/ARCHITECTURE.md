@@ -73,8 +73,15 @@ opt in only when the server explicitly declares parallel safety.
 - Arguments dropped when schema has >10 params or deeply nested objects.
 - Same tool called repeatedly with identical args (call-storm).
 - Truncated JSON due to `max_tokens` hit mid-structure.
+- Args shape close-but-wrong: `null` for optional fields, stringified arrays
+  (`"[\"a\"]"`), `{}` placeholders where arrays expected, bare strings where
+  arrays expected, container-CWD `/root/<file>` paths, post-training
+  markdown auto-links leaking into path fields (`[notes.md](http://notes.md)`).
 
-**Solution.** Four passes:
+**Solution.** Repair runs in two layers:
+
+**Layer A — call-level pipeline** (`src/repair/index.ts`, runs on every
+assistant turn):
 
 1. **`flatten`** — schemas with >10 leaf params or depth >2 are auto-detected
    on `ToolRegistry.register()` and presented to the model in dot-notation
@@ -83,8 +90,77 @@ opt in only when the server explicitly declares parallel safety.
    call the model forgot to emit in `tool_calls`.
 3. **`truncation`** — detect unbalanced JSON and repair by closing braces or
    requesting a continuation completion.
-4. **`storm`** — identical `(tool, args)` tuple within a sliding window →
+4. **`path-normalize`** — strip leading `/root` from path-like args (DeepSeek
+   trains on container CWDs where the repo sits at `/root/<repo>`); rewrites
+   to project-relative.
+5. **`storm`** — identical `(tool, args)` tuple within a sliding window →
    suppress the call, inject a reflection turn.
+
+**Layer B — arg-shape repair at dispatch** (`src/repair/schema-walk.ts` +
+`src/repair/arg-shape.ts`, runs once per `tools.dispatch()` call):
+
+The inversion that matters: **validate-then-repair**, not preprocess-then-
+validate. A preprocessing pass encodes a prior about what's broken and risks
+silent corruption (e.g. mangling a `writeFile.content` that happens to look
+like a JSON array). The validator is allowed to complain first, then repair
+is spent only at the exact issue paths the schema disagreed at.
+
+Order:
+
+1. **Autolink unwrap** — degenerate `[X](http(s)://X)` collapses to `X` in
+   any string field. Real markdown links (`[click](https://example.com)`)
+   pass through because link-text ≠ URL host.
+2. **`validate(schema, args)` → `Issue[]`** — lightweight JSONSchema walker
+   (`required-missing` / `type-mismatch` / `array-expected`).
+3. For each issue (processed **deepest-first** to keep paths stable across
+   sibling mutations), apply `SHAPE_REPAIRS` in fixed order:
+   1. `stripNullOnOptional` — drop `null` at optional keys. **Refuses array
+      indices** — element drop changes batch semantics; leave to the tool.
+   2. `coerceNumericString` — `"50"` → `50` for `type: integer/number` fields.
+      Restores the lenient behavior tools used to fake in their `fn` bodies.
+   3. `parseStringifiedArray` — `'["a","b"]'` → `["a","b"]` when value
+      JSON-parses to an array. **Must precede** wrap-bare-string so
+      `'["a","b"]'` doesn't become `['["a","b"]']`.
+   4. `unwrapEmptyPlaceholderObject` — `{}` at an array field → `[]`.
+   5. `wrapBareString` — `"foo"` at an array field → `["foo"]`.
+4. Re-validate. Residual issues return a model-readable error listing each
+   `path: expected X, got Y` so the model can self-correct on the next turn.
+
+The walker covers JSONSchema `type` (string OR string-array), `required`,
+nested `properties` and `array.items`, plus `enum` membership. `oneOf` /
+`anyOf` / `allOf` are not modeled — host-side gate is best-effort.
+
+**Opt-out.** Tools with their own runtime sanitizer (`submit_plan`,
+`revise_plan`, `mark_step_complete`, `ask_choice`, `todo_write`,
+`spawn_subagent`) declare `lenientArgs: true` — their dispatch skips the
+gate so the tool's `fn` keeps authority over mixed-shape arrays and enum
+fallbacks. **Autolink sweep still runs** for path-like fields (see scoping
+below) — that's invariant-bearing and worth the tradeoff.
+
+**Autolink scope.** `unwrapDegenerateAutolinks` only touches strings whose
+direct key OR enclosing array's parent key is in `PATH_FIELD_NAMES`
+(`path` / `paths` / `source` / `destination` / `file_path` / `filepath` /
+`src` / `dst` / `target`). This prevents silent corruption of
+`write_file.content`, `submit_plan.plan`, and other free-text fields that
+might legitimately contain markdown links. The unwrap returns the
+whitespace-stripped link-text (not the raw matched text), so split-domain
+forms like `[src/fo o.ts](http://src/foo.ts)` resolve to `src/foo.ts`.
+
+**Telemetry.** `ToolRegistry.getRepairStats()` exposes
+`{ [toolName]: { [repairKind]: count } }`. `unregister(name)` and
+`resetRepairStats([name])` clear it — important for long-lived registries
+with MCP hot-add/hot-remove.
+
+**Lenient JSON fallback (`jsonrepair`).** Every strict `JSON.parse` failure
+in the repair pillar is wrapped with `tryParseLoose` (`src/repair/json-coerce.ts`):
+strict first, then `jsonrepair` (ISC), then strict parse again. Single-quoted
+objects, Python `True/False/None`, trailing commas, smart quotes, fenced
+```json``` blocks, and truncated JSON all become recoverable. Failure
+boundaries that benefit: `tools.dispatch()` arg parse, `scavenge`,
+`parseStringifiedArray`, `truncation` residual. Each rescue is counted as
+`jsonrepair-fallback` so its hit rate is observable. The dispatch path
+additionally guards `isPlainObjectValue` — jsonrepair is permissive enough
+to coerce bare text into a JSON string, which isn't a valid tool-args shape.
 
 ### Pillar 3 — Cost Control *(v0.6)*
 
@@ -141,11 +217,100 @@ start.
 
 Header shows a red `⇧ pro escalated` pill while the turn is on pro.
 
+#### 4.5 Read-dedup
+
+When the model re-reads a file it already read this session, `read_file`
+returns a one-line stub (`unchanged since an earlier read … content is
+still above`) instead of re-dumping the body — saving the re-dump tokens.
+The stub fires only when three conditions hold, so it never points the
+model at content that isn't there:
+
+1. **Same emitted view + same content.** The dedup key binds to the file's
+   `dev:ino` plus the resolved view (range / head / tail / full / outline /
+   aggressive). Freshness is judged by `sha256` of the bytes read on the
+   same fd that would be emitted — not mtime, which a same-size edit or a
+   restored timestamp can defeat.
+2. **Prior output still in the active log.** This is the interaction with
+   §4.2: once a read's output is shrunk by turn-end compaction or dropped
+   by a history fold, the stub would be lying, so the entry is invalidated
+   (the loop calls into the dedup state on every `compactInPlace`). Large
+   reads that won't survive dispatch truncation are never recorded.
+3. **Not forced / not disabled.** `read_file force:true` always re-dumps;
+   `REASONIX_DEDUP=0` or `config.filesystem.dedupEnabled:false` disables
+   the layer entirely.
+
+State is owned per-`CacheFirstLoop`, so ACP sessions, desktop tabs, and
+subagents never share read history. Concurrent identical reads in one
+parallel chunk claim in declared order and all dump in full, keeping
+output byte-identical across replays (Pillar 1).
+
 #### Cost transparency
 
 Per-turn and session cost are colored in the StatsPanel:
 - `turn $0.003` — green <$0.05, yellow $0.05–0.20, red ≥$0.20
 - `session $0.12` — same scale ×10
+
+### Pillar 4 — Output Compaction *(v0.48)*
+
+`rtk`-inspired per-command output filter that sits between `runCommand` and the
+model's tool-result channel. The model rarely needs the byte-exact output of
+`git status` or a passing `npm test` — what it needs is the **shape** (how many
+files changed, which tests failed, where the lint errors cluster). Pillar 4
+swaps the byte-blob for a structured summary and tees the original to disk
+under `~/.local/share/reasonix/tee/<ts>_<slug>.log`, surfacing the path as
+`[full: …]` so the model can `read_file` it on demand.
+
+**Filter registry (`src/compact/registry.ts`).** Stateless dispatch — each
+filter declares an `argv → bool` matcher and a `(input) → string|null` reducer.
+First-match wins; returning `null` is passthrough; throwing is logged to
+stderr, counted as `fallback`, and the model gets the untouched raw — silent
+masking is explicitly avoided. Idempotent registration means
+`registerShellTools` can re-register on every workspace switch without
+duplicate ids.
+
+**Tier-1 filters (high-frequency commands).**
+
+| id | input shape | output shape | typical reduction |
+|----|-------------|--------------|-------------------|
+| `git-status` | porcelain or verbose status | `M:3 A:1 ?:2` + file list | 70-90% |
+| `git-log` | full / oneline | `<sha> <subject>` per commit | 60-85% |
+| `git-diff` | unified diff | hunks + folded unchanged blocks | 50-80% |
+| `vitest` / `jest` | runner output | failures-only with stack | 90-99% on pass, 70% on fail |
+| `pytest` | session output | failures section only | 85-95% |
+| `cargo-test` / `go-test` | runner output | failures-only | 85-95% |
+| `eslint` / `biome` / `tsc` | diagnostics | grouped by file + top rules | 60-85% |
+| `ls` / `tree` / `find` | listings | extension counts + truncated head | 60-80% |
+
+Below ~50 lines listings pass through unchanged — compaction overhead isn't
+worth saving 5 tokens.
+
+**Tee + retention.** `src/compact/tee.ts` writes the raw blob (capped at 5 MB
+with a truncation marker) and FIFO-prunes the directory at 100 files.
+`REASONIX_TEE=0` disables persistence; `REASONIX_TEE=<dir>` overrides the
+location (used in tests). Path resolution falls back to `tmpdir()` when home
+isn't writable.
+
+**Truncation tee-back.** The 32 KB byte cap inside `runCommand` previously
+dropped the tail outright. With Pillar 4 it preserves the full pre-truncation
+buffer in `RunCommandResult.rawOutput`, which the dispatch layer tees. The
+truncation marker now ends with `[full: <path>]` so the model can recover
+the bytes it actually needed.
+
+**Read-side: aggressive mode.** `read_file` accepts `level: "aggressive"` for
+.ts/.tsx/.js/.jsx/.mjs/.cjs/.py/.go/.rs — regex-based body stripper that
+collapses functions/classes to `{ … }` (or `: ...` in Python) while keeping
+signature lines and a stable line count. Best-effort, never AST. Trailing
+hint tells the model how to re-read with `level=minimal`.
+
+**Kill switches.** `REASONIX_COMPACT=0` bypasses the entire layer (returns
+raw byte-for-byte). `REASONIX_COMPACT_EXCLUDE=git,tree` skips named
+`argv[0]` heads. `config.json` has `compact: { enabled, exclude, tee }`
+mirrors. Filter throws are silently swallowed → raw output, ensuring the
+layer can never break a turn.
+
+**Telemetry.** `getCompactionStats()` returns a `Map<filterId, { hits, savedBytes }>`
+populated on every successful compact call. `fallback` is its own id, so a
+misbehaving filter is observable without crashing the loop.
 
 ## Module layout
 
@@ -162,6 +327,11 @@ src/
 ├── prompt-fragments.ts     # TUI_FORMATTING_RULES, NEGATIVE_CLAIM_RULE —
 │                           #   reused by main + subagent + skill prompts
 ├── code/prompt.ts          # reasonix code main system prompt
+├── compact/                # Pillar 4 — per-command output filter + tee
+│   ├── registry.ts         # registerCompactor / applyCompactor + stats
+│   ├── defaults.ts         # one-shot Tier-1 registration
+│   ├── tee.ts              # raw-output FIFO snapshot store
+│   └── filters/            # git, test-runner, linter, listing (ANSI via npm strip-ansi)
 ├── tools/                  # Tool implementations
 │   ├── filesystem.ts       # read / list / search / edit / write
 │   ├── shell.ts            # run_command + run_background (JobRegistry)

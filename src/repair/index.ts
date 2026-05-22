@@ -1,6 +1,7 @@
-/** Pass order: scavenge → truncation → storm. Schema flatten runs at loop construction, not per-turn. */
+/** Pass order: scavenge → truncation → path-normalize → storm. Schema flatten runs at loop construction, not per-turn. */
 
 import type { ToolCall } from "../types.js";
+import { normalizeContainerPaths } from "./path-normalize.js";
 import { scavengeToolCalls } from "./scavenge.js";
 import { type IsMutating, type IsStormExempt, StormBreaker } from "./storm.js";
 import { repairTruncatedJson } from "./truncation.js";
@@ -11,11 +12,14 @@ export { repairTruncatedJson } from "./truncation.js";
 export type { TruncationRepairResult } from "./truncation.js";
 export { scavengeToolCalls } from "./scavenge.js";
 export type { ScavengeOptions, ScavengeResult } from "./scavenge.js";
+export { normalizeContainerPaths } from "./path-normalize.js";
+export type { PathNormalizeResult } from "./path-normalize.js";
 export { StormBreaker } from "./storm.js";
 
 export interface RepairReport {
   scavenged: number;
   truncationsFixed: number;
+  pathsNormalized: number;
   stormsBroken: number;
   notes: string[];
 }
@@ -58,6 +62,7 @@ export class ToolCallRepair {
     const report: RepairReport = {
       scavenged: 0,
       truncationsFixed: 0,
+      pathsNormalized: 0,
       stormsBroken: 0,
       notes: [],
     };
@@ -108,7 +113,16 @@ export class ToolCallRepair {
       }
     }
 
-    // 3. Storm breaker.
+    // 3. Path normalize — strip /root prefix from path args (DeepSeek container-CWD habit).
+    for (const call of merged) {
+      const r = normalizeContainerPaths(call);
+      if (r.changed) {
+        report.pathsNormalized++;
+        if (r.note) report.notes.push(r.note);
+      }
+    }
+
+    // 4. Storm breaker.
     const filtered: ToolCall[] = [];
     for (const call of merged) {
       const verdict = this.storm.inspect(call);

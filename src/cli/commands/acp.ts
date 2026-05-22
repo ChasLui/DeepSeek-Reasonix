@@ -30,6 +30,8 @@ import {
   loadReasoningEffort,
   normalizeMcpConfig,
   readConfig,
+  resolveBudgetWindows,
+  resolveSessionToolset,
 } from "../../config.js";
 import { loadEditMode } from "../../config.js";
 import { Eventizer } from "../../core/eventize.js";
@@ -43,6 +45,7 @@ import { preflightStdioSpec } from "../../mcp/preflight.js";
 import { bridgeMcpTools } from "../../mcp/registry.js";
 import { buildTransportFromSpec } from "../../mcp/transport-from-spec.js";
 import { timestampSuffix } from "../../memory/session.js";
+import { applySessionToolset } from "../../tools/toolset.js";
 import { openTranscriptFile, recordFromLoopEvent, writeRecord } from "../../transcript/log.js";
 import { VERSION } from "../../version.js";
 import { formatMcpLifecycleEvent } from "../ui/mcp-lifecycle.js";
@@ -159,18 +162,24 @@ async function buildSession(opts: {
   const toolset = await buildCodeToolset({ rootDir: opts.rootDir });
   // Bridge MCP tools BEFORE building the prefix so their specs make it into the cache key.
   const mcpClients = await loadMcpServers(toolset.tools, opts.mcpSpecs ?? [], opts.mcpPrefix);
+  applySessionToolset(toolset.tools, resolveSessionToolset());
   const system = codeSystemPrompt(opts.rootDir, {
     hasSemanticSearch: toolset.semantic.enabled,
     modelId: model,
   });
   const client = new DeepSeekClient({ baseUrl: loadBaseUrl() });
-  const prefix = new ImmutablePrefix({ system, toolSpecs: toolset.tools.specs() });
+  const prefix = new ImmutablePrefix({
+    system,
+    toolSpecs: toolset.tools.specs(),
+  });
   const loop = new CacheFirstLoop({
     client,
     prefix,
     tools: toolset.tools,
     model,
     budgetUsd: opts.budgetUsd,
+    budgetWindows: resolveBudgetWindows(),
+    workspace: opts.rootDir,
     session: `acp-${timestampSuffix()}`,
   });
   return {
@@ -232,13 +241,19 @@ export async function acpCommand(opts: AcpOptions): Promise<void> {
 
   server.onRequest<InitializeParams, InitializeResult>("initialize", (params) => {
     if (!params || typeof params !== "object") {
-      throw Object.assign(new Error("initialize: missing params"), { code: ERR_INVALID_PARAMS });
+      throw Object.assign(new Error("initialize: missing params"), {
+        code: ERR_INVALID_PARAMS,
+      });
     }
     return {
       protocolVersion: ACP_PROTOCOL_VERSION,
       agentCapabilities: {
         loadSession: false,
-        promptCapabilities: { image: false, audio: false, embeddedContext: true },
+        promptCapabilities: {
+          image: false,
+          audio: false,
+          embeddedContext: true,
+        },
         mcpCapabilities: { http: false, sse: false },
       },
       agentInfo: { name: "reasonix", title: "Reasonix", version: VERSION },
@@ -273,7 +288,9 @@ export async function acpCommand(opts: AcpOptions): Promise<void> {
     }
     const text = flattenPrompt(params.prompt as ContentBlock[]);
     if (!text) {
-      throw Object.assign(new Error("session/prompt: empty prompt"), { code: ERR_INVALID_PARAMS });
+      throw Object.assign(new Error("session/prompt: empty prompt"), {
+        code: ERR_INVALID_PARAMS,
+      });
     }
     session.aborter = new AbortController();
     let stopReason: StopReason = "end_turn";

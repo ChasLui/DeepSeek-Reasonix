@@ -49,7 +49,10 @@ export interface PlanToolOptions {
   onPlanSubmitted?: (plan: string, steps?: PlanStep[]) => void;
   onStepCompleted?: (update: StepCompletion) => void;
   onPlanRevisionProposed?: (reason: string, remainingSteps: PlanStep[], summary?: string) => void;
-  requireStepEvidence?: (args: { stepId: string; title?: string }) => string | null | undefined;
+  requireStepEvidence?: (args: {
+    stepId: string;
+    title?: string;
+  }) => string | null | undefined;
 }
 
 // Arg sanitizers — defensive cleanup shared between submit_plan and revise_plan
@@ -137,6 +140,7 @@ function registerSubmitPlan(registry: ToolRegistry, opts: PlanToolOptions): void
     name: "submit_plan",
     description: SUBMIT_PLAN_DESCRIPTION,
     readOnly: true,
+    lenientArgs: true,
     parameters: {
       type: "object",
       properties: {
@@ -189,6 +193,7 @@ function registerMarkStepComplete(registry: ToolRegistry, opts: PlanToolOptions)
     name: "mark_step_complete",
     description: MARK_STEP_COMPLETE_DESCRIPTION,
     readOnly: true,
+    lenientArgs: true,
     parameters: {
       type: "object",
       properties: {
@@ -214,7 +219,10 @@ function registerMarkStepComplete(registry: ToolRegistry, opts: PlanToolOptions)
           items: {
             type: "object",
             properties: {
-              kind: { type: "string", enum: ["verification", "diff", "checkpoint", "manual"] },
+              kind: {
+                type: "string",
+                enum: ["verification", "diff", "checkpoint", "manual"],
+              },
               summary: { type: "string" },
               command: { type: "string" },
               paths: { type: "array", items: { type: "string" } },
@@ -277,6 +285,7 @@ function registerRevisePlan(registry: ToolRegistry, opts: PlanToolOptions): void
     name: "revise_plan",
     description: REVISE_PLAN_DESCRIPTION,
     readOnly: true,
+    lenientArgs: true,
     parameters: {
       type: "object",
       properties: {

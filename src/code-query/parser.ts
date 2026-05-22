@@ -5,12 +5,13 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Language, Parser, type Tree } from "web-tree-sitter";
+import { nullPrototype } from "../utils/safe-object.js";
 
 const localRequire = createRequire(import.meta.url);
 
 export type GrammarName = "typescript" | "tsx" | "javascript" | "python" | "go" | "rust" | "java";
 
-const EXT_TO_GRAMMAR: Record<string, GrammarName> = {
+const EXT_TO_GRAMMAR: Record<string, GrammarName> = nullPrototype({
   ".ts": "typescript",
   ".mts": "typescript",
   ".cts": "typescript",
@@ -24,7 +25,7 @@ const EXT_TO_GRAMMAR: Record<string, GrammarName> = {
   ".go": "go",
   ".rs": "rust",
   ".java": "java",
-};
+});
 
 export interface ParserOptions {
   grammarDir?: string;
@@ -107,7 +108,7 @@ function resolveGrammarPath(grammar: GrammarName, overrideDir?: string): string 
   throw new Error(`tree-sitter grammar ${grammar} not found. Looked in: ${candidates.join(", ")}`);
 }
 
-const DEV_PACKAGE_FOR_GRAMMAR: Record<GrammarName, string[]> = {
+const DEV_PACKAGE_FOR_GRAMMAR: Record<GrammarName, string[]> = nullPrototype({
   typescript: ["tree-sitter-typescript"],
   tsx: ["tree-sitter-typescript"],
   javascript: ["tree-sitter-javascript"],
@@ -115,4 +116,4 @@ const DEV_PACKAGE_FOR_GRAMMAR: Record<GrammarName, string[]> = {
   go: ["tree-sitter-go"],
   rust: ["tree-sitter-rust"],
   java: ["tree-sitter-java"],
-};
+});

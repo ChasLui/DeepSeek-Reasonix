@@ -28,7 +28,38 @@ describe("scavengeToolCalls", () => {
     const reasoning = `decide: {"tool_name": "search", "tool_args": {"q": "deepseek"}}`;
     const r = scavengeToolCalls(reasoning, { allowedNames: allowed });
     expect(r.calls[0]!.function.name).toBe("search");
-    expect(JSON.parse(r.calls[0]!.function.arguments)).toEqual({ q: "deepseek" });
+    expect(JSON.parse(r.calls[0]!.function.arguments)).toEqual({
+      q: "deepseek",
+    });
+  });
+
+  it("recovers a call with trailing comma via jsonrepair fallback", () => {
+    const reasoning = `plan: {"name": "search", "arguments": {"q": "ts",},}`;
+    const r = scavengeToolCalls(reasoning, { allowedNames: allowed });
+    expect(r.calls.length).toBe(1);
+    expect(r.calls[0]!.function.name).toBe("search");
+    expect(JSON.parse(r.calls[0]!.function.arguments)).toEqual({ q: "ts" });
+  });
+
+  it("recovers a call with Python True/False/None via jsonrepair fallback", () => {
+    const reasoning = `plan: {"name": "search", "arguments": {"q": "x", "deep": True, "filter": None}}`;
+    const r = scavengeToolCalls(reasoning, { allowedNames: allowed });
+    expect(r.calls.length).toBe(1);
+    expect(JSON.parse(r.calls[0]!.function.arguments)).toEqual({
+      q: "x",
+      deep: true,
+      filter: null,
+    });
+  });
+
+  it("recovers a call wrapped in smart quotes via jsonrepair fallback", () => {
+    const reasoning = "plan: {“name”: “search”, “arguments”: {“q”: “deepseek”}}";
+    const r = scavengeToolCalls(reasoning, { allowedNames: allowed });
+    expect(r.calls.length).toBe(1);
+    expect(r.calls[0]!.function.name).toBe("search");
+    expect(JSON.parse(r.calls[0]!.function.arguments)).toEqual({
+      q: "deepseek",
+    });
   });
 
   it("ignores tools not in the allowed set", () => {
@@ -41,7 +72,10 @@ describe("scavengeToolCalls", () => {
     const reasoning = Array.from({ length: 6 })
       .map(() => `{"name": "search", "arguments": {"q": "x"}}`)
       .join(" then ");
-    const r = scavengeToolCalls(reasoning, { allowedNames: allowed, maxCalls: 2 });
+    const r = scavengeToolCalls(reasoning, {
+      allowedNames: allowed,
+      maxCalls: 2,
+    });
     expect(r.calls.length).toBe(2);
   });
 
@@ -87,7 +121,9 @@ describe("scavengeToolCalls", () => {
       '<｜DSML｜invoke name="search"><｜DSML｜parameter name="q" string="false">not valid json</｜DSML｜parameter></｜DSML｜invoke>';
     const r = scavengeToolCalls(input, { allowedNames: dsmlAllowed });
     expect(r.calls.length).toBe(1);
-    expect(JSON.parse(r.calls[0]!.function.arguments)).toEqual({ q: "not valid json" });
+    expect(JSON.parse(r.calls[0]!.function.arguments)).toEqual({
+      q: "not valid json",
+    });
   });
 
   it("does not double-count: JSON args inside a DSML block don't become separate calls", () => {
