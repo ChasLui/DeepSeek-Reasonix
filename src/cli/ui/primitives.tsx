@@ -17,11 +17,15 @@ export function ChromeRule(): React.ReactElement {
   return <Text dimColor>{"─".repeat(w)}</Text>;
 }
 
-/** Compact decimal-K token formatter — `1234 → "1.2K"`, `131000 → "131K"`. Base-1000 matches DeepSeek's "1M context" / "128K" wording and the web dashboard's display, so the CLI bottom bar and the web bar agree on ctx capacity. */
+/** Compact decimal-K/M token formatter — `1234 → "1.2K"`, `131000 → "131K"`, `1_000_000 → "1M"`. Base-1000 matches DeepSeek's "1M context" / "128K" wording and the web dashboard's display, so the CLI bottom bar and the web bar agree on ctx capacity. */
 export function formatTokens(n: number): string {
   if (n < 1000) return String(n);
+  if (n >= 1_000_000) {
+    const m = n / 1_000_000;
+    return (m >= 100 ? `${m.toFixed(0)}M` : `${m.toFixed(1)}M`).replace(".0M", "M");
+  }
   const k = n / 1000;
-  return k >= 100 ? `${k.toFixed(0)}K` : `${k.toFixed(1)}K`;
+  return (k >= 100 ? `${k.toFixed(0)}K` : `${k.toFixed(1)}K`).replace(".0K", "K");
 }
 
 /**
