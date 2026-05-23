@@ -7,7 +7,7 @@ export type TurnInterruptOutcome =
   | "quit-armed"
   | "quit";
 
-export const CTRL_C_QUIT_WINDOW_MS = 5000;
+export const CTRL_C_QUIT_WINDOW_MS = 800;
 
 export interface TurnInterruptController {
   turnActiveRef: { readonly current: boolean };

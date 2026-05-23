@@ -669,7 +669,7 @@ export const EN: TranslationSchema = {
     flippedAutoSession: "▸ flipped to AUTO mode for the rest of the session (persisted)",
     flippedAutoWalk: "▸ flipped to AUTO mode — future edits will apply immediately. Walk exited.",
     dashboardStopped: "▸ dashboard stopped.",
-    ctrlCPressAgainToQuit: "▸ cancelled — press Ctrl+C again within 5s to quit",
+    ctrlCPressAgainToQuit: "▸ cancelled — press Ctrl+C again quickly to quit",
     notedMemory: "▸ noted ({scope}) — {verb} {path}",
     notedScopeProject: "project",
     notedScopeGlobal: "global",

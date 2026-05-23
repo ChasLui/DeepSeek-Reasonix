@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { handleTurnInterrupt } from "../src/cli/ui/turn-interrupt.js";
+import { CTRL_C_QUIT_WINDOW_MS, handleTurnInterrupt } from "../src/cli/ui/turn-interrupt.js";
 
 describe("handleTurnInterrupt", () => {
+  it("matches Claude Code's quick double-press window for quitting", () => {
+    expect(CTRL_C_QUIT_WINDOW_MS).toBe(800);
+  });
+
   it("aborts on the first Ctrl+C, then force-quits on the second (Ctrl+C twice to exit)", () => {
     const resetPendingModals = vi.fn();
     const stopLoop = vi.fn();
@@ -91,7 +95,7 @@ describe("handleTurnInterrupt", () => {
     expect(resetPendingModals).not.toHaveBeenCalled();
     expect(abort).not.toHaveBeenCalled();
 
-    now = 11_000;
+    now = 10_000 + CTRL_C_QUIT_WINDOW_MS;
     expect(
       handleTurnInterrupt("ctrl-c", {
         turnActiveRef: { current: false },
@@ -125,13 +129,13 @@ describe("handleTurnInterrupt", () => {
       clearIdleInput: vi.fn(() => false),
       notifyCtrlCQuitArmed,
       quitProcess,
-      now: () => 15_001,
+      now: () => 10_000 + CTRL_C_QUIT_WINDOW_MS + 1,
     });
 
     expect(outcome).toBe("quit-armed");
     expect(quitProcess).not.toHaveBeenCalled();
     expect(notifyCtrlCQuitArmed).toHaveBeenCalledTimes(1);
-    expect(ctrlCQuitArmedAt.current).toBe(15_001);
+    expect(ctrlCQuitArmedAt.current).toBe(10_000 + CTRL_C_QUIT_WINDOW_MS + 1);
   });
 
   it("stops an idle auto-loop on Esc without aborting the next turn", () => {

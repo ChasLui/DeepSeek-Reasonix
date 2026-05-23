@@ -605,7 +605,7 @@ export const zhCN: TranslationSchema = {
     flippedAutoSession: "▸ 已切换到 AUTO 模式（本会话剩余生效，已持久化）",
     flippedAutoWalk: "▸ 已切换到 AUTO 模式 — 后续编辑立即应用。浏览模式退出。",
     dashboardStopped: "▸ 仪表板已停止。",
-    ctrlCPressAgainToQuit: "▸ 已取消 — 5 秒内再按 Ctrl+C 退出",
+    ctrlCPressAgainToQuit: "▸ 已取消 — 快速再按 Ctrl+C 退出",
     notedMemory: "▸ 已记录（{scope}）— {verb} {path}",
     notedScopeProject: "项目",
     notedScopeGlobal: "全局",

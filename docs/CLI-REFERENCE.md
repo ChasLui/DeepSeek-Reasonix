@@ -154,7 +154,7 @@ Type `/` mid-chat to open the picker. Aliases shown in parentheses. Code-mode-on
 | `Tab` | Complete @-mention · drill folder · accept slash command |
 | `Shift+Tab` | Edit-gate: toggle review ↔ AUTO mode |
 | `Esc` | Dismiss picker · abort the running model turn |
-| `Ctrl+C` | Cancel current input / abort the running model turn; press again within 5s to quit (NOT copy — see clipboard) |
+| `Ctrl+C` | Cancel current input / abort the running model turn; press again quickly (~800ms) to quit (NOT copy — see clipboard) |
 | `PgUp` / `PgDn` | Scroll chat history a page at a time. While plan details are expanded, scroll the bounded detail window |
 | `End` | Jump chat to the most recent line |
 
