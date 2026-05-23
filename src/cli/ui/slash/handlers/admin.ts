@@ -18,11 +18,11 @@ import { renderDashboard } from "../../../commands/stats.js";
 import { MANUAL_UPDATE_COMMANDS, planUpdate } from "../../../commands/update.js";
 import type { SlashHandler } from "../dispatch.js";
 
-const doctor: SlashHandler = (_args, _loop, ctx) => {
+const doctor: SlashHandler = (_args, loop, ctx) => {
   const root = ctx.codeRoot ?? process.cwd();
   if (!ctx.postDoctor) return { info: t("handlers.admin.doctorNeedsTui") };
   void (async () => {
-    const checks = await runDoctorChecks(root);
+    const checks = await runDoctorChecks(root, { promptCacheStats: loop.cacheMonitor.stats() });
     ctx.postDoctor!(
       checks.map((c) => ({ label: c.label.trim(), level: c.level, detail: c.detail })),
     );
@@ -144,7 +144,7 @@ const stats: SlashHandler = (_args, loop) => {
     };
   }
   const agg = aggregateUsage(records);
-  return { info: renderDashboard(agg, path, loop.getCacheStats()) };
+  return { info: renderDashboard(agg, path, loop.getCacheStats(), loop.cacheMonitor.stats()) };
 };
 
 export const handlers: Record<string, SlashHandler> = {

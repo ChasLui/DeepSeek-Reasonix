@@ -340,6 +340,7 @@ export const zhCN: TranslationSchema = {
     stats: {
       description: "跨会话成本仪表板（今日 / 本周 / 本月 / 全部 · 缓存命中 · 与 Claude 对比）",
     },
+    cache: { description: "显示此会话的 prompt-cache 破坏历史" },
     cost: {
       description: "空 → 上一轮花费（使用卡片）；带文本 → 估算发送成本（最坏情况 + 可能缓存命中）",
       argsHint: "[text]",

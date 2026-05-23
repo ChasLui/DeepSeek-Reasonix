@@ -24,6 +24,7 @@ import { indexExists } from "../../index/semantic/builder.js";
 import { checkOllamaStatus } from "../../index/semantic/ollama-launcher.js";
 import { listSessions } from "../../memory/session.js";
 import { detectProxyUrl, matchesNoProxy, resolveNoProxy } from "../../net/proxy.js";
+import type { PromptCacheStats } from "../../observability/prompt-cache-monitor.js";
 import { readUsageSince } from "../../telemetry/usage.js";
 import { resolveDataPath } from "../../tokenizer.js";
 import { getVfsStats } from "../../tools/shell/vfs-lite.js";
@@ -42,10 +43,17 @@ export interface DoctorOptions {
   json?: boolean;
 }
 
+export interface DoctorRunOptions {
+  promptCacheStats?: PromptCacheStats;
+}
+
 type Level = DoctorLevel;
 type Check = DoctorCheck;
 
-export async function runDoctorChecks(projectRoot: string): Promise<DoctorCheck[]> {
+export async function runDoctorChecks(
+  projectRoot: string,
+  opts: DoctorRunOptions = {},
+): Promise<DoctorCheck[]> {
   // No descriptive names for the destructured slots — CodeQL's clear-text-logging
   // heuristic taints any variable name matching `*key*`/`*auth*`/`*cred*`/etc and
   // would trip on `apiKeyCheck`. The slots map 1:1 to the Promise.all array below.
@@ -71,6 +79,7 @@ export async function runDoctorChecks(projectRoot: string): Promise<DoctorCheck[
     r[7],
     checkVfsLite(),
     checkToolCache(),
+    checkPromptCache(opts.promptCacheStats),
     checkReadDedup(),
     checkCodeRelations(),
     checkToon(),
@@ -94,6 +103,39 @@ function checkToolCache(): Check {
     label: "cache        ",
     level: "ok",
     detail: `${fileState}; ${parseState}; ${webFetchState} (session-owned, in-memory)${debug}`,
+  };
+}
+
+function checkPromptCache(stats?: PromptCacheStats): Check {
+  if (stats && !stats.enabled) {
+    return {
+      id: "prompt-cache",
+      label: "prompt-cache ",
+      level: "ok",
+      detail: "disabled via REASONIX_PROMPT_CACHE_MONITOR=0",
+    };
+  }
+  if (process.env.REASONIX_PROMPT_CACHE_MONITOR === "0") {
+    return {
+      id: "prompt-cache",
+      label: "prompt-cache ",
+      level: "ok",
+      detail: "disabled via REASONIX_PROMPT_CACHE_MONITOR=0",
+    };
+  }
+  const diffState =
+    process.env.REASONIX_CACHE_BREAK_DIFF === "0"
+      ? "diff patches off via REASONIX_CACHE_BREAK_DIFF=0"
+      : "diff patches on";
+  const dir = process.env.REASONIX_CACHE_BREAK_DIFF_DIR ?? "~/.reasonix/tmp";
+  const sessionState = stats
+    ? `${(stats.hitRatio * 100).toFixed(1)}% hit · ${stats.breaks} breaks${stats.lastBreakReason ? ` · last: ${stats.lastBreakReason}` : ""}`
+    : "session-local stats unavailable in standalone doctor";
+  return {
+    id: "prompt-cache",
+    label: "prompt-cache ",
+    level: stats && stats.breaks > 0 ? "warn" : "ok",
+    detail: `${sessionState}; ${diffState}; dir=${dir}`,
   };
 }
 

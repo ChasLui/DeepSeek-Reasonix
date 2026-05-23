@@ -137,6 +137,30 @@ const status: SlashHandler = (_args, loop, ctx) => {
   return { info: lines.join("\n") };
 };
 
+const cache: SlashHandler = (_args, loop) => {
+  const stats = loop.cacheMonitor.stats();
+  if (!stats.enabled) return { info: "prompt-cache: disabled" };
+  const lines = [
+    `prompt-cache: ${(stats.hitRatio * 100).toFixed(1)}% hit · ${stats.breaks} breaks`,
+  ];
+  const reports = loop.cacheMonitor.getReport(5);
+  if (reports.length === 0) {
+    lines.push("no breaks recorded");
+    return { info: lines.join("\n") };
+  }
+  lines.push("", "| timestamp | reason | drop | patch |", "| --- | --- | ---: | --- |");
+  for (const report of reports) {
+    lines.push(
+      `| ${new Date(report.timestamp).toISOString()} | ${escapeCell(report.reason)} | ${report.dropTokens} | ${escapeCell(report.diffPatchPath ?? "")} |`,
+    );
+  }
+  return { info: lines.join("\n") };
+};
+
+function escapeCell(value: string): string {
+  return value.replaceAll("|", "\\|").replace(/\r?\n/g, " ");
+}
+
 function renderToolCacheStatusLine(loop: import("@/loop.js").CacheFirstLoop): string {
   const stats = loop.getCacheStats();
   const fileTotal = stats.fileCache.hits + stats.fileCache.misses;
@@ -317,6 +341,7 @@ const feedback: SlashHandler = (_args, loop, ctx) => {
 export const handlers: Record<string, SlashHandler> = {
   context,
   status,
+  cache,
   compact,
   cost,
   feedback,

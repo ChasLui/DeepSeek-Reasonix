@@ -1,11 +1,13 @@
-import { createHash } from "node:crypto";
 import type { ChatMessage, ToolSpec } from "../types.js";
+import { sha256Prefix } from "../utils/sha256.js";
 
 export interface ImmutablePrefixOptions {
   system: string;
   toolSpecs?: readonly ToolSpec[];
   fewShots?: readonly ChatMessage[];
 }
+
+export type EpochEvent = { type: "add"; name: string } | { type: "remove"; name: string };
 
 export class ImmutablePrefix {
   /** Stable across turns; rebuilt only on /new when REASONIX.md changed on disk. */
@@ -15,6 +17,7 @@ export class ImmutablePrefix {
   readonly fewShots: readonly ChatMessage[];
   /** Invalidated by addTool / removeTool / replaceSystem; bypassing any of those leaves cache stale → fingerprint diverges from sent prefix. */
   private _fingerprintCache: string | null = null;
+  private readonly _epochListeners = new Set<(evt: EpochEvent) => void>();
 
   constructor(opts: ImmutablePrefixOptions) {
     this.system = opts.system;
@@ -34,6 +37,13 @@ export class ImmutablePrefix {
     return this._toolSpecs;
   }
 
+  onEpoch(listener: (evt: EpochEvent) => void): () => void {
+    this._epochListeners.add(listener);
+    return () => {
+      this._epochListeners.delete(listener);
+    };
+  }
+
   toMessages(): ChatMessage[] {
     return [{ role: "system", content: this.system }, ...this.fewShots.map((m) => ({ ...m }))];
   }
@@ -48,6 +58,7 @@ export class ImmutablePrefix {
     if (this._toolSpecs.some((t) => t.function?.name === name)) return false;
     this._toolSpecs.push(spec);
     this._fingerprintCache = null;
+    this.emitEpoch({ type: "add", name });
     return true;
   }
 
@@ -57,6 +68,7 @@ export class ImmutablePrefix {
     if (idx < 0) return false;
     this._toolSpecs.splice(idx, 1);
     this._fingerprintCache = null;
+    this.emitEpoch({ type: "remove", name });
     return true;
   }
 
@@ -84,7 +96,19 @@ export class ImmutablePrefix {
       tools: this._toolSpecs,
       shots: this.fewShots,
     });
-    return createHash("sha256").update(blob).digest("hex").slice(0, 16);
+    return sha256Prefix(blob);
+  }
+
+  private emitEpoch(evt: EpochEvent): void {
+    const listeners = [...this._epochListeners];
+    for (const listener of listeners) {
+      if (!this._epochListeners.has(listener)) continue;
+      try {
+        listener(evt);
+      } catch (err) {
+        console.warn(`ImmutablePrefix epoch listener failed: ${String(err)}`);
+      }
+    }
   }
 }
 

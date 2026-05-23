@@ -371,6 +371,7 @@ describe("renderDashboard", () => {
     expect(out).toContain("month");
     expect(out).toContain("all-time");
     expect(out).toContain("cache hit");
+    expect(out).toContain("prompt-cache:");
     expect(out).toContain("tool cache:");
     expect(out).toContain("cache saved");
     expect(out).toContain("vs Claude");
@@ -428,6 +429,37 @@ describe("renderDashboard", () => {
     expect(out).toContain("subagent activity:");
     expect(out).toContain("explore");
     expect(out).toContain("2 run");
+  });
+
+  it("renders live prompt-cache break stats when supplied", () => {
+    const agg = aggregateUsage(
+      [
+        {
+          ts: 1_700_000_000_000,
+          session: "s",
+          model: "deepseek-chat",
+          promptTokens: 1000,
+          completionTokens: 10,
+          cacheHitTokens: 800,
+          cacheMissTokens: 200,
+          costUsd: 0.001,
+          claudeEquivUsd: 0.01,
+        },
+      ],
+      { now: 1_700_000_000_000 },
+    );
+
+    const out = renderDashboard(agg, "/tmp/fake.jsonl", undefined, {
+      enabled: true,
+      hitTokens: 800,
+      missTokens: 200,
+      hitRatio: 0.8,
+      breaks: 2,
+      lastBreakReason: "tools changed: alpha",
+    });
+
+    expect(out).toContain("prompt-cache:   80.0% hit · 2 breaks");
+    expect(out).toContain("last: tools changed: alpha");
   });
 
   it("groups subagent records without a skillName under (adhoc)", () => {

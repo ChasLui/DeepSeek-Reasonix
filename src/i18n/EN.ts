@@ -380,6 +380,9 @@ export const EN: TranslationSchema = {
       description:
         "cross-session cost dashboard (today / week / month / all-time · cache hit · vs Claude)",
     },
+    cache: {
+      description: "show prompt-cache break history for this session",
+    },
     cost: {
       description:
         "bare → last turn's spend (Usage card); with text → estimate cost of sending it next (worst-case + likely-cache)",

@@ -96,3 +96,4 @@ bun.lock
 .wolf/
 docs/plans/
 bin/plan-lint.sh
+tmp/

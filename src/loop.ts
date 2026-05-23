@@ -17,6 +17,8 @@ import {
   periodWindowDays,
 } from "./budget/window.js";
 import { FileReadCache } from "./cache/file-read.js";
+import { PromptFingerprint } from "./cache/prompt-fingerprint.js";
+import { ToolSchemaIndex } from "./cache/tool-schema.js";
 import { WebFetchCache } from "./cache/web-fetch.js";
 import { ParseTreeCache } from "./code-query/parser.js";
 import { ContextManager } from "./context-manager.js";
@@ -58,6 +60,7 @@ import {
   loadSessionMeta,
   rewriteSession,
 } from "./memory/session.js";
+import { PromptCacheMonitor } from "./observability/prompt-cache-monitor.js";
 import { type RepairReport, ToolCallRepair } from "./repair/index.js";
 import { SessionStats, type TurnStats } from "./telemetry/stats.js";
 import { defaultUsageLogPath, readUsageSince } from "./telemetry/usage.js";
@@ -134,6 +137,9 @@ export class CacheFirstLoop {
   readonly readDedup = new ReadDedupState();
   readonly fileCache = new FileReadCache();
   readonly parseCache = new ParseTreeCache();
+  readonly toolSchemaIndex = new ToolSchemaIndex();
+  readonly promptFingerprint = new PromptFingerprint(this.toolSchemaIndex);
+  readonly cacheMonitor = new PromptCacheMonitor();
   readonly webFetchCache = new WebFetchCache();
 
   // Mutable via configure() — slash commands in the TUI / library callers tweak
@@ -238,6 +244,12 @@ export class CacheFirstLoop {
 
     this._streamPreference = opts.stream ?? true;
     this.stream = this._streamPreference;
+    this.prefix.onEpoch((evt) => {
+      this.cacheMonitor.recordEpochEvent("prefix-mutation", {
+        added: evt.type === "add" ? [evt.name] : [],
+        removed: evt.type === "remove" ? [evt.name] : [],
+      });
+    });
 
     // Any compaction (fold / heal / shrink) replaces the active log, so the
     // exact prior read_file output a dedup stub points at may be gone. Drop
@@ -388,6 +400,8 @@ export class CacheFirstLoop {
         /* builder threw — keep prior system rather than crash /new */
       }
     }
+    this.cacheMonitor.resetBaseline();
+    this.cacheMonitor.recordEpochEvent("new");
     return { dropped, archived, systemRebuilt };
   }
 
@@ -417,6 +431,8 @@ export class CacheFirstLoop {
         /* builder threw — keep prior system rather than crash /cwd */
       }
     }
+    this.cacheMonitor.resetBaseline();
+    this.cacheMonitor.recordEpochEvent("cwd");
     return { dropped, archived };
   }
 
@@ -926,6 +942,7 @@ export class CacheFirstLoop {
       let toolCalls: ToolCall[] = [];
       let usage: TurnStats["usage"] | null = null;
 
+      this.cacheMonitor.recordBeforeCall(this.promptFingerprint.snapshot(this.prefix));
       try {
         if (this.stream) {
           const callBuf: Map<number, ToolCall> = new Map();
@@ -1137,6 +1154,8 @@ export class CacheFirstLoop {
         iter--;
         continue;
       }
+
+      this.cacheMonitor.recordAfterCall(usage, messages);
 
       // Attribute under the actual model used (escalated → pro, else
       // this.model) so cost/usage logs reflect reality.

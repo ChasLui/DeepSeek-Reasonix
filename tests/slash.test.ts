@@ -548,6 +548,7 @@ describe("handleSlash", () => {
       "language",
       "theme",
       "mcp",
+      "cache",
       "memory",
       "retry",
       "compact",
@@ -569,7 +570,7 @@ describe("handleSlash", () => {
     // Case-insensitive.
     expect(suggestSlashCommands("HE").map((s) => s.cmd)).toEqual(["help"]);
     // Empty prefix returns the full non-advanced release list, including code commands.
-    expect(suggestSlashCommands("", true)).toHaveLength(42);
+    expect(suggestSlashCommands("", true)).toHaveLength(43);
     expect(suggestSlashCommands("", true).map((s) => s.cmd)).toContain("logs");
     expect(suggestSlashCommands("", true).map((s) => s.cmd)).toContain("language");
     expect(suggestSlashCommands("lan").map((s) => s.cmd)).toContain("language");
@@ -635,6 +636,40 @@ describe("handleSlash", () => {
     it("is surfaced by suggestSlashCommands", () => {
       const names = suggestSlashCommands("sta").map((s) => s.cmd);
       expect(names).toContain("stats");
+    });
+  });
+
+  describe("/cache", () => {
+    it("shows an empty prompt-cache break history", () => {
+      const r = handleSlash("cache", [], makeLoop());
+      expect(r.info).toContain("prompt-cache:");
+      expect(r.info).toContain("no breaks recorded");
+    });
+
+    it("shows recent prompt-cache breaks", () => {
+      const loop = makeLoop();
+      process.env.REASONIX_CACHE_BREAK_DIFF = "0";
+      const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+      try {
+        loop.cacheMonitor.recordBeforeCall(loop.promptFingerprint.snapshot(loop.prefix));
+        loop.cacheMonitor.recordAfterCall({ hit: 10000 }, []);
+        loop.prefix.replaceSystem("changed");
+        loop.cacheMonitor.recordBeforeCall(loop.promptFingerprint.snapshot(loop.prefix));
+        loop.cacheMonitor.recordAfterCall({ hit: 5000 }, []);
+
+        const r = handleSlash("cache", [], loop);
+        expect(r.info).toContain("| timestamp | reason | drop | patch |");
+        expect(r.info).toContain("system changed");
+        expect(r.info).toContain("5000");
+      } finally {
+        stderr.mockRestore();
+        Reflect.deleteProperty(process.env, "REASONIX_CACHE_BREAK_DIFF");
+      }
+    });
+
+    it("is surfaced by suggestSlashCommands", () => {
+      const names = suggestSlashCommands("ca").map((s) => s.cmd);
+      expect(names).toContain("cache");
     });
   });
 

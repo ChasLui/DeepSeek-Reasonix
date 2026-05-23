@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { checkBudgetWindows } from "../../budget/window.js";
 import { resolveBudgetWindows } from "../../config.js";
 import { t } from "../../i18n/index.js";
+import type { PromptCacheStats } from "../../observability/prompt-cache-monitor.js";
 import {
   type UsageAggregate,
   type UsageBucket,
@@ -116,10 +117,12 @@ export function renderDashboard(
   agg: UsageAggregate,
   logPath: string,
   cacheStats?: DashboardCacheStats,
+  promptCacheStats?: PromptCacheStats,
 ): string {
   const lines: string[] = [];
   const size = formatLogSize(logPath);
   lines.push(`Reasonix usage — ${logPath}${size ? ` (${size})` : ""}`);
+  lines.push(renderPromptCacheLine(agg, promptCacheStats));
   lines.push(renderToolCacheLine(cacheStats));
   lines.push("");
   lines.push(header());
@@ -151,6 +154,15 @@ export function renderDashboard(
     lines.push(renderSubagentSection(agg.subagents));
   }
   return lines.join("\n");
+}
+
+function renderPromptCacheLine(agg: UsageAggregate, stats?: PromptCacheStats): string {
+  if (stats && !stats.enabled) return "prompt-cache:   disabled";
+  const all = agg.buckets[agg.buckets.length - 1];
+  const ratio = all ? bucketCacheHitRatio(all) : 0;
+  const breaks = stats?.breaks ?? 0;
+  const last = stats?.lastBreakReason ? ` · last: ${stats.lastBreakReason}` : "";
+  return `prompt-cache:   ${(ratio * 100).toFixed(1)}% hit · ${breaks} breaks${last}`;
 }
 
 function renderToolCacheLine(stats?: DashboardCacheStats): string {

@@ -4,7 +4,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type DoctorCheck, doctorCommand, formatDoctorJson } from "../src/cli/commands/doctor.js";
+import {
+  type DoctorCheck,
+  doctorCommand,
+  formatDoctorJson,
+  runDoctorChecks,
+} from "../src/cli/commands/doctor.js";
 import { VERSION } from "../src/version.js";
 
 describe("formatDoctorJson", () => {
@@ -90,6 +95,11 @@ describe("doctorCommand --json (integration)", () => {
       message: expect.stringContaining("enabled mode=all"),
     });
     expect(parsed.checks).toContainEqual({
+      id: "prompt-cache",
+      status: "ok",
+      message: expect.stringContaining("session-local stats unavailable"),
+    });
+    expect(parsed.checks).toContainEqual({
       id: "cache",
       status: "ok",
       message: expect.stringContaining("file-cache enabled; parse-cache enabled"),
@@ -112,5 +122,40 @@ describe("doctorCommand --json (integration)", () => {
     } else {
       expect(exitSpy).not.toHaveBeenCalled();
     }
+  });
+
+  it("reports live prompt-cache stats when a TUI loop supplies them", async () => {
+    const checks = await runDoctorChecks(tmpCwd, {
+      promptCacheStats: {
+        enabled: true,
+        hitTokens: 9000,
+        missTokens: 1000,
+        hitRatio: 0.9,
+        breaks: 1,
+        lastBreakReason: "system changed",
+      },
+    });
+
+    expect(checks.find((c) => c.id === "prompt-cache")).toMatchObject({
+      level: "warn",
+      detail: expect.stringContaining("90.0% hit · 1 breaks · last: system changed"),
+    });
+  });
+
+  it("reports prompt-cache disabled when the supplied monitor stats are disabled", async () => {
+    const checks = await runDoctorChecks(tmpCwd, {
+      promptCacheStats: {
+        enabled: false,
+        hitTokens: 0,
+        missTokens: 0,
+        hitRatio: 0,
+        breaks: 0,
+      },
+    });
+
+    expect(checks.find((c) => c.id === "prompt-cache")).toMatchObject({
+      level: "ok",
+      detail: "disabled via REASONIX_PROMPT_CACHE_MONITOR=0",
+    });
   });
 });
