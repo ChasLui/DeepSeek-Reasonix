@@ -259,6 +259,7 @@ export class MemoryStore {
     const content = `${formatFrontmatter(entry)}${body}\n`;
     writeFileSync(file, content, "utf8");
     this.regenerateIndex(input.scope);
+    this.markSearchIndexStale();
     return file;
   }
 
@@ -271,6 +272,7 @@ export class MemoryStore {
     if (!existsSync(file)) return false;
     unlinkSync(file);
     this.regenerateIndex(scope);
+    this.markSearchIndexStale();
     return true;
   }
 
@@ -304,6 +306,12 @@ export class MemoryStore {
       }
     }
     writeFileSync(indexPath, `${lines.join("\n")}\n`, "utf8");
+  }
+
+  private markSearchIndexStale(): void {
+    const root = join(this.homeDir, USER_MEMORY_DIR, ".index");
+    ensureDir(root);
+    writeFileSync(join(root, ".stale"), "true\n", "utf8");
   }
 }
 

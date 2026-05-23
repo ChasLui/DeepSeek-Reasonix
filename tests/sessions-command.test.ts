@@ -21,7 +21,7 @@ describe("sessions command", () => {
     if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
   });
 
-  it("prints identifying metadata for saved sessions", () => {
+  it("prints identifying metadata for saved sessions", async () => {
     appendSessionMessage("release-fix", { role: "user", content: "repair packaging" });
     patchSessionMeta("release-fix", {
       summary: "Fix release packaging after optional renderer dependency update",
@@ -33,7 +33,7 @@ describe("sessions command", () => {
       lines.push(args.map(String).join(" "));
     });
 
-    sessionsCommand({});
+    await sessionsCommand({});
 
     const output = lines.join("\n");
     expect(output).toContain("release-fix");

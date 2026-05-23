@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { type ResolvedEmbeddingConfig, resolveSemanticEmbeddingConfig } from "../../config.js";
 import { type ResolvedIndexConfig, defaultIndexConfig } from "../config.js";
+import { writeCodeLexicalIndex } from "../lexical/code.js";
 import { walkChunks } from "./chunker.js";
 import type { CodeChunk, SkipReason } from "./chunker.js";
 import { embed, embedAll, probeOllama } from "./embedding.js";
@@ -186,6 +187,8 @@ export async function buildIndex(root: string, opts: BuildOptions = {}): Promise
     chunksAdded += entries.length;
   }
 
+  throwIfAborted(opts.signal);
+  await writeCodeLexicalIndex(root, store.all);
   throwIfAborted(opts.signal);
   opts.onProgress?.({
     phase: "done",

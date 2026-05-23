@@ -373,6 +373,7 @@ describe("renderDashboard", () => {
     expect(out).toContain("cache hit");
     expect(out).toContain("prompt-cache:");
     expect(out).toContain("tool cache:");
+    expect(out).toContain("memory recall:");
     expect(out).toContain("cache saved");
     expect(out).toContain("vs Claude");
     expect(out).toContain("most used model:");
@@ -460,6 +461,32 @@ describe("renderDashboard", () => {
 
     expect(out).toContain("prompt-cache:   80.0% hit · 2 breaks");
     expect(out).toContain("last: tools changed: alpha");
+  });
+
+  it("renders memory recall and observation stats when supplied", () => {
+    const agg = aggregateUsage(
+      [
+        {
+          ts: 1_700_000_000_000,
+          session: "s",
+          model: "deepseek-chat",
+          promptTokens: 1000,
+          completionTokens: 10,
+          cacheHitTokens: 800,
+          cacheMissTokens: 200,
+          costUsd: 0.001,
+          claudeEquivUsd: 0.01,
+        },
+      ],
+      { now: 1_700_000_000_000 },
+    );
+
+    const out = renderDashboard(agg, "/tmp/fake.jsonl", undefined, undefined, {
+      hybridLlmTokens: 0,
+      observations24h: 3,
+    });
+
+    expect(out).toContain("memory recall:   hybrid llm tokens=0 · observations 24h=3");
   });
 
   it("groups subagent records without a skillName under (adhoc)", () => {

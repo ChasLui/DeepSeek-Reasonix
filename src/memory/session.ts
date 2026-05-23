@@ -1,6 +1,7 @@
 /** JSONL append-only message log under `~/.reasonix/sessions/`; concurrent-write safe. */
 
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   appendFileSync,
   chmodSync,
@@ -15,7 +16,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, posix as posixPath, win32 as win32Path } from "node:path";
+import { basename, dirname, join, posix as posixPath, win32 as win32Path } from "node:path";
 import type { ChatMessage } from "../types.js";
 
 const SESSION_SIDECAR_EXTS = [
@@ -68,6 +69,17 @@ export interface SessionMeta {
   lastPromptTokens?: number;
   /** True when the session filename/summary was generated from conversation content. */
   autoTitleGenerated?: boolean;
+  /** Import provenance for sessions copied from other tools. */
+  source?: "claude-code" | (string & {});
+}
+
+export interface ImportClaudeCodeSessionResult {
+  sessionId: string;
+  path: string;
+  added: number;
+  skipped: number;
+  duplicate: boolean;
+  reasons: Record<string, number>;
 }
 
 export function sessionsDir(): string {
@@ -159,6 +171,73 @@ export function loadSessionMessages(name: string): ChatMessage[] {
   return backup?.messages ?? live?.messages ?? [];
 }
 
+export function importClaudeCodeSession(file: string): ImportClaudeCodeSessionResult {
+  const stat = statSync(file);
+  if (!stat.isFile()) throw new Error(`not a file: ${file}`);
+  if (stat.size > 50 * 1024 * 1024) throw new Error(`session jsonl too large: ${file}`);
+
+  const raw = readFileSync(file, "utf8");
+  const messages: ChatMessage[] = [];
+  const reasons: Record<string, number> = Object.create(null) as Record<string, number>;
+  let sessionId: string | undefined;
+  let skipped = 0;
+
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      skipped += 1;
+      bump(reasons, "invalid_json");
+      continue;
+    }
+    sessionId ??= extractSessionId(parsed);
+    const normalized = normalizeClaudeMessage(parsed);
+    if (!normalized.message) {
+      skipped += 1;
+      bump(reasons, normalized.reason);
+      continue;
+    }
+    messages.push(normalized.message);
+  }
+
+  const safeSessionId = sanitizeName(sessionId ?? fallbackImportedSessionId(file));
+  const path = sessionPath(safeSessionId);
+  if (existsSync(path)) {
+    return {
+      sessionId: safeSessionId,
+      path,
+      added: 0,
+      skipped: skipped + messages.length,
+      duplicate: true,
+      reasons,
+    };
+  }
+  if (messages.length === 0) {
+    return {
+      sessionId: safeSessionId,
+      path,
+      added: 0,
+      skipped,
+      duplicate: false,
+      reasons,
+    };
+  }
+
+  rewriteSession(safeSessionId, messages);
+  patchSessionMeta(safeSessionId, { source: "claude-code" });
+  return {
+    sessionId: safeSessionId,
+    path,
+    added: messages.length,
+    skipped,
+    duplicate: false,
+    reasons,
+  };
+}
+
 function readSessionMessages(
   path: string,
 ): { messages: ChatMessage[]; hadContent: boolean } | null {
@@ -193,7 +272,10 @@ export function appendSessionMessage(name: string, message: ChatMessage): void {
   }
 }
 
-export function listSessions(opts?: { workspaceFilter?: string }): SessionInfo[] {
+export function listSessions(opts?: {
+  workspaceFilter?: string;
+  sourceFilter?: string;
+}): SessionInfo[] {
   const dir = sessionsDir();
   if (!existsSync(dir)) return [];
   const want = opts?.workspaceFilter ? normalizeWorkspace(opts.workspaceFilter) : null;
@@ -207,6 +289,7 @@ export function listSessions(opts?: { workspaceFilter?: string }): SessionInfo[]
         const path = join(dir, file);
         const name = file.replace(/\.jsonl$/, "");
         const meta = loadSessionMeta(name);
+        if (opts?.sourceFilter && meta.source !== opts.sourceFilter) return [];
         // Workspace pre-filter: cheap meta read first, skip the
         // (potentially multi-MB) jsonl read for sessions that don't
         // belong to the current workspace. Issue #1179.
@@ -383,6 +466,148 @@ function countLines(path: string): number {
   } catch {
     return 0;
   }
+}
+
+type NormalizeMessageResult =
+  | { message: ChatMessage; reason?: never }
+  | { message: null; reason: "invalid_message" | "invalid_tool_call" };
+
+interface NormalizedToolCalls {
+  ok: boolean;
+  calls: NonNullable<ChatMessage["tool_calls"]>;
+}
+
+function normalizeClaudeMessage(raw: unknown): NormalizeMessageResult {
+  if (!raw || typeof raw !== "object") return { message: null, reason: "invalid_message" };
+  const outer = raw as { message?: unknown };
+  const source = outer.message && typeof outer.message === "object" ? outer.message : raw;
+  if (!source || typeof source !== "object") return { message: null, reason: "invalid_message" };
+  const value = source as {
+    role?: unknown;
+    type?: unknown;
+    content?: unknown;
+    name?: unknown;
+    tool_call_id?: unknown;
+    tool_calls?: unknown;
+  };
+  const role = normalizeRole(value.role ?? value.type);
+  if (!role) return { message: null, reason: "invalid_message" };
+  const content = normalizeContent(value.content);
+  if (content === undefined) return { message: null, reason: "invalid_message" };
+  const toolCalls = normalizeToolCalls(value.tool_calls, value.content);
+  if (!toolCalls.ok) return { message: null, reason: "invalid_tool_call" };
+  const msg: ChatMessage = { role };
+  if (content !== null) msg.content = content;
+  if (typeof value.name === "string") msg.name = value.name;
+  if (typeof value.tool_call_id === "string") msg.tool_call_id = value.tool_call_id;
+  if (toolCalls.calls.length > 0) msg.tool_calls = toolCalls.calls;
+  return { message: msg };
+}
+
+function normalizeRole(raw: unknown): ChatMessage["role"] | null {
+  if (raw === "system" || raw === "user" || raw === "assistant" || raw === "tool") return raw;
+  return null;
+}
+
+function normalizeContent(raw: unknown): string | null | undefined {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === "string") return raw;
+  if (!Array.isArray(raw)) return undefined;
+  const parts: string[] = [];
+  for (const item of raw) {
+    if (typeof item === "string") {
+      parts.push(item);
+      continue;
+    }
+    if (!item || typeof item !== "object") continue;
+    const block = item as { type?: unknown; text?: unknown; content?: unknown };
+    if (typeof block.text === "string") parts.push(block.text);
+    else if (typeof block.content === "string") parts.push(block.content);
+  }
+  return parts.join("\n");
+}
+
+function normalizeToolCalls(rawToolCalls: unknown, rawContent: unknown): NormalizedToolCalls {
+  const calls: NonNullable<ChatMessage["tool_calls"]> = [];
+  if (rawToolCalls !== undefined) {
+    if (!Array.isArray(rawToolCalls)) return { ok: false, calls: [] };
+    for (const item of rawToolCalls) {
+      const call = normalizeToolCall(item);
+      if (!call) return { ok: false, calls: [] };
+      calls.push(call);
+    }
+  }
+  const contentCalls = toolCallsFromContent(rawContent);
+  if (!contentCalls.ok) return { ok: false, calls: [] };
+  calls.push(...contentCalls.calls);
+  return { ok: true, calls };
+}
+
+function normalizeToolCall(item: unknown): NonNullable<ChatMessage["tool_calls"]>[number] | null {
+  if (!item || typeof item !== "object") return null;
+  const value = item as {
+    id?: unknown;
+    type?: unknown;
+    name?: unknown;
+    input?: unknown;
+    function?: unknown;
+  };
+  const fn =
+    value.function && typeof value.function === "object"
+      ? (value.function as { name?: unknown; arguments?: unknown })
+      : value;
+  const name = typeof fn.name === "string" && fn.name.trim() ? fn.name : undefined;
+  if (!name) return null;
+  const args =
+    "arguments" in fn
+      ? stringifyToolArguments(fn.arguments)
+      : "input" in value
+        ? stringifyToolArguments(value.input)
+        : "";
+  return {
+    ...(typeof value.id === "string" ? { id: value.id } : {}),
+    type: "function",
+    function: { name, arguments: args },
+  };
+}
+
+function toolCallsFromContent(raw: unknown): NormalizedToolCalls {
+  if (!Array.isArray(raw)) return { ok: true, calls: [] };
+  const out: NonNullable<ChatMessage["tool_calls"]> = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const type = (item as { type?: unknown }).type;
+    if (type !== "tool_use") continue;
+    const call = normalizeToolCall(item);
+    if (!call) return { ok: false, calls: [] };
+    out.push(call);
+  }
+  return { ok: true, calls: out };
+}
+
+function stringifyToolArguments(raw: unknown): string {
+  if (typeof raw === "string") return raw;
+  if (raw === undefined) return "";
+  return JSON.stringify(raw);
+}
+
+function extractSessionId(raw: unknown): string | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const value = raw as { sessionId?: unknown; session_id?: unknown; conversationId?: unknown };
+  for (const candidate of [value.sessionId, value.session_id, value.conversationId]) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+  }
+  return undefined;
+}
+
+function fallbackImportedSessionId(file: string): string {
+  const base = basename(file).replace(/\.jsonl$/i, "");
+  const hash = createHash("sha1").update(file).digest("hex").slice(0, 8);
+  return `${base || "claude-code"}-${hash}`;
+}
+
+function bump(reasons: Record<string, number>, key: string): void {
+  reasons[key] = (reasons[key] ?? 0) + 1;
 }
 
 function sessionBackupPath(path: string): string {

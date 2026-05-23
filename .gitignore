@@ -76,6 +76,7 @@ bun.lock
 # files (settings.json, skills/) stay tracked, but the user-private
 # bits (semantic index, sessions, opt-out markers) never should.
 .reasonix/semantic/
+.reasonix/index/
 .reasonix/sessions/
 .reasonix/semantic-skip
 # OpenWolf project runtime (daemon log, cron state, token ledger,
@@ -97,3 +98,4 @@ bun.lock
 docs/plans/
 bin/plan-lint.sh
 tmp/
+.claude/scheduled_tasks.lock

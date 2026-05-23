@@ -22,6 +22,7 @@ import { loadHooks } from "../../hooks.js";
 import { t } from "../../i18n/index.js";
 import { indexExists } from "../../index/semantic/builder.js";
 import { checkOllamaStatus } from "../../index/semantic/ollama-launcher.js";
+import { countRecentObservationEvents } from "../../memory/observation.js";
 import { listSessions } from "../../memory/session.js";
 import { detectProxyUrl, matchesNoProxy, resolveNoProxy } from "../../net/proxy.js";
 import type { PromptCacheStats } from "../../observability/prompt-cache-monitor.js";
@@ -80,6 +81,7 @@ export async function runDoctorChecks(
     checkVfsLite(),
     checkToolCache(),
     checkPromptCache(opts.promptCacheStats),
+    checkMemoryObservation(),
     checkReadDedup(),
     checkCodeRelations(),
     checkToon(),
@@ -136,6 +138,23 @@ function checkPromptCache(stats?: PromptCacheStats): Check {
     label: "prompt-cache ",
     level: stats && stats.breaks > 0 ? "warn" : "ok",
     detail: `${sessionState}; ${diffState}; dir=${dir}`,
+  };
+}
+
+function checkMemoryObservation(): Check {
+  const cfg = readConfig();
+  const kill = process.env.REASONIX_MEMORY_AUTO === "0";
+  const enabled = cfg.memory?.autoCapture === true && !kill;
+  const budgets = cfg.memory?.observationBudgets;
+  const recent = countRecentObservationEvents();
+  const budgetText = budgets
+    ? `; budgets lines=${budgets.maxLines ?? "default"} writes=${budgets.maxWrites ?? "default"} bytes=${budgets.aggregateBytes ?? "default"} tokens=${budgets.aggregateTokens ?? "default"}`
+    : "";
+  return {
+    id: "memory-observation",
+    label: "memory-obs   ",
+    level: "ok",
+    detail: `${enabled ? "enabled" : kill ? "disabled via REASONIX_MEMORY_AUTO=0" : "disabled by config"}; observations last 24h=${recent}${budgetText}`,
   };
 }
 

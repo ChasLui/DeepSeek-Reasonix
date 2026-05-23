@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { checkBudgetWindows } from "../../budget/window.js";
 import { resolveBudgetWindows } from "../../config.js";
 import { t } from "../../i18n/index.js";
+import { countRecentObservationEvents } from "../../memory/observation.js";
 import type { PromptCacheStats } from "../../observability/prompt-cache-monitor.js";
 import {
   type UsageAggregate,
@@ -48,6 +49,11 @@ export interface DashboardCacheStats {
   };
 }
 
+export interface DashboardMemoryStats {
+  observations24h: number;
+  hybridLlmTokens: number;
+}
+
 export function statsCommand(opts: StatsOptions): void {
   if (opts.transcript) {
     transcriptSummary(opts.transcript);
@@ -84,8 +90,13 @@ function transcriptSummary(path: string): void {
 function dashboard(opts: StatsOptions): void {
   const path = opts.logPath ?? defaultUsageLogPath();
   const records = readUsageLog(path);
+  const memoryStats = {
+    observations24h: countRecentObservationEvents(),
+    hybridLlmTokens: 0,
+  };
   if (records.length === 0) {
     console.log("no usage data yet.");
+    console.log(renderMemoryRecallLine(memoryStats));
     console.log("");
     console.log(`  ${path}`);
     console.log("");
@@ -95,7 +106,7 @@ function dashboard(opts: StatsOptions): void {
   }
 
   const agg = aggregateUsage(records, { now: opts.now });
-  console.log(renderDashboard(agg, path));
+  console.log(renderDashboard(agg, path, undefined, undefined, memoryStats));
   const windows = resolveBudgetWindows();
   if (windows.length > 0) {
     console.log("");
@@ -118,12 +129,14 @@ export function renderDashboard(
   logPath: string,
   cacheStats?: DashboardCacheStats,
   promptCacheStats?: PromptCacheStats,
+  memoryStats?: DashboardMemoryStats,
 ): string {
   const lines: string[] = [];
   const size = formatLogSize(logPath);
   lines.push(`Reasonix usage — ${logPath}${size ? ` (${size})` : ""}`);
   lines.push(renderPromptCacheLine(agg, promptCacheStats));
   lines.push(renderToolCacheLine(cacheStats));
+  lines.push(renderMemoryRecallLine(memoryStats));
   lines.push("");
   lines.push(header());
   lines.push(divider());
@@ -154,6 +167,12 @@ export function renderDashboard(
     lines.push(renderSubagentSection(agg.subagents));
   }
   return lines.join("\n");
+}
+
+function renderMemoryRecallLine(stats?: DashboardMemoryStats): string {
+  const hybridTokens = stats?.hybridLlmTokens ?? 0;
+  const observations = stats?.observations24h ?? 0;
+  return `memory recall:   hybrid llm tokens=${hybridTokens} · observations 24h=${observations}`;
 }
 
 function renderPromptCacheLine(agg: UsageAggregate, stats?: PromptCacheStats): string {

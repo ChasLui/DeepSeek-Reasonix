@@ -6,17 +6,15 @@
  * actually sustains high cache hit on a long-ish session, not just
  * that the API-level append-vs-mutate primitive behaves as expected.
  *
- * Run: REASONIX_LOG_LEVEL=ERROR npx tsx scripts/probe-loop-cache.mts
- * Reads DEEPSEEK_API_KEY from .env.testbak.
+ * Run after `npm run build`: REASONIX_LOG_LEVEL=ERROR node scripts/probe-loop-cache.mts
+ * Reads DEEPSEEK_API_KEY from env, or .env.testbak when present.
  */
 
-import { readFileSync } from "node:fs";
-import { CacheFirstLoop } from "../src/loop.js";
-import { DeepSeekClient } from "../src/client.js";
-import { ImmutablePrefix } from "../src/memory/runtime.js";
-import { ToolRegistry } from "../src/tools.js";
+import { existsSync, readFileSync } from "node:fs";
+import { CacheFirstLoop, DeepSeekClient, ImmutablePrefix, ToolRegistry } from "../dist/index.js";
 
 function loadDotenv(path: string) {
+  if (!existsSync(path)) return;
   const txt = readFileSync(path, "utf8");
   for (const line of txt.split(/\r?\n/)) {
     const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
@@ -24,6 +22,11 @@ function loadDotenv(path: string) {
   }
 }
 loadDotenv("./.env.testbak");
+
+if (!process.env.DEEPSEEK_API_KEY) {
+  console.error("DEEPSEEK_API_KEY is required for scripts/probe-loop-cache.mts");
+  process.exit(1);
+}
 
 const filler = (label: string, n: number): string =>
   Array.from(
@@ -75,7 +78,11 @@ async function main() {
   };
 
   for (let i = 0; i < 6; i++) {
-    let usage: { promptTokens: number; promptCacheHitTokens: number; promptCacheMissTokens: number } | null = null;
+    let usage: {
+      promptTokens: number;
+      promptCacheHitTokens: number;
+      promptCacheMissTokens: number;
+    } | null = null;
     for await (const ev of loop.step(`Turn ${i}: just say "ok ${i}".`)) {
       if (ev.role === "assistant_final" && ev.stats?.usage) {
         usage = ev.stats.usage as typeof usage;

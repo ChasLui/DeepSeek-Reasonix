@@ -62,6 +62,7 @@ import { formatHookOutcomeMessage, runHooks } from "../../hooks.js";
 import { t, tObj } from "../../i18n/index.js";
 import { CacheFirstLoop, DeepSeekClient, ImmutablePrefix } from "../../index.js";
 import type { LoopEvent } from "../../loop.js";
+import { extractObservationFromHook } from "../../memory/observation.js";
 import {
   deleteSession,
   detectGitBranch,
@@ -74,6 +75,7 @@ import {
   renameSession,
   sanitizeName,
 } from "../../memory/session.js";
+import { MemoryStore } from "../../memory/user.js";
 import type { QQChannel } from "../../qq/channel.js";
 import { useQQChannel } from "../../qq/use-qq-channel.js";
 import type {
@@ -3219,7 +3221,9 @@ function AppInner({
       // so the display doesn't balloon.
       let modelInput = text;
       if (codeMode) {
-        const expanded = expandAtMentions(text, currentRootDir, { toonMode: loadToonMode() });
+        const expanded = expandAtMentions(text, currentRootDir, {
+          toonMode: loadToonMode(),
+        });
         if (expanded.expansions.length > 0) {
           modelInput = expanded.text;
           const inlined = expanded.expansions
@@ -3434,19 +3438,46 @@ function AppInner({
         // warning. Natural place for "after every turn, run the
         // formatter / lint / tests" automation.
         if (hookList.some((h) => h.event === "Stop")) {
+          const stopPayload = {
+            event: "Stop" as const,
+            cwd: currentRootDir,
+            lastAssistantText: streamRef.text,
+            turn: loop.stats.summary().turns,
+          };
           const stopReport = await runHooks({
             hooks: hookList,
-            payload: {
-              event: "Stop",
-              cwd: currentRootDir,
-              lastAssistantText: streamRef.text,
-              turn: loop.stats.summary().turns,
-            },
+            payload: stopPayload,
           });
           for (const o of stopReport.outcomes) {
             if (o.decision === "pass") continue;
             log.pushWarning(t("app.hookStop"), formatHookOutcomeMessage(o));
           }
+          // Fire-and-forget observation pipeline — sync FS work (readConfig
+          // + new MemoryStore) moved off the hook critical path so NF-007's
+          // <5ms budget holds even when config/observations live on slow FS.
+          // Sequential `await` inside avoids last-write-wins when multiple
+          // outcomes resolve to the same memory entry name.
+          void (async () => {
+            try {
+              const cfg = readConfig();
+              if (!cfg.memory?.autoCapture || process.env.REASONIX_MEMORY_AUTO === "0") return;
+              const store = new MemoryStore({ projectRoot: currentRootDir });
+              for (const outcome of stopReport.outcomes) {
+                await extractObservationFromHook(
+                  stopPayload,
+                  { stdout: outcome.stdout, stderr: outcome.stderr },
+                  {
+                    store,
+                    autoCapture: true,
+                    budgets: cfg.memory?.observationBudgets,
+                    config: cfg,
+                  },
+                );
+              }
+            } catch {
+              // observation never blocks hook outcome
+            }
+          })();
         }
         qq.maybeSendFinalReply(lastAssistantText);
       } finally {

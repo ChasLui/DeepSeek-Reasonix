@@ -228,6 +228,13 @@ export interface ReasonixConfig {
   /** User-declared extensions to the built-in memory types (#709). Unknown types round-trip even without a declaration; declaring one lets you attach a default priority + lifecycle. */
   memory?: {
     customTypes?: CustomMemoryTypeConfig[];
+    autoCapture?: boolean;
+    observationBudgets?: {
+      maxLines?: number;
+      maxWrites?: number;
+      aggregateBytes?: number;
+      aggregateTokens?: number;
+    };
   };
   pricingOverride?: Record<string, PricingOverride>;
   /** Per-app proxy override. Layered on top of HTTPS_PROXY / NO_PROXY env vars + the default DeepSeek-bypass whitelist. */

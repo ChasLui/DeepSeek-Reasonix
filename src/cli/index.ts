@@ -426,10 +426,29 @@ program
 program
   .command("sessions [name]")
   .description(t("cli.sessions"))
+  .argument("[target]")
   .option("-v, --verbose", t("ui.verboseHint"))
-  .action(async (name: string | undefined, opts) => {
+  .option("--source <source>", "Filter sessions by import source")
+  .option("--index", "Index imported Claude Code sessions into memory search")
+  .action(async (name: string | undefined, target: string | undefined, opts) => {
     const { sessionsCommand } = await import("./commands/sessions.js");
-    sessionsCommand({ name, verbose: !!opts.verbose });
+    await sessionsCommand({
+      name,
+      target,
+      verbose: !!opts.verbose,
+      source: opts.source,
+      index: !!opts.index,
+    });
+  });
+
+program
+  .command("memory")
+  .description("Inspect and maintain user memory")
+  .argument("[args...]", "memory subcommand and arguments")
+  .allowUnknownOption(true)
+  .action(async (args: string[] | undefined) => {
+    const { memoryCommand } = await import("./commands/memory.js");
+    await memoryCommand(args ?? [], { projectRoot: process.cwd() });
   });
 
 program
