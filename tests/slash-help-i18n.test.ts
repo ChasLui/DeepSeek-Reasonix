@@ -13,4 +13,15 @@ describe("slash help i18n coverage", () => {
     const missing = SLASH_COMMANDS.filter((c) => !zhCN.slash[c.cmd]?.description);
     expect(missing.map((c) => c.cmd)).toEqual([]);
   });
+
+  it("documents the macOS Ctrl-not-Cmd modifier note in both locales", () => {
+    const enKeyboard = EN.ui.keysReference.sections.find((section) => section.title === "keyboard");
+    const zhKeyboard = zhCN.ui.keysReference.sections.find((section) => section.title === "键盘");
+    expect(EN.ui.macOSModifierHint).toContain("Ctrl");
+    expect(zhCN.ui.macOSModifierHint).toContain("Ctrl");
+    expect(enKeyboard?.rows[0]).toMatchObject({ key: "macOS" });
+    expect(zhKeyboard?.rows[0]).toMatchObject({ key: "macOS" });
+    expect(enKeyboard?.rows[0]?.text).toContain("Cmd");
+    expect(zhKeyboard?.rows[0]?.text).toContain("Cmd");
+  });
 });

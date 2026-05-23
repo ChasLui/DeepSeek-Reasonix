@@ -1,7 +1,12 @@
 /** Stdin reader CSI parser — drives the state machine via `feed()`; safety net for the input layer. */
 
 import { describe, expect, it } from "vitest";
-import { type KeyEvent, StdinReader, sanitizePasteText } from "../src/cli/ui/stdin-reader.js";
+import {
+  type KeyEvent,
+  StdinReader,
+  normalizeModifiers,
+  sanitizePasteText,
+} from "../src/cli/ui/stdin-reader.js";
 
 function setup() {
   const reader = new StdinReader();
@@ -106,9 +111,43 @@ describe("StdinReader — CSI sequences (well-behaved)", () => {
     reader.feed("\x1b[27;3;97~"); // Alt+a
     reader.feed("\x1b[27;5;65~"); // Ctrl+A (uppercase code in envelope)
     expect(events).toEqual([
-      { input: "a", meta: true },
+      { input: "a", alt: true },
       { input: "a", ctrl: true },
     ]);
+  });
+
+  it("decodes Kitty super and preserves Ctrl regression cases", () => {
+    const { reader, events } = setup();
+    reader.feed("\x1b[99;9u"); // Super+c
+    reader.feed("\x1b[99;5u"); // Ctrl+c
+    reader.feed("\x1b[99;10u"); // Super+Shift+c
+    expect(events).toEqual([
+      { input: "c", super: true },
+      { input: "c", ctrl: true },
+      { input: "c", shift: true, super: true },
+    ]);
+  });
+
+  it("preserves Kitty hyper and true meta bits without binding them", () => {
+    const { reader, events } = setup();
+    reader.feed("\x1b[99;17u"); // Hyper+c
+    reader.feed("\x1b[99;33u"); // Meta+c
+    expect(events).toEqual([
+      { input: "c", hyper: true },
+      { input: "c", meta: true },
+    ]);
+  });
+
+  it("decodes Alt+Enter without also setting meta", () => {
+    const { reader, events } = setup();
+    reader.feed("\x1b[27;3;13~");
+    expect(events).toEqual([{ input: "", return: true, alt: true }]);
+  });
+
+  it("normalizes alt/meta alias collisions to one semantic modifier", () => {
+    const normalized = normalizeModifiers({ input: "b", alt: true, meta: true });
+    expect(normalized).toMatchObject({ input: "b", alt: true });
+    expect(normalized.meta).toBeUndefined();
   });
 });
 
@@ -356,10 +395,10 @@ describe("StdinReader — ESC ambiguity timer", () => {
 });
 
 describe("StdinReader — ESC + char (Alt+key)", () => {
-  it("ESC followed by a non-CSI char fires meta:true", () => {
+  it("ESC followed by a non-CSI char fires alt:true", () => {
     const { reader, events } = setup();
     reader.feed("\x1bx");
-    expect(events).toEqual([{ input: "x", meta: true }]);
+    expect(events).toEqual([{ input: "x", alt: true }]);
   });
 });
 

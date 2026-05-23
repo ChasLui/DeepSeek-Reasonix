@@ -34,7 +34,11 @@ export function CopyMode({ cards, onClose }: CopyModeProps): React.ReactElement 
   const stepUp = (i: number) => stepBy(snapshot, i, -1);
 
   useKeystroke((ev) => {
-    if (ev.escape || (ev.input === "q" && !ev.ctrl && !ev.meta)) return onClose(null);
+    if (
+      ev.escape ||
+      (ev.input === "q" && !ev.ctrl && !ev.alt && !ev.super && !ev.hyper && !ev.meta)
+    )
+      return onClose(null);
     if (ev.input === "j" || ev.downArrow) return setCursor(stepDown(cursor));
     if (ev.input === "k" || ev.upArrow) return setCursor(stepUp(cursor));
     if (ev.pageDown) return setCursor(scrollBy(snapshot, cursor, bodyRows));

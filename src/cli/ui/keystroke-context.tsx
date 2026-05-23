@@ -23,7 +23,12 @@
 import { useInput } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React as a runtime value
 import React, { createContext, useContext, useEffect, useRef } from "react";
-import { type KeyEvent, type StdinReader, getStdinReader } from "./stdin-reader.js";
+import {
+  type KeyEvent,
+  type StdinReader,
+  getStdinReader,
+  normalizeModifiers,
+} from "./stdin-reader.js";
 
 interface KeystrokeBus {
   /** Subscribe — returns an unsubscribe function. */
@@ -99,23 +104,25 @@ export function useKeystroke(handler: KeystrokeHandler, isActive = true): void {
   useInput(
     (input, key) => {
       if (bus) return;
-      handlerRef.current({
-        input,
-        upArrow: key.upArrow,
-        downArrow: key.downArrow,
-        leftArrow: key.leftArrow,
-        rightArrow: key.rightArrow,
-        return: key.return,
-        escape: key.escape,
-        backspace: key.backspace,
-        delete: key.delete,
-        tab: key.tab,
-        shift: key.shift,
-        ctrl: key.ctrl,
-        meta: key.meta,
-        pageUp: key.pageUp,
-        pageDown: key.pageDown,
-      });
+      handlerRef.current(
+        normalizeModifiers({
+          input,
+          upArrow: key.upArrow,
+          downArrow: key.downArrow,
+          leftArrow: key.leftArrow,
+          rightArrow: key.rightArrow,
+          return: key.return,
+          escape: key.escape,
+          backspace: key.backspace,
+          delete: key.delete,
+          tab: key.tab,
+          shift: key.shift,
+          ctrl: key.ctrl,
+          alt: key.meta,
+          pageUp: key.pageUp,
+          pageDown: key.pageDown,
+        }),
+      );
     },
     { isActive: !bus && isActive },
   );

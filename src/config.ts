@@ -142,6 +142,7 @@ export interface ReasonixConfig {
   editMode?: EditMode;
   editModeHintShown?: boolean;
   mouseClipboardHintShown?: boolean;
+  macOSModifierHintShown?: boolean;
   /** When false, skip the boot splash animation and show the main UI immediately. Default true. */
   banner?: boolean;
   reasoningEffort?: ReasoningEffort;
@@ -1208,6 +1209,10 @@ export function mouseClipboardHintShown(path: string = defaultConfigPath()): boo
   return readConfig(path).mouseClipboardHintShown === true;
 }
 
+export function macOSModifierHintShown(path: string = defaultConfigPath()): boolean {
+  return readConfig(path).macOSModifierHintShown === true;
+}
+
 /** Unknown / missing fall back to "max" so hand-edited bad config can't silently override the default. */
 export function loadReasoningEffort(path: string = defaultConfigPath()): ReasoningEffort {
   const v = readConfig(path).reasoningEffort;
@@ -1440,6 +1445,13 @@ export function markMouseClipboardHintShown(path: string = defaultConfigPath()):
   const cfg = readConfig(path);
   if (cfg.mouseClipboardHintShown === true) return;
   cfg.mouseClipboardHintShown = true;
+  writeConfig(cfg, path);
+}
+
+export function markMacOSModifierHintShown(path: string = defaultConfigPath()): void {
+  const cfg = readConfig(path);
+  if (cfg.macOSModifierHintShown === true) return;
+  cfg.macOSModifierHintShown = true;
   writeConfig(cfg, path);
 }
 

@@ -193,10 +193,14 @@ async function captureStartupState(opts?: {
   }));
 
   let capturedProps: Record<string, unknown> | null = null;
-  mocks.renderMock.mockImplementation((element: { props: Record<string, unknown> }) => {
-    capturedProps = element.props;
-    return { waitUntilExit: async () => undefined };
-  });
+  let capturedRenderOptions: Record<string, unknown> | null = null;
+  mocks.renderMock.mockImplementation(
+    (element: { props: Record<string, unknown> }, options: Record<string, unknown>) => {
+      capturedProps = element.props;
+      capturedRenderOptions = options;
+      return { waitUntilExit: async () => undefined };
+    },
+  );
 
   const [{ chatCommand }, { ToolRegistry }, { setLanguageRuntime }] = await Promise.all([
     import("../src/cli/commands/chat.js"),
@@ -214,10 +218,13 @@ async function captureStartupState(opts?: {
   });
 
   expect(capturedProps).not.toBeNull();
-  return capturedProps as {
-    mcpServers: Array<{ label: string; spec: string }>;
-    mcpSpecs: string[];
-    startupInfoHints: string[];
+  return {
+    ...(capturedProps as {
+      mcpServers: Array<{ label: string; spec: string }>;
+      mcpSpecs: string[];
+      startupInfoHints: string[];
+    }),
+    renderOptions: capturedRenderOptions ?? {},
   };
 }
 
@@ -258,6 +265,11 @@ describe("chatCommand MCP startup summary states", { timeout: 15_000 }, () => {
 
     await captureStartupState({ noMouse: true });
     expect(mocks.enableMouseModeMock).not.toHaveBeenCalled();
+  });
+
+  it("leaves Ctrl+C under Reasonix's raw stdin handler instead of Ink exitOnCtrlC", async () => {
+    const props = await captureStartupState();
+    expect(props.renderOptions).toMatchObject({ exitOnCtrlC: false });
   });
 
   it("never blocks chatCommand on bridge failure — App.tsx surfaces the lifecycle error post-mount", async () => {

@@ -68,7 +68,9 @@ export function WorkspacePicker({
         setQuery((q) => q.slice(0, -1));
         return;
       }
-      if (ev.input && !ev.ctrl && !ev.meta && !ev.tab) setQuery((q) => `${q}${ev.input}`);
+      if (ev.input && !ev.ctrl && !ev.alt && !ev.super && !ev.hyper && !ev.meta && !ev.tab) {
+        setQuery((q) => `${q}${ev.input}`);
+      }
       return;
     }
     if (ev.escape) return onChoose({ kind: "quit" });

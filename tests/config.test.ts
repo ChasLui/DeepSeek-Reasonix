@@ -29,7 +29,9 @@ import {
   loadSemanticEmbeddingUserConfig,
   loadTheme,
   loadToonMode,
+  macOSModifierHintShown,
   markEditModeHintShown,
+  markMacOSModifierHintShown,
   readConfig,
   redactKey,
   redactSemanticEmbeddingConfig,
@@ -548,6 +550,16 @@ describe("config", () => {
     saveEditMode("auto", path);
     markEditModeHintShown(path);
     expect(editModeHintShown(path)).toBe(true);
+    expect(loadEditMode(path)).toBe("auto");
+  });
+
+  it("macOSModifierHintShown defaults to false and toggles on markMacOSModifierHintShown", () => {
+    expect(macOSModifierHintShown(path)).toBe(false);
+    markMacOSModifierHintShown(path);
+    expect(macOSModifierHintShown(path)).toBe(true);
+    saveEditMode("auto", path);
+    markMacOSModifierHintShown(path);
+    expect(macOSModifierHintShown(path)).toBe(true);
     expect(loadEditMode(path)).toBe("auto");
   });
 

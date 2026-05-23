@@ -40,7 +40,7 @@ export function MaskedInput({
       onChange(next);
       return;
     }
-    if (ev.input && !ev.ctrl && !ev.meta && !ev.escape) {
+    if (ev.input && !ev.ctrl && !ev.alt && !ev.super && !ev.hyper && !ev.meta && !ev.escape) {
       const cleaned = stripPasteMarkers(ev.input);
       if (cleaned.length === 0) return;
       const next = stripPasteMarkers(valueRef.current + cleaned);

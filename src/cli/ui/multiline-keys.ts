@@ -5,6 +5,9 @@ export interface MultilineKey {
   return?: boolean;
   shift?: boolean;
   ctrl?: boolean;
+  alt?: boolean;
+  super?: boolean;
+  hyper?: boolean;
   meta?: boolean;
   backspace?: boolean;
   delete?: boolean;
@@ -52,6 +55,8 @@ export function processMultilineKey(
   // leading `\x1b`. See key-normalize.ts for the long version.
   const recovered = recoverCsiTail(keyIn.input, keyIn);
   const key: MultilineKey = recovered ? { ...keyIn, ...recovered, input: "" } : keyIn;
+  const alt = key.alt === true;
+  const hasNonTextModifier = key.ctrl || key.alt || key.super || key.hyper || key.meta;
 
   // Parent-owned keys: Tab (slash-complete), Esc (abort).
   if (key.tab || key.escape) {
@@ -130,7 +135,7 @@ export function processMultilineKey(
   }
   if (
     (key.ctrl && key.input === "w") ||
-    (key.meta && (key.backspace || key.input === "\x7f" || key.input === "\b"))
+    (alt && (key.backspace || key.input === "\x7f" || key.input === "\b"))
   ) {
     if (cursor === 0) return NOOP;
     const wordStart = previousWordStart(value, cursor);
@@ -140,11 +145,11 @@ export function processMultilineKey(
       submit: false,
     };
   }
-  if (key.meta && key.input === "b") {
+  if (alt && key.input === "b") {
     const target = previousWordStart(value, cursor);
     return target === cursor ? NOOP : { next: null, cursor: target, submit: false };
   }
-  if (key.meta && key.input === "f") {
+  if (alt && key.input === "f") {
     const target = nextWordEnd(value, cursor);
     return target === cursor ? NOOP : { next: null, cursor: target, submit: false };
   }
@@ -187,7 +192,7 @@ export function processMultilineKey(
   }
 
   if (key.return) {
-    if (key.shift || key.meta) return insertAt(value, cursor, "\n");
+    if (key.shift || alt) return insertAt(value, cursor, "\n");
     // Bash-style line continuation: trailing '\' + Enter (only when the
     // cursor sits at end-of-buffer, so a stray '\' mid-line doesn't
     // trigger it).
@@ -216,8 +221,8 @@ export function processMultilineKey(
 
   // Bare modifier events (Ctrl/Meta with no printable) and unhandled
   // Ctrl-<letter> chords are dropped so a stray Ctrl+L doesn't insert "l".
-  if ((key.ctrl || key.meta) && key.input.length === 0) return NOOP;
-  if (key.ctrl || key.meta) return NOOP;
+  if (hasNonTextModifier && key.input.length === 0) return NOOP;
+  if (hasNonTextModifier) return NOOP;
 
   // Printable input (may be a multi-char paste; pasted newlines land
   // inside the buffer rather than triggering submit on the first line).

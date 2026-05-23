@@ -24,7 +24,18 @@ export function handleTurnInterrupt(
   }: TurnInterruptController,
 ): TurnInterruptOutcome {
   if (turnActiveRef.current) {
-    if (abortedThisTurn.current) return "already-aborted";
+    if (abortedThisTurn.current) {
+      // The turn is already unwinding from a first interrupt. A second
+      // Ctrl+C means "I want OUT" — honor the universal "Ctrl+C twice
+      // force-quits" contract even when the turn is wedged (hung network,
+      // slow Warp PTY) and never flips submittingRef back to idle. Esc
+      // never escalates this way — it only ever aborts a turn.
+      if (key === "ctrl-c") {
+        quitProcess();
+        return "quit";
+      }
+      return "already-aborted";
+    }
     abortedThisTurn.current = true;
     resetPendingModals();
     if (isLoopActive()) stopLoop();

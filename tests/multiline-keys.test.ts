@@ -63,6 +63,13 @@ describe("processMultilineKey — submit + newline", () => {
     expect(r.submit).toBe(false);
   });
 
+  it("Alt+Enter inserts a newline at the cursor", () => {
+    const r = processMultilineKey("abc", 1, key({ return: true, alt: true }));
+    expect(r.next).toBe("a\nbc");
+    expect(r.cursor).toBe(2);
+    expect(r.submit).toBe(false);
+  });
+
   it("Ctrl+J inserts a newline at the cursor (ASCII LF form)", () => {
     const r = processMultilineKey("abc", 2, key({ input: "\n" }));
     expect(r.next).toBe("ab\nc");
@@ -274,9 +281,14 @@ describe("processMultilineKey — parent-owned keys are ignored", () => {
     expect(r.cursor).toBeNull();
   });
 
-  it("Meta (Alt) key events are dropped", () => {
-    const r = processMultilineKey("x", 1, key({ input: "a", meta: true }));
+  it("Alt key events are dropped", () => {
+    const r = processMultilineKey("x", 1, key({ input: "a", alt: true }));
     expect(r.next).toBeNull();
+  });
+
+  it("protocol Meta key events are dropped instead of treated as Alt", () => {
+    const r = processMultilineKey("hello world", 11, key({ input: "b", meta: true }));
+    expect(r).toEqual({ next: null, cursor: null, submit: false });
   });
 });
 
@@ -374,30 +386,30 @@ describe("processMultilineKey — Home/End/Ctrl+K/Alt-word", () => {
   });
 
   it("Alt+B moves cursor to start of previous word", () => {
-    const r = processMultilineKey("hello world", 11, key({ input: "b", meta: true }));
+    const r = processMultilineKey("hello world", 11, key({ input: "b", alt: true }));
     expect(r.cursor).toBe(6);
     expect(r.next).toBeNull();
   });
 
   it("Alt+B at start of buffer is a no-op", () => {
-    const r = processMultilineKey("hello", 0, key({ input: "b", meta: true }));
+    const r = processMultilineKey("hello", 0, key({ input: "b", alt: true }));
     expect(r).toEqual({ next: null, cursor: null, submit: false });
   });
 
   it("Alt+F moves cursor to end of next word", () => {
-    const r = processMultilineKey("hello world", 0, key({ input: "f", meta: true }));
+    const r = processMultilineKey("hello world", 0, key({ input: "f", alt: true }));
     expect(r.cursor).toBe(5);
     expect(r.next).toBeNull();
   });
 
   it("Alt+F at end of buffer is a no-op", () => {
     const v = "hello";
-    const r = processMultilineKey(v, v.length, key({ input: "f", meta: true }));
+    const r = processMultilineKey(v, v.length, key({ input: "f", alt: true }));
     expect(r).toEqual({ next: null, cursor: null, submit: false });
   });
 
   it("Alt+Backspace deletes the previous word (Ctrl+W alias)", () => {
-    const r = processMultilineKey("hello world", 11, key({ meta: true, backspace: true }));
+    const r = processMultilineKey("hello world", 11, key({ alt: true, backspace: true }));
     expect(r.next).toBe("hello ");
     expect(r.cursor).toBe(6);
   });

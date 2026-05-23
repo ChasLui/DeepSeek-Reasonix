@@ -74,7 +74,7 @@ export function PlanRefineInput({ mode, questions, onSubmit, onCancel }: PlanRef
       setValue((v) => v.slice(0, -1));
       return;
     }
-    if (ev.input && !ev.ctrl && !ev.meta) {
+    if (ev.input && !ev.ctrl && !ev.alt && !ev.super && !ev.hyper && !ev.meta) {
       setValue((v) => v + ev.input);
     }
   });

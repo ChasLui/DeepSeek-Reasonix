@@ -341,7 +341,7 @@ export function McpMarketplace({ onClose, postInfo, reloadMcp, pickerPorts }: Mc
       setState((s) => ({ ...s, query: s.query.slice(0, -1), selected: 0 }));
       return;
     }
-    if (ev.input && !ev.ctrl && !ev.meta) {
+    if (ev.input && !ev.ctrl && !ev.alt && !ev.super && !ev.hyper && !ev.meta) {
       setState((s) => ({ ...s, query: s.query + ev.input, selected: 0 }));
     }
   });

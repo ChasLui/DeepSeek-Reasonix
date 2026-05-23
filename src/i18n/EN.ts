@@ -80,6 +80,8 @@ export const EN: TranslationSchema = {
     restoredEdits:
       "▸ restored {count} pending edit block(s) from an interrupted prior run — /apply to commit or /discard to drop.",
     resumedPlan: "Resumed plan · {when}{summary}",
+    macOSModifierHint:
+      "▸ macOS note: Reasonix shortcuts use Ctrl, not Cmd. Cmd+C/V remain terminal copy/paste.",
     tipEditBindings: {
       topic: "edit-gate keybindings",
       sections: [
@@ -135,6 +137,10 @@ export const EN: TranslationSchema = {
         {
           title: "keyboard",
           rows: [
+            {
+              key: "macOS",
+              text: "Reasonix app shortcuts use Ctrl, not Cmd; Cmd+C/V stay terminal copy/paste.",
+            },
             { key: "Enter", text: "submit the prompt" },
             { key: "Shift+Enter", text: "insert a newline in the prompt" },
             {
@@ -159,7 +165,7 @@ export const EN: TranslationSchema = {
             },
             {
               key: "Ctrl+C",
-              text: "abort the running model turn (NOT copy — see clipboard)",
+              text: "abort the running model turn; press again to quit (NOT copy — see clipboard)",
             },
             {
               key: "PgUp / PgDn",

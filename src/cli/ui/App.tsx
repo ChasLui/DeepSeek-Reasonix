@@ -42,7 +42,9 @@ import {
   loadReasoningEffort,
   loadTheme,
   loadToonMode,
+  macOSModifierHintShown,
   markEditModeHintShown,
+  markMacOSModifierHintShown,
   markMouseClipboardHintShown,
   mouseClipboardHintShown,
   readConfig,
@@ -160,6 +162,7 @@ import { useScrollback } from "./hooks/useScrollback.js";
 import { useToolProgressDisplay } from "./hooks/useToolProgressDisplay.js";
 import { useTranscriptWriter } from "./hooks/useTranscriptWriter.js";
 import { useWorkspaceRoot } from "./hooks/useWorkspaceRoot.js";
+import { detectKeyCapabilities } from "./key-capabilities.js";
 import { useKeystroke } from "./keystroke-context.js";
 import { CardStream } from "./layout/CardStream.js";
 import { InputAreaWithHistoryHint } from "./layout/InputAreaWithHistoryHint.js";
@@ -1597,6 +1600,10 @@ function AppInner({
       log.pushInfo(t("ui.newSession", { name: session }));
     }
     for (const hint of startupInfoHints ?? []) log.pushInfo(hint);
+    if (detectKeyCapabilities().isMacOS && !macOSModifierHintShown()) {
+      log.pushInfo(t("ui.macOSModifierHint"));
+      markMacOSModifierHintShown();
+    }
     // Restore any pending edit queue from a prior run that was
     // interrupted before /apply or /discard. The checkpoint file sits
     // next to the session log; if present, we re-populate pendingEdits

@@ -394,7 +394,7 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
       qqSubmitRef={qqSubmitRef}
       qqErrorRef={qqErrorRef}
     />,
-    { exitOnCtrlC: true },
+    { exitOnCtrlC: false },
   );
   try {
     await waitUntilExit();

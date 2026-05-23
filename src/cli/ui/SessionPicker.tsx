@@ -136,7 +136,7 @@ export function SessionPicker({
         setRenaming({ ...renaming, buf: renaming.buf.slice(0, -1) });
         return;
       }
-      if (ev.input && !ev.ctrl && !ev.meta && !ev.tab) {
+      if (ev.input && !ev.ctrl && !ev.alt && !ev.super && !ev.hyper && !ev.meta && !ev.tab) {
         setRenaming({ ...renaming, buf: renaming.buf + ev.input });
       }
       return;
@@ -163,7 +163,7 @@ export function SessionPicker({
         setQuery((q) => q.slice(0, -1));
         return;
       }
-      if (ev.input && !ev.ctrl && !ev.meta && !ev.tab) {
+      if (ev.input && !ev.ctrl && !ev.alt && !ev.super && !ev.hyper && !ev.meta && !ev.tab) {
         setQuery((q) => `${q}${ev.input}`);
       }
       return;

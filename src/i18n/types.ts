@@ -69,6 +69,7 @@ export interface TranslationSchema {
     ephemeralSession: string;
     restoredEdits: string;
     resumedPlan: string;
+    macOSModifierHint: string;
     tipEditBindings: {
       topic: string;
       sections: ReadonlyArray<{

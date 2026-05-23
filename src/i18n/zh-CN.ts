@@ -79,6 +79,8 @@ export const zhCN: TranslationSchema = {
     restoredEdits:
       "▸ 从中断的运行中恢复了 {count} 个待处理的编辑块 — /apply 提交或 /discard 放弃。",
     resumedPlan: "已恢复计划 · {when}{summary}",
+    macOSModifierHint:
+      "▸ macOS 提示：Reasonix 应用快捷键用 Ctrl，不是 Cmd。Cmd+C/V 仍交给终端复制/粘贴。",
     tipEditBindings: {
       topic: "编辑门控快捷键",
       sections: [
@@ -128,6 +130,10 @@ export const zhCN: TranslationSchema = {
         {
           title: "键盘",
           rows: [
+            {
+              key: "macOS",
+              text: "Reasonix 应用快捷键用 Ctrl，不是 Cmd；Cmd+C/V 仍是终端复制/粘贴。",
+            },
             { key: "Enter", text: "提交输入" },
             { key: "Shift+Enter", text: "在输入框中插入换行" },
             {
@@ -146,7 +152,7 @@ export const zhCN: TranslationSchema = {
             { key: "Esc", text: "关闭弹出选择器 · 中止当前模型回合" },
             {
               key: "Ctrl+C",
-              text: "中止当前模型回合（不是复制 — 见剪贴板段）",
+              text: "中止当前模型回合；再按一次退出（不是复制 — 见剪贴板段）",
             },
             { key: "PgUp / PgDn", text: "整页滚动聊天记录" },
             { key: "End", text: "跳到聊天的最新一行" },

@@ -21,6 +21,9 @@ export interface KeyEvent {
   escape?: boolean;
   shift?: boolean;
   ctrl?: boolean;
+  alt?: boolean;
+  super?: boolean;
+  hyper?: boolean;
   meta?: boolean;
   /** Bracketed-paste content; consumers MUST NOT re-interpret as keystrokes (e.g. `\n` ≠ submit). */
   paste?: boolean;
@@ -156,30 +159,51 @@ function lookupCsi(tail: string): KeyEvent | null {
   return null;
 }
 
+const MOD_SHIFT = 1;
+const MOD_ALT = 2;
+const MOD_CTRL = 4;
+const MOD_SUPER = 8;
+const MOD_HYPER = 16;
+const MOD_META = 32;
+const MOD_CAPS_LOCK = 64;
+const MOD_NUM_LOCK = 128;
+const MOD_KNOWN =
+  MOD_SHIFT | MOD_ALT | MOD_CTRL | MOD_SUPER | MOD_HYPER | MOD_META | MOD_CAPS_LOCK | MOD_NUM_LOCK;
+
+function decodeModifierFlags(bits: number): Partial<KeyEvent> | null {
+  if ((bits & ~MOD_KNOWN) !== 0) return null;
+  const ev: Partial<KeyEvent> = {};
+  if ((bits & MOD_SHIFT) !== 0) ev.shift = true;
+  if ((bits & MOD_CTRL) !== 0) ev.ctrl = true;
+  if ((bits & MOD_ALT) !== 0) ev.alt = true;
+  if ((bits & MOD_SUPER) !== 0) ev.super = true;
+  if ((bits & MOD_HYPER) !== 0) ev.hyper = true;
+  if ((bits & MOD_META) !== 0) ev.meta = true;
+  return ev;
+}
+
+export function normalizeModifiers(ev: KeyEvent): KeyEvent {
+  if (!ev.alt || !ev.meta) return ev;
+  const normalized = { ...ev };
+  normalized.meta = undefined;
+  return normalized;
+}
+
 /** modifyOtherKeys / Kitty: reconstruct the keystroke from `<codepoint>` + `<mod>`. */
 function decodeModifiedKey(cp: number, mod: number): KeyEvent | null {
-  if (mod < 1 || mod > 8) return null;
+  if (mod < 1) return null;
   const bits = mod - 1;
-  const shift = (bits & 1) !== 0;
-  const alt = (bits & 2) !== 0;
-  const ctrl = (bits & 4) !== 0;
-  if (cp >= 0x20 && cp <= 0x7e && !ctrl && !alt) {
-    const ev: KeyEvent = { input: String.fromCharCode(cp) };
-    if (shift) ev.shift = true;
-    return ev;
-  }
-  if (cp >= 0x20 && cp <= 0x7e && alt && !ctrl) {
-    const ev: KeyEvent = { input: String.fromCharCode(cp), meta: true };
-    if (shift) ev.shift = true;
-    return ev;
-  }
-  if (cp >= 0x41 && cp <= 0x7a && ctrl && !alt) {
-    const ev: KeyEvent = {
-      input: String.fromCharCode(cp).toLowerCase(),
-      ctrl: true,
-    };
-    if (shift) ev.shift = true;
-    return ev;
+  const modifiers = decodeModifierFlags(bits);
+  if (!modifiers) return null;
+  if (cp === 9) return normalizeModifiers({ input: "", tab: true, ...modifiers });
+  if (cp === 13) return normalizeModifiers({ input: "", return: true, ...modifiers });
+  if (cp === 27) return normalizeModifiers({ input: "", escape: true, ...modifiers });
+  if (cp >= 0x20 && cp <= 0x7e) {
+    const input =
+      modifiers.ctrl && cp >= 0x41 && cp <= 0x7a
+        ? String.fromCharCode(cp).toLowerCase()
+        : String.fromCharCode(cp);
+    return normalizeModifiers({ input, ...modifiers });
   }
   return null;
 }
@@ -416,13 +440,13 @@ export class StdinReader {
         // Alt+Enter: ESC + CR (or ESC + LF). Universal newline shortcut on terminals
         // that don't support modifyOtherKeys (Shift+Enter falls through to plain Enter there).
         if (ch === "\r" || ch === "\n") {
-          this.dispatch({ input: "", return: true, meta: true });
+          this.dispatch({ input: "", return: true, alt: true });
           this.state = "idle";
           i++;
           continue;
         }
         // ESC + any other char = Alt+key (rare; we still dispatch).
-        this.dispatch({ input: ch, meta: true });
+        this.dispatch({ input: ch, alt: true });
         this.state = "idle";
         i++;
         continue;
