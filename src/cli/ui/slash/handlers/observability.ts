@@ -110,6 +110,7 @@ const status: SlashHandler = (_args, loop, ctx) => {
   const workspaceLine = ctx.codeRoot
     ? t("handlers.observability.statusWorkspace", { path: ctx.codeRoot })
     : "";
+  const toolCacheLine = renderToolCacheStatusLine(loop);
   const codeRelLine = renderCodeRelationStatusLine();
   const toonLine = renderToonStatusLine();
   const lines = [
@@ -124,6 +125,7 @@ const status: SlashHandler = (_args, loop, ctx) => {
     mcpLine,
     sessionLine,
   ];
+  if (toolCacheLine) lines.push(toolCacheLine);
   if (codeRelLine) lines.push(codeRelLine);
   if (toonLine) lines.push(toonLine);
   if (workspaceLine) lines.push(workspaceLine);
@@ -134,6 +136,17 @@ const status: SlashHandler = (_args, loop, ctx) => {
   if (dashLine) lines.push(dashLine);
   return { info: lines.join("\n") };
 };
+
+function renderToolCacheStatusLine(loop: import("@/loop.js").CacheFirstLoop): string {
+  const stats = loop.getCacheStats();
+  const fileTotal = stats.fileCache.hits + stats.fileCache.misses;
+  const parseTotal = stats.parseCache.hits + stats.parseCache.misses;
+  const webTotal = stats.webFetchCache.hits + stats.webFetchCache.misses;
+  const fileRate = fileTotal > 0 ? (stats.fileCache.hits / fileTotal) * 100 : 0;
+  const parseRate = parseTotal > 0 ? (stats.parseCache.hits / parseTotal) * 100 : 0;
+  const webRate = webTotal > 0 ? (stats.webFetchCache.hits / webTotal) * 100 : 0;
+  return `tool-cache: file=${fileRate.toFixed(1)}% ${stats.fileCache.hits}/${fileTotal} size=${compactNum(stats.fileCache.sizeBytes)}B parse=${parseRate.toFixed(1)}% ${stats.parseCache.hits}/${parseTotal} web=${webRate.toFixed(1)}% ${stats.webFetchCache.hits}/${webTotal} evict=${stats.fileCache.evictions}/${stats.parseCache.evictions}/${stats.webFetchCache.evictions}`;
+}
 
 function renderCodeRelationStatusLine(): string {
   const stats = getCodeRelationStats();

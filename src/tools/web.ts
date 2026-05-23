@@ -1,6 +1,7 @@
 /** web_search uses Mojeek (DDG returns anti-bot 202 to unauthenticated POSTs); web_fetch sniffs HTML to text. */
 
 import { parse as parseHtml } from "node-html-parser";
+import { type WebFetchCache, shouldCacheWebFetchResponse } from "../cache/web-fetch.js";
 import {
   loadExaApiKey,
   loadMetasoApiKey,
@@ -35,6 +36,10 @@ export interface WebFetchOptions {
   /** Timeout in ms. Defaults to 15_000. */
   timeoutMs?: number;
   signal?: AbortSignal;
+}
+
+interface WebFetchRuntimeOptions extends WebFetchOptions {
+  cache?: WebFetchCache;
 }
 
 export interface WebSearchOptions {
@@ -646,9 +651,15 @@ export function parseMojeekResults(html: string): SearchResult[] {
   return results;
 }
 
-export async function webFetch(url: string, opts: WebFetchOptions = {}): Promise<PageContent> {
+export async function webFetch(
+  url: string,
+  opts: WebFetchRuntimeOptions = {},
+): Promise<PageContent> {
   const maxChars = opts.maxChars ?? DEFAULT_FETCH_MAX_CHARS;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
+  if (opts.signal?.aborted) throw opts.signal.reason ?? new Error("aborted");
+  const cached = opts.cache?.get(url, maxChars);
+  if (cached) return cached;
   const ctl = new AbortController();
   // Track whether the abort came from our internal timer vs the caller's
   // signal — only the timer-driven abort should produce a "timed out" hint.
@@ -677,6 +688,7 @@ export async function webFetch(url: string, opts: WebFetchOptions = {}): Promise
     opts.signal?.removeEventListener("abort", cancel);
   }
   if (!resp.ok) throw new Error(fetchStatusError(resp.status, url));
+  const cacheable = shouldCacheWebFetchResponse(resp);
   const contentType = resp.headers.get("content-type") ?? "";
   // Pre-check Content-Length when the server provides it. Cheaper to
   // refuse upfront than to start streaming a 1GB ISO.
@@ -697,7 +709,9 @@ export async function webFetch(url: string, opts: WebFetchOptions = {}): Promise
   const finalText = truncated
     ? `${text.slice(0, maxChars)}\n\n[… truncated ${text.length - maxChars} chars …]`
     : text;
-  return { url, title, text: finalText, truncated };
+  const page = { url, title, text: finalText, truncated };
+  if (cacheable) opts.cache?.set(url, maxChars, page);
+  return page;
 }
 
 /** Streams + caps so chunked responses (or servers lying about Content-Length) can't balloon the heap. */
@@ -900,6 +914,7 @@ export function registerWebTools(registry: ToolRegistry, opts: WebToolsOptions =
       const page = await webFetch(args.url, {
         maxChars: maxFetchChars,
         signal: ctx?.signal,
+        cache: ctx?.webFetchCache,
       });
       const header = page.title ? `${page.title}\n${page.url}` : page.url;
       return `${header}\n\n${page.text}`;

@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import * as pathMod from "node:path";
+import type { ToolCallContext } from "../../tools.js";
 import { writeFileNoFollow as writeNoFollow } from "./gate.js";
 
 function displayRel(rootDir: string, full: string): string {
@@ -10,11 +11,14 @@ export async function applyEdit(
   rootDir: string,
   abs: string,
   args: { search: string; replace: string },
+  ctx?: ToolCallContext,
 ): Promise<string> {
   if (args.search.length === 0) {
     throw new Error("edit_file: search cannot be empty");
   }
-  const before = await fs.readFile(abs, "utf8");
+  const stat = await fs.stat(abs);
+  const cached = ctx?.fileCache?.get(abs, stat);
+  const before = cached ? cached.raw.toString("utf8") : await fs.readFile(abs, "utf8");
   const le = before.includes("\r\n") ? "\r\n" : "\n";
   const adaptedSearch = args.search.replace(/\r?\n/g, le);
   const adaptedReplace = args.replace.replace(/\r?\n/g, le);
@@ -31,6 +35,8 @@ export async function applyEdit(
   const after =
     before.slice(0, firstIdx) + adaptedReplace + before.slice(firstIdx + adaptedSearch.length);
   await fs.writeFile(abs, after, "utf8");
+  ctx?.fileCache?.invalidate(abs);
+  ctx?.parseCache?.invalidate(abs);
   const rel = displayRel(rootDir, abs);
   const header = `edited ${rel} (${adaptedSearch.length}→${adaptedReplace.length} chars)`;
   const startLine = before.slice(0, firstIdx).split(/\r?\n/).length;
@@ -47,6 +53,7 @@ export interface MultiEditEntry {
 export async function applyMultiEdit(
   rootDir: string,
   edits: ReadonlyArray<MultiEditEntry>,
+  ctx?: ToolCallContext,
 ): Promise<string> {
   if (edits.length === 0) {
     throw new Error("multi_edit: edits must contain at least one entry");
@@ -84,7 +91,9 @@ export async function applyMultiEdit(
     if (!state) {
       let before: string;
       try {
-        before = await fs.readFile(e.abs, "utf8");
+        const stat = await fs.stat(e.abs);
+        const cached = ctx?.fileCache?.get(e.abs, stat);
+        before = cached ? cached.raw.toString("utf8") : await fs.readFile(e.abs, "utf8");
       } catch (err) {
         throw new Error(
           `multi_edit: edit #${i + 1} cannot read ${rel}: ${(err as Error).message} (no edits applied)`,
@@ -125,6 +134,10 @@ export async function applyMultiEdit(
     for (const [abs, state] of filesByPath) {
       attempted.push({ abs, before: state.before });
       await writeNoFollow(abs, state.buf);
+    }
+    for (const abs of filesByPath.keys()) {
+      ctx?.fileCache?.invalidate(abs);
+      ctx?.parseCache?.invalidate(abs);
     }
   } catch (writeErr) {
     const rollbackFailures: string[] = [];

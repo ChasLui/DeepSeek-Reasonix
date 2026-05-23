@@ -24,6 +24,29 @@ export interface StatsOptions {
   now?: number;
 }
 
+export interface DashboardCacheStats {
+  fileCache: {
+    hits: number;
+    misses: number;
+    evictions: number;
+    sizeBytes: number;
+    entries: number;
+  };
+  parseCache: {
+    hits: number;
+    misses: number;
+    evictions: number;
+    entries: number;
+  };
+  webFetchCache: {
+    hits: number;
+    misses: number;
+    evictions: number;
+    entries: number;
+    skipped: number;
+  };
+}
+
 export function statsCommand(opts: StatsOptions): void {
   if (opts.transcript) {
     transcriptSummary(opts.transcript);
@@ -89,10 +112,15 @@ function dashboard(opts: StatsOptions): void {
 }
 
 /** Pure renderer — pulled out so tests can assert on the string directly. */
-export function renderDashboard(agg: UsageAggregate, logPath: string): string {
+export function renderDashboard(
+  agg: UsageAggregate,
+  logPath: string,
+  cacheStats?: DashboardCacheStats,
+): string {
   const lines: string[] = [];
   const size = formatLogSize(logPath);
   lines.push(`Reasonix usage — ${logPath}${size ? ` (${size})` : ""}`);
+  lines.push(renderToolCacheLine(cacheStats));
   lines.push("");
   lines.push(header());
   lines.push(divider());
@@ -123,6 +151,27 @@ export function renderDashboard(agg: UsageAggregate, logPath: string): string {
     lines.push(renderSubagentSection(agg.subagents));
   }
   return lines.join("\n");
+}
+
+function renderToolCacheLine(stats?: DashboardCacheStats): string {
+  if (!stats) {
+    const file = process.env.REASONIX_FILE_CACHE === "0" ? "off" : "on";
+    const parse = process.env.REASONIX_PARSE_CACHE === "0" ? "off" : "on";
+    const web = process.env.REASONIX_WEB_FETCH_CACHE === "0" ? "off" : "on";
+    return `tool cache:      file=${file} parse=${parse} web-fetch=${web} (session-local hit rates are shown in /status)`;
+  }
+  const fileTotal = stats.fileCache.hits + stats.fileCache.misses;
+  const parseTotal = stats.parseCache.hits + stats.parseCache.misses;
+  const webTotal = stats.webFetchCache.hits + stats.webFetchCache.misses;
+  const fileRate = fileTotal > 0 ? (stats.fileCache.hits / fileTotal) * 100 : 0;
+  const parseRate = parseTotal > 0 ? (stats.parseCache.hits / parseTotal) * 100 : 0;
+  const webRate = webTotal > 0 ? (stats.webFetchCache.hits / webTotal) * 100 : 0;
+  return [
+    `tool cache:      file ${fileRate.toFixed(1)}% (${stats.fileCache.hits}/${fileTotal})`,
+    `parse ${parseRate.toFixed(1)}% (${stats.parseCache.hits}/${parseTotal})`,
+    `web ${webRate.toFixed(1)}% (${stats.webFetchCache.hits}/${webTotal})`,
+    `evict f=${stats.fileCache.evictions} p=${stats.parseCache.evictions} w=${stats.webFetchCache.evictions}`,
+  ].join(" · ");
 }
 
 function renderSubagentSection(sub: NonNullable<UsageAggregate["subagents"]>): string {

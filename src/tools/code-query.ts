@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import { resolve as pathResolve } from "node:path";
 import {
   type CodeMatchKind,
@@ -14,7 +14,7 @@ import {
 } from "../code-query/relations.js";
 import { recordCodeRelationQuery } from "../code-query/stats.js";
 import { extractSymbols } from "../code-query/symbols.js";
-import type { ToolRegistry } from "../tools.js";
+import type { ToolCallContext, ToolRegistry } from "../tools.js";
 
 export interface CodeQueryToolOpts {
   rootDir: string;
@@ -45,13 +45,17 @@ export function registerCodeQueryTools(registry: ToolRegistry, opts: CodeQueryTo
       },
       required: ["path"],
     },
-    fn: async (args: { path: string }) => {
+    fn: async (args: { path: string }, ctx?: ToolCallContext) => {
       const filePath = resolveProjectPath(rootDir, args.path);
       if (!grammarForPath(filePath)) {
         return JSON.stringify({ path: args.path, error: UNSUPPORTED });
       }
       const source = await readFile(filePath, "utf8");
-      const symbols = await extractSymbols(filePath, source);
+      const stat = await lstat(filePath);
+      const symbols = await extractSymbols(filePath, source, {
+        parseCache: ctx?.parseCache,
+        stat,
+      });
       return JSON.stringify({ path: args.path, symbols });
     },
   });
@@ -82,15 +86,19 @@ export function registerCodeQueryTools(registry: ToolRegistry, opts: CodeQueryTo
       },
       required: ["name", "path"],
     },
-    fn: async (args: { name: string; path: string; kind?: string }) => {
+    fn: async (args: { name: string; path: string; kind?: string }, ctx?: ToolCallContext) => {
       const filePath = resolveProjectPath(rootDir, args.path);
       if (!grammarForPath(filePath)) {
         return JSON.stringify({ path: args.path, error: UNSUPPORTED });
       }
       const source = await readFile(filePath, "utf8");
+      const stat = await lstat(filePath);
       const kind = (args.kind ?? "any") as CodeMatchKind | "any";
       const findOpts: FindInCodeOptions = kind === "any" ? {} : { kind };
-      const matches = await findInCode(filePath, source, args.name, findOpts);
+      const matches = await findInCode(filePath, source, args.name, findOpts, {
+        parseCache: ctx?.parseCache,
+        stat,
+      });
       return JSON.stringify({ path: args.path, matches });
     },
   });
@@ -129,10 +137,15 @@ export function registerCodeQueryTools(registry: ToolRegistry, opts: CodeQueryTo
       },
       required: ["symbol", "relation"],
     },
-    fn: async (args: { symbol: string; relation: string; scope?: string }) => {
+    fn: async (
+      args: { symbol: string; relation: string; scope?: string },
+      ctx?: ToolCallContext,
+    ) => {
       try {
         const relation = args.relation as "callers" | "callees" | "importers" | "imports";
-        return JSON.stringify(await findReferences(rootDir, { ...args, relation }));
+        return JSON.stringify(
+          await findReferences(rootDir, { ...args, relation }, { parseCache: ctx?.parseCache }),
+        );
       } catch (err) {
         recordCodeRelationQuery({ fallback: true });
         return JSON.stringify({
@@ -164,13 +177,17 @@ export function registerCodeQueryTools(registry: ToolRegistry, opts: CodeQueryTo
         },
       },
     },
-    fn: async (args: { scope?: string; includeCallers?: boolean }) => {
+    fn: async (args: { scope?: string; includeCallers?: boolean }, ctx?: ToolCallContext) => {
       try {
         return JSON.stringify(
-          await detectChanges(rootDir, {
-            scope: (args.scope ?? "unstaged") as DetectChangesScope,
-            includeCallers: args.includeCallers === true,
-          }),
+          await detectChanges(
+            rootDir,
+            {
+              scope: (args.scope ?? "unstaged") as DetectChangesScope,
+              includeCallers: args.includeCallers === true,
+            },
+            { parseCache: ctx?.parseCache },
+          ),
         );
       } catch (err) {
         recordCodeRelationQuery({ fallback: true });
@@ -217,22 +234,29 @@ export function registerCodeQueryTools(registry: ToolRegistry, opts: CodeQueryTo
       },
       required: ["symbol"],
     },
-    fn: async (args: {
-      symbol: string;
-      direction?: string;
-      maxDepth?: number;
-      minConfidence?: "AMBIGUOUS" | "INFERRED" | "EXTRACTED";
-      scope?: string;
-    }) => {
+    fn: async (
+      args: {
+        symbol: string;
+        direction?: string;
+        maxDepth?: number;
+        minConfidence?: "AMBIGUOUS" | "INFERRED" | "EXTRACTED";
+        scope?: string;
+      },
+      ctx?: ToolCallContext,
+    ) => {
       try {
         return JSON.stringify(
-          await impact(rootDir, {
-            symbol: args.symbol,
-            direction: "callers",
-            maxDepth: args.maxDepth,
-            minConfidence: args.minConfidence,
-            scope: args.scope,
-          }),
+          await impact(
+            rootDir,
+            {
+              symbol: args.symbol,
+              direction: "callers",
+              maxDepth: args.maxDepth,
+              minConfidence: args.minConfidence,
+              scope: args.scope,
+            },
+            { parseCache: ctx?.parseCache },
+          ),
         );
       } catch (err) {
         recordCodeRelationQuery({ fallback: true });

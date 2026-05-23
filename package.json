@@ -79,6 +79,7 @@
     "ink": "^7.0.2",
     "ink-text-input": "^6.0.0",
     "jsonrepair": "^3.14.0",
+    "lru-cache": "^11.5.0",
     "node-html-parser": "^7.1.0",
     "picomatch": "^4.0.4",
     "react": "^19.2.6",

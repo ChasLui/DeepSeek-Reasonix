@@ -4,7 +4,12 @@ import { lstat, readFile, readdir } from "node:fs/promises";
 import { basename, extname, isAbsolute, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { classifyIdentifierNode, isIdentifierNode, walkCodeNodes } from "./find-in-code.js";
-import { getParser, grammarForPath } from "./parser.js";
+import {
+  type ParseSourceOptions,
+  type ParseTreeCache,
+  grammarForPath,
+  parseSource,
+} from "./parser.js";
 import { recordCodeRelationQuery } from "./stats.js";
 import { type CodeSymbol, extractSymbols } from "./symbols.js";
 
@@ -31,6 +36,10 @@ export interface ImpactArgs {
   maxDepth?: number;
   minConfidence?: ConfidenceTier;
   scope?: string;
+}
+
+export interface CodeRelationRuntimeOptions {
+  parseCache?: ParseTreeCache;
 }
 
 export interface SymbolRef {
@@ -177,10 +186,11 @@ const confidenceScore = {
 export async function findReferences(
   rootDir: string,
   args: FindReferencesArgs,
+  opts: CodeRelationRuntimeOptions = {},
 ): Promise<FindReferencesResult> {
   const symbol = normalizeSymbol(args.symbol);
   const scope = args.scope?.trim() || ".";
-  const snapshot = await loadProjectSnapshot(rootDir, scope);
+  const snapshot = await loadProjectSnapshot(rootDir, scope, opts);
   let records: CodeRelationRecord[];
   if (args.relation === "callers") {
     records = callerRecords(snapshot, symbol);
@@ -211,6 +221,7 @@ export async function findReferences(
 export async function detectChanges(
   rootDir: string,
   args: DetectChangesArgs = {},
+  opts: CodeRelationRuntimeOptions = {},
 ): Promise<DetectChangesResult> {
   const scope = args.scope ?? "unstaged";
   const diff = await readGitDiff(rootDir, scope);
@@ -228,7 +239,11 @@ export async function detectChanges(
       continue;
     }
     const source = await readFile(absPath, "utf8");
-    const symbols = await extractSymbols(absPath, source);
+    const stat = await lstat(absPath);
+    const symbols = await extractSymbols(absPath, source, {
+      parseCache: opts.parseCache,
+      stat,
+    });
     changedFiles.push({
       path,
       hunks: fileHunks,
@@ -241,10 +256,14 @@ export async function detectChanges(
     callers = [];
     for (const file of changedFiles) {
       for (const symbol of file.symbols) {
-        const refs = await findReferences(rootDir, {
-          symbol: symbol.name,
-          relation: "callers",
-        });
+        const refs = await findReferences(
+          rootDir,
+          {
+            symbol: symbol.name,
+            relation: "callers",
+          },
+          opts,
+        );
         callers.push({ symbol: symbol.name, file: file.path, records: refs.records });
       }
     }
@@ -258,7 +277,11 @@ export async function detectChanges(
   return { scope, bestEffort: true, changedFiles, ...(callers ? { callers } : {}) };
 }
 
-export async function impact(rootDir: string, args: ImpactArgs): Promise<ImpactResult> {
+export async function impact(
+  rootDir: string,
+  args: ImpactArgs,
+  opts: CodeRelationRuntimeOptions = {},
+): Promise<ImpactResult> {
   const symbol = normalizeSymbol(args.symbol);
   const requestedDepth = positiveInteger(args.maxDepth) ?? 2;
   const maxDepth = Math.min(2, Math.max(1, requestedDepth));
@@ -273,11 +296,15 @@ export async function impact(rootDir: string, args: ImpactArgs): Promise<ImpactR
     const depthRecords: CodeRelationRecord[] = [];
     const next = new Set<string>();
     for (const current of frontier.sort()) {
-      const refs = await findReferences(rootDir, {
-        symbol: current,
-        relation: "callers",
-        scope: args.scope,
-      });
+      const refs = await findReferences(
+        rootDir,
+        {
+          symbol: current,
+          relation: "callers",
+          scope: args.scope,
+        },
+        opts,
+      );
       for (const record of refs.records) {
         if (CONFIDENCE_ORDER.indexOf(record.confidence) < minRank) continue;
         depthRecords.push({ ...record, relation: "callers" });
@@ -322,19 +349,25 @@ function normalizeSymbol(symbol: string): string {
   return trimmed;
 }
 
-async function loadProjectSnapshot(rootDir: string, scope: string): Promise<ProjectSnapshot> {
+async function loadProjectSnapshot(
+  rootDir: string,
+  scope: string,
+  opts: CodeRelationRuntimeOptions,
+): Promise<ProjectSnapshot> {
   const listed = await listCodeFiles(rootDir, scope);
   const files: ProjectFile[] = [];
   for (const absPath of listed.files) {
     const source = await readFile(absPath, "utf8");
+    const stat = await lstat(absPath);
     const path = rootRelativePath(rootDir, absPath);
-    const symbols = await extractSymbols(absPath, source);
+    const parseOpts: ParseSourceOptions = { parseCache: opts.parseCache, stat };
+    const symbols = await extractSymbols(absPath, source, parseOpts);
     files.push({
       path,
       absPath,
       source,
       symbols,
-      calls: await extractCalls(absPath, path, source, symbols),
+      calls: await extractCalls(absPath, path, source, symbols, parseOpts),
       imports: extractImports(path, source).map((entry) => resolveImport(rootDir, absPath, entry)),
     });
   }
@@ -381,37 +414,33 @@ async function extractCalls(
   relPath: string,
   source: string,
   symbols: CodeSymbol[],
+  parseOpts: ParseSourceOptions = {},
 ): Promise<CallOccurrence[]> {
   const grammar = grammarForPath(absPath);
   if (!grammar) return [];
-  const parser = await getParser(grammar);
+  const parsed = await parseSource(absPath, source, parseOpts);
+  if (!parsed) return [];
   try {
-    const tree = parser.parse(source);
-    if (!tree) return [];
-    try {
-      const sourceLines = source.split(/\r?\n/);
-      const calls: CallOccurrence[] = [];
-      walkCodeNodes(tree.rootNode, (node) => {
-        if (!isIdentifierNode(node)) return;
-        if (classifyIdentifierNode(node) !== "call") return;
-        const line = node.startPosition.row + 1;
-        const column = node.startPosition.column + 1;
-        calls.push({
-          file: relPath,
-          line,
-          column,
-          name: node.text,
-          snippet: sourceLines[node.startPosition.row] ?? "",
-          owner: ownerRef(relPath, findInnermostSymbol(symbols, line, column)),
-        });
+    const sourceLines = source.split(/\r?\n/);
+    const calls: CallOccurrence[] = [];
+    walkCodeNodes(parsed.tree.rootNode, (node) => {
+      if (!isIdentifierNode(node)) return;
+      if (classifyIdentifierNode(node) !== "call") return;
+      const line = node.startPosition.row + 1;
+      const column = node.startPosition.column + 1;
+      calls.push({
+        file: relPath,
+        line,
+        column,
+        name: node.text,
+        snippet: sourceLines[node.startPosition.row] ?? "",
+        owner: ownerRef(relPath, findInnermostSymbol(symbols, line, column)),
       });
-      calls.sort((a, b) => a.line - b.line || a.column - b.column || a.name.localeCompare(b.name));
-      return calls;
-    } finally {
-      tree.delete();
-    }
+    });
+    calls.sort((a, b) => a.line - b.line || a.column - b.column || a.name.localeCompare(b.name));
+    return calls;
   } finally {
-    parser.delete();
+    parsed.tree.delete();
   }
 }
 

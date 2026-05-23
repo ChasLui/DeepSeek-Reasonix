@@ -128,7 +128,7 @@ const update: SlashHandler = (_args, _loop, ctx) => {
   return { info: lines.join("\n") };
 };
 
-const stats: SlashHandler = () => {
+const stats: SlashHandler = (_args, loop) => {
   const path = defaultUsageLogPath();
   const records = readUsageLog(path);
   if (records.length === 0) {
@@ -144,7 +144,7 @@ const stats: SlashHandler = () => {
     };
   }
   const agg = aggregateUsage(records);
-  return { info: renderDashboard(agg, path) };
+  return { info: renderDashboard(agg, path, loop.getCacheStats()) };
 };
 
 export const handlers: Record<string, SlashHandler> = {

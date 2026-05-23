@@ -70,12 +70,31 @@ export async function runDoctorChecks(projectRoot: string): Promise<DoctorCheck[
     r[6],
     r[7],
     checkVfsLite(),
+    checkToolCache(),
     checkReadDedup(),
     checkCodeRelations(),
     checkToon(),
     checkBudget(),
     checkToolset(),
   ];
+}
+
+function checkToolCache(): Check {
+  const fileState =
+    process.env.REASONIX_FILE_CACHE === "0" ? "file-cache disabled" : "file-cache enabled";
+  const parseState =
+    process.env.REASONIX_PARSE_CACHE === "0" ? "parse-cache disabled" : "parse-cache enabled";
+  const webFetchState =
+    process.env.REASONIX_WEB_FETCH_CACHE === "0"
+      ? "web-fetch-cache disabled"
+      : "web-fetch-cache enabled";
+  const debug = process.env.REASONIX_CACHE_DEBUG === "1" ? " · debug eviction logging on" : "";
+  return {
+    id: "cache",
+    label: "cache        ",
+    level: "ok",
+    detail: `${fileState}; ${parseState}; ${webFetchState} (session-owned, in-memory)${debug}`,
+  };
 }
 
 /** Read-dedup config status. Hit counts are session-scoped (loop-owned), so a

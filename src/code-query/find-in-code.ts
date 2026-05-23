@@ -1,5 +1,5 @@
 import type { Node } from "web-tree-sitter";
-import { getParser, grammarForPath } from "./parser.js";
+import { type ParseSourceOptions, grammarForPath, parseSource } from "./parser.js";
 
 export type CodeMatchKind = "call" | "definition" | "reference";
 
@@ -77,38 +77,34 @@ export async function findInCode(
   source: string,
   name: string,
   opts: FindInCodeOptions = {},
+  parseOpts: ParseSourceOptions = {},
 ): Promise<CodeMatch[]> {
   if (!name) return [];
   const grammar = grammarForPath(filePath);
   if (!grammar) return [];
-  const parser = await getParser(grammar);
+  const parsed = await parseSource(filePath, source, parseOpts);
+  if (!parsed) return [];
   try {
-    const tree = parser.parse(source);
-    if (!tree) return [];
-    try {
-      const sourceLines = source.split(/\r?\n/);
-      const matches: CodeMatch[] = [];
-      walkCodeNodes(tree.rootNode, (node) => {
-        if (!isIdentifierNode(node)) return;
-        if (node.text !== name) return;
-        const kind = classifyIdentifierNode(node);
-        const filter = opts.kind ?? "any";
-        if (filter !== "any" && filter !== kind) return;
-        const line = node.startPosition.row + 1;
-        const column = node.startPosition.column + 1;
-        matches.push({
-          line,
-          column,
-          kind,
-          snippet: sourceLines[node.startPosition.row] ?? "",
-        });
+    const sourceLines = source.split(/\r?\n/);
+    const matches: CodeMatch[] = [];
+    walkCodeNodes(parsed.tree.rootNode, (node) => {
+      if (!isIdentifierNode(node)) return;
+      if (node.text !== name) return;
+      const kind = classifyIdentifierNode(node);
+      const filter = opts.kind ?? "any";
+      if (filter !== "any" && filter !== kind) return;
+      const line = node.startPosition.row + 1;
+      const column = node.startPosition.column + 1;
+      matches.push({
+        line,
+        column,
+        kind,
+        snippet: sourceLines[node.startPosition.row] ?? "",
       });
-      return matches;
-    } finally {
-      tree.delete();
-    }
+    });
+    return matches;
   } finally {
-    parser.delete();
+    parsed.tree.delete();
   }
 }
 

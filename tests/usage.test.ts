@@ -371,6 +371,7 @@ describe("renderDashboard", () => {
     expect(out).toContain("month");
     expect(out).toContain("all-time");
     expect(out).toContain("cache hit");
+    expect(out).toContain("tool cache:");
     expect(out).toContain("cache saved");
     expect(out).toContain("vs Claude");
     expect(out).toContain("most used model:");

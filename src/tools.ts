@@ -1,3 +1,6 @@
+import type { FileReadCache } from "./cache/file-read.js";
+import type { WebFetchCache } from "./cache/web-fetch.js";
+import type { ParseTreeCache } from "./code-query/parser.js";
 import { type ToonMode, resolveToonMode } from "./config.js";
 import type { PauseGate } from "./core/pause-gate.js";
 import { truncateForModel, truncateForModelByTokens } from "./mcp/registry.js";
@@ -21,6 +24,12 @@ export interface ToolCallContext {
   confirmationGate?: PauseGate;
   /** Session-scoped read-dedup state (loop-owned). Present iff dedup is live for this session. */
   readDedup?: ReadDedupState;
+  /** Session-scoped file content cache (loop-owned). */
+  fileCache?: FileReadCache;
+  /** Session-scoped tree-sitter parse cache (loop-owned). */
+  parseCache?: ParseTreeCache;
+  /** Session-scoped web_fetch response cache (loop-owned). */
+  webFetchCache?: WebFetchCache;
   /** Token budget the dispatcher will truncate this result to — read_file uses it to refuse dedup on bodies that won't survive intact. */
   maxResultTokens?: number;
 }
@@ -209,6 +218,12 @@ export class ToolRegistry {
       confirmationGate?: PauseGate;
       /** Session-scoped read-dedup state; forwarded to the tool fn's ctx. */
       readDedup?: ReadDedupState;
+      /** Session-scoped file content cache; forwarded to the tool fn's ctx. */
+      fileCache?: FileReadCache;
+      /** Session-scoped tree-sitter parse cache; forwarded to the tool fn's ctx. */
+      parseCache?: ParseTreeCache;
+      /** Session-scoped web_fetch response cache; forwarded to the tool fn's ctx. */
+      webFetchCache?: WebFetchCache;
     } = {},
   ): Promise<string> {
     const tool = this._tools.get(name);
@@ -334,6 +349,9 @@ export class ToolRegistry {
         signal: opts.signal,
         confirmationGate: opts.confirmationGate,
         readDedup: opts.readDedup,
+        fileCache: opts.fileCache,
+        parseCache: opts.parseCache,
+        webFetchCache: opts.webFetchCache,
         maxResultTokens: opts.maxResultTokens,
       });
       const str = this._serializeResult(result);

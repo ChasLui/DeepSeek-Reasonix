@@ -9,6 +9,7 @@ export interface FileIdentity {
   ino: number;
   size: number;
   mtimeMs: number;
+  ctimeMs?: number;
 }
 
 interface DedupEntry extends FileIdentity {

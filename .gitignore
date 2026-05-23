@@ -94,3 +94,5 @@ bun.lock
 .design-ref/
 .ccb/
 .wolf/
+docs/plans/
+bin/plan-lint.sh

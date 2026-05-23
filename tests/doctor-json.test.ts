@@ -89,6 +89,11 @@ describe("doctorCommand --json (integration)", () => {
       status: "ok",
       message: expect.stringContaining("enabled mode=all"),
     });
+    expect(parsed.checks).toContainEqual({
+      id: "cache",
+      status: "ok",
+      message: expect.stringContaining("file-cache enabled; parse-cache enabled"),
+    });
     for (const c of parsed.checks) {
       expect(typeof c.id).toBe("string");
       expect(["ok", "warn", "fail"]).toContain(c.status);

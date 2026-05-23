@@ -1,6 +1,12 @@
 import { type Node, Query } from "web-tree-sitter";
 import { nullPrototype } from "../utils/safe-object.js";
-import { type GrammarName, getParser, grammarForPath } from "./parser.js";
+import {
+  type GrammarName,
+  type ParseSourceOptions,
+  getLanguage,
+  grammarForPath,
+  parseSource,
+} from "./parser.js";
 
 export type SymbolKind =
   | "function"
@@ -114,25 +120,26 @@ const METHOD_PROMOTING_CONTAINER_TYPES = new Set([
   "trait_item",
 ]);
 
-export async function extractSymbols(filePath: string, source: string): Promise<CodeSymbol[]> {
+export async function extractSymbols(
+  filePath: string,
+  source: string,
+  opts: ParseSourceOptions = {},
+): Promise<CodeSymbol[]> {
   const grammar = grammarForPath(filePath);
   if (!grammar) return [];
-  const parser = await getParser(grammar);
+  const parsed = await parseSource(filePath, source, opts);
+  if (!parsed) return [];
+  const language = await getLanguage(grammar, opts);
   try {
-    const tree = parser.parse(source);
-    if (!tree) return [];
-    const language = parser.language;
-    if (!language) return [];
     const query = new Query(language, QUERIES[grammar]);
     try {
-      const matches = query.matches(tree.rootNode);
+      const matches = query.matches(parsed.tree.rootNode);
       return matchesToSymbols(matches);
     } finally {
       query.delete();
-      tree.delete();
     }
   } finally {
-    parser.delete();
+    parsed.tree.delete();
   }
 }
 

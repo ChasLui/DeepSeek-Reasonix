@@ -16,6 +16,9 @@ import {
   checkBudgetWindows,
   periodWindowDays,
 } from "./budget/window.js";
+import { FileReadCache } from "./cache/file-read.js";
+import { WebFetchCache } from "./cache/web-fetch.js";
+import { ParseTreeCache } from "./code-query/parser.js";
 import { ContextManager } from "./context-manager.js";
 import { InflightSet } from "./core/inflight.js";
 import { t } from "./i18n/index.js";
@@ -129,6 +132,9 @@ export class CacheFirstLoop {
    * subagent) is isolated, and so the active log can invalidate stub-eligible
    * entries the moment a fold/heal/shrink removes their output. */
   readonly readDedup = new ReadDedupState();
+  readonly fileCache = new FileReadCache();
+  readonly parseCache = new ParseTreeCache();
+  readonly webFetchCache = new WebFetchCache();
 
   // Mutable via configure() — slash commands in the TUI / library callers tweak
   // these mid-session so users don't have to restart.
@@ -200,6 +206,18 @@ export class CacheFirstLoop {
     return this._turn;
   }
 
+  getCacheStats(): {
+    fileCache: ReturnType<FileReadCache["stats"]>;
+    parseCache: ReturnType<ParseTreeCache["stats"]>;
+    webFetchCache: ReturnType<WebFetchCache["stats"]>;
+  } {
+    return {
+      fileCache: this.fileCache.stats(),
+      parseCache: this.parseCache.stats(),
+      webFetchCache: this.webFetchCache.stats(),
+    };
+  }
+
   constructor(opts: CacheFirstLoopOptions) {
     this.client = opts.client;
     this.prefix = opts.prefix;
@@ -224,7 +242,12 @@ export class CacheFirstLoop {
     // Any compaction (fold / heal / shrink) replaces the active log, so the
     // exact prior read_file output a dedup stub points at may be gone. Drop
     // all stub-eligible entries — next reads dump in full.
-    this.log.onCompact(() => this.readDedup.invalidateAll());
+    this.log.onCompact(() => {
+      this.readDedup.invalidateAll();
+      this.fileCache.invalidateAll();
+      this.parseCache.invalidateAll();
+      this.webFetchCache.invalidateAll();
+    });
 
     const allowedNames = new Set([...this.prefix.toolSpecs.map((s) => s.function.name)]);
     // Storm breaker clears its window on mutating calls so read → edit → verify isn't a storm.
@@ -527,6 +550,9 @@ export class CacheFirstLoop {
         maxResultTokens: DEFAULT_MAX_RESULT_TOKENS,
         confirmationGate: this.confirmationGate,
         readDedup: this.readDedup,
+        fileCache: this.fileCache,
+        parseCache: this.parseCache,
+        webFetchCache: this.webFetchCache,
       });
 
       const postReport = await runHooks({

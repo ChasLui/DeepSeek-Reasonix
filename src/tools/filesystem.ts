@@ -324,6 +324,7 @@ export function registerFilesystemTools(
         // bind to the same inode — closes the stat→read TOCTOU race.
         const fh = await fs.open(abs, "r");
         let raw: Buffer;
+        let sha: string;
         let sizeBytes: number;
         let identity: FileIdentity;
         try {
@@ -333,12 +334,13 @@ export function registerFilesystemTools(
           }
           sizeBytes = stat.size;
           // Identity bound to the SAME fd that we read — symlink retarget /
-          // same-size content swap change dev/ino/mtime and miss the cache.
+          // same-size content swap changes dev/ino/mtime/ctime and misses the cache.
           identity = {
             dev: stat.dev,
             ino: stat.ino,
             size: stat.size,
             mtimeMs: stat.mtimeMs,
+            ctimeMs: stat.ctimeMs,
           };
           if (sizeBytes > HARD_MAX_FILE_BYTES) {
             return [
@@ -349,7 +351,14 @@ export function registerFilesystemTools(
               `  - read_file path:"${rel}" head:N  /  tail:N             — read N lines at the start or end`,
             ].join("\n");
           }
-          raw = await fh.readFile();
+          const cached = ctx?.fileCache?.get(abs, stat);
+          if (cached) {
+            raw = cached.raw;
+            sha = cached.sha256;
+          } else {
+            raw = await fh.readFile();
+            sha = hashContent(raw);
+          }
         } finally {
           await fh.close();
         }
@@ -357,6 +366,7 @@ export function registerFilesystemTools(
         if (looksBinary(raw)) {
           return `[refused: ${rel} appears to be binary (${formatBytes(sizeBytes)}) — read_file returns text only. Use get_file_info for stat.]`;
         }
+        ctx?.fileCache?.set(abs, identity, raw, sha, "utf8");
 
         const text = raw.toString("utf8");
         let lines = text.split(/\r?\n/);
@@ -454,7 +464,6 @@ export function registerFilesystemTools(
           outlineThreshold: outlineThresholdBytes,
         };
         const key = dedupKey(abs, emittedViewSignature(view));
-        const sha = hashContent(raw);
         const hit = dedupState.lookup(key, identity, sha);
         if (hit) {
           dedupState.markHit(hit.bytes);
@@ -799,6 +808,8 @@ export function registerFilesystemTools(
       // O_NOFOLLOW: refuse to write through a symlink at the target path
       // (same protection edit_file already has — closes a sandbox-escape hole).
       await writeFileNoFollow(abs, args.content);
+      ctx?.fileCache?.invalidate(abs);
+      ctx?.parseCache?.invalidate(abs);
       return `wrote ${args.content.length} chars to ${displayRel(rootDir, abs)}`;
     },
   });
@@ -823,7 +834,7 @@ export function registerFilesystemTools(
       required: ["path", "search", "replace"],
     },
     fn: async (args: { path: string; search: string; replace: string }, ctx?: ToolCallContext) =>
-      applyEdit(rootDir, await safePath(args.path, "edit_file", ctx, "write"), args),
+      applyEdit(rootDir, await safePath(args.path, "edit_file", ctx, "write"), args, ctx),
   });
 
   registry.register({
@@ -869,7 +880,7 @@ export function registerFilesystemTools(
           replace: e?.replace,
         })),
       );
-      return applyMultiEdit(rootDir, resolved);
+      return applyMultiEdit(rootDir, resolved, ctx);
     },
   });
 
