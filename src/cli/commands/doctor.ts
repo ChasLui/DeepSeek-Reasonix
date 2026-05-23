@@ -82,6 +82,7 @@ export async function runDoctorChecks(
     checkToolCache(),
     checkPromptCache(opts.promptCacheStats),
     checkMemoryObservation(),
+    checkMemoryHybridCli(),
     checkReadDedup(),
     checkCodeRelations(),
     checkToon(),
@@ -138,6 +139,22 @@ function checkPromptCache(stats?: PromptCacheStats): Check {
     label: "prompt-cache ",
     level: stats && stats.breaks > 0 ? "warn" : "ok",
     detail: `${sessionState}; ${diffState}; dir=${dir}`,
+  };
+}
+
+/** Hybrid memory CLI walks stdout, not runCommand, so the Pillar 4 filter
+ * registry is intentionally skipped — surfaced here so operators don't mistake
+ * the absence of compaction telemetry for a misconfiguration (R-008). */
+function checkMemoryHybridCli(): Check {
+  const killHybrid = process.env.REASONIX_HYBRID_SEARCH === "0";
+  const detail = killHybrid
+    ? "disabled via REASONIX_HYBRID_SEARCH=0; CLI falls back to lexical-only"
+    : "opt-in via --hybrid; bypass-compact-by-design — output walks stdout (not runCommand), Pillar 4 filter registry intentionally skipped";
+  return {
+    id: "memory-hybrid-cli",
+    label: "memory-hybrid",
+    level: "ok",
+    detail,
   };
 }
 
