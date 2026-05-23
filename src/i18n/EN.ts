@@ -165,7 +165,7 @@ export const EN: TranslationSchema = {
             },
             {
               key: "Ctrl+C",
-              text: "abort the running model turn; press again to quit (NOT copy — see clipboard)",
+              text: "cancel input / abort the running model turn; press again to quit (NOT copy — see clipboard)",
             },
             {
               key: "PgUp / PgDn",
@@ -669,6 +669,7 @@ export const EN: TranslationSchema = {
     flippedAutoSession: "▸ flipped to AUTO mode for the rest of the session (persisted)",
     flippedAutoWalk: "▸ flipped to AUTO mode — future edits will apply immediately. Walk exited.",
     dashboardStopped: "▸ dashboard stopped.",
+    ctrlCPressAgainToQuit: "▸ cancelled — press Ctrl+C again within 5s to quit",
     notedMemory: "▸ noted ({scope}) — {verb} {path}",
     notedScopeProject: "project",
     notedScopeGlobal: "global",
@@ -1355,7 +1356,7 @@ export const EN: TranslationSchema = {
     hintScroll: "scroll",
     hintHistory: "history",
     hintAbort: "abort",
-    hintQuit: "quit",
+    hintQuit: "cancel/quit",
     abortedHint: "turn aborted by user \u00b7 esc again to clear \u00b7 \u23ce to ask a follow-up",
     editorNoRawMode:
       "external editor unavailable \u2014 stdin doesn't support raw-mode toggling on this terminal",

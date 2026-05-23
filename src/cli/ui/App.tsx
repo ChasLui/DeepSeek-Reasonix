@@ -560,10 +560,10 @@ function AppInner({
   const [liveMcpServers, setLiveMcpServers] = useState<McpServerSummary[]>(() => mcpServers ?? []);
   const liveMcpServersRef = useRef(liveMcpServers);
   liveMcpServersRef.current = liveMcpServers;
-  // Tracks whether the current turn has been aborted via Esc, so the
-  // Esc handler only fires once per turn (repeated presses would yield
-  // stacked warning events).
+  // Tracks whether the current turn has been aborted, so repeated Esc
+  // does not stack warning events and repeated Ctrl+C can force-quit.
   const abortedThisTurn = useRef(false);
+  const ctrlCQuitArmedAt = useRef(0);
   // Mirrors the live `busy` flag for /loop's timer (it has no React
   // closure handle, only refs). Skips the firing when a prior turn is
   // still running rather than queuing a duplicate submit.
@@ -1689,7 +1689,9 @@ function AppInner({
     }
   }, [session, loop, codeMode, syncPendingCount, log, pendingEdits, startupInfoHints]);
 
-  // Esc handles "abort the current turn" separately; Ctrl+C is the universal "I'm done" key.
+  // Ctrl+C mirrors coding-agent TUIs: first press cancels/interrupts, a
+  // second quick press confirms exit. Ctrl+D remains immediate EOF-style
+  // exit for users who explicitly want to leave.
   const quitProcess = useQuit(transcriptRef);
 
   // Ctrl+D = standard TUI exit (matches the boot-banner hint). Always-on
@@ -1769,6 +1771,7 @@ function AppInner({
     // PromptInput own the key.
     const chKey = ev.input;
     const key = ev;
+    if (!(key.ctrl && key.input === "c")) ctrlCQuitArmedAt.current = 0;
     if (ev.paste) {
       // Paste content goes only to PromptInput. Don't run global
       // hotkey logic over it (a `\n` in paste shouldn't fire submit).
@@ -1778,10 +1781,18 @@ function AppInner({
       handleTurnInterrupt("ctrl-c", {
         turnActiveRef: submittingRef,
         abortedThisTurn,
+        ctrlCQuitArmedAt,
         resetPendingModals,
         isLoopActive,
         stopLoop,
         loop,
+        clearIdleInput: () => {
+          if (input.length === 0) return false;
+          setInput("");
+          setComposerCursor(0);
+          return true;
+        },
+        notifyCtrlCQuitArmed: () => log.pushInfo(t("app.ctrlCPressAgainToQuit")),
         quitProcess,
       });
       return;
@@ -1802,10 +1813,13 @@ function AppInner({
       handleTurnInterrupt("escape", {
         turnActiveRef: submittingRef,
         abortedThisTurn,
+        ctrlCQuitArmedAt,
         resetPendingModals,
         isLoopActive,
         stopLoop,
         loop,
+        clearIdleInput: () => false,
+        notifyCtrlCQuitArmed: () => undefined,
         quitProcess,
       });
       return;

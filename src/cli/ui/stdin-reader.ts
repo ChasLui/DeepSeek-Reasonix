@@ -511,8 +511,8 @@ export class StdinReader {
         continue;
       }
       if (ch === "\x03") {
-        // Ctrl+C — terminate the process. Raw mode disables the
-        // default SIGINT, so we have to handle it ourselves.
+        // Raw mode disables SIGINT, so the App-level interrupt state
+        // machine owns Ctrl+C semantics.
         this.dispatch({ input: "c", ctrl: true });
         i++;
         continue;

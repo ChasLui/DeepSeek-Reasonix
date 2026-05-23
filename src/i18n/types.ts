@@ -179,6 +179,7 @@ export interface TranslationSchema {
     flippedAutoSession: string;
     flippedAutoWalk: string;
     dashboardStopped: string;
+    ctrlCPressAgainToQuit: string;
     notedMemory: string;
     notedScopeProject: string;
     notedScopeGlobal: string;
