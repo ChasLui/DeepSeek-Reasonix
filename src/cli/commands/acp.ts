@@ -21,6 +21,7 @@ import {
   flattenPrompt,
 } from "../../acp/protocol.js";
 import { AcpServer } from "../../acp/server.js";
+import { getOrCreateDeepSeekClient } from "../../client-singleton.js";
 import { codeSystemPrompt } from "../../code/prompt.js";
 import { buildCodeToolset } from "../../code/setup.js";
 import {
@@ -39,7 +40,7 @@ import { pauseGate } from "../../core/pause-gate.js";
 import { autoResolveVerdict } from "../../core/pause-policy.js";
 import { loadDotenv } from "../../env.js";
 import { t } from "../../i18n/index.js";
-import { CacheFirstLoop, DeepSeekClient, ImmutablePrefix } from "../../index.js";
+import { CacheFirstLoop, ImmutablePrefix } from "../../index.js";
 import { McpClient } from "../../mcp/client.js";
 import { preflightStdioSpec } from "../../mcp/preflight.js";
 import { bridgeMcpTools } from "../../mcp/registry.js";
@@ -167,7 +168,7 @@ async function buildSession(opts: {
     hasSemanticSearch: toolset.semantic.enabled,
     modelId: model,
   });
-  const client = new DeepSeekClient({ baseUrl: loadBaseUrl() });
+  const client = getOrCreateDeepSeekClient({ baseUrl: loadBaseUrl() });
   const prefix = new ImmutablePrefix({
     system,
     toolSpecs: toolset.tools.specs(),

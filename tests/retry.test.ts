@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { RateLimitTimeoutError } from "../src/rate-limit/index.js";
 import { fetchWithRetry } from "../src/retry.js";
 
 function makeFetch(responses: Array<Response | Error | (() => Response | Error)>): {
@@ -115,6 +116,56 @@ describe("fetchWithRetry", () => {
     await fetchWithRetry(f.fn, "https://x", {}, { ...BASE, onRetry });
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(onRetry.mock.calls[0]![0].reason).toMatch(/http 429/);
+  });
+
+  it("uses onRateLimit wait override for 429 without Retry-After", async () => {
+    vi.useFakeTimers();
+    const onRateLimit = vi.fn(() => 1234);
+    const f = makeFetch([new Response("", { status: 429 }), new Response("ok", { status: 200 })]);
+    const promise = fetchWithRetry(
+      f.fn,
+      "https://x",
+      {},
+      {
+        ...BASE,
+        maxBackoffMs: 2000,
+        onRateLimit,
+      },
+    );
+
+    await vi.advanceTimersByTimeAsync(1233);
+    expect(f.calls).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    const r = await promise;
+
+    expect(r.status).toBe(200);
+    expect(onRateLimit).toHaveBeenCalledWith(expect.any(Response), undefined);
+    vi.useRealTimers();
+  });
+
+  it("retries after RateLimitTimeoutError", async () => {
+    vi.useFakeTimers();
+    const f = makeFetch([
+      new RateLimitTimeoutError("deepseek-v4-pro", 60_000),
+      new Response("ok", { status: 200 }),
+    ]);
+    const promise = fetchWithRetry(
+      f.fn,
+      "https://x",
+      {},
+      {
+        ...BASE,
+        initialBackoffMs: 1,
+        maxBackoffMs: 1,
+      },
+    );
+
+    await vi.advanceTimersByTimeAsync(1);
+    const r = await promise;
+
+    expect(r.status).toBe(200);
+    expect(f.calls).toBe(2);
+    vi.useRealTimers();
   });
 
   it("maxAttempts=1 effectively disables retry", async () => {

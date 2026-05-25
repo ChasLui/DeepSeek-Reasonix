@@ -10,6 +10,7 @@ import {
   formatDoctorJson,
   runDoctorChecks,
 } from "../src/cli/commands/doctor.js";
+import { defaultConfigPath, writeConfig } from "../src/config.js";
 import { VERSION } from "../src/version.js";
 
 describe("formatDoctorJson", () => {
@@ -157,5 +158,35 @@ describe("doctorCommand --json (integration)", () => {
       level: "ok",
       detail: "disabled via REASONIX_PROMPT_CACHE_MONITOR=0",
     });
+  });
+
+  it("warns when legacy rateLimit.rpm is configured", async () => {
+    writeConfig({ rateLimit: { rpm: 30 } }, defaultConfigPath());
+
+    const checks = await runDoctorChecks(tmpCwd);
+
+    expect(checks.find((c) => c.id === "rate-limit")).toMatchObject({
+      level: "warn",
+      detail: expect.stringContaining("deprecated"),
+    });
+  });
+
+  it("reports default concurrency caps as upstream limits", async () => {
+    const checks = await runDoctorChecks(tmpCwd);
+
+    expect(checks.find((c) => c.id === "rate-limit")).toMatchObject({
+      level: "ok",
+      detail: expect.stringContaining("(default cap = upstream limit)"),
+    });
+  });
+
+  it("reports manual cap narrowing and adaptive disabled mode", async () => {
+    writeConfig({ rateLimit: { concurrency: { pro: 16, adaptive: false } } }, defaultConfigPath());
+
+    const checks = await runDoctorChecks(tmpCwd);
+    const detail = checks.find((c) => c.id === "rate-limit")?.detail ?? "";
+
+    expect(detail).toContain("manually narrowed (default 500");
+    expect(detail).toContain("adaptive disabled (manual mode)");
   });
 });

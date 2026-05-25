@@ -11,6 +11,7 @@ import {
   parseAtQuery,
   rankPickerCandidates,
 } from "../../at-mentions.js";
+import { getOrCreateDeepSeekClient } from "../../client-singleton.js";
 import { pickPrimaryBalance } from "../../client.js";
 import { codeSystemPrompt } from "../../code/prompt.js";
 import { buildCodeToolset } from "../../code/setup.js";
@@ -61,7 +62,7 @@ import {
   setDesktopQQEnabled,
 } from "../../desktop/qq-settings.js";
 import { loadDotenv } from "../../env.js";
-import { CacheFirstLoop, DeepSeekClient, ImmutablePrefix } from "../../index.js";
+import { CacheFirstLoop, ImmutablePrefix } from "../../index.js";
 import { parseMcpSpec } from "../../mcp/spec.js";
 import {
   deleteSession,
@@ -774,7 +775,7 @@ function mintSessionFor(rootDir: string): string {
 function buildRuntimeFor(tab: Tab): RuntimeState {
   if (!tab.toolset) throw new Error("buildRuntimeFor called before initTabToolset finished");
   const toolset = tab.toolset;
-  const client = new DeepSeekClient({ baseUrl: loadBaseUrl() });
+  const client = getOrCreateDeepSeekClient({ baseUrl: loadBaseUrl() });
   applySessionToolset(toolset.tools, resolveSessionToolset());
   const prefix = new ImmutablePrefix({
     system: tab.system,

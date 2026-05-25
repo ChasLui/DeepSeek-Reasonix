@@ -1,4 +1,5 @@
-import { DeepSeekClient } from "../client.js";
+import { getOrCreateDeepSeekClient } from "../client-singleton.js";
+import type { DeepSeekClient } from "../client.js";
 import {
   loadBaseUrl,
   loadCodeRelationsEnabled,
@@ -99,7 +100,7 @@ export async function buildCodeToolset(opts: CodeToolsetOpts): Promise<CodeTools
     customSkillPaths: loadResolvedSkillPaths(opts.rootDir),
     onSkillInstalled: opts.onSkillInstalled,
     subagentRunner: async (skill, task, signal) => {
-      if (!subagentClient) subagentClient = new DeepSeekClient({ baseUrl: loadBaseUrl() });
+      if (!subagentClient) subagentClient = getOrCreateDeepSeekClient({ baseUrl: loadBaseUrl() });
       const result = await spawnSubagent({
         client: subagentClient,
         parentRegistry: tools,

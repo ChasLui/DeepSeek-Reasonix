@@ -277,6 +277,29 @@ describe("config", () => {
     expect(loadRateLimit(path)).toBeUndefined();
   });
 
+  it("loads concurrency-only rateLimit without rpm", () => {
+    writeConfig({ rateLimit: { concurrency: { pro: 16, flash: 64, default: 8 } } }, path);
+
+    expect(loadRateLimit(path)).toEqual({
+      concurrency: { pro: 16, flash: 64, default: 8 },
+    });
+  });
+
+  it("loads concurrency and rpm together", () => {
+    writeConfig({ rateLimit: { rpm: 30, concurrency: { pro: 16, adaptive: false } } }, path);
+
+    expect(loadRateLimit(path)).toEqual({
+      rpm: 30,
+      concurrency: { pro: 16, adaptive: false },
+    });
+  });
+
+  it("drops negative concurrency caps", () => {
+    writeConfig({ rateLimit: { concurrency: { pro: -1, flash: 32, default: 0 } } }, path);
+
+    expect(loadRateLimit(path)).toEqual({ concurrency: { flash: 32 } });
+  });
+
   it("loads proxy.disabled + proxy.noProxy[] when present, drops blank entries", () => {
     writeConfig(
       {

@@ -114,6 +114,12 @@ export interface PricingOverride {
 
 export interface RateLimitConfig {
   rpm?: number;
+  concurrency?: {
+    pro?: number;
+    flash?: number;
+    default?: number;
+    adaptive?: boolean;
+  };
 }
 
 export type ToonMode = "off" | "results" | "prefix" | "all";
@@ -799,9 +805,29 @@ export function loadProxyConfig(path: string = defaultConfigPath()): ProxyConfig
 }
 
 export function loadRateLimit(path: string = defaultConfigPath()): RateLimitConfig | undefined {
-  const rpm = readConfig(path).rateLimit?.rpm;
-  if (typeof rpm !== "number" || !Number.isInteger(rpm) || rpm <= 0) return undefined;
-  return { rpm };
+  const raw = readConfig(path).rateLimit;
+  if (!raw || typeof raw !== "object") return undefined;
+  const out: RateLimitConfig = {};
+  if (typeof raw.rpm === "number" && Number.isInteger(raw.rpm) && raw.rpm > 0) out.rpm = raw.rpm;
+  const concurrency = sanitizeConcurrencyConfig(raw.concurrency);
+  if (concurrency) out.concurrency = concurrency;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function sanitizeConcurrencyConfig(
+  raw: RateLimitConfig["concurrency"] | undefined,
+): RateLimitConfig["concurrency"] | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const out: NonNullable<RateLimitConfig["concurrency"]> = {};
+  if (isPositiveInteger(raw.pro)) out.pro = raw.pro;
+  if (isPositiveInteger(raw.flash)) out.flash = raw.flash;
+  if (isPositiveInteger(raw.default)) out.default = raw.default;
+  if (typeof raw.adaptive === "boolean") out.adaptive = raw.adaptive;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
 
 export function saveBaseUrl(url: string, path: string = defaultConfigPath()): void {

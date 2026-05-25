@@ -1,5 +1,7 @@
 /** Pillar invariants — promoted from spike-fork-prefix-rebuild Exp 1 to permanent regression. */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { DeepSeekClient } from "../src/client.js";
 import { type EventizeContext, Eventizer } from "../src/core/eventize.js";
@@ -132,6 +134,35 @@ describe("Pillar 1 — message-level append-only across turn boundaries", () => 
         }
       }
       prev = cur;
+    }
+  });
+});
+
+describe("Pillar 1 — selective DeepSeek client singleton", () => {
+  it("keeps singleton usage limited to long-session entry points", () => {
+    const allowed = new Set([
+      "src/cli/ui/App.tsx",
+      "src/cli/commands/acp.ts",
+      "src/cli/commands/desktop.ts",
+      "src/code/setup.ts",
+      "src/client-singleton.ts",
+    ]);
+    const files = [
+      "src/cli/ui/App.tsx",
+      "src/cli/commands/acp.ts",
+      "src/cli/commands/desktop.ts",
+      "src/code/setup.ts",
+      "src/cli/commands/commit.ts",
+      "src/cli/commands/doctor.ts",
+      "src/cli/commands/run.ts",
+      "src/client-singleton.ts",
+    ];
+
+    for (const file of files) {
+      const hasSingleton = readFileSync(join(process.cwd(), file), "utf8").includes(
+        "getOrCreateDeepSeekClient",
+      );
+      expect(hasSingleton).toBe(allowed.has(file));
     }
   });
 });

@@ -1,7 +1,10 @@
 import { type EventSourceMessage, createParser } from "eventsource-parser";
-import { loadRateLimit } from "./config.js";
+import { type RateLimitConfig, loadRateLimit } from "./config.js";
+import { type ConcurrencyBucket, getProcessBucket } from "./rate-limit/index.js";
 import { type RetryOptions, fetchWithRetry } from "./retry.js";
 import type { ChatMessage, ChatRequestOptions, RawUsage, ToolCall, ToolSpec } from "./types.js";
+
+type ConcurrencyTokenHandle = Awaited<ReturnType<ConcurrencyBucket["acquire"]>>;
 
 export class Usage {
   constructor(
@@ -88,7 +91,8 @@ export interface DeepSeekClientOptions {
   baseUrl?: string;
   timeoutMs?: number;
   fetch?: typeof fetch;
-  rateLimit?: { rpm?: number };
+  rateLimit?: RateLimitConfig;
+  concurrencyBucket?: ConcurrencyBucket;
   /** Retry configuration. Pass `{ maxAttempts: 1 }` to disable retries. */
   retry?: RetryOptions;
 }
@@ -99,6 +103,7 @@ export class DeepSeekClient {
   readonly timeoutMs: number;
   readonly retry: RetryOptions;
   private readonly _fetch: typeof fetch;
+  private readonly concurrencyBucket: ConcurrencyBucket;
   private readonly minChatIntervalMs: number;
   private nextChatRequestAt = 0;
 
@@ -126,8 +131,10 @@ export class DeepSeekClient {
     // is a safety net for genuinely hung sockets.
     this.timeoutMs = opts.timeoutMs ?? 660_000;
     this._fetch = opts.fetch ?? globalThis.fetch.bind(globalThis);
+    const rateLimit = opts.rateLimit ?? loadRateLimit();
+    this.concurrencyBucket = opts.concurrencyBucket ?? getProcessBucket(rateLimit);
     this.retry = opts.retry ?? {};
-    const rpm = opts.rateLimit?.rpm ?? loadRateLimit()?.rpm;
+    const rpm = rateLimit?.rpm;
     this.minChatIntervalMs = rpm ? Math.ceil(60_000 / rpm) : 0;
   }
 
@@ -225,11 +232,16 @@ export class DeepSeekClient {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
     const signal = opts.signal ?? ctrl.signal;
+    const tokenRef: { current: ConcurrencyTokenHandle | undefined } = { current: undefined };
 
     try {
-      await this.waitForChatRateLimit(signal);
       const resp = await fetchWithRetry(
-        this._fetch,
+        async (url, init) => {
+          tokenRef.current = await this.concurrencyBucket.acquire(opts.model, signal);
+          await this.waitForChatRateLimit(signal);
+          tokenRef.current.transitionTo("fetching");
+          return this._fetch(url, init);
+        },
         `${this.baseUrl}/chat/completions`,
         {
           method: "POST",
@@ -240,7 +252,7 @@ export class DeepSeekClient {
           body: JSON.stringify(this.buildPayload(opts, false)),
           signal,
         },
-        { ...this.retry, signal },
+        this.retryOptionsWithTokenRelease(opts.model, signal, tokenRef),
       );
       if (!resp.ok) {
         throw new Error(`DeepSeek ${resp.status}: ${await resp.text()}`);
@@ -256,6 +268,7 @@ export class DeepSeekClient {
       };
     } finally {
       clearTimeout(timer);
+      tokenRef.current?.release();
     }
   }
 
@@ -263,15 +276,19 @@ export class DeepSeekClient {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
     const signal = opts.signal ?? ctrl.signal;
+    const tokenRef: { current: ConcurrencyTokenHandle | undefined } = { current: undefined };
 
-    let resp: Response;
     try {
-      await this.waitForChatRateLimit(signal);
       // Only the initial fetch is retried. Once the server has started sending
       // the stream body we do NOT retry — a mid-stream retry would re-bill and
       // desync the session context.
-      resp = await fetchWithRetry(
-        this._fetch,
+      const resp = await fetchWithRetry(
+        async (url, init) => {
+          tokenRef.current = await this.concurrencyBucket.acquire(opts.model, signal);
+          await this.waitForChatRateLimit(signal);
+          tokenRef.current.transitionTo("fetching");
+          return this._fetch(url, init);
+        },
         `${this.baseUrl}/chat/completions`,
         {
           method: "POST",
@@ -283,73 +300,106 @@ export class DeepSeekClient {
           body: JSON.stringify(this.buildPayload(opts, true)),
           signal,
         },
-        { ...this.retry, signal },
+        this.retryOptionsWithTokenRelease(opts.model, signal, tokenRef),
       );
-    } catch (err) {
-      clearTimeout(timer);
-      throw err;
-    }
-    if (!resp.ok || !resp.body) {
-      clearTimeout(timer);
-      throw new Error(`DeepSeek ${resp.status}: ${await resp.text().catch(() => "")}`);
-    }
-
-    const queue: StreamChunk[] = [];
-    let done = false;
-    const parser = createParser({
-      onEvent: (ev: EventSourceMessage) => {
-        if (!ev.data || ev.data === "[DONE]") {
-          done = true;
-          return;
-        }
-        try {
-          const json = JSON.parse(ev.data);
-          const delta = json.choices?.[0]?.delta ?? {};
-          const finishReason = json.choices?.[0]?.finish_reason ?? undefined;
-          const chunk: StreamChunk = { raw: json, finishReason };
-          if (typeof delta.content === "string" && delta.content.length > 0) {
-            chunk.contentDelta = delta.content;
-          }
-          if (typeof delta.reasoning_content === "string" && delta.reasoning_content.length > 0) {
-            chunk.reasoningDelta = delta.reasoning_content;
-          }
-          if (Array.isArray(delta.tool_calls) && delta.tool_calls.length > 0) {
-            const tc = delta.tool_calls[0];
-            chunk.toolCallDelta = {
-              index: tc.index ?? 0,
-              id: tc.id,
-              name: tc.function?.name,
-              argumentsDelta: tc.function?.arguments,
-            };
-          }
-          if (json.usage) {
-            chunk.usage = Usage.fromApi(json.usage);
-          }
-          queue.push(chunk);
-        } catch {
-          /* skip malformed sse frame */
-        }
-      },
-    });
-
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    try {
-      while (true) {
-        if (queue.length > 0) {
-          yield queue.shift()!;
-          continue;
-        }
-        if (done) break;
-        const { value, done: streamDone } = await reader.read();
-        if (streamDone) break;
-        parser.feed(decoder.decode(value, { stream: true }));
+      if (!resp.ok || !resp.body) {
+        throw new Error(`DeepSeek ${resp.status}: ${await resp.text().catch(() => "")}`);
       }
-      while (queue.length > 0) yield queue.shift()!;
+      tokenRef.current?.transitionTo("streaming");
+
+      const queue: StreamChunk[] = [];
+      let done = false;
+      const parser = createParser({
+        onEvent: (ev: EventSourceMessage) => {
+          if (!ev.data || ev.data === "[DONE]") {
+            done = true;
+            return;
+          }
+          try {
+            const json = JSON.parse(ev.data);
+            const delta = json.choices?.[0]?.delta ?? {};
+            const finishReason = json.choices?.[0]?.finish_reason ?? undefined;
+            const chunk: StreamChunk = { raw: json, finishReason };
+            if (typeof delta.content === "string" && delta.content.length > 0) {
+              chunk.contentDelta = delta.content;
+            }
+            if (typeof delta.reasoning_content === "string" && delta.reasoning_content.length > 0) {
+              chunk.reasoningDelta = delta.reasoning_content;
+            }
+            if (Array.isArray(delta.tool_calls) && delta.tool_calls.length > 0) {
+              const tc = delta.tool_calls[0];
+              chunk.toolCallDelta = {
+                index: tc.index ?? 0,
+                id: tc.id,
+                name: tc.function?.name,
+                argumentsDelta: tc.function?.arguments,
+              };
+            }
+            if (json.usage) {
+              chunk.usage = Usage.fromApi(json.usage);
+            }
+            queue.push(chunk);
+          } catch {
+            /* skip malformed sse frame */
+          }
+        },
+      });
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      try {
+        while (true) {
+          if (queue.length > 0) {
+            yield queue.shift()!;
+            continue;
+          }
+          if (done) break;
+          const { value, done: streamDone } = await reader.read();
+          if (streamDone) break;
+          parser.feed(decoder.decode(value, { stream: true }));
+        }
+        while (queue.length > 0) yield queue.shift()!;
+      } finally {
+        reader.releaseLock();
+      }
     } finally {
       clearTimeout(timer);
-      reader.releaseLock();
+      tokenRef.current?.release();
     }
+  }
+
+  private retryOptionsWithTokenRelease(
+    model: string,
+    signal: AbortSignal,
+    tokenRef: { current: ConcurrencyTokenHandle | undefined },
+  ): RetryOptions {
+    const options = this.retryOptions(model, signal);
+    const userOnRetry = options.onRetry;
+    return {
+      ...options,
+      onRetry: (info) => {
+        tokenRef.current?.release();
+        tokenRef.current = undefined;
+        userOnRetry?.(info);
+      },
+    };
+  }
+
+  private retryOptions(model: string, signal: AbortSignal): RetryOptions {
+    const userOnRateLimit = this.retry.onRateLimit;
+    return {
+      ...this.retry,
+      signal,
+      model,
+      onRateLimit: (resp, seenModel) => {
+        const targetModel = seenModel ?? model;
+        this.concurrencyBucket.note429(targetModel);
+        return (
+          userOnRateLimit?.(resp, targetModel) ??
+          this.concurrencyBucket.suggestedBackoff(targetModel)
+        );
+      },
+    };
   }
 }
 

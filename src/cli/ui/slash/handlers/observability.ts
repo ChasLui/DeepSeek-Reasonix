@@ -10,6 +10,7 @@ import {
 } from "@/config.js";
 import { getLanguage, t } from "@/i18n/index.js";
 import { getCodeGraphStats } from "@/index/code-graph/stats.js";
+import { CONCURRENCY_MODEL_IDS, getProcessBucket } from "@/rate-limit/index.js";
 import { DEEPSEEK_CONTEXT_TOKENS, DEFAULT_CONTEXT_TOKENS, pricingFor } from "@/telemetry/stats.js";
 import { countTokensBounded } from "@/tokenizer.js";
 import { getToonStats } from "@/toon/stats.js";
@@ -92,7 +93,9 @@ const status: SlashHandler = (_args, loop, ctx) => {
         resumed: loop.resumedMessageCount,
       })
     : t("handlers.observability.statusSessionEphemeral");
-  const rpm = loadRateLimit()?.rpm;
+  const rateLimit = loadRateLimit();
+  const rpm = rateLimit?.rpm;
+  const concurrencyLine = renderConcurrencyStatusLine(rateLimit);
   const mcpCount = ctx.mcpSpecs?.length ?? 0;
   const toolCount = loop.prefix.toolSpecs.length;
   const mcpLine = t("handlers.observability.statusMcp", { servers: mcpCount, tools: toolCount });
@@ -124,7 +127,12 @@ const status: SlashHandler = (_args, loop, ctx) => {
     }),
     cacheLine,
     ctxLine,
-    `rate limit: ${rpm ? `${rpm} rpm` : "off"}`,
+    concurrencyLine,
+    t("handlers.observability.statusRateLimitRpm", {
+      value: rpm
+        ? t("handlers.observability.statusRateLimitRpmDeprecated", { rpm })
+        : t("handlers.observability.statusRateLimitRpmOff"),
+    }),
     mcpLine,
     sessionLine,
   ];
@@ -205,6 +213,28 @@ function renderToonStatusLine(): string {
   const savedTokens = layers.reduce((sum, layer) => sum + layer.savedTokens, 0);
   const fallbackCount = stats.fallbacks.encode + stats.fallbacks.decode;
   return `toon: ${mode} hits=${hits} saved=${compactNum(savedTokens)}tok fallback=${fallbackCount}`;
+}
+
+function renderConcurrencyStatusLine(rateLimit = loadRateLimit()): string {
+  const bucket = getProcessBucket(rateLimit);
+  const stats = bucket.allStats();
+  return (["pro", "flash", "default"] as const)
+    .map((name) => {
+      const s = stats[name];
+      return t("handlers.observability.statusConcurrency", {
+        inUse: s.inUse,
+        cap: s.cap,
+        model: CONCURRENCY_MODEL_IDS[name],
+        queued: s.queued,
+        recent429: s.recent429,
+        adaptive: t(
+          s.adaptive
+            ? "handlers.observability.statusConcurrencyAdaptiveOn"
+            : "handlers.observability.statusConcurrencyAdaptiveOff",
+        ),
+      });
+    })
+    .join("\n");
 }
 
 function renderTinyBar(pct: number, width: number): string {

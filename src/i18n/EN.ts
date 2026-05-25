@@ -1118,6 +1118,13 @@ export const EN: TranslationSchema = {
       statusCtxNone: "  ctx     no turns yet",
       statusCost: "  cost    ${cost} · cache {bar} {pct}% · turns {turns}",
       statusCostCold: "  cost    ${cost} · turns {turns} (cache warming up)",
+      statusConcurrency:
+        "  Concurrency: {inUse}/{cap} ({model}) · queued {queued} · 429 last 5m {recent429} · adaptive {adaptive}",
+      statusConcurrencyAdaptiveOn: "on",
+      statusConcurrencyAdaptiveOff: "off",
+      statusRateLimitRpm: "  rate limit rpm: {value}",
+      statusRateLimitRpmDeprecated: "{rpm} rpm (deprecated)",
+      statusRateLimitRpmOff: "off",
       statusBudget: "  budget  ${spent} / ${cap} ({pct}%){tag}",
       statusSession: '  session "{name}" · {count} messages in log (resumed {resumed})',
       statusSessionEphemeral: "  session (ephemeral — no persistence)",

@@ -9,6 +9,7 @@ import {
   openEventSink,
 } from "../../adapters/event-sink-jsonl.js";
 import { type AtUrlExpansion, expandAtMentions, expandAtUrls } from "../../at-mentions.js";
+import { getOrCreateDeepSeekClient } from "../../client-singleton.js";
 import {
   type CheckpointMeta,
   createCheckpoint,
@@ -60,7 +61,7 @@ import { pauseGate } from "../../core/pause-gate.js";
 import { autoResolveVerdict, shouldAutoResolveCheckpoint } from "../../core/pause-policy.js";
 import { formatHookOutcomeMessage, runHooks } from "../../hooks.js";
 import { t, tObj } from "../../i18n/index.js";
-import { CacheFirstLoop, DeepSeekClient, ImmutablePrefix } from "../../index.js";
+import { CacheFirstLoop, ImmutablePrefix } from "../../index.js";
 import type { LoopEvent } from "../../loop.js";
 import { extractObservationFromHook } from "../../memory/observation.js";
 import {
@@ -991,7 +992,7 @@ function AppInner({
   // biome-ignore lint/correctness/useExhaustiveDependencies: currentRootDir —see comment above
   const loop = useMemo(() => {
     if (loopRef.current) return loopRef.current;
-    const client = new DeepSeekClient({ baseUrl: loadBaseUrl() });
+    const client = getOrCreateDeepSeekClient({ baseUrl: loadBaseUrl() });
     // Register run_skill HERE (not in code.tsx / chat.tsx) because
     // subagent-runAs skills need the client + parent registry to
     // spawn child loops. Wiring lives in App.tsx so the same code

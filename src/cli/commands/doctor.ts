@@ -28,6 +28,7 @@ import { countRecentObservationEvents } from "../../memory/observation.js";
 import { listSessions } from "../../memory/session.js";
 import { detectProxyUrl, matchesNoProxy, resolveNoProxy } from "../../net/proxy.js";
 import type { PromptCacheStats } from "../../observability/prompt-cache-monitor.js";
+import { resolveConcurrencySettings } from "../../rate-limit/index.js";
 import { readUsageSince } from "../../telemetry/usage.js";
 import { resolveDataPath } from "../../tokenizer.js";
 import { getVfsStats } from "../../tools/shell/vfs-lite.js";
@@ -91,6 +92,7 @@ export async function runDoctorChecks(
     r[8],
     checkToon(),
     checkBudget(),
+    checkRateLimitConfig(),
     checkToolset(),
   ];
 }
@@ -304,6 +306,31 @@ function checkBudget(): Check {
     label: "budget       ",
     level: statuses.some((s) => s.state !== "ok") ? "warn" : "ok",
     detail,
+  };
+}
+
+function checkRateLimitConfig(): Check {
+  const raw = readConfig().rateLimit;
+  const settings = resolveConcurrencySettings(raw);
+  const capParts = Object.values(settings.caps).map((cap) => {
+    const source =
+      cap.source === "default"
+        ? "(default cap = upstream limit)"
+        : cap.manuallyNarrowed
+          ? `manually narrowed (default ${cap.upstreamCap}, source=${cap.source})`
+          : `source=${cap.source} (using upstream cap ${cap.upstreamCap})`;
+    return `${cap.model} ${cap.cap}/${cap.upstreamCap} ${source}`;
+  });
+  const notes: string[] = [...capParts];
+  const rpm = raw?.rpm;
+  const hasRpm = typeof rpm === "number" && Number.isFinite(rpm);
+  if (hasRpm) notes.push("rateLimit.rpm deprecated — DeepSeek limits concurrency, not RPM");
+  if (!settings.adaptive) notes.push("adaptive disabled (manual mode)");
+  return {
+    id: "rate-limit",
+    label: "rate-limit   ",
+    level: hasRpm ? "warn" : "ok",
+    detail: notes.join("; "),
   };
 }
 

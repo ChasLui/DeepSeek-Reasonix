@@ -1,5 +1,7 @@
 /** No retry on aborts or mid-stream body errors — re-billing the user for desynced output is worse than failing. */
 
+import { isRateLimitTimeoutError } from "./rate-limit/errors.js";
+
 export interface RetryOptions {
   /** Maximum total attempts (including the first). Default 4. */
   maxAttempts?: number;
@@ -13,6 +15,9 @@ export interface RetryOptions {
   signal?: AbortSignal;
   /** Telemetry hook — called before each wait. */
   onRetry?: (info: RetryInfo) => void;
+  /** Called on HTTP 429. Retry-After still wins when present. */
+  onRateLimit?: (resp: Response, model?: string) => number | undefined;
+  model?: string;
 }
 
 export interface RetryInfo {
@@ -45,14 +50,17 @@ export async function fetchWithRetry(
       // Success or non-retryable failure: return as-is.
       if (resp.ok || !retryable.has(resp.status)) return resp;
 
+      const retryAfter = resp.headers.get("Retry-After");
+      const rateLimitMs = resp.status === 429 ? opts.onRateLimit?.(resp, opts.model) : undefined;
       // Retryable but out of attempts: return the last response so the caller
       // can surface the status to the user.
       if (attempt === maxAttempts - 1) return resp;
 
+      const overrideMs = retryAfter ? undefined : rateLimitMs;
       // Drain the body so the connection can be reused on the next attempt.
       await resp.text().catch(() => undefined);
 
-      const waitMs = computeWait(attempt, initial, cap, resp.headers.get("Retry-After"));
+      const waitMs = computeWait(attempt, initial, cap, retryAfter, overrideMs);
       opts.onRetry?.({ attempt: attempt + 1, reason: `http ${resp.status}`, waitMs });
       await sleep(waitMs, opts.signal);
     } catch (err) {
@@ -61,10 +69,12 @@ export async function fetchWithRetry(
       if (isAbortError(err) || opts.signal?.aborted) throw err;
       if (attempt === maxAttempts - 1) throw err;
 
-      const waitMs = computeWait(attempt, initial, cap, null);
+      const waitMs = computeWait(attempt, initial, cap, null, undefined);
       opts.onRetry?.({
         attempt: attempt + 1,
-        reason: `network: ${messageOf(err)}`,
+        reason: isRateLimitTimeoutError(err)
+          ? `rate-limit-timeout: ${messageOf(err)}`
+          : `network: ${messageOf(err)}`,
         waitMs,
       });
       await sleep(waitMs, opts.signal);
@@ -79,12 +89,16 @@ function computeWait(
   initial: number,
   cap: number,
   retryAfter: string | null,
+  overrideMs: number | undefined,
 ): number {
   if (retryAfter) {
     const seconds = Number.parseFloat(retryAfter);
     if (Number.isFinite(seconds) && seconds > 0) {
       return Math.min(seconds * 1000, cap);
     }
+  }
+  if (overrideMs !== undefined && Number.isFinite(overrideMs) && overrideMs >= 0) {
+    return Math.min(overrideMs, cap);
   }
   const exp = initial * 2 ** attempt;
   // Jitter range [75%, 125%] to spread retries out when many clients hit 429 together.

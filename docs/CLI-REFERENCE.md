@@ -42,6 +42,20 @@ Run `reasonix --help` (or any subcommand with `--help`) for the full flag list. 
 | `--no-alt-screen` | Render to scrollback instead of the alt-screen buffer (preserves chat in shell history; legacy mode, can ghost on resize) |
 | `--no-mouse` | Disable DECSET 1007 (alternate-scroll); wheel reverts to native terminal scroll |
 
+### Environment knobs
+
+| Variable | Default | Effect |
+|---|---:|---|
+| `REASONIX_CONCURRENCY_PRO` | `500` | Narrow the local `deepseek-v4-pro` concurrency cap. Values above the upstream cap are clamped. |
+| `REASONIX_CONCURRENCY_FLASH` | `2500` | Narrow the local `deepseek-v4-flash` concurrency cap. |
+| `REASONIX_CONCURRENCY_DEFAULT` | `128` | Cap unknown DeepSeek model ids. |
+| `REASONIX_CONCURRENCY_ADAPTIVE` | `1` | `0` disables 429-triggered cap degrade/restore and keeps caps fixed. |
+| `REASONIX_QUEUE_GIVEUP_MS` | `60000` | Stop waiting for a local bucket slot after this many ms; retry logic then handles backoff. |
+| `REASONIX_QUEUE_HINT_MS` | `2000` | Emit queued/acquired observability events only after this queue wait threshold. |
+| `REASONIX_429_THROTTLE_WINDOW_MS` | `5000` | Coalesce multiple simultaneous 429s into one cap reduction per model bucket. |
+| `REASONIX_429_RESTORE_INTERVAL_MS` | `60000` | Lazy restore interval for adaptive caps after the last 429. |
+| `REASONIX_QUEUE_MAX_DEPTH` | `256` | Hard cap for local queued acquires per model bucket. Full queues fail fast. |
+
 ---
 
 ## Slash commands

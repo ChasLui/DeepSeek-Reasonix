@@ -54,6 +54,23 @@ export interface ToolPreparingEvent extends EventBase {
   name: string;
 }
 
+export interface RateLimitQueuedPayload {
+  type: "rate-limit.queued";
+  model: string;
+  depth: number;
+  estimatedWaitMs: number;
+}
+
+export interface RateLimitAcquiredPayload {
+  type: "rate-limit.acquired";
+  model: string;
+  queuedMs: number;
+}
+
+export interface RateLimitQueuedEvent extends EventBase, RateLimitQueuedPayload {}
+
+export interface RateLimitAcquiredEvent extends EventBase, RateLimitAcquiredPayload {}
+
 export interface ToolIntentEvent extends EventBase {
   type: "tool.intent";
   callId: string;
@@ -225,6 +242,8 @@ export type Event =
   | ModelTurnStartedEvent
   | ModelDeltaEvent
   | ModelFinalEvent
+  | RateLimitQueuedEvent
+  | RateLimitAcquiredEvent
   | ToolPreparingEvent
   | ToolIntentEvent
   | ToolDispatchedEvent

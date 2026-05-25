@@ -66,6 +66,32 @@ queries (`job_output`, `list_jobs`). Mutating / side-effecting tools
 stay default. MCP-bridged tools default `false` — third-party tools
 opt in only when the server explicitly declares parallel safety.
 
+#### Concurrency observer
+
+DeepSeek rate limiting is concurrency-based: upstream currently allows
+`deepseek-v4-pro=500` and `deepseek-v4-flash=2500` concurrent requests per
+account. Reasonix mirrors those upstream limits by default and does not
+invent a smaller local cap. The in-process `ConcurrencyBucket` is an
+observation layer: it tracks `inUse`, queue depth, recent 429s, and token
+state without changing prompt bytes, message order, or prefix fingerprints.
+
+Caps can be manually narrowed with `REASONIX_CONCURRENCY_PRO`,
+`REASONIX_CONCURRENCY_FLASH`, `REASONIX_CONCURRENCY_DEFAULT`, or
+`rateLimit.concurrency.{pro,flash,default}`. A 429 halves the affected
+model bucket once per 5s throttle window, then lazy-restores every 60s by
+`ceil(cap * 1.5)` until the configured initial cap is reached. Set
+`REASONIX_CONCURRENCY_ADAPTIVE=0` or
+`rateLimit.concurrency.adaptive:false` to keep caps fixed and rely only on
+normal retry backoff.
+
+Queued acquisitions give up after `REASONIX_QUEUE_GIVEUP_MS` (default
+60s), leaving roughly four minutes of DeepSeek's 5-minute prefix-cache TTL
+for retry cycles instead of burning the cache window in a local queue.
+`REASONIX_QUEUE_HINT_MS` (default 2s) controls when queued/acquired events
+are emitted for observability. Auxiliary calls still route to v4-flash
+per Pillar 3, so a full flash bucket never promotes summaries or subagents
+to pro just to escape a queue.
+
 ### Pillar 2 — Tool-Call Repair
 
 **Problem.** Empirical DeepSeek failure modes:
