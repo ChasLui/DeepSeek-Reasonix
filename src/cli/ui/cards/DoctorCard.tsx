@@ -10,6 +10,7 @@ import { CARD } from "../theme/tokens.js";
 
 const LEVEL_GLYPH: Record<DoctorCheckEntry["level"], string> = {
   ok: "✓",
+  info: "i",
   warn: "⚠",
   fail: "✗",
 };
@@ -18,6 +19,8 @@ function levelTag(level: DoctorCheckEntry["level"]): string {
   switch (level) {
     case "ok":
       return t("cardLabels.levelOk");
+    case "info":
+      return t("cardLabels.levelInfo");
     case "warn":
       return t("cardLabels.levelWarn");
     case "fail":
@@ -29,14 +32,16 @@ export function DoctorCard({ card }: { card: DoctorCardData }): React.ReactEleme
   const { fg, tone } = useThemeTokens();
   const levelColor: Record<DoctorCheckEntry["level"], string> = {
     ok: tone.ok,
+    info: tone.info,
     warn: tone.warn,
     fail: tone.err,
   };
   const ok = card.checks.filter((c) => c.level === "ok").length;
+  const info = card.checks.filter((c) => c.level === "info").length;
   const warn = card.checks.filter((c) => c.level === "warn").length;
   const fail = card.checks.filter((c) => c.level === "fail").length;
   const labelWidth = card.checks.reduce((m, c) => Math.max(m, c.label.length), 0);
-  const summary = `${card.checks.length} ${t("cardLabels.checksLabel")} · ${ok} ${t("cardLabels.passed")}${warn > 0 ? ` · ${warn} ${t("cardLabels.warnTag")}` : ""}${fail > 0 ? ` · ${fail} ${t("cardLabels.failTag")}` : ""}`;
+  const summary = `${card.checks.length} ${t("cardLabels.checksLabel")} · ${ok} ${t("cardLabels.passed")}${info > 0 ? ` · ${info} ${t("cardLabels.infoTag")}` : ""}${warn > 0 ? ` · ${warn} ${t("cardLabels.warnTag")}` : ""}${fail > 0 ? ` · ${fail} ${t("cardLabels.failTag")}` : ""}`;
 
   return (
     <Card tone={CARD.tool.color}>

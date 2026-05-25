@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { closeSync, constants as fsConstants, mkdirSync, openSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import type { PendingPromptChanges, PromptSnapshot } from "../cache/prompt-fingerprint.js";
 import { PromptFingerprint } from "../cache/prompt-fingerprint.js";
 import { noFollowFlag } from "../tools/fs/gate.js";
@@ -16,17 +16,23 @@ export interface CacheBreakReport {
   hitTokens: number;
   dropTokens: number;
   reason: string;
-  reasonCategory:
-    | "system"
-    | "tools"
-    | "epoch-leak"
-    | "ttl-1h"
-    | "ttl-5min"
-    | "server-side"
-    | "unknown";
+  reasonCategory: CacheBreakReasonCategory;
   diffPatchPath?: string;
+  writeError?: string;
   epochLabel?: string;
 }
+
+export type CacheBreakReasonCategory =
+  | "best-effort-miss"
+  | "epoch-leak"
+  | "older-miss"
+  | "recent-miss"
+  | "server-side"
+  | "system"
+  | "tools"
+  | "ttl-1h"
+  | "ttl-5min"
+  | "unknown";
 
 export interface PromptCacheStats {
   enabled: boolean;
@@ -34,6 +40,8 @@ export interface PromptCacheStats {
   missTokens: number;
   hitRatio: number;
   breaks: number;
+  writeFailures: number;
+  recentBreakCategories?: ReadonlyArray<CacheBreakReasonCategory>;
   lastBreakReason?: string;
 }
 
@@ -61,8 +69,8 @@ interface PendingEpoch {
 const DEFAULT_MIN_DROP_TOKENS = 2000;
 const DEFAULT_DROP_RATIO = 0.05;
 const MAX_BREAK_HISTORY = 100;
-const TTL_1H_MS = 60 * 60 * 1000;
-const TTL_5M_MS = 5 * 60 * 1000;
+const RECENT_MISS_CUTOFF_MS = 10 * 60 * 1000;
+const DIFF_WRITE_MAX_ATTEMPTS = 3;
 
 const EMPTY_CHANGES: PendingPromptChanges = {
   systemChanged: false,
@@ -90,6 +98,7 @@ export class PromptCacheMonitor {
   private callCount = 0;
   private hitTokens = 0;
   private missTokens = 0;
+  private writeFailures = 0;
   /** Wall-clock of the last recordAfterCall — fallback reason uses (now - lastCallAt) as the
    * "no observed assistant response since" age, since ChatMessage carries no timestamps. */
   private lastCallAt: number | null = null;
@@ -169,8 +178,9 @@ export class PromptCacheMonitor {
       reasonCategory: reason.category,
       epochLabel: this.pendingEpoch?.label,
     };
-    const diffPatchPath = this.writeDiffPatch(report, changes, messages);
-    if (diffPatchPath) report.diffPatchPath = diffPatchPath;
+    const diffPatch = this.writeDiffPatch(report, changes, messages);
+    if (diffPatch.diffPatchPath) report.diffPatchPath = diffPatch.diffPatchPath;
+    if (diffPatch.writeError) report.writeError = diffPatch.writeError;
     this.breakHistory.push(report);
     if (this.breakHistory.length > MAX_BREAK_HISTORY) this.breakHistory.shift();
     if (this.shouldEmitBreakWarning()) {
@@ -232,6 +242,8 @@ export class PromptCacheMonitor {
       missTokens: this.missTokens,
       hitRatio: denom > 0 ? this.hitTokens / denom : 0,
       breaks: this.enabled ? this.breakHistory.length : 0,
+      writeFailures: this.writeFailures,
+      recentBreakCategories: this.breakHistory.slice(-5).map((r) => r.reasonCategory),
     };
     const last = this.breakHistory[this.breakHistory.length - 1];
     return last ? { ...base, lastBreakReason: last.reason } : base;
@@ -304,42 +316,58 @@ export class PromptCacheMonitor {
     report: CacheBreakReport,
     changes: PendingPromptChanges,
     messages: readonly ChatMessage[],
-  ): string | undefined {
-    if (process.env.REASONIX_CACHE_BREAK_DIFF === "0") return undefined;
-    if (isTestProcess() && !this.explicitDiffDir) return undefined;
+  ): { diffPatchPath?: string; writeError?: string } {
+    if (process.env.REASONIX_CACHE_BREAK_DIFF === "0") return {};
+    if (isTestProcess() && !this.explicitDiffDir) return {};
     const snapshot = this.currentSnapshot;
-    if (!snapshot) return undefined;
+    if (!snapshot) return {};
+    const raw = [
+      "--- prompt-cache-before",
+      "+++ prompt-cache-after",
+      "@@ prompt cache break @@",
+      `-hit_tokens=${report.prevHitTokens}`,
+      `+hit_tokens=${report.hitTokens}`,
+      `+drop_tokens=${report.dropTokens}`,
+      `+reason=${report.reason}`,
+      `+epoch=${report.epochLabel ?? ""}`,
+      `+changes=${JSON.stringify(changes)}`,
+      `+snapshot=${JSON.stringify(snapshotToJson(snapshot))}`,
+      `+messages=${JSON.stringify(messages)}`,
+      "",
+    ].join("\n");
+    const payload = this.secretRedactor(sanitizePromptCachePaths(raw));
     try {
-      mkdirSync(this.tmpDir, { recursive: true, mode: 0o700 });
+      mkdirSync(dirname(this.tmpDir), { recursive: true, mode: 0o700 });
+      try {
+        mkdirSync(this.tmpDir, { mode: 0o700 });
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+      }
+    } catch (err) {
+      return this.recordWriteFailure(err, 1);
+    }
+    let lastError: unknown;
+    let attempts = 0;
+    for (let attempt = 1; attempt <= DIFF_WRITE_MAX_ATTEMPTS; attempt++) {
+      attempts = attempt;
       const id = randomBytes(6).toString("hex");
       const path = join(this.tmpDir, `cache-break-${id}.diff`);
-      const raw = [
-        "--- prompt-cache-before",
-        "+++ prompt-cache-after",
-        "@@ prompt cache break @@",
-        `-hit_tokens=${report.prevHitTokens}`,
-        `+hit_tokens=${report.hitTokens}`,
-        `+drop_tokens=${report.dropTokens}`,
-        `+reason=${report.reason}`,
-        `+epoch=${report.epochLabel ?? ""}`,
-        `+changes=${JSON.stringify(changes)}`,
-        `+snapshot=${JSON.stringify(snapshotToJson(snapshot))}`,
-        `+messages=${JSON.stringify(messages)}`,
-        "",
-      ].join("\n");
-      const payload = this.secretRedactor(sanitizePaths(raw));
-      const nf = noFollowFlag() ?? 0;
-      const flags = fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | nf;
-      const fd = openSync(path, flags, 0o600);
       try {
-        writeSync(fd, payload);
-      } finally {
-        closeSync(fd);
+        writeFileExclusive(path, payload);
+        return { diffPatchPath: sanitizePathLabel(path) };
+      } catch (err) {
+        lastError = err;
+        if (!isDiffWriteRetryable(err)) return this.recordWriteFailure(err, attempt);
       }
-      return sanitizePathLabel(path);
-    } catch {
-      return undefined;
     }
+    return this.recordWriteFailure(lastError, attempts);
+  }
+
+  private recordWriteFailure(err: unknown, attempts: number): { writeError: string } {
+    this.writeFailures++;
+    const writeError = formatWriteError(err, attempts);
+    console.warn(`[PROMPT CACHE BREAK] diff patch write failed: ${writeError}`);
+    return { writeError };
   }
 
   private shouldEmitBreakWarning(): boolean {
@@ -388,44 +416,82 @@ function formatDelta(delta: number): string {
   return delta >= 0 ? `+${delta}` : `${delta}`;
 }
 
-function fallbackReason(age: number | null): {
+export function classifyPromptCacheFallback(age: number | null): {
   text: string;
-  category: CacheBreakReport["reasonCategory"];
+  category: CacheBreakReasonCategory;
 } {
-  if (age === null) return { text: "unknown cause (prompt unchanged)", category: "unknown" };
-  if (age > TTL_1H_MS) {
+  if (age === null) {
     return {
-      text: "possible 1h TTL expiry (prompt unchanged)",
-      category: "ttl-1h",
+      text: "best-effort miss (no prior call baseline; DeepSeek does not guarantee 100% cache hit)",
+      category: "best-effort-miss",
     };
   }
-  if (age > TTL_5M_MS) {
+  if (age >= RECENT_MISS_CUTOFF_MS) {
     return {
-      text: "possible 5min TTL expiry (prompt unchanged)",
-      category: "ttl-5min",
+      text: "older miss (≥ 10 min, possible TTL expiry; DeepSeek TTL is non-deterministic 'hours to days')",
+      category: "older-miss",
     };
   }
   return {
-    text: "likely server-side (prompt unchanged)",
-    category: "server-side",
+    text: "recent miss (< 10 min, likely server-side eviction within DeepSeek best-effort cache window)",
+    category: "recent-miss",
   };
 }
 
-function sanitizePaths(text: string): string {
+export function sanitizePromptCachePaths(text: string): string {
   const home = homedir();
   const homeReplaced = text.replaceAll(home, "~");
+  const windowsReplaced = homeReplaced.replace(/\b[A-Za-z]:\\[^\s"'<>]+/g, "[WIN_PATH]");
+  const tildeReplaced = windowsReplaced.replace(
+    /(?:^|(?<=[\s'"=`(,;<>]))(~\/[A-Za-z0-9._~@%+=-]+(?:\/[A-Za-z0-9._~@%+=-]+)+)/g,
+    (_match, path: string) => sanitizePathLabel(path),
+  );
   // Match absolute POSIX paths only at non-identifier boundaries; URL host ends with a
   // letter/digit so `https://h.com/api/v1` never matches (the `/` after `h.com` has `m`
   // before it, not whitespace/punct/start-of-line). Stays a single regex so chains stay simple.
-  return homeReplaced.replace(
+  return tildeReplaced.replace(
     /(?:^|(?<=[\s'"=`(,;<>]))(\/[A-Za-z0-9._@%+=-][A-Za-z0-9._~@%+=-]*(?:\/[A-Za-z0-9._~@%+=-]+)+)/g,
     (_match, path: string) => sanitizePathLabel(path),
   );
 }
 
 function sanitizePathLabel(path: string): string {
-  if (path.startsWith("~")) return path;
+  if (path.startsWith("~/")) {
+    const firstSegment = path.slice(2).split("/")[0] ?? "path";
+    return `~/${firstSegment}.sha=${sha256Prefix(path, 8)}`;
+  }
   return `${basename(path)}.sha=${sha256Prefix(path, 8)}`;
+}
+
+function fallbackReason(age: number | null): {
+  text: string;
+  category: CacheBreakReasonCategory;
+} {
+  return classifyPromptCacheFallback(age);
+}
+
+function writeFileExclusive(path: string, payload: string): void {
+  const nf = noFollowFlag();
+  const flags =
+    nf === undefined ? "wx" : fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | nf;
+  const fd = openSync(path, flags, 0o600);
+  try {
+    writeSync(fd, payload);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function isDiffWriteRetryable(err: unknown): boolean {
+  const code = (err as NodeJS.ErrnoException | undefined)?.code;
+  return code === "EEXIST" || code === "ELOOP";
+}
+
+function formatWriteError(err: unknown, attempts: number): string {
+  const e = err as NodeJS.ErrnoException | undefined;
+  const code = e?.code ?? "UNKNOWN";
+  const message = e?.message ?? String(err);
+  return `${code} after ${attempts} attempt${attempts === 1 ? "" : "s"}: ${message}`;
 }
 
 function isTestProcess(): boolean {

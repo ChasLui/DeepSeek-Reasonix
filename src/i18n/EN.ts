@@ -38,6 +38,14 @@ export const EN: TranslationSchema = {
     usageHint: "run `reasonix chat`, `reasonix code`, or `reasonix run <task>` — every turn",
     usageDetail: "appends one line to the log and `reasonix stats` will roll it up.",
   },
+  promptCache: {
+    promptCacheRecentMiss:
+      "recent miss (< 10 min, likely server-side eviction within DeepSeek best-effort cache window)",
+    promptCacheOlderMiss:
+      "older miss (≥ 10 min, possible TTL expiry; DeepSeek TTL is non-deterministic 'hours to days')",
+    promptCacheBestEffortMiss:
+      "best-effort miss (no prior call baseline; DeepSeek does not guarantee 100% cache hit)",
+  },
   run: {
     missingApiKey:
       "DEEPSEEK_API_KEY is not set and stdin is not a TTY (cannot prompt).\n" +
@@ -1709,10 +1717,12 @@ export const EN: TranslationSchema = {
     skipAction: "[s] skip",
     rejectAction: "[r] reject",
     levelOk: "OK",
+    levelInfo: "info",
     levelWarn: "warn",
     levelFail: "FAIL",
     checksLabel: "checks",
     passed: "passed",
+    infoTag: "info",
     warnTag: "warn",
     failTag: "fail",
     stepLabel: "step",

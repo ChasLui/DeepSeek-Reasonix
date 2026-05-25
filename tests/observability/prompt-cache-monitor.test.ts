@@ -4,7 +4,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PromptFingerprint } from "../../src/cache/prompt-fingerprint.js";
 import { ImmutablePrefix } from "../../src/memory/runtime.js";
-import { PromptCacheMonitor } from "../../src/observability/prompt-cache-monitor.js";
+import {
+  PromptCacheMonitor,
+  classifyPromptCacheFallback,
+} from "../../src/observability/prompt-cache-monitor.js";
 import type { ChatMessage, ToolSpec } from "../../src/types.js";
 
 const ENV_KEYS = ["REASONIX_PROMPT_CACHE_MONITOR", "REASONIX_CACHE_BREAK_DIFF"] as const;
@@ -78,12 +81,35 @@ describe("PromptCacheMonitor", () => {
     expect(runDropCase(2001, 0)).toBe(true);
   });
 
-  it("classifies fallback reasons by inter-call age", () => {
+  it("classifies as recent-miss when prev call < 10 min ago", () => {
     silenceStderr();
 
-    expect(runFallbackCase(61 * 60 * 1000)?.reasonCategory).toBe("ttl-1h");
-    expect(runFallbackCase(6 * 60 * 1000)?.reasonCategory).toBe("ttl-5min");
-    expect(runFallbackCase(60 * 1000)?.reasonCategory).toBe("server-side");
+    const report = runFallbackCase(9 * 60 * 1000);
+
+    expect(report?.reasonCategory).toBe("recent-miss");
+    expect(report?.reason).toContain(
+      "recent miss (< 10 min, likely server-side eviction within DeepSeek best-effort cache window)",
+    );
+  });
+
+  it("classifies as older-miss when prev call >= 10 min ago", () => {
+    silenceStderr();
+
+    const report = runFallbackCase(10 * 60 * 1000);
+
+    expect(report?.reasonCategory).toBe("older-miss");
+    expect(report?.reason).toContain(
+      "older miss (≥ 10 min, possible TTL expiry; DeepSeek TTL is non-deterministic 'hours to days')",
+    );
+  });
+
+  it("classifies as best-effort-miss when no prev call baseline", () => {
+    const reason = classifyPromptCacheFallback(null);
+
+    expect(reason.category).toBe("best-effort-miss");
+    expect(reason.text).toContain(
+      "best-effort miss (no prior call baseline; DeepSeek does not guarantee 100% cache hit)",
+    );
   });
 
   it("suppresses precise epoch matches but reports epoch plus extra drift", () => {

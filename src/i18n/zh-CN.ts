@@ -38,6 +38,14 @@ export const zhCN: TranslationSchema = {
     usageHint: "运行 `reasonix chat`、`reasonix code` 或 `reasonix run <task>` — 每次对话都会记录",
     usageDetail: "每次对话在日志中追加一行，`reasonix stats` 会将其汇总统计。",
   },
+  promptCache: {
+    promptCacheRecentMiss:
+      "近期未命中（< 10 分钟，可能是 DeepSeek 尽力而为缓存窗口内的服务侧驱逐）",
+    promptCacheOlderMiss:
+      "较早未命中（≥ 10 分钟，可能是 TTL 过期；DeepSeek TTL 非确定，为数小时到数天）",
+    promptCacheBestEffortMiss:
+      "尽力而为未命中（没有前一次调用基线；DeepSeek 不保证 100% 缓存命中）",
+  },
   run: {
     missingApiKey:
       "未设置 DEEPSEEK_API_KEY 且标准输入不是 TTY（无法交互式输入）。\n" +
@@ -1577,10 +1585,12 @@ export const zhCN: TranslationSchema = {
     skipAction: "[s] 跳过",
     rejectAction: "[r] 拒绝",
     levelOk: "正常",
+    levelInfo: "信息",
     levelWarn: "警告",
     levelFail: "失败",
     checksLabel: "检查项",
     passed: "通过",
+    infoTag: "信息",
     warnTag: "警告",
     failTag: "失败",
     stepLabel: "步骤",

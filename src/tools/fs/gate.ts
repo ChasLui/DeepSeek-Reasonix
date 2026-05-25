@@ -1,7 +1,7 @@
 /** Central FS gate — symlink default-deny + canonical-path validation.
  *  See docs/plans/2026-05-20-just-bash-sandbox-borrow.md Task 4. */
 
-import { promises as fs } from "node:fs";
+import { promises as fs, constants as fsConstants } from "node:fs";
 import * as pathMod from "node:path";
 
 export interface GateOptions {
@@ -70,12 +70,10 @@ async function resolveParent(
   return pathMod.join(canonicalParent, pathMod.basename(abs));
 }
 
-/** O_NOFOLLOW flag value — POSIX 0x100000 on macOS/Linux, undefined on Windows. */
+/** O_NOFOLLOW flag value — read from Node because numeric values vary by platform. */
 export function noFollowFlag(): number | undefined {
   if (process.platform === "win32") return undefined;
-  // node:fs.constants.O_NOFOLLOW is the right value but importing constants
-  // pulls in the whole namespace; this constant is stable across POSIX.
-  return 0x100;
+  return fsConstants.O_NOFOLLOW;
 }
 
 /** Convenience: write whole file content, refusing to follow symlinks. POSIX uses O_NOFOLLOW;
@@ -102,7 +100,5 @@ export async function openForWriteNoFollow(abs: string): Promise<fs.FileHandle> 
     }
     return await fs.open(abs, "w");
   }
-  // r+w with create + truncate + no-follow.
-  // 0o100 = O_CREAT, 0o1000 = O_TRUNC, 0x100 = O_NOFOLLOW (POSIX).
-  return await fs.open(abs, fs.constants.O_RDWR | fs.constants.O_CREAT | fs.constants.O_TRUNC | nf);
+  return await fs.open(abs, fsConstants.O_RDWR | fsConstants.O_CREAT | fsConstants.O_TRUNC | nf);
 }

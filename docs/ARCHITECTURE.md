@@ -43,6 +43,22 @@ timestamps each turn — cache hit rate in practice: <20%.
 **Metric.** `prompt_cache_hit_tokens / (hit + miss)` exposed per-turn and
 aggregated per-session. Visible in the TUI's top-bar cache cell.
 
+#### Cache TTL alignment with DeepSeek docs
+
+DeepSeek's KV cache docs snapshot (2026-05-25,
+https://api-docs.deepseek.com/zh-cn/guides/kv_cache) says the cache is enabled
+by default, each request can create cache-prefix units, and later requests only
+hit when they completely match an already-persisted prefix unit. Prefix units
+come from request end positions, detected common prefixes across requests, and
+fixed token intervals for long inputs/outputs.
+
+The docs expose `prompt_cache_hit_tokens` and `prompt_cache_miss_tokens`, but
+also state that the cache is best-effort, does not guarantee 100% hits, and is
+cleared after an inactive lifetime generally measured in hours to days. Reasonix
+therefore treats unchanged-prompt misses as `recent-miss`, `older-miss`, or
+`best-effort-miss`; it does not encode a deterministic 5-minute or 1-hour
+DeepSeek TTL as a product fact.
+
 #### Parallel tool dispatch
 
 Each tool declares `parallelSafe?: boolean` (default `false`). The loop
@@ -85,8 +101,8 @@ model bucket once per 5s throttle window, then lazy-restores every 60s by
 normal retry backoff.
 
 Queued acquisitions give up after `REASONIX_QUEUE_GIVEUP_MS` (default
-60s), leaving roughly four minutes of DeepSeek's 5-minute prefix-cache TTL
-for retry cycles instead of burning the cache window in a local queue.
+60s), preserving retry time inside DeepSeek's best-effort cache lifetime
+instead of burning the window in a local queue.
 `REASONIX_QUEUE_HINT_MS` (default 2s) controls when queued/acquired events
 are emitted for observability. Auxiliary calls still route to v4-flash
 per Pillar 3, so a full flash bucket never promotes summaries or subagents

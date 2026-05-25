@@ -38,6 +38,11 @@ export interface TranslationSchema {
     usageHint: string;
     usageDetail: string;
   };
+  promptCache: {
+    promptCacheRecentMiss: string;
+    promptCacheOlderMiss: string;
+    promptCacheBestEffortMiss: string;
+  };
   run: {
     missingApiKey: string;
   };
@@ -727,10 +732,12 @@ export interface TranslationSchema {
     skipAction: string;
     rejectAction: string;
     levelOk: string;
+    levelInfo: string;
     levelWarn: string;
     levelFail: string;
     checksLabel: string;
     passed: string;
+    infoTag: string;
     warnTag: string;
     failTag: string;
     stepLabel: string;

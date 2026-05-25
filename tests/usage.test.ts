@@ -456,6 +456,7 @@ describe("renderDashboard", () => {
       missTokens: 200,
       hitRatio: 0.8,
       breaks: 2,
+      writeFailures: 0,
       lastBreakReason: "tools changed: alpha",
     });
 

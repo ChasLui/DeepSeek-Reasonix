@@ -17,15 +17,17 @@ describe("formatDoctorJson", () => {
   it("emits version, summary, and {id,status,message} per check", () => {
     const checks: DoctorCheck[] = [
       { id: "api-key", label: "api key", level: "ok", detail: "set via env" },
+      { id: "prompt-cache", label: "prompt-cache", level: "info", detail: "best-effort" },
       { id: "tokenizer", label: "tokenizer", level: "warn", detail: "fallback" },
       { id: "api-reach", label: "api reach", level: "fail", detail: "boom" },
     ];
     const parsed = JSON.parse(formatDoctorJson(checks, "0.18.1"));
 
     expect(parsed.version).toBe("0.18.1");
-    expect(parsed.summary).toEqual({ ok: 1, warn: 1, fail: 1 });
+    expect(parsed.summary).toEqual({ ok: 1, info: 1, warn: 1, fail: 1 });
     expect(parsed.checks).toEqual([
       { id: "api-key", status: "ok", message: "set via env" },
+      { id: "prompt-cache", status: "info", message: "best-effort" },
       { id: "tokenizer", status: "warn", message: "fallback" },
       { id: "api-reach", status: "fail", message: "boom" },
     ]);
@@ -42,7 +44,7 @@ describe("formatDoctorJson", () => {
 
   it("counts an empty check list as all zeros", () => {
     const parsed = JSON.parse(formatDoctorJson([], VERSION));
-    expect(parsed.summary).toEqual({ ok: 0, warn: 0, fail: 0 });
+    expect(parsed.summary).toEqual({ ok: 0, info: 0, warn: 0, fail: 0 });
     expect(parsed.checks).toEqual([]);
   });
 });
@@ -107,7 +109,7 @@ describe("doctorCommand --json (integration)", () => {
     });
     for (const c of parsed.checks) {
       expect(typeof c.id).toBe("string");
-      expect(["ok", "warn", "fail"]).toContain(c.status);
+      expect(["ok", "info", "warn", "fail"]).toContain(c.status);
       expect(typeof c.message).toBe("string");
     }
   });
@@ -133,6 +135,8 @@ describe("doctorCommand --json (integration)", () => {
         missTokens: 1000,
         hitRatio: 0.9,
         breaks: 1,
+        writeFailures: 0,
+        recentBreakCategories: ["system"],
         lastBreakReason: "system changed",
       },
     });
@@ -151,11 +155,12 @@ describe("doctorCommand --json (integration)", () => {
         missTokens: 0,
         hitRatio: 0,
         breaks: 0,
+        writeFailures: 0,
       },
     });
 
     expect(checks.find((c) => c.id === "prompt-cache")).toMatchObject({
-      level: "ok",
+      level: "info",
       detail: "disabled via REASONIX_PROMPT_CACHE_MONITOR=0",
     });
   });

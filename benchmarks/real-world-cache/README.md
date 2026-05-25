@@ -72,5 +72,26 @@ run through `CacheFirstLoop` vs a deliberately cache-hostile baseline. The
 real-world data above is what the synthetic numbers look like once a user
 runs the harness in anger.
 
+## Manual cache probes
+
+Two manual probes exercise DeepSeek's documented KV-cache patterns without
+entering CI:
+
+```sh
+npx tsx benchmarks/real-world-cache/long-doc-qa.ts --turns 3
+npx tsx benchmarks/real-world-cache/multi-turn-chat.ts --turns 5
+npx tsc --noEmit -p tsconfig.benchmarks.json
+```
+
+They require `DEEPSEEK_API_KEY`; without it they print
+`skip: DEEPSEEK_API_KEY missing` and exit 0. Each run writes
+`benchmarks/real-world-cache/results/<bench>/results.json` and `results.md`
+locally. The expected budget is about `$0.05` for both probes together.
+
+The acceptance gate is functional: the run completes, writes results, and
+turns after the first show `prompt_cache_hit_tokens > 0`. A 70% hit ratio is
+an operating expectation, not a pass/fail rule, because DeepSeek documents the
+cache as best-effort rather than guaranteed.
+
 Submit your own dashboard screenshot if you want it anonymized and added
 here — open an issue.

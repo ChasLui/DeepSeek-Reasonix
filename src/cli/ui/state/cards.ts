@@ -232,7 +232,7 @@ export type Card =
 
 export interface DoctorCheckEntry {
   readonly label: string;
-  readonly level: "ok" | "warn" | "fail";
+  readonly level: "ok" | "info" | "warn" | "fail";
   readonly detail: string;
 }
 

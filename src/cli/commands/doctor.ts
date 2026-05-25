@@ -27,14 +27,17 @@ import { checkOllamaStatus } from "../../index/semantic/ollama-launcher.js";
 import { countRecentObservationEvents } from "../../memory/observation.js";
 import { listSessions } from "../../memory/session.js";
 import { detectProxyUrl, matchesNoProxy, resolveNoProxy } from "../../net/proxy.js";
-import type { PromptCacheStats } from "../../observability/prompt-cache-monitor.js";
+import type {
+  CacheBreakReasonCategory,
+  PromptCacheStats,
+} from "../../observability/prompt-cache-monitor.js";
 import { resolveConcurrencySettings } from "../../rate-limit/index.js";
 import { readUsageSince } from "../../telemetry/usage.js";
 import { resolveDataPath } from "../../tokenizer.js";
 import { getVfsStats } from "../../tools/shell/vfs-lite.js";
 import { VERSION } from "../../version.js";
 
-export type DoctorLevel = "ok" | "warn" | "fail";
+export type DoctorLevel = "ok" | "info" | "warn" | "fail";
 
 export interface DoctorCheck {
   id: string;
@@ -120,7 +123,7 @@ function checkPromptCache(stats?: PromptCacheStats): Check {
     return {
       id: "prompt-cache",
       label: "prompt-cache ",
-      level: "ok",
+      level: "info",
       detail: "disabled via REASONIX_PROMPT_CACHE_MONITOR=0",
     };
   }
@@ -128,7 +131,7 @@ function checkPromptCache(stats?: PromptCacheStats): Check {
     return {
       id: "prompt-cache",
       label: "prompt-cache ",
-      level: "ok",
+      level: "info",
       detail: "disabled via REASONIX_PROMPT_CACHE_MONITOR=0",
     };
   }
@@ -140,12 +143,45 @@ function checkPromptCache(stats?: PromptCacheStats): Check {
   const sessionState = stats
     ? `${(stats.hitRatio * 100).toFixed(1)}% hit · ${stats.breaks} breaks${stats.lastBreakReason ? ` · last: ${stats.lastBreakReason}` : ""}`
     : "session-local stats unavailable in standalone doctor";
+  const promptCacheAssessment = promptCacheAssessmentFor(stats);
   return {
     id: "prompt-cache",
     label: "prompt-cache ",
-    level: stats && stats.breaks > 0 ? "warn" : "ok",
-    detail: `${sessionState}; ${diffState}; dir=${dir}`,
+    level: promptCacheAssessment.level,
+    detail: `${sessionState}${promptCacheAssessment.detail ? ` · ${promptCacheAssessment.detail}` : ""}; ${diffState}; dir=${dir}`,
   };
+}
+
+const PROMPT_CACHE_FALLBACK_CATEGORIES = new Set<CacheBreakReasonCategory>([
+  "recent-miss",
+  "older-miss",
+  "best-effort-miss",
+]);
+
+function promptCacheAssessmentFor(stats: PromptCacheStats | undefined): {
+  level: DoctorLevel;
+  detail: string;
+} {
+  if (!stats) return { level: "ok", detail: "" };
+  const writeFailures = stats.writeFailures ?? 0;
+  if (writeFailures > 0) {
+    return {
+      level: "warn",
+      detail: `diff patch write failed ${writeFailures} times — check ~/.reasonix/tmp/ permissions`,
+    };
+  }
+  if (stats.breaks === 0) return { level: "ok", detail: "" };
+  const categories = stats.recentBreakCategories ?? [];
+  const nonFallback = categories.find(
+    (category) => !PROMPT_CACHE_FALLBACK_CATEGORIES.has(category),
+  );
+  if (nonFallback) {
+    return { level: "warn", detail: `local prompt drift category=${nonFallback}` };
+  }
+  if (categories.length === stats.breaks || categories.length > 0) {
+    return { level: "info", detail: "DeepSeek best-effort cache; no local prompt drift" };
+  }
+  return { level: "warn", detail: "local prompt drift category=unknown" };
 }
 
 /** Hybrid memory CLI walks stdout, not runCommand, so the Pillar 4 filter
@@ -461,6 +497,7 @@ function color(text: string, code: string): string {
 
 function badge(level: Level): string {
   if (level === "ok") return color("✓", "32");
+  if (level === "info") return color("i", "36");
   if (level === "warn") return color("⚠", "33");
   return color("✗", "31");
 }
@@ -810,11 +847,12 @@ async function checkProject(projectRoot: string): Promise<Check> {
 
 export function formatDoctorJson(checks: DoctorCheck[], version: string): string {
   const ok = checks.filter((c) => c.level === "ok").length;
+  const info = checks.filter((c) => c.level === "info").length;
   const warn = checks.filter((c) => c.level === "warn").length;
   const fail = checks.filter((c) => c.level === "fail").length;
   return JSON.stringify({
     version,
-    summary: { ok, warn, fail },
+    summary: { ok, info, warn, fail },
     checks: checks.map((c) => ({
       id: c.id,
       status: c.level,
@@ -841,6 +879,7 @@ export async function doctorCommand(opts: DoctorOptions = {}): Promise<void> {
   const checks = await runDoctorChecks(projectRoot);
 
   const ok = checks.filter((c) => c.level === "ok").length;
+  const info = checks.filter((c) => c.level === "info").length;
   const warn = checks.filter((c) => c.level === "warn").length;
   const fail = checks.filter((c) => c.level === "fail").length;
 
@@ -855,7 +894,7 @@ export async function doctorCommand(opts: DoctorOptions = {}): Promise<void> {
   }
 
   console.log("");
-  const summary = `${ok} ok · ${warn} warn · ${fail} fail`;
+  const summary = `${ok} ok · ${info} info · ${warn} warn · ${fail} fail`;
   if (fail > 0) {
     console.log(color(summary, "31"));
     process.exit(1);

@@ -21,6 +21,7 @@ scripts/.cm-entry.mjs
 # absolute machine paths (username + dir layout). Conclusions live in
 # docs/plans/2026-05-20-just-bash-sandbox-borrow.md instead.
 scripts/vfs-spike-report.md
+benchmarks/real-world-cache/results/
 
 # =============================================================================
 # Environment & secrets
@@ -95,7 +96,8 @@ bun.lock
 .design-ref/
 .ccb/
 .wolf/
-docs/plans/
+docs/plans/*
+!docs/plans/*-attestation.md
 bin/plan-lint.sh
 tmp/
 .claude/scheduled_tasks.lock

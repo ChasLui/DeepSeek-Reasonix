@@ -262,7 +262,7 @@ const doctorShow = z.object({
   checks: z.array(
     z.object({
       label: z.string(),
-      level: z.enum(["ok", "warn", "fail"]),
+      level: z.enum(["ok", "info", "warn", "fail"]),
       detail: z.string(),
     }),
   ),

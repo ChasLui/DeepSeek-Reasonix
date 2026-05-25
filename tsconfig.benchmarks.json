@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["benchmarks/real-world-cache/*.ts"],
+  "exclude": ["node_modules", "dist", "tests", "examples"]
+}

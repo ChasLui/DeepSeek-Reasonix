@@ -85,7 +85,11 @@ export interface SlashContext {
   postInfo?: (text: string) => void;
   /** Push a structured Doctor card with check-by-check status; used by `/doctor`. */
   postDoctor?: (
-    checks: ReadonlyArray<{ label: string; level: "ok" | "warn" | "fail"; detail: string }>,
+    checks: ReadonlyArray<{
+      label: string;
+      level: "ok" | "info" | "warn" | "fail";
+      detail: string;
+    }>,
   ) => void;
   /** Push a verbose Usage card (full bars) — used by `/cost`; auto-emitted per-turn cards stay compact. */
   postUsage?: (args: {
