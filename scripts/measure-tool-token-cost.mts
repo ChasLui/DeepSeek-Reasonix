@@ -51,7 +51,11 @@ try {
   registerPlanTool(tools);
   registerChoiceTool(tools);
   registerTodoTool(tools);
-  registerScaffoldTools(tools, { homeDir: home, projectRoot: root, configPath: join(home, "config.json") });
+  registerScaffoldTools(tools, {
+    homeDir: home,
+    projectRoot: root,
+    configPath: join(home, "config.json"),
+  });
   registerWebTools(tools);
   registerSkillTools(tools, { projectRoot: root, disableBuiltins: true });
 
@@ -84,7 +88,7 @@ try {
     move_file: { source: "copy-source/x.txt", destination: "moved-x.txt" },
 
     run_command: { command: "node --version" },
-    run_background: { command: "node -e \"setTimeout(()=>{},200)\"", waitSec: 0.1 },
+    run_background: { command: 'node -e "setTimeout(()=>{},200)"', waitSec: 0.1 },
     list_jobs: {},
     job_output: null,
     wait_for_job: null,
@@ -130,19 +134,43 @@ try {
 
     let args = fixtures[name];
     if (args === undefined) {
-      rows.push({ name, schemaTok, argsTok: 0, outputTok: 0, status: "skipped", note: "no fixture" });
+      rows.push({
+        name,
+        schemaTok,
+        argsTok: 0,
+        outputTok: 0,
+        status: "skipped",
+        note: "no fixture",
+      });
       continue;
     }
-    if (args === null && (name === "job_output" || name === "wait_for_job" || name === "stop_job")) {
+    if (
+      args === null &&
+      (name === "job_output" || name === "wait_for_job" || name === "stop_job")
+    ) {
       if (postBgJobId === undefined) {
-        rows.push({ name, schemaTok, argsTok: 0, outputTok: 0, status: "skipped", note: "needs run_background first" });
+        rows.push({
+          name,
+          schemaTok,
+          argsTok: 0,
+          outputTok: 0,
+          status: "skipped",
+          note: "needs run_background first",
+        });
         continue;
       }
       args = { jobId: postBgJobId };
       if (name === "wait_for_job") args.timeoutMs = 300;
     }
     if (args === null) {
-      rows.push({ name, schemaTok, argsTok: 0, outputTok: 0, status: "skipped", note: "gate-bound / interactive" });
+      rows.push({
+        name,
+        schemaTok,
+        argsTok: 0,
+        outputTok: 0,
+        status: "skipped",
+        note: "gate-bound / interactive",
+      });
       continue;
     }
 
@@ -158,11 +186,20 @@ try {
       }
     } catch (err) {
       const msg = (err as Error).message;
-      rows.push({ name, schemaTok, argsTok, outputTok: 0, status: "error", note: msg.slice(0, 60) });
+      rows.push({
+        name,
+        schemaTok,
+        argsTok,
+        outputTok: 0,
+        status: "error",
+        note: msg.slice(0, 60),
+      });
     }
   }
 
-  rows.sort((a, b) => b.schemaTok + b.argsTok + b.outputTok - (a.schemaTok + a.argsTok + a.outputTok));
+  rows.sort(
+    (a, b) => b.schemaTok + b.argsTok + b.outputTok - (a.schemaTok + a.argsTok + a.outputTok),
+  );
 
   const pad = (s: string | number, w: number, right = true) =>
     right ? String(s).padStart(w) : String(s).padEnd(w);
@@ -206,7 +243,9 @@ try {
   );
 
   console.log("\nNote: schema = fixed per-turn cost while tool is registered.");
-  console.log("      args + output = one specific dispatch (representative input, not worst case).");
+  console.log(
+    "      args + output = one specific dispatch (representative input, not worst case).",
+  );
   console.log("      skipped: gate-bound (plan/choice/skills) or needs prior call.");
 
   globalThis.fetch = originalFetch;

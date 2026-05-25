@@ -356,6 +356,43 @@ Prompt-based tools-schema-as-TOON is still benchmark-gated because it would
 bypass native function calling; the default payload encoder does not change that
 protocol boundary.
 
+## Persistent code-graph index (lexical+symbol+edge)
+
+`src/index/code-graph/` is a JSON-backed fast path for code relation tools, not
+a fifth pillar and not a replacement for the tree-sitter immediate path in
+`src/code-query/`. The design is tracked in
+`docs/plans/2026-05-24-codegraph-borrow-ral.md`.
+
+`reasonix code-index rebuild` writes deterministic artifacts under
+`.reasonix/index/code-graph/`: `nodes.json`, `edges.json`, `bm25.json`, and
+`files-stamps.json`. All four files carry the same deterministic `graphHash`;
+loaders recompute it from artifact payloads so mixed or edited artifacts fail
+closed instead of serving partial graph state. The in-process load cache includes
+artifact `ctimeMs` in its signature, so same-size rewrites do not bypass that
+validation. Doctor artifact stats validate the same node, edge, and BM25 schema
+before reporting counts. The builder uses a lightweight source scanner for the
+index hot path; the older tree-sitter relation path remains the compatibility
+oracle and fallback when artifacts are missing, stale-checking times out, or a
+relation is unsupported by the graph.
+
+Runtime lookup accelerates `find_references` for all four relations —
+`callers`, `callees`, `imports`, and `importers` — and is the path
+`detect_changes(includeCallers)` uses for caller expansion. The graph
+persists `unresolvedRefs`, so an incremental update that adds a new file
+re-resolves dangling references from older files (incremental ≡ full
+rebuild for cross-file resolution).
+
+When `buildCodeGraph` or `incrementalUpdate` throws inside a query, the
+fast path records a per-root cooldown (`REASONIX_CODE_GRAPH_BUILD_COOLDOWN_MS`,
+default 60s). Inside the cooldown window queries skip fresh builds and go
+straight to the immediate fallback; an artifact already on disk still wins
+the fast path. This prevents the 1s-timeout livelock on large repos.
+
+`REASONIX_CODE_GRAPH=0` bypasses the entire layer, and
+`REASONIX_CODE_GRAPH_BODY=1` is required before node `signature` /
+`docstring` fields are written. Telemetry and doctor output only report
+counts, sizes, elapsed time, and stale ratio.
+
 ## Module layout
 
 ```
@@ -386,6 +423,7 @@ src/
 │   ├── plan.ts             # submit_plan (review gate)
 │   └── web.ts              # web_search, web_fetch (multi-engine: Mojeek, SearXNG or Metaso)
 ├── mcp/                    # MCP client + bridge (stdio + SSE)
+├── index/code-graph/       # JSON code-graph fast path for relation tools
 ├── memory.ts               # ImmutablePrefix / AppendOnlyLog / VolatileScratch
 ├── project-memory.ts       # REASONIX.md loader
 ├── user-memory.ts          # ~/.reasonix/memory/ store (project + global)

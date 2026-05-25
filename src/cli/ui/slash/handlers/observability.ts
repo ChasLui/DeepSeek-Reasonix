@@ -1,6 +1,7 @@
 import { release } from "node:os";
 import { getCodeRelationStats } from "@/code-query/stats.js";
 import {
+  loadCodeGraphEnabled,
   loadCodeRelationsEnabled,
   loadRateLimit,
   loadTheme,
@@ -8,6 +9,7 @@ import {
   resolveThemePreference,
 } from "@/config.js";
 import { getLanguage, t } from "@/i18n/index.js";
+import { getCodeGraphStats } from "@/index/code-graph/stats.js";
 import { DEEPSEEK_CONTEXT_TOKENS, DEFAULT_CONTEXT_TOKENS, pricingFor } from "@/telemetry/stats.js";
 import { countTokensBounded } from "@/tokenizer.js";
 import { getToonStats } from "@/toon/stats.js";
@@ -112,6 +114,7 @@ const status: SlashHandler = (_args, loop, ctx) => {
     : "";
   const toolCacheLine = renderToolCacheStatusLine(loop);
   const codeRelLine = renderCodeRelationStatusLine();
+  const codeGraphLine = renderCodeGraphStatusLine();
   const toonLine = renderToonStatusLine();
   const lines = [
     t("handlers.observability.statusModel", { model: loop.model }),
@@ -127,6 +130,7 @@ const status: SlashHandler = (_args, loop, ctx) => {
   ];
   if (toolCacheLine) lines.push(toolCacheLine);
   if (codeRelLine) lines.push(codeRelLine);
+  if (codeGraphLine) lines.push(codeGraphLine);
   if (toonLine) lines.push(toonLine);
   if (workspaceLine) lines.push(workspaceLine);
   if (budgetLine) lines.push(budgetLine);
@@ -177,6 +181,19 @@ function renderCodeRelationStatusLine(): string {
   const enabled = loadCodeRelationsEnabled();
   if (!enabled && stats.queries === 0) return "";
   return `code-rel: ${enabled ? "on" : "off"} queries=${stats.queries} candidates=${compactNum(stats.candidatesScanned)} changed=${stats.changedFiles} saved≈${compactNum(stats.savedRoundsEstimate)}r fallback=${stats.fallbacks}`;
+}
+
+function renderCodeGraphStatusLine(): string {
+  const stats = getCodeGraphStats();
+  const enabled = loadCodeGraphEnabled();
+  if (!enabled && stats.queries === 0 && stats.builds === 0 && stats.loads === 0) return "";
+  const nodes = stats.lastNodes === undefined ? "n/a" : compactNum(stats.lastNodes);
+  const edges = stats.lastEdges === undefined ? "n/a" : compactNum(stats.lastEdges);
+  const lastBuild =
+    stats.lastBuildElapsedMs === undefined ? "n/a" : `${stats.lastBuildElapsedMs}ms`;
+  const stale =
+    stats.stalenessRatio === undefined ? "n/a" : `${(stats.stalenessRatio * 100).toFixed(1)}%`;
+  return `code-graph: ${enabled ? "on" : "off"} builds=${stats.builds} loads=${stats.loads} cache=${stats.cacheHits}/${stats.loads} queries=${stats.queries} fallback=${stats.fallbacks} nodes=${nodes} edges=${edges} stale=${stale} last_build=${lastBuild}`;
 }
 
 function renderToonStatusLine(): string {

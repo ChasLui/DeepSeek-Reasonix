@@ -12,14 +12,14 @@ function Nav({ active }) {
   }, []);
 
   const NAV_LINKS = [
-    { href: "index.html#install",  label: { zh: "安装",     en: "Install" } },
-    { href: "index.html#agents",   label: { zh: "原理",     en: "How it works" } },
-    { href: "index.html#features", label: { zh: "特性",     en: "Features" } },
-    { href: "index.html#config",   label: { zh: "配置",     en: "Config" } },
-    { href: "configuration.html",  label: { zh: "Guide",    en: "Guide" } },
-    { href: "download.html",       label: { zh: "下载",     en: "Download" }, key: "download" },
-    { href: "index.html#roadmap",  label: { zh: "Roadmap",  en: "Roadmap" } },
-    { href: "index.html#faq",      label: { zh: "FAQ",      en: "FAQ" } },
+    { href: "index.html#install", label: { zh: "安装", en: "Install" } },
+    { href: "index.html#agents", label: { zh: "原理", en: "How it works" } },
+    { href: "index.html#features", label: { zh: "特性", en: "Features" } },
+    { href: "index.html#config", label: { zh: "配置", en: "Config" } },
+    { href: "configuration.html", label: { zh: "Guide", en: "Guide" } },
+    { href: "download.html", label: { zh: "下载", en: "Download" }, key: "download" },
+    { href: "index.html#roadmap", label: { zh: "Roadmap", en: "Roadmap" } },
+    { href: "index.html#faq", label: { zh: "FAQ", en: "FAQ" } },
   ];
 
   return (
@@ -28,7 +28,8 @@ function Nav({ active }) {
         <a className="brand" href="index.html">
           <span className="brand-mark"></span>
           <span className="brand-name">
-            <b>Reasonix</b><span>DS · {rxLabel}</span>
+            <b>Reasonix</b>
+            <span>DS · {rxLabel}</span>
           </span>
         </a>
         <div className="nav-links" role="navigation">
@@ -50,16 +51,25 @@ function Nav({ active }) {
               className={lang === "en" ? "on" : ""}
               aria-pressed={lang === "en"}
               onClick={() => setLang("en")}
-            >EN</button>
+            >
+              EN
+            </button>
             <button
               type="button"
               className={lang === "zh" ? "on" : ""}
               aria-pressed={lang === "zh"}
               onClick={() => setLang("zh")}
-            >中文</button>
+            >
+              中文
+            </button>
           </div>
-          <a className="btn btn-ghost btn-sm" href="https://github.com/esengine/DeepSeek-Reasonix" target="_blank" rel="noreferrer">
-            <Ic.Github size={13}/> GitHub
+          <a
+            className="btn btn-ghost btn-sm"
+            href="https://github.com/esengine/DeepSeek-Reasonix"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Ic.Github size={13} /> GitHub
           </a>
           <a className="btn btn-primary btn-sm" href="download.html">
             {t({ zh: "下载桌面端 →", en: "Download desktop →" }, lang)}

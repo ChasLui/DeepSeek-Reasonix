@@ -13,6 +13,8 @@ import {
   isPlausibleKey,
   loadApiKey,
   loadBaseUrl,
+  loadCodeGraphEnabled,
+  loadCodeGraphIncludeBody,
   loadCodeRelationsEnabled,
   loadDesktopOpenTabs,
   loadEditMode,
@@ -37,6 +39,8 @@ import {
   redactSemanticEmbeddingConfig,
   removeProjectPathAllowed,
   removeProjectShellAllowed,
+  resolveCodeGraphEnabled,
+  resolveCodeGraphIncludeBody,
   resolveCodeRelationsEnabled,
   resolveSemanticEmbeddingConfig,
   resolveThemePreference,
@@ -61,6 +65,8 @@ describe("config", () => {
   const originalSearch = process.env.REASONIX_SEARCH;
   const originalBaseUrl = process.env.DEEPSEEK_BASE_URL;
   const originalCodeRel = process.env.REASONIX_CODEREL;
+  const originalCodeGraph = process.env.REASONIX_CODE_GRAPH;
+  const originalCodeGraphBody = process.env.REASONIX_CODE_GRAPH_BODY;
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "reasonix-test-"));
@@ -73,6 +79,10 @@ describe("config", () => {
     delete process.env.DEEPSEEK_BASE_URL;
     // biome-ignore lint/performance/noDelete: same reason
     delete process.env.REASONIX_CODEREL;
+    // biome-ignore lint/performance/noDelete: same reason
+    delete process.env.REASONIX_CODE_GRAPH;
+    // biome-ignore lint/performance/noDelete: same reason
+    delete process.env.REASONIX_CODE_GRAPH_BODY;
   });
 
   afterEach(() => {
@@ -101,6 +111,18 @@ describe("config", () => {
     } else {
       process.env.REASONIX_CODEREL = originalCodeRel;
     }
+    if (originalCodeGraph === undefined) {
+      // biome-ignore lint/performance/noDelete: same reason
+      delete process.env.REASONIX_CODE_GRAPH;
+    } else {
+      process.env.REASONIX_CODE_GRAPH = originalCodeGraph;
+    }
+    if (originalCodeGraphBody === undefined) {
+      // biome-ignore lint/performance/noDelete: same reason
+      delete process.env.REASONIX_CODE_GRAPH_BODY;
+    } else {
+      process.env.REASONIX_CODE_GRAPH_BODY = originalCodeGraphBody;
+    }
   });
 
   it("readConfig returns {} when file is missing", () => {
@@ -127,6 +149,21 @@ describe("config", () => {
     expect(resolveCodeRelationsEnabled({ enabled: false }, undefined)).toBe(false);
     expect(resolveCodeRelationsEnabled({ enabled: true }, "0")).toBe(false);
     expect(resolveCodeRelationsEnabled(false, "1")).toBe(true);
+  });
+
+  it("defaults code graph on while keeping body fields opt-in", () => {
+    expect(resolveCodeGraphEnabled(undefined, undefined)).toBe(true);
+    expect(loadCodeGraphEnabled(path)).toBe(true);
+    expect(resolveCodeGraphEnabled(false, undefined)).toBe(false);
+    expect(resolveCodeGraphEnabled({ enabled: false }, undefined)).toBe(false);
+    expect(resolveCodeGraphEnabled({ enabled: true }, "0")).toBe(false);
+    expect(resolveCodeGraphEnabled(false, "1")).toBe(true);
+
+    expect(resolveCodeGraphIncludeBody(undefined, undefined)).toBe(false);
+    expect(loadCodeGraphIncludeBody(path)).toBe(false);
+    expect(resolveCodeGraphIncludeBody({ includeBody: true }, undefined)).toBe(true);
+    expect(resolveCodeGraphIncludeBody({ includeBody: false }, "1")).toBe(true);
+    expect(resolveCodeGraphIncludeBody({ includeBody: true }, "0")).toBe(false);
   });
 
   it("writeConfig + readConfig round-trip", () => {

@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { findReferences } from "../src/code-query/relations.js";
 import { ImmutablePrefix } from "../src/memory/runtime.js";
 import { scavengeToolCalls } from "../src/repair/scavenge.js";
 import { countTokensBounded } from "../src/tokenizer.js";
@@ -45,6 +46,23 @@ describe("code relation tools", () => {
     expect(names).toContain("find_references");
     expect(names).toContain("detect_changes");
     expect(names).toContain("impact");
+    expect(registry.isParallelSafe("find_references")).toBe(false);
+    const originalCodeGraph = process.env.REASONIX_CODE_GRAPH;
+    process.env.REASONIX_CODE_GRAPH = "1";
+    try {
+      expect(registry.get("find_references")?.readOnlyCheck?.({ relation: "callers" })).toBe(false);
+      expect(registry.get("find_references")?.readOnlyCheck?.({ relation: "imports" })).toBe(false);
+      expect(registry.get("detect_changes")?.readOnlyCheck?.({ includeCallers: true })).toBe(false);
+      expect(registry.get("detect_changes")?.readOnlyCheck?.({ includeCallers: false })).toBe(true);
+      expect(registry.get("impact")?.readOnlyCheck?.({})).toBe(false);
+    } finally {
+      if (originalCodeGraph === undefined) {
+        // biome-ignore lint/performance/noDelete: restore exact env state
+        delete process.env.REASONIX_CODE_GRAPH;
+      } else {
+        process.env.REASONIX_CODE_GRAPH = originalCodeGraph;
+      }
+    }
 
     const disabled = new ToolRegistry();
     registerCodeQueryTools(disabled, { rootDir: tmp, codeRelationsEnabled: false });
@@ -134,6 +152,487 @@ describe("code relation tools", () => {
     expect(importers.records).toContainEqual(
       expect.objectContaining({ file: "src/b.ts", module: "./a" }),
     );
+  });
+
+  it("does not expose resolved paths for relative imports outside the project root", async () => {
+    const outsideRoot = `${tmp}-outside`;
+    mkdirSync(outsideRoot, { recursive: true });
+    try {
+      writeFileSync(join(outsideRoot, "external.ts"), "export function externalHelper() {}\n");
+      writeProjectFile(
+        tmp,
+        "src/b.ts",
+        [
+          `import { externalHelper } from "../../${basename(outsideRoot)}/external.ts";`,
+          "export function run() { return externalHelper(); }",
+        ].join("\n"),
+      );
+
+      const importsRaw = await registry.dispatch(
+        "find_references",
+        JSON.stringify({ symbol: "run", relation: "imports", scope: "src" }),
+      );
+      const imports = parseToolResult<{ records: Array<{ resolvedPath?: string }> }>(importsRaw);
+
+      expect(imports.records).toHaveLength(1);
+      expect(imports.records[0]?.resolvedPath).toBeUndefined();
+    } finally {
+      rmSync(outsideRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    }
+  });
+
+  it("resolves aliased named imports through their local binding", async () => {
+    writeProjectFile(tmp, "src/a.ts", "export function helper() { return 1; }\n");
+    writeProjectFile(
+      tmp,
+      "src/b.ts",
+      [
+        'import { helper as h } from "./a";',
+        "export function aliasRun() { return h(); }",
+        "export function wrongRun() { return helper(); }",
+      ].join("\n"),
+    );
+
+    const callers = await findReferences(
+      tmp,
+      { symbol: "helper", relation: "callers", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(callers.records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: expect.objectContaining({ name: "aliasRun" }),
+          confidence: "INFERRED",
+          to: expect.objectContaining({ name: "helper", file: "src/a.ts" }),
+        }),
+        expect.objectContaining({
+          from: expect.objectContaining({ name: "wrongRun" }),
+          confidence: "AMBIGUOUS",
+        }),
+      ]),
+    );
+    expect(callers.records.find((record) => record.from?.name === "wrongRun")?.confidence).not.toBe(
+      "INFERRED",
+    );
+
+    const callees = await findReferences(
+      tmp,
+      { symbol: "aliasRun", relation: "callees", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(callees.records).toContainEqual(
+      expect.objectContaining({
+        symbol: "helper",
+        confidence: "INFERRED",
+        to: expect.objectContaining({ name: "helper", file: "src/a.ts" }),
+      }),
+    );
+  });
+
+  it("resolves namespace imports through their receiver", async () => {
+    writeProjectFile(tmp, "src/a.ts", "export function helper() { return 1; }\n");
+    writeProjectFile(
+      tmp,
+      "src/b.ts",
+      [
+        'import * as ns from "./a";',
+        "const obj = { helper: () => 2 };",
+        "export function nsRun() { return ns.helper(); }",
+        "export function wrongRun() { return helper(); }",
+        "export function objRun() { return obj.helper(); }",
+      ].join("\n"),
+    );
+
+    const callers = await findReferences(
+      tmp,
+      { symbol: "helper", relation: "callers", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(callers.records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: expect.objectContaining({ name: "nsRun" }),
+          confidence: "INFERRED",
+          to: expect.objectContaining({ name: "helper", file: "src/a.ts" }),
+        }),
+        expect.objectContaining({
+          from: expect.objectContaining({ name: "wrongRun" }),
+          confidence: "AMBIGUOUS",
+        }),
+      ]),
+    );
+
+    const callees = await findReferences(
+      tmp,
+      { symbol: "nsRun", relation: "callees", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(callees.records).toContainEqual(
+      expect.objectContaining({
+        symbol: "helper",
+        confidence: "INFERRED",
+        to: expect.objectContaining({ name: "helper", file: "src/a.ts" }),
+      }),
+    );
+  });
+
+  it("keeps default imports distinct from named exports in immediate caller lookup", async () => {
+    writeProjectFile(tmp, "src/a.ts", "export function helper() { return 1; }\n");
+    writeProjectFile(
+      tmp,
+      "src/b.ts",
+      ['import helper from "./a";', "export function run() { return helper(); }"].join("\n"),
+    );
+
+    const callers = await findReferences(
+      tmp,
+      { symbol: "helper", relation: "callers", scope: "src" },
+      { codeGraph: false },
+    );
+
+    expect(callers.records).toEqual([]);
+
+    const importers = await findReferences(
+      tmp,
+      { symbol: "helper", relation: "importers", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(importers.records).toEqual([]);
+  });
+
+  it("keeps module-only imports out of symbol importer lookup", async () => {
+    writeProjectFile(
+      tmp,
+      "src/a.ts",
+      ["export function helper() { return 1; }", "export function other() { return 2; }"].join(
+        "\n",
+      ),
+    );
+    writeProjectFile(tmp, "src/side-effect.ts", 'import "./a";\n');
+    writeProjectFile(tmp, "src/other.ts", 'import { other } from "./a";\n');
+    writeProjectFile(tmp, "src/alias.ts", 'import { other as helper } from "./a";\nhelper();\n');
+    writeProjectFile(tmp, "src/namespace.ts", 'import * as ns from "./a";\nns.helper();\n');
+
+    const symbolImporters = await findReferences(
+      tmp,
+      { symbol: "helper", relation: "importers", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(symbolImporters.records).toEqual([
+      expect.objectContaining({
+        file: "src/namespace.ts",
+        reason: "namespace import binding",
+      }),
+    ]);
+
+    const pathImporters = await findReferences(
+      tmp,
+      { symbol: "src/a.ts", relation: "importers", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(pathImporters.records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ file: "src/namespace.ts" }),
+        expect.objectContaining({ file: "src/alias.ts" }),
+        expect.objectContaining({ file: "src/other.ts" }),
+        expect.objectContaining({ file: "src/side-effect.ts" }),
+      ]),
+    );
+  });
+
+  it("keeps unrelated named re-exports out of symbol importer lookup", async () => {
+    writeProjectFile(
+      tmp,
+      "src/a.ts",
+      ["export function helper() { return 1; }", "export function other() { return 2; }"].join(
+        "\n",
+      ),
+    );
+    writeProjectFile(tmp, "src/reexport-helper.ts", 'export { helper as h } from "./a";\n');
+    writeProjectFile(tmp, "src/reexport-other.ts", 'export { other } from "./a";\n');
+    writeProjectFile(tmp, "src/reexport-star.ts", 'export * from "./a";\n');
+
+    const importers = await findReferences(
+      tmp,
+      { symbol: "helper", relation: "importers", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(importers.records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          file: "src/reexport-helper.ts",
+          reason: "import-scoped binding",
+        }),
+        expect.objectContaining({
+          file: "src/reexport-star.ts",
+          reason: "resolved import source",
+        }),
+      ]),
+    );
+    expect(importers.records).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ file: "src/reexport-other.ts" })]),
+    );
+  });
+
+  it("resolves named default exports through default imports in immediate caller lookup", async () => {
+    writeProjectFile(tmp, "src/a.ts", "export default function helper() { return 1; }\n");
+    writeProjectFile(
+      tmp,
+      "src/b.ts",
+      ['import localHelper from "./a";', "export function run() { return localHelper(); }"].join(
+        "\n",
+      ),
+    );
+
+    const callers = await findReferences(
+      tmp,
+      { symbol: "helper", relation: "callers", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(callers.records).toEqual([
+      expect.objectContaining({
+        from: expect.objectContaining({ name: "run" }),
+        confidence: "INFERRED",
+        to: expect.objectContaining({ name: "helper", file: "src/a.ts" }),
+      }),
+    ]);
+
+    const callees = await findReferences(
+      tmp,
+      { symbol: "run", relation: "callees", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(callees.records).toContainEqual(
+      expect.objectContaining({
+        symbol: "helper",
+        confidence: "INFERRED",
+        to: expect.objectContaining({ name: "helper", file: "src/a.ts" }),
+      }),
+    );
+
+    const importers = await findReferences(
+      tmp,
+      { symbol: "helper", relation: "importers", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(importers.records).toContainEqual(
+      expect.objectContaining({
+        file: "src/b.ts",
+        module: "./a",
+        confidence: "INFERRED",
+        reason: "default import binding",
+      }),
+    );
+  });
+
+  it("resolves named default exports through named default imports", async () => {
+    writeProjectFile(tmp, "src/a.ts", "export default function helper() { return 1; }\n");
+    writeProjectFile(
+      tmp,
+      "src/b.ts",
+      [
+        'import { default as localHelper } from "./a";',
+        "export function run() { return localHelper(); }",
+      ].join("\n"),
+    );
+
+    const callers = await findReferences(
+      tmp,
+      { symbol: "helper", relation: "callers", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(callers.records).toEqual([
+      expect.objectContaining({
+        from: expect.objectContaining({ name: "run" }),
+        confidence: "INFERRED",
+        to: expect.objectContaining({ name: "helper", file: "src/a.ts" }),
+      }),
+    ]);
+
+    const callees = await findReferences(
+      tmp,
+      { symbol: "run", relation: "callees", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(callees.records).toContainEqual(
+      expect.objectContaining({
+        symbol: "helper",
+        confidence: "INFERRED",
+        to: expect.objectContaining({ name: "helper", file: "src/a.ts" }),
+      }),
+    );
+
+    const importers = await findReferences(
+      tmp,
+      { symbol: "helper", relation: "importers", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(importers.records).toContainEqual(
+      expect.objectContaining({
+        file: "src/b.ts",
+        module: "./a",
+        confidence: "INFERRED",
+        reason: "default import binding",
+      }),
+    );
+  });
+
+  it("resolves named default exports through default re-exports in importer lookup", async () => {
+    writeProjectFile(tmp, "src/a.ts", "export default function helper() { return 1; }\n");
+    writeProjectFile(tmp, "src/b.ts", 'export { default as exportedHelper } from "./a";\n');
+
+    const importers = await findReferences(
+      tmp,
+      { symbol: "helper", relation: "importers", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(importers.records).toContainEqual(
+      expect.objectContaining({
+        file: "src/b.ts",
+        module: "./a",
+        confidence: "INFERRED",
+        reason: "default re-export binding",
+      }),
+    );
+
+    const aliasImporters = await findReferences(
+      tmp,
+      { symbol: "exportedHelper", relation: "importers", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(aliasImporters.records).toEqual([]);
+  });
+
+  it("does not treat type-only imports as immediate caller bindings", async () => {
+    writeProjectFile(tmp, "src/a.ts", "export function helper() { return 1; }\n");
+    writeProjectFile(
+      tmp,
+      "src/b.ts",
+      ['import type { helper } from "./a";', "export function run() { return helper(); }"].join(
+        "\n",
+      ),
+    );
+
+    const callers = await findReferences(
+      tmp,
+      { symbol: "helper", relation: "callers", scope: "src" },
+      { codeGraph: false },
+    );
+
+    expect(callers.records).toEqual([]);
+
+    const callees = await findReferences(
+      tmp,
+      { symbol: "run", relation: "callees", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(callees.records).toEqual([]);
+  });
+
+  it("does not treat type-only namespace imports as immediate caller bindings", async () => {
+    writeProjectFile(tmp, "src/a.ts", "export function helper() { return 1; }\n");
+    writeProjectFile(
+      tmp,
+      "src/b.ts",
+      ['import type * as ns from "./a";', "export function run() { return ns.helper(); }"].join(
+        "\n",
+      ),
+    );
+
+    const callers = await findReferences(
+      tmp,
+      { symbol: "helper", relation: "callers", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(callers.records).toEqual([]);
+
+    const callees = await findReferences(
+      tmp,
+      { symbol: "run", relation: "callees", scope: "src" },
+      { codeGraph: false },
+    );
+    expect(callees.records).toEqual([]);
+  });
+
+  it("find_references callers supports qualified method queries without external false positives", async () => {
+    writeProjectFile(
+      tmp,
+      "src/a.ts",
+      [
+        "export class Foo {",
+        "  method() { return 1; }",
+        "}",
+        "export function callLocal(foo: Foo) { return foo.method(); }",
+      ].join("\n"),
+    );
+
+    const qualifiedRaw = await registry.dispatch(
+      "find_references",
+      JSON.stringify({ symbol: "Foo.method", relation: "callers", scope: "src" }),
+    );
+    const qualified = parseToolResult<{
+      records: Array<{ file: string; from?: { name: string }; to?: { parent?: string } }>;
+    }>(qualifiedRaw);
+    expect(qualified.records).toContainEqual(
+      expect.objectContaining({
+        file: "src/a.ts",
+        from: expect.objectContaining({ name: "callLocal" }),
+        to: expect.objectContaining({ parent: "Foo" }),
+      }),
+    );
+
+    const unknownRaw = await registry.dispatch(
+      "find_references",
+      JSON.stringify({ symbol: "Missing.method", relation: "callers", scope: "src" }),
+    );
+    const unknown = parseToolResult<{ records: unknown[] }>(unknownRaw);
+    expect(unknown.records).toEqual([]);
+  });
+
+  it("keeps duplicate method names ambiguous instead of guessing a qualified owner", async () => {
+    writeProjectFile(
+      tmp,
+      "src/a.ts",
+      [
+        "export class Foo {",
+        "  method() { return 1; }",
+        "}",
+        "export class Bar {",
+        "  method() { return 2; }",
+        "}",
+        "export function callFoo(foo: Foo) { return foo.method(); }",
+        "export function callBar(bar: Bar) { return bar.method(); }",
+      ].join("\n"),
+    );
+
+    const qualifiedRaw = await registry.dispatch(
+      "find_references",
+      JSON.stringify({ symbol: "Foo.method", relation: "callers", scope: "src" }),
+    );
+    const qualified = parseToolResult<{ records: unknown[] }>(qualifiedRaw);
+    expect(qualified.records).toEqual([]);
+
+    const unqualifiedRaw = await registry.dispatch(
+      "find_references",
+      JSON.stringify({ symbol: "method", relation: "callers", scope: "src" }),
+    );
+    const unqualified = parseToolResult<{
+      records: Array<{ confidence: string; from?: { name: string }; to?: unknown }>;
+    }>(unqualifiedRaw);
+    expect(unqualified.records).toHaveLength(2);
+    expect(unqualified.records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          confidence: "AMBIGUOUS",
+          from: expect.objectContaining({ name: "callFoo" }),
+        }),
+        expect.objectContaining({
+          confidence: "AMBIGUOUS",
+          from: expect.objectContaining({ name: "callBar" }),
+        }),
+      ]),
+    );
+    expect(unqualified.records.every((record) => record.to === undefined)).toBe(true);
   });
 
   it("impact groups shallow caller depth and hard-caps requested depth at 2", async () => {

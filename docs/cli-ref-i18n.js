@@ -1,8 +1,6 @@
 /* CLI-reference page translations + scrollspy. Layered on top of i18n.js. */
 
-(function () {
-  "use strict";
-
+(() => {
   var R = window.Reasonix;
   if (!R) return;
 
@@ -84,8 +82,7 @@
     "th.action": "效果",
 
     "sh.title": "Shell 子命令",
-    "sh.body":
-      "任意子命令加 <code>--help</code> 可查完整 flag 列表。主要子命令：",
+    "sh.body": "任意子命令加 <code>--help</code> 可查完整 flag 列表。主要子命令：",
     "sh.flags.title": "常用运行时 flag（chat / code）",
 
     "sl.title": "斜杠命令",
@@ -108,8 +105,7 @@
       "Reasonix 只设置 DECSET 1007（alternate-scroll）——滚轮事件转为 ↑/↓ 按键传给应用，原生点击/拖拽选择不受影响。加 <code>--no-mouse</code> 可完全关闭。",
 
     "cp.title": "复制 / 粘贴",
-    "cp.body":
-      "默认走<strong>终端原生</strong>路径。拖拽选中文本，再用终端本身的复制快捷键：",
+    "cp.body": "默认走<strong>终端原生</strong>路径。拖拽选中文本，再用终端本身的复制快捷键：",
     "cp.h.drag": "拖拽选择不生效时",
     "cp.body.drag":
       "SSH / mosh / tmux 下，alt-screen 缓冲区会阻止终端把选区延伸到可视视口以外——alt-screen 上方根本没有 scrollback 可拖入。两种解决方式：",
@@ -126,7 +122,7 @@
 
   function applyCli(lang) {
     var dict = DICT[lang] || DICT.en;
-    document.querySelectorAll("[data-i18n]").forEach(function (el) {
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
       var key = el.getAttribute("data-i18n");
       if (dict[key] !== undefined) el.innerHTML = dict[key];
     });
@@ -135,26 +131,22 @@
   applyCli(R.lang());
   R.onLangChange(applyCli);
 
-  var sections = Array.prototype.slice.call(
-    document.querySelectorAll(".guide-body section[id]"),
-  );
-  var tocLinks = Array.prototype.slice.call(
-    document.querySelectorAll(".guide-toc a"),
-  );
+  var sections = Array.prototype.slice.call(document.querySelectorAll(".guide-body section[id]"));
+  var tocLinks = Array.prototype.slice.call(document.querySelectorAll(".guide-toc a"));
   if (sections.length && tocLinks.length && "IntersectionObserver" in window) {
     var byId = {};
-    tocLinks.forEach(function (a) {
+    tocLinks.forEach((a) => {
       var href = a.getAttribute("href") || "";
       var id = href.replace(/^#/, "");
       if (id) byId[id] = a;
     });
     var io = new IntersectionObserver(
-      function (entries) {
-        entries.forEach(function (e) {
+      (entries) => {
+        entries.forEach((e) => {
           var link = byId[e.target.id];
           if (!link) return;
           if (e.isIntersecting) {
-            tocLinks.forEach(function (l) {
+            tocLinks.forEach((l) => {
               l.classList.remove("is-active");
             });
             link.classList.add("is-active");
@@ -163,7 +155,7 @@
       },
       { rootMargin: "-30% 0px -60% 0px", threshold: 0 },
     );
-    sections.forEach(function (s) {
+    sections.forEach((s) => {
       io.observe(s);
     });
   }

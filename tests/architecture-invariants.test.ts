@@ -1,9 +1,11 @@
 /** Pillar invariants — promoted from spike-fork-prefix-rebuild Exp 1 to permanent regression. */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { DeepSeekClient } from "../src/client.js";
 import { type EventizeContext, Eventizer } from "../src/core/eventize.js";
 import type { Event } from "../src/core/events.js";
 import { replay } from "../src/core/reducers.js";
+import { CacheFirstLoop } from "../src/loop.js";
 import type { LoopEvent } from "../src/loop.js";
 import { ImmutablePrefix } from "../src/memory/runtime.js";
 
@@ -71,6 +73,22 @@ describe("Pillar 1 — ImmutablePrefix.fingerprint determinism", () => {
     });
     expect(ok).toBe(true);
     expect(p.fingerprint).not.toBe(before);
+  });
+
+  it("addTool keeps ToolCallRepair allowed names in sync through prefix epoch", () => {
+    const prefix = new ImmutablePrefix({ system: "x", toolSpecs: [] });
+    const loop = new CacheFirstLoop({
+      client: new DeepSeekClient({ apiKey: "sk-test", fetch: vi.fn() as unknown as typeof fetch }),
+      prefix,
+    });
+
+    prefix.addTool({
+      type: "function",
+      function: { name: "dynamic_tool", parameters: { type: "object", properties: {} } },
+    });
+    const repaired = loop.repair.process([], '{"name":"dynamic_tool","arguments":{"value":1}}');
+
+    expect(repaired.calls.map((call) => call.function.name)).toEqual(["dynamic_tool"]);
   });
 });
 

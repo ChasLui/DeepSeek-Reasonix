@@ -9,8 +9,8 @@
  */
 
 import { readFileSync } from "node:fs";
-import { CacheFirstLoop, DeepSeekClient, ImmutablePrefix, ToolRegistry } from "../src/index.js";
 import { codeSystemPrompt } from "../src/code/prompt.js";
+import { CacheFirstLoop, DeepSeekClient, ImmutablePrefix, ToolRegistry } from "../src/index.js";
 import { applySkillsIndex } from "../src/skills.js";
 import { registerFilesystemTools } from "../src/tools/filesystem.js";
 import { JobRegistry } from "../src/tools/jobs.js";
@@ -73,7 +73,7 @@ const USER_PROMPT = process.argv[2] ?? "what kind of project is this?";
 
 const toolCallsPerTurn: Array<Record<string, number>> = [];
 let currentTurn: Record<string, number> = {};
-let runSkillFirstBatch: string[] = [];
+const runSkillFirstBatch: string[] = [];
 let firstBatchCaptured = false;
 let assistantText = "";
 

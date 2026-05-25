@@ -53,7 +53,7 @@ function buildOsOptions(version) {
 
 function MirrorIcon({ name }) {
   const Icon = Ic[name];
-  return Icon ? <Icon size={16}/> : null;
+  return Icon ? <Icon size={16} /> : null;
 }
 
 function detectOS() {
@@ -100,13 +100,13 @@ function MirrorGrid({ os, setOs }) {
   const runTest = React.useCallback(() => {
     if (MIRRORS.length === 0) return;
     setTesting(true);
-    setResults(MIRRORS.map(m => ({ id: m.id, lat: null, done: false, ok: false })));
+    setResults(MIRRORS.map((m) => ({ id: m.id, lat: null, done: false, ok: false })));
     let remaining = MIRRORS.length;
     MIRRORS.forEach((m) => {
       probeMirror(m.probe).then((lat) => {
-        setResults(prev => prev.map(r =>
-          r.id === m.id ? { id: m.id, lat, done: true, ok: lat != null } : r
-        ));
+        setResults((prev) =>
+          prev.map((r) => (r.id === m.id ? { id: m.id, lat, done: true, ok: lat != null } : r)),
+        );
         remaining -= 1;
         if (remaining === 0) setTesting(false);
       });
@@ -120,7 +120,7 @@ function MirrorGrid({ os, setOs }) {
   }, [runTest, versionReady]);
 
   const fastest = React.useMemo(() => {
-    const done = results.filter(r => r.done && r.ok && r.lat != null);
+    const done = results.filter((r) => r.done && r.ok && r.lat != null);
     if (done.length === 0) return null;
     return done.reduce((a, b) => (a.lat <= b.lat ? a : b)).id;
   }, [results]);
@@ -128,24 +128,33 @@ function MirrorGrid({ os, setOs }) {
   if (!versionReady) {
     const msg =
       rxStatus === "failed"
-        ? t({ zh: "版本信息获取失败 · 请刷新重试", en: "Could not fetch the version · refresh to retry" }, lang)
+        ? t(
+            {
+              zh: "版本信息获取失败 · 请刷新重试",
+              en: "Could not fetch the version · refresh to retry",
+            },
+            lang,
+          )
         : t({ zh: "正在获取最新版本…", en: "Fetching latest version…" }, lang);
     return (
-      <div className="dl-loading" style={{ padding: 32, textAlign: "center", color: "var(--cream-mute)" }}>
+      <div
+        className="dl-loading"
+        style={{ padding: 32, textAlign: "center", color: "var(--cream-mute)" }}
+      >
         {msg}
       </div>
     );
   }
 
-  const currentOs = OS_OPTIONS.find(o => o.id === os) || OS_OPTIONS[0];
-  const fastestMirror = MIRRORS.find(m => m.id === fastest);
+  const currentOs = OS_OPTIONS.find((o) => o.id === os) || OS_OPTIONS[0];
+  const fastestMirror = MIRRORS.find((m) => m.id === fastest);
   const downloadUrl = fastestMirror ? `${fastestMirror.base}/${currentOs.file}` : null;
 
   return (
     <div>
       <div className="dl-toolbar">
         <div className="tabs">
-          {OS_OPTIONS.map(o => (
+          {OS_OPTIONS.map((o) => (
             <button key={o.id} className={os === o.id ? "on" : ""} onClick={() => setOs(o.id)}>
               {o.label}
             </button>
@@ -158,24 +167,41 @@ function MirrorGrid({ os, setOs }) {
           title={t({ zh: "重新探测", en: "Re-probe" }, lang)}
           style={{ marginLeft: "auto" }}
         >
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={testing ? { animation: "spin 0.9s linear infinite" } : {}}>
-            <path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/>
+          <svg
+            viewBox="0 0 24 24"
+            width="13"
+            height="13"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={testing ? { animation: "spin 0.9s linear infinite" } : {}}
+          >
+            <path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5" />
           </svg>
-          {testing ? t({ zh: "探测中…", en: "Probing…" }, lang) : t({ zh: "重新探测", en: "Re-probe" }, lang)}
+          {testing
+            ? t({ zh: "探测中…", en: "Probing…" }, lang)
+            : t({ zh: "重新探测", en: "Re-probe" }, lang)}
         </button>
       </div>
 
       <div className="mirrors">
-        {MIRRORS.map(m => {
-          const r = results.find(x => x.id === m.id) || { lat: null, done: false, ok: false };
+        {MIRRORS.map((m) => {
+          const r = results.find((x) => x.id === m.id) || { lat: null, done: false, ok: false };
           const isFastest = m.id === fastest && r.done && r.ok;
           const isTesting = !r.done;
           const failed = r.done && !r.ok;
           const url = `${m.base}/${currentOs.file}`;
           return (
-            <div key={m.id} className={"mirror " + (isFastest ? "fastest " : "") + (isTesting ? "testing" : "")}>
+            <div
+              key={m.id}
+              className={"mirror " + (isFastest ? "fastest " : "") + (isTesting ? "testing" : "")}
+            >
               <div className="mirror-head">
-                <span className="mirror-icon"><MirrorIcon name={m.icon}/></span>
+                <span className="mirror-icon">
+                  <MirrorIcon name={m.icon} />
+                </span>
                 <div>
                   <div className="mirror-name">{m.name}</div>
                   <div className="mirror-region">{m.region}</div>
@@ -198,7 +224,12 @@ function MirrorGrid({ os, setOs }) {
               <a
                 href={url}
                 className={"btn btn-sm " + (isFastest ? "btn-primary" : "btn-ghost")}
-                style={{ marginTop: 18, width: "100%", justifyContent: "center", ...(failed ? { opacity: 0.5, pointerEvents: "none" } : {}) }}
+                style={{
+                  marginTop: 18,
+                  width: "100%",
+                  justifyContent: "center",
+                  ...(failed ? { opacity: 0.5, pointerEvents: "none" } : {}),
+                }}
               >
                 {t({ zh: "从此镜像下载 →", en: "Download from this mirror →" }, lang)}
               </a>
@@ -210,20 +241,35 @@ function MirrorGrid({ os, setOs }) {
       <div className="dl-summary">
         <div className="info">
           {testing ? (
-            <>{t({ zh: "正在探测最快镜像", en: "Probing for the fastest mirror" }, lang)} <span style={{ color: "var(--cream-mute)" }}>· measuring TTFB</span></>
+            <>
+              {t({ zh: "正在探测最快镜像", en: "Probing for the fastest mirror" }, lang)}{" "}
+              <span style={{ color: "var(--cream-mute)" }}>· measuring TTFB</span>
+            </>
           ) : fastestMirror ? (
             <>
-              {t({ zh: "已为你选择 ", en: "Picked " }, lang)}<b>{fastestMirror.name}</b>
-              <span style={{ color: "var(--cream-mute)" }}> · {currentOs.file} · {currentOs.size}</span>
+              {t({ zh: "已为你选择 ", en: "Picked " }, lang)}
+              <b>{fastestMirror.name}</b>
+              <span style={{ color: "var(--cream-mute)" }}>
+                {" "}
+                · {currentOs.file} · {currentOs.size}
+              </span>
             </>
-          ) : t({ zh: "探测失败 · 请手动选择镜像", en: "Probe failed · pick a mirror manually" }, lang)}
+          ) : (
+            t(
+              { zh: "探测失败 · 请手动选择镜像", en: "Probe failed · pick a mirror manually" },
+              lang,
+            )
+          )}
         </div>
         <a
           href={downloadUrl || "#"}
           className="btn btn-primary"
           style={testing || !downloadUrl ? { opacity: 0.5, pointerEvents: "none" } : {}}
         >
-          {t({ zh: `下载 ${currentOs.label} 版本 →`, en: `Download for ${currentOs.label} →` }, lang)}
+          {t(
+            { zh: `下载 ${currentOs.label} 版本 →`, en: `Download for ${currentOs.label} →` },
+            lang,
+          )}
         </a>
       </div>
 

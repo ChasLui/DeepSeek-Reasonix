@@ -13,12 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ToolRegistry } from "../src/tools.js";
 import { registerMemoryTools } from "../src/tools/memory.js";
-import {
-  MemoryStore,
-  applyMemoryStack,
-  applyUserMemory,
-  projectHash,
-} from "../src/user-memory.js";
+import { MemoryStore, applyMemoryStack, applyUserMemory, projectHash } from "../src/user-memory.js";
 
 let failures = 0;
 function check(label: string, cond: unknown, detail?: string) {
@@ -59,31 +54,59 @@ async function main() {
     const globalFile = join(home, "memory", "global", "tabs_not_spaces.md");
     check("project-scoped file landed in <hash>/ dir", existsSync(projectFile));
     check("global-scoped file landed in global/ dir", existsSync(globalFile));
-    check("no cross-contamination project ⇒ global", !existsSync(join(home, "memory", "global", "bun_build.md")));
+    check(
+      "no cross-contamination project ⇒ global",
+      !existsSync(join(home, "memory", "global", "bun_build.md")),
+    );
 
     const projectIndex = readFileSync(join(home, "memory", hash, "MEMORY.md"), "utf8");
-    check("project MEMORY.md points at bun_build.md", projectIndex.includes("[bun_build](bun_build.md)"));
+    check(
+      "project MEMORY.md points at bun_build.md",
+      projectIndex.includes("[bun_build](bun_build.md)"),
+    );
     const globalIndex = readFileSync(join(home, "memory", "global", "MEMORY.md"), "utf8");
-    check("global MEMORY.md points at tabs_not_spaces.md", globalIndex.includes("[tabs_not_spaces](tabs_not_spaces.md)"));
+    check(
+      "global MEMORY.md points at tabs_not_spaces.md",
+      globalIndex.includes("[tabs_not_spaces](tabs_not_spaces.md)"),
+    );
 
     const raw = readFileSync(projectFile, "utf8");
-    check("frontmatter has name/type/scope/created", /^---\nname: bun_build\n/.test(raw) && /type: project/.test(raw) && /scope: project/.test(raw) && /created: \d{4}-\d{2}-\d{2}/.test(raw));
+    check(
+      "frontmatter has name/type/scope/created",
+      /^---\nname: bun_build\n/.test(raw) &&
+        /type: project/.test(raw) &&
+        /scope: project/.test(raw) &&
+        /created: \d{4}-\d{2}-\d{2}/.test(raw),
+    );
 
     // ── 2. Prefix assembly via applyMemoryStack (+ REASONIX.md) ────────
     process.stdout.write("\n2. Prefix assembly (REASONIX.md + user memory)\n");
-    writeFileSync(join(projectRoot, "REASONIX.md"), "# Project notes\nPrefer explicit types over inference.\n", "utf8");
+    writeFileSync(
+      join(projectRoot, "REASONIX.md"),
+      "# Project notes\nPrefer explicit types over inference.\n",
+      "utf8",
+    );
     const BASE = "You are a test assistant.";
     const withProjOnly = applyUserMemory(BASE, { homeDir: home, projectRoot });
     check("applyUserMemory contains global block", withProjOnly.includes("# User memory — global"));
-    check("applyUserMemory contains project block", withProjOnly.includes("# User memory — this project"));
+    check(
+      "applyUserMemory contains project block",
+      withProjOnly.includes("# User memory — this project"),
+    );
     check("bun_build description present in prefix", withProjOnly.includes("bun run build"));
-    check("tabs_not_spaces description present in prefix", withProjOnly.includes("Use tabs for indentation"));
+    check(
+      "tabs_not_spaces description present in prefix",
+      withProjOnly.includes("Use tabs for indentation"),
+    );
 
     // Order: base → (REASONIX.md would go first via applyMemoryStack) → global → project
     const ordered = applyUserMemory(BASE, { homeDir: home, projectRoot });
     const iGlobalBlock = ordered.indexOf("# User memory — global");
     const iProjBlock = ordered.indexOf("# User memory — this project");
-    check("global block precedes project block (stable for cache)", iGlobalBlock > 0 && iGlobalBlock < iProjBlock);
+    check(
+      "global block precedes project block (stable for cache)",
+      iGlobalBlock > 0 && iGlobalBlock < iProjBlock,
+    );
 
     // Determinism — two calls with same state produce byte-identical prompts.
     const a = applyUserMemory(BASE, { homeDir: home, projectRoot });
@@ -97,7 +120,10 @@ async function main() {
     check("remember tool registered", reg.has("remember"));
     check("forget tool registered", reg.has("forget"));
     check("recall_memory tool registered", reg.has("recall_memory"));
-    check("recall_memory is readOnly (plan-mode safe)", reg.get("recall_memory")?.readOnly === true);
+    check(
+      "recall_memory is readOnly (plan-mode safe)",
+      reg.get("recall_memory")?.readOnly === true,
+    );
     check("remember is NOT readOnly (plan-mode blocked)", reg.get("remember")?.readOnly !== true);
 
     const remOut = await reg.dispatch("remember", {
@@ -107,7 +133,11 @@ async function main() {
       description: "User wants terse answers, no trailing summaries",
       content: "Default to terse. If the user wants detail they'll ask.",
     });
-    check("remember returns a confirmation (not an error)", remOut.includes("REMEMBERED (global/prefers_short_replies)"), remOut);
+    check(
+      "remember returns a confirmation (not an error)",
+      remOut.includes("REMEMBERED (global/prefers_short_replies)"),
+      remOut,
+    );
 
     const recallOut = await reg.dispatch("recall_memory", {
       scope: "global",
@@ -119,8 +149,16 @@ async function main() {
       scope: "global",
       name: "prefers_short_replies",
     });
-    check("forget returns a confirmation", forgetOut.includes("forgot (global/prefers_short_replies)"));
-    check("recall_memory after forget returns an error", (await reg.dispatch("recall_memory", { scope: "global", name: "prefers_short_replies" })).includes("error"));
+    check(
+      "forget returns a confirmation",
+      forgetOut.includes("forgot (global/prefers_short_replies)"),
+    );
+    check(
+      "recall_memory after forget returns an error",
+      (
+        await reg.dispatch("recall_memory", { scope: "global", name: "prefers_short_replies" })
+      ).includes("error"),
+    );
 
     // ── 4. Project scope refused when projectRoot is absent ────────────
     process.stdout.write("\n4. Chat-mode (no projectRoot) refuses project scope\n");
@@ -133,7 +171,10 @@ async function main() {
       description: "d",
       content: "c",
     });
-    check("scope='project' in chat mode → error payload", projInChat.includes("error") && projInChat.includes("project"));
+    check(
+      "scope='project' in chat mode → error payload",
+      projInChat.includes("error") && projInChat.includes("project"),
+    );
     const globalInChat = await chatReg.dispatch("remember", {
       type: "user",
       scope: "global",
@@ -141,7 +182,10 @@ async function main() {
       description: "works across projects",
       content: "body",
     });
-    check("scope='global' in chat mode → writes successfully", globalInChat.includes("REMEMBERED (global/"));
+    check(
+      "scope='global' in chat mode → writes successfully",
+      globalInChat.includes("REMEMBERED (global/"),
+    );
 
     // ── 5. REASONIX_MEMORY=off short-circuit ───────────────────────────
     process.stdout.write("\n5. REASONIX_MEMORY=off opt-out\n");
@@ -150,7 +194,10 @@ async function main() {
       const silenced = applyUserMemory(BASE, { homeDir: home, projectRoot });
       check("applyUserMemory returns BASE unchanged when off", silenced === BASE);
       const fullStack = applyMemoryStack(BASE, projectRoot);
-      check("applyMemoryStack returns BASE unchanged when off (REASONIX.md also skipped)", fullStack === BASE);
+      check(
+        "applyMemoryStack returns BASE unchanged when off (REASONIX.md also skipped)",
+        fullStack === BASE,
+      );
     } finally {
       delete process.env.REASONIX_MEMORY;
     }
@@ -177,7 +224,9 @@ async function main() {
     const outsideFile = join(home, "etc", "passwd.md");
     check("no file written outside the memory dir", !existsSync(outsideFile));
 
-    process.stdout.write(`\n${failures === 0 ? "✅ all smoke checks passed" : `❌ ${failures} failure(s)`}\n`);
+    process.stdout.write(
+      `\n${failures === 0 ? "✅ all smoke checks passed" : `❌ ${failures} failure(s)`}\n`,
+    );
   } finally {
     rmSync(home, { recursive: true, force: true });
     rmSync(projectRoot, { recursive: true, force: true });

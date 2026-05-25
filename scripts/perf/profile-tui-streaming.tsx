@@ -53,7 +53,10 @@ function Driver({ done }: { done: () => void }): React.ReactElement {
       const start = performance.now();
       let dispatches = 0;
       for (let t = 0; t < TURNS && !aborted; t++) {
-        dispatch({ type: "user.submit", text: `turn ${t}: explore the renderer hot path` } as never);
+        dispatch({
+          type: "user.submit",
+          text: `turn ${t}: explore the renderer hot path`,
+        } as never);
         dispatches++;
         await tick();
         dispatch({ type: "turn.start", turnId: `t-${t}` } as never);

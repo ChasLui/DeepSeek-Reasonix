@@ -56,6 +56,7 @@ describe("code-query parse cache", () => {
   });
 
   it("lets find_references share parse results within one snapshot", async () => {
+    vi.stubEnv("REASONIX_CODE_GRAPH", "0");
     await fs.writeFile(join(root, "a.ts"), "function foo() {}\nfunction caller() { foo(); }\n");
     const parseCache = new ParseTreeCache();
 

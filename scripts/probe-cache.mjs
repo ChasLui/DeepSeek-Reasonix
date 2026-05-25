@@ -27,7 +27,11 @@ const BASE = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com";
 if (!KEY) throw new Error("DEEPSEEK_API_KEY missing");
 
 const filler = (label, n) =>
-  Array.from({ length: n }, (_, i) => `${label} line ${i}: lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.`).join("\n");
+  Array.from(
+    { length: n },
+    (_, i) =>
+      `${label} line ${i}: lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.`,
+  ).join("\n");
 
 const SYS = "You are a terse echo bot. Reply with a single short sentence.";
 const MSG_A_FULL = `Long context block A. Detail follows:\n${filler("A", 80)}`;
@@ -141,7 +145,9 @@ async function main() {
     ratios.push(total > 0 ? (r.hit / total) * 100 : 0);
   }
   const avg = ratios.reduce((a, b) => a + b, 0) / ratios.length;
-  console.log(`\nappend-only cache hit % across 5 turns: ${ratios.map((x) => x.toFixed(1)).join(", ")}`);
+  console.log(
+    `\nappend-only cache hit % across 5 turns: ${ratios.map((x) => x.toFixed(1)).join(", ")}`,
+  );
   console.log(`average: ${avg.toFixed(1)}%`);
   if (avg > 80) {
     console.log("VERDICT: append-only keeps cache warm across turns. New strategy validated.");

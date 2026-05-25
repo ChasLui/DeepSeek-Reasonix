@@ -75,8 +75,13 @@
   margin-top: 56px;
 }
 @media (max-width: 900px) {
-  .guide-shell { grid-template-columns: 1fr; gap: 32px; }
-  .guide-toc { display: none; }
+  .guide-shell {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .guide-toc {
+    display: none;
+  }
 }
 
 .guide-toc {
@@ -110,13 +115,17 @@
   text-decoration: none;
   transition: color 0.15s;
 }
-.guide-toc a:hover { color: var(--cream); }
+.guide-toc a:hover {
+  color: var(--cream);
+}
 
 .guide-body section {
   padding: 32px 0 40px;
   border-bottom: 1px solid var(--rule);
 }
-.guide-body section:last-child { border-bottom: 0; }
+.guide-body section:last-child {
+  border-bottom: 0;
+}
 
 .guide-body h2 {
   font-family: var(--serif);
@@ -142,8 +151,14 @@
   color: var(--cream-dim);
   margin: 0 0 14px;
 }
-.guide-body p strong { color: var(--cream); font-weight: 600; }
-.guide-body p em { font-style: italic; color: var(--cream-2); }
+.guide-body p strong {
+  color: var(--cream);
+  font-weight: 600;
+}
+.guide-body p em {
+  font-style: italic;
+  color: var(--cream-2);
+}
 
 .guide-body code,
 .guide-body p code {
@@ -175,7 +190,9 @@
   font-size: inherit;
   color: inherit;
 }
-.guide-body pre.code .hash { color: var(--cream-mute); }
+.guide-body pre.code .hash {
+  color: var(--cream-mute);
+}
 
 .guide-body .callout {
   background: var(--accent-soft);
@@ -223,8 +240,12 @@
   color: var(--cream-dim);
   vertical-align: top;
 }
-.guide-body .cmd-table tr:last-child td { border-bottom: 0; }
-.guide-body .cmd-table td:first-child { white-space: nowrap; }
+.guide-body .cmd-table tr:last-child td {
+  border-bottom: 0;
+}
+.guide-body .cmd-table td:first-child {
+  white-space: nowrap;
+}
 
 .guide-body .kv-list {
   list-style: none;
@@ -243,8 +264,13 @@
   align-items: baseline;
   line-height: 1.65;
 }
-.guide-body .kv-list li:last-child { border-bottom: 0; }
-.guide-body .kv-list li > code:first-child { align-self: start; margin-top: 2px; }
+.guide-body .kv-list li:last-child {
+  border-bottom: 0;
+}
+.guide-body .kv-list li > code:first-child {
+  align-self: start;
+  margin-top: 2px;
+}
 
 .guide-cta {
   margin-top: 48px;
@@ -283,11 +309,19 @@
   text-decoration: none;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.guide-cta .cta.primary { background: var(--accent); color: var(--ink); }
-.guide-cta .cta.primary:hover { background: var(--accent-2); }
+.guide-cta .cta.primary {
+  background: var(--accent);
+  color: var(--ink);
+}
+.guide-cta .cta.primary:hover {
+  background: var(--accent-2);
+}
 .guide-cta .cta.ghost {
   background: transparent;
   color: var(--cream-2);
   border: 1px solid var(--rule-2);
 }
-.guide-cta .cta.ghost:hover { color: var(--cream); border-color: var(--cream-mute); }
+.guide-cta .cta.ghost:hover {
+  color: var(--cream);
+  border-color: var(--cream-mute);
+}

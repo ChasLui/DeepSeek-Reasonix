@@ -14,9 +14,13 @@ process.stdin.resume();
 
 console.log("shift+enter probe armed. press keys; ctrl+c exits.");
 console.log("expected for shift+enter:");
-console.log("  modifyOtherKeys → 0x1b 0x5b 0x32 0x37 0x3b 0x32 0x3b 0x31 0x33 0x7e  (\\x1b[27;2;13~)");
+console.log(
+  "  modifyOtherKeys → 0x1b 0x5b 0x32 0x37 0x3b 0x32 0x3b 0x31 0x33 0x7e  (\\x1b[27;2;13~)",
+);
 console.log("  kitty           → 0x1b 0x5b 0x31 0x33 0x3b 0x32 0x75              (\\x1b[13;2u)");
-console.log("  unsupported     → 0x0d                                              (just \\r — no way to distinguish)\n");
+console.log(
+  "  unsupported     → 0x0d                                              (just \\r — no way to distinguish)\n",
+);
 
 process.stdin.on("data", (chunk) => {
   const s = String(chunk);

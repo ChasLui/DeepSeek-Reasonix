@@ -5,21 +5,17 @@
 // state instead of a stale literal — pre-empts the "docs version is wrong"
 // drift that hardcoding caused. Each release just overwrites latest.json.
 window.REASONIX_VERSION = window.REASONIX_VERSION || "";
-window.REASONIX_VERSION_STATUS = window.REASONIX_VERSION
-  ? "ok"
-  : "loading";
+window.REASONIX_VERSION_STATUS = window.REASONIX_VERSION ? "ok" : "loading";
 
 (function fetchVersion() {
   var url = "https://pub-147fb53b9c1e4bbf891a257968619ea7.r2.dev/latest/latest.json";
   var ctrl = new AbortController();
-  var timer = setTimeout(function () {
+  var timer = setTimeout(() => {
     ctrl.abort();
   }, 5000);
   fetch(url, { signal: ctrl.signal, cache: "no-cache" })
-    .then(function (r) {
-      return r.ok ? r.json() : null;
-    })
-    .then(function (j) {
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => {
       clearTimeout(timer);
       if (j && j.version) {
         window.REASONIX_VERSION = String(j.version).replace(/^v/, "");
@@ -29,7 +25,7 @@ window.REASONIX_VERSION_STATUS = window.REASONIX_VERSION
       }
       window.dispatchEvent(new Event("reasonix:version"));
     })
-    .catch(function () {
+    .catch(() => {
       clearTimeout(timer);
       window.REASONIX_VERSION_STATUS = "failed";
       window.dispatchEvent(new Event("reasonix:version"));

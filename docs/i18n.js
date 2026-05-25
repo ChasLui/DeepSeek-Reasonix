@@ -2,9 +2,7 @@
 // Detection precedence: ?lang=xx → localStorage → navigator.language → "en".
 // Falls back gracefully when localStorage is unavailable (private mode, etc).
 
-(function () {
-  "use strict";
-
+(() => {
   const STORAGE_KEY = "reasonix.lang";
   const DEFAULT_LANG = "en";
   const SUPPORTED = ["en", "zh"];
@@ -37,8 +35,7 @@
 
       "term.user":
         "users.ts findByEmail is case-sensitive — login fails for users with uppercase emails",
-      "term.found":
-        "▸ Found it. findByEmail uses === directly. Switch to lowercase normalization.",
+      "term.found": "▸ Found it. findByEmail uses === directly. Switch to lowercase normalization.",
       "term.pending": "▸ 1 pending edit · /apply to write · /discard to drop",
 
       "why.title": "Why Reasonix",
@@ -135,7 +132,7 @@
         "Shell commands on lifecycle events. Pre/post tool, prompt submit, stop. Exit-2 to block.",
       "conf.perm.title": "Permissions",
       "conf.perm.body":
-        "Per-workspace shell allowlist. Exact-prefix match. Interactive \"always allow\" persists.",
+        'Per-workspace shell allowlist. Exact-prefix match. Interactive "always allow" persists.',
       "conf.ws.title": "Web search",
       "conf.ws.body":
         "Mojeek by default, no setup. Switch to self-hosted SearXNG or Metaso with <code>/search-engine</code>.",
@@ -216,10 +213,8 @@
       "metric.lic": "开源 · 社区共建",
       "metric.src": "数据来源：2026-05-01 真实用户缓存命中案例 →",
 
-      "term.user":
-        "users.ts 里 findByEmail 对大小写敏感导致登录失败，帮我改",
-      "term.found":
-        "▸ 找到了。findByEmail 直接用 === 比对。改成小写规范化并补一条测试。",
+      "term.user": "users.ts 里 findByEmail 对大小写敏感导致登录失败，帮我改",
+      "term.found": "▸ 找到了。findByEmail 直接用 === 比对。改成小写规范化并补一条测试。",
       "term.pending": "▸ 1 处待应用编辑 · /apply 写入 · /discard 丢弃",
 
       "why.title": "为什么选 Reasonix",
@@ -250,8 +245,7 @@
         '到 <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">platform.deepseek.com</a> 注册并创建 Key。',
       "qs.step2.title": "切到项目目录运行",
       "qs.step2.body": "无需安装。",
-      "qs.step2.note":
-        "首次运行会走一个短向导：粘贴 API key、选预设、可选挂载 MCP 服务器。",
+      "qs.step2.note": "首次运行会走一个短向导：粘贴 API key、选预设、可选挂载 MCP 服务器。",
       "qs.step3.title": "审阅再应用",
       "qs.step3.body":
         "代理会把改动以可审阅的块呈现——你不 <code>/apply</code>，磁盘不会被改。Plan 模式可以让你先把多文件改动整理好，再统一落盘。",
@@ -259,8 +253,7 @@
         "需要 Node ≥ 22。支持 macOS、Linux、Windows（PowerShell · Git Bash · Windows Terminal）。任何时候按 <kbd>Esc</kbd> 中断；<code>/help</code> 查看完整斜杠命令。",
 
       "feat.title": "开箱即用",
-      "feat.sub":
-        "12 个具体能力。循环是地基，下面是地基之上你能直接拿来用的东西。",
+      "feat.sub": "12 个具体能力。循环是地基，下面是地基之上你能直接拿来用的东西。",
       "feat.renderer.title": "自研 cell-diff 渲染器",
       "feat.renderer.body":
         "基于 Yoga 的 TUI 运行时，不依赖 Ink。宽字符、emoji、bracketed paste、resize 跨平台都干净。",
@@ -306,17 +299,14 @@
       "conf.mcp.body":
         "stdio · SSE · Streamable HTTP。<code>config.json</code> 和 <code>--mcp</code> 共用同一种 spec 格式。",
       "conf.sk.title": "Skills",
-      "conf.sk.body":
-        "模型可调用的 markdown 剧本。Inline 或 subagent。同名时项目级覆盖全局。",
+      "conf.sk.body": "模型可调用的 markdown 剧本。Inline 或 subagent。同名时项目级覆盖全局。",
       "conf.mem.title": "Memory",
-      "conf.mem.body":
-        "用户私有的知识，钉进前缀。全局 + 项目两个 scope，四种结构化类型。",
+      "conf.mem.body": "用户私有的知识，钉进前缀。全局 + 项目两个 scope，四种结构化类型。",
       "conf.hk.title": "Hooks",
       "conf.hk.body":
         "生命周期事件触发的 shell 命令。pre/post 工具、prompt 提交、退出。exit 2 即拦截。",
       "conf.perm.title": "权限",
-      "conf.perm.body":
-        "按工作区的 shell 白名单。精确前缀匹配。交互式“永久允许”会持久化。",
+      "conf.perm.body": "按工作区的 shell 白名单。精确前缀匹配。交互式“永久允许”会持久化。",
       "conf.ws.title": "Web 搜索",
       "conf.ws.body":
         "默认 Mojeek，零配置。用 <code>/search-engine</code> 切自托管 SearXNG 或 Metaso。",
@@ -491,20 +481,16 @@
 
   // Public API for sibling scripts (term-anim.js).
   window.Reasonix = window.Reasonix || {};
-  window.Reasonix.t = function (key) {
+  window.Reasonix.t = (key) => {
     const dict = translations[currentLang] || translations[DEFAULT_LANG];
     return dict[key];
   };
-  window.Reasonix.lang = function () {
-    return currentLang;
-  };
-  window.Reasonix.onLangChange = function (fn) {
+  window.Reasonix.lang = () => currentLang;
+  window.Reasonix.onLangChange = (fn) => {
     if (typeof fn === "function") langListeners.push(fn);
   };
-  window.Reasonix.version = function () {
-    return currentVersion;
-  };
-  window.Reasonix.onVersionChange = function (fn) {
+  window.Reasonix.version = () => currentVersion;
+  window.Reasonix.onVersionChange = (fn) => {
     if (typeof fn === "function") versionListeners.push(fn);
   };
 

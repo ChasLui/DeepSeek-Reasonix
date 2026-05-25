@@ -655,6 +655,18 @@ program
     },
   );
 
+const codeIndex = program.command("code-index").description("Build and inspect code indexes");
+
+codeIndex
+  .command("rebuild")
+  .description("Rebuild the persistent code graph index")
+  .option("--dir <path>", t("ui.projectDirHint"))
+  .option("--json", t("ui.jsonHint"))
+  .action(async (opts: { dir?: string; json?: boolean }) => {
+    const { rebuildCodeGraphCommand } = await import("./commands/code-index.js");
+    await rebuildCodeGraphCommand({ dir: opts.dir, json: !!opts.json });
+  });
+
 program.parseAsync(process.argv).catch((err) => {
   console.error(err);
   process.exit(1);

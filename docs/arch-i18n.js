@@ -1,7 +1,6 @@
 /* Architecture page translations + scrollspy. Layered on top of i18n.js. */
 
-(function () {
-  "use strict";
+(() => {
 
   var R = window.Reasonix;
   if (!R) return;
@@ -250,7 +249,7 @@
 
   function applyArch(lang) {
     var dict = DICT[lang] || DICT.en;
-    document.querySelectorAll("[data-i18n]").forEach(function (el) {
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
       var key = el.getAttribute("data-i18n");
       if (dict[key] !== undefined) el.innerHTML = dict[key];
     });
@@ -267,18 +266,18 @@
   );
   if (sections.length && tocLinks.length && "IntersectionObserver" in window) {
     var byId = {};
-    tocLinks.forEach(function (a) {
+    tocLinks.forEach((a) => {
       var href = a.getAttribute("href") || "";
       var id = href.replace(/^#/, "");
       if (id) byId[id] = a;
     });
     var io = new IntersectionObserver(
-      function (entries) {
-        entries.forEach(function (e) {
+      (entries) => {
+        entries.forEach((e) => {
           var link = byId[e.target.id];
           if (!link) return;
           if (e.isIntersecting) {
-            tocLinks.forEach(function (l) {
+            tocLinks.forEach((l) => {
               l.classList.remove("is-active");
             });
             link.classList.add("is-active");
@@ -287,7 +286,7 @@
       },
       { rootMargin: "-30% 0px -60% 0px", threshold: 0 },
     );
-    sections.forEach(function (s) {
+    sections.forEach((s) => {
       io.observe(s);
     });
   }

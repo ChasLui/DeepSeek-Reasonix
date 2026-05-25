@@ -1,8 +1,6 @@
 /* Configuration-guide translations + scrollspy. Layered on top of i18n.js. */
 
-(function () {
-  "use strict";
-
+(() => {
   var R = window.Reasonix;
   if (!R) return;
 
@@ -62,8 +60,7 @@
     "mcp.body.streamable": "Opt in with the <code>streamable+</code> URL prefix.",
     "mcp.h.cli": "CLI flags &amp; slash commands",
     "mcp.cmd.hub": "Open the interactive MCP hub.",
-    "mcp.cmd.disable":
-      "Persist to <code>mcpDisabled</code>; effective on next launch.",
+    "mcp.cmd.disable": "Persist to <code>mcpDisabled</code>; effective on next launch.",
     "mcp.cmd.enable": "Re-enable a disabled server.",
     "mcp.cmd.recon": "Reconnect a live server and pick up newly-registered tools.",
 
@@ -80,8 +77,7 @@
     "sk.fm.model": "subagent model override",
     "sk.body.task": "Task",
     "sk.body.s1": "Fetch the last 20 commits.",
-    "sk.body.s2":
-      "Flag commits whose message mentions password / secret / token.",
+    "sk.body.s2": "Flag commits whose message mentions password / secret / token.",
     "sk.body.s3": "Report findings.",
     "sk.fm.f.name":
       "1–64 chars: alnum, <code>_</code>, <code>-</code>, interior <code>.</code>. Defaults to filename stem.",
@@ -90,8 +86,7 @@
       "<code>inline</code> (default): body enters parent log. <code>subagent</code>: isolated child loop, only the final answer returns.",
     "sk.fm.f.tools":
       "Comma-separated literal tool names. Subagent only — scopes the child's tool registry.",
-    "sk.fm.f.model":
-      "Subagent only. Must start with <code>deepseek-</code>; ignored otherwise.",
+    "sk.fm.f.model": "Subagent only. Must start with <code>deepseek-</code>; ignored otherwise.",
     "sk.h.cmds": "Slash commands",
     "sk.cmd.list": "List every skill, scope-tagged.",
     "sk.cmd.new":
@@ -115,10 +110,9 @@
     "mem.cmd.list": "List all entries, both scopes.",
     "mem.cmd.show": "Display body. Scope is auto-resolved.",
     "mem.cmd.forget": "Delete one entry.",
-    "mem.cmd.clear":
-      "Wipe an entire scope. <code>confirm</code> is mandatory.",
+    "mem.cmd.clear": "Wipe an entire scope. <code>confirm</code> is mandatory.",
     "mem.body.write":
-      "<strong>Writing memories:</strong> say it in chat (\"remember I prefer Vitest over Jest\"). The model invokes the <code>scaffold_memory</code> tool, which proposes a file and waits for your <code>/apply</code>.",
+      '<strong>Writing memories:</strong> say it in chat ("remember I prefer Vitest over Jest"). The model invokes the <code>scaffold_memory</code> tool, which proposes a file and waits for your <code>/apply</code>.',
 
     "hk.title": "Hooks",
     "hk.body1":
@@ -131,26 +125,22 @@
     "hk.h.events": "Events",
     "hk.ev.pre":
       "Before a tool runs. <strong>Gating:</strong> exit 2 blocks; exit 0 passes. 5 s default timeout.",
-    "hk.ev.post":
-      "After a tool runs. Non-gating; warn-only on non-zero. 30 s default.",
+    "hk.ev.post": "After a tool runs. Non-gating; warn-only on non-zero. 30 s default.",
     "hk.ev.usr":
       "Before user input is processed. <strong>Gating</strong> (exit 2 blocks the message).",
-    "hk.ev.stop":
-      "On <code>/quit</code> or session exit. Non-gating.",
+    "hk.ev.stop": "On <code>/quit</code> or session exit. Non-gating.",
     "hk.h.payload": "Stdin payload",
-    "hk.body.payload":
-      "Each hook receives a JSON object on stdin describing the event:",
+    "hk.body.payload": "Each hook receives a JSON object on stdin describing the event:",
 
     "perm.title": "Permissions",
     "perm.body1":
-      "Shell commands are gated per-workspace. The first time the agent runs a command, you get an interactive <em>allow once / allow always / deny</em> prompt; \"allow always\" persists the exact prefix to <code>config.json</code> under that project.",
+      'Shell commands are gated per-workspace. The first time the agent runs a command, you get an interactive <em>allow once / allow always / deny</em> prompt; "allow always" persists the exact prefix to <code>config.json</code> under that project.',
     "perm.body.exact":
       "<strong>Exact match after trim.</strong> <code>git</code> alone does <em>not</em> cover <code>git push origin main</code>; list each prefix you actually want green-lit.",
     "perm.cmd.list": "Show this project's allowlist.",
     "perm.cmd.add": "Add a shell prefix.",
     "perm.cmd.rm": "Remove by name or list index.",
-    "perm.cmd.clear":
-      "Wipe everything. <code>confirm</code> is mandatory.",
+    "perm.cmd.clear": "Wipe everything. <code>confirm</code> is mandatory.",
 
     "ws.title": "Web search",
     "ws.body1":
@@ -226,15 +216,12 @@
     "mcp.body.sse":
       "纯 <code>http://</code> / <code>https://</code> URL 走 HTTP+SSE，向后兼容。匿名条目（不带 <code>name=</code>）能用，但之后没法按名字开关。",
     "mcp.h.streamable": "Streamable HTTP（2025-03 规范）",
-    "mcp.body.streamable":
-      "用 <code>streamable+</code> 前缀显式开启。",
+    "mcp.body.streamable": "用 <code>streamable+</code> 前缀显式开启。",
     "mcp.h.cli": "CLI flag 与斜杠命令",
     "mcp.cmd.hub": "打开交互式 MCP 中心。",
-    "mcp.cmd.disable":
-      "写到 <code>mcpDisabled</code>；下次启动生效。",
+    "mcp.cmd.disable": "写到 <code>mcpDisabled</code>；下次启动生效。",
     "mcp.cmd.enable": "重新启用一个被禁用的服务器。",
-    "mcp.cmd.recon":
-      "重连一个在线服务器，并增量注册新工具。",
+    "mcp.cmd.recon": "重连一个在线服务器，并增量注册新工具。",
 
     "sk.title": "Skills",
     "sk.body1":
@@ -249,26 +236,21 @@
     "sk.fm.model": "subagent 的模型覆盖",
     "sk.body.task": "任务",
     "sk.body.s1": "拉最近 20 个 commit。",
-    "sk.body.s2":
-      "标记 commit message 里出现 password / secret / token 的提交。",
+    "sk.body.s2": "标记 commit message 里出现 password / secret / token 的提交。",
     "sk.body.s3": "汇总结果。",
     "sk.fm.f.name":
       "1–64 字符：alnum、<code>_</code>、<code>-</code>，中间允许 <code>.</code>。默认取文件名 stem。",
-    "sk.fm.f.desc":
-      "一行。在 <code>/skill list</code> 里展示。",
+    "sk.fm.f.desc": "一行。在 <code>/skill list</code> 里展示。",
     "sk.fm.f.runas":
       "<code>inline</code>（默认）：body 进父循环的日志。<code>subagent</code>：起一个隔离子循环，只回传最终结果。",
-    "sk.fm.f.tools":
-      "逗号分隔的工具字面名。仅 subagent 生效——给子循环的 tool registry 圈定范围。",
-    "sk.fm.f.model":
-      "仅 subagent 生效。必须以 <code>deepseek-</code> 开头，否则忽略。",
+    "sk.fm.f.tools": "逗号分隔的工具字面名。仅 subagent 生效——给子循环的 tool registry 圈定范围。",
+    "sk.fm.f.model": "仅 subagent 生效。必须以 <code>deepseek-</code> 开头，否则忽略。",
     "sk.h.cmds": "斜杠命令",
     "sk.cmd.list": "按 scope 列出全部 skill。",
     "sk.cmd.new":
       "在项目 scope 下生成 stub。加 <code>--global</code> 可写到 <code>~/.reasonix/skills</code>。",
     "sk.cmd.show": "打印完整 body。",
-    "sk.cmd.run":
-      "运行它。后续 args 会作为单一字符串拼到 body 之后。",
+    "sk.cmd.run": "运行它。后续 args 会作为单一字符串拼到 body 之后。",
 
     "mem.title": "Memory",
     "mem.body1":
@@ -278,8 +260,7 @@
     "mem.proj": "sha1(absRoot)[0..16]",
     "mem.h.entry": "条目格式",
     "mem.f.desc": "用户是资深后端，第一次接触 React。",
-    "mem.f.type":
-      "user | feedback | project | reference",
+    "mem.f.type": "user | feedback | project | reference",
     "mem.f.body": "正文——真正要记的事实，纯 markdown。",
     "mem.body.types":
       "<strong>四种类型：</strong><code>user</code>（用户是谁）、<code>feedback</code>（修正/偏好）、<code>project</code>（计划/截止/动机）、<code>reference</code>（外部系统该去哪里查）。",
@@ -287,8 +268,7 @@
     "mem.cmd.list": "列出两个 scope 的全部条目。",
     "mem.cmd.show": "展示 body。scope 自动解析。",
     "mem.cmd.forget": "删一条。",
-    "mem.cmd.clear":
-      "清空整个 scope。必须显式加 <code>confirm</code>。",
+    "mem.cmd.clear": "清空整个 scope。必须显式加 <code>confirm</code>。",
     "mem.body.write":
       "<strong>怎么写入：</strong>直接在对话里说（“记一下我用 Vitest，不用 Jest”）。模型会调用 <code>scaffold_memory</code> 工具起草一条文件，等你 <code>/apply</code> 落盘。",
 
@@ -299,20 +279,14 @@
     "hk.path.proj": "项目 scope",
     "hk.path.glob": "全局 scope",
     "hk.h.shape": "Schema",
-    "hk.ex.audit":
-      "在风险工具调用执行前先审计一下",
+    "hk.ex.audit": "在风险工具调用执行前先审计一下",
     "hk.h.events": "事件",
-    "hk.ev.pre":
-      "工具执行前。<strong>会拦截：</strong>exit 2 阻断；exit 0 通过。默认 5 秒超时。",
-    "hk.ev.post":
-      "工具执行后。不拦截；非零仅 warn。默认 30 秒。",
-    "hk.ev.usr":
-      "用户输入处理前。<strong>会拦截</strong>（exit 2 把这条消息阻断）。",
-    "hk.ev.stop":
-      "<code>/quit</code> 或会话退出时触发。不拦截。",
+    "hk.ev.pre": "工具执行前。<strong>会拦截：</strong>exit 2 阻断；exit 0 通过。默认 5 秒超时。",
+    "hk.ev.post": "工具执行后。不拦截；非零仅 warn。默认 30 秒。",
+    "hk.ev.usr": "用户输入处理前。<strong>会拦截</strong>（exit 2 把这条消息阻断）。",
+    "hk.ev.stop": "<code>/quit</code> 或会话退出时触发。不拦截。",
     "hk.h.payload": "Stdin 负载",
-    "hk.body.payload":
-      "每个 hook 在 stdin 上收到一段 JSON，描述事件：",
+    "hk.body.payload": "每个 hook 在 stdin 上收到一段 JSON，描述事件：",
 
     "perm.title": "权限",
     "perm.body1":
@@ -322,8 +296,7 @@
     "perm.cmd.list": "查看本项目的白名单。",
     "perm.cmd.add": "新增一条 shell 前缀。",
     "perm.cmd.rm": "按名字或下标删除。",
-    "perm.cmd.clear":
-      "全清。必须显式加 <code>confirm</code>。",
+    "perm.cmd.clear": "全清。必须显式加 <code>confirm</code>。",
 
     "ws.title": "Web 搜索",
     "ws.body1":
@@ -350,7 +323,7 @@
 
   function applyGuide(lang) {
     var dict = DICT[lang] || DICT.en;
-    document.querySelectorAll("[data-i18n]").forEach(function (el) {
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
       var key = el.getAttribute("data-i18n");
       if (dict[key] !== undefined) el.innerHTML = dict[key];
     });
@@ -361,26 +334,22 @@
   R.onLangChange(applyGuide);
 
   // Scrollspy — highlight the current section's TOC entry.
-  var sections = Array.prototype.slice.call(
-    document.querySelectorAll(".guide-body section[id]"),
-  );
-  var tocLinks = Array.prototype.slice.call(
-    document.querySelectorAll(".guide-toc a"),
-  );
+  var sections = Array.prototype.slice.call(document.querySelectorAll(".guide-body section[id]"));
+  var tocLinks = Array.prototype.slice.call(document.querySelectorAll(".guide-toc a"));
   if (sections.length && tocLinks.length && "IntersectionObserver" in window) {
     var byId = {};
-    tocLinks.forEach(function (a) {
+    tocLinks.forEach((a) => {
       var href = a.getAttribute("href") || "";
       var id = href.replace(/^#/, "");
       if (id) byId[id] = a;
     });
     var io = new IntersectionObserver(
-      function (entries) {
-        entries.forEach(function (e) {
+      (entries) => {
+        entries.forEach((e) => {
           var link = byId[e.target.id];
           if (!link) return;
           if (e.isIntersecting) {
-            tocLinks.forEach(function (l) {
+            tocLinks.forEach((l) => {
               l.classList.remove("is-active");
             });
             link.classList.add("is-active");
@@ -389,7 +358,7 @@
       },
       { rootMargin: "-30% 0px -60% 0px", threshold: 0 },
     );
-    sections.forEach(function (s) {
+    sections.forEach((s) => {
       io.observe(s);
     });
   }

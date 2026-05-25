@@ -1,6 +1,6 @@
 /** Library reads only DEEPSEEK_API_KEY from env; the CLI bridges config → env var. */
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { z } from "zod";
@@ -125,6 +125,11 @@ export interface ToonConfig {
 
 export interface CodeRelationsConfig {
   enabled?: boolean;
+}
+
+export interface CodeGraphConfig {
+  enabled?: boolean;
+  includeBody?: boolean;
 }
 
 export interface ProxyConfig {
@@ -273,6 +278,8 @@ export interface ReasonixConfig {
   toon?: boolean | ToonConfig;
   /** Lightweight on-demand code relation tools. REASONIX_CODEREL=0 disables registration. */
   codeRelations?: boolean | CodeRelationsConfig;
+  /** Persistent code graph index. REASONIX_CODE_GRAPH=0 bypasses it; body fields are opt-in. */
+  codeGraph?: boolean | CodeGraphConfig;
   /** QQ Bot configuration */
   qq?: QQBotConfig;
 }
@@ -419,8 +426,40 @@ function sanitizeStringArrayField(
   parent[leaf] = filtered;
 }
 
+// P1-D: mtime+size memoize so tool readOnlyCheck / loadCodeGraphEnabled don't
+// pay a sync readFile per tool call. Each candidate is still probed (so .toon →
+// .json fallback semantics are preserved). Cache invalidates automatically on
+// mtime/size change; writeConfig() also drops its target entry to avoid
+// same-turn write→read races where mtime hasn't ticked yet.
+interface ReadConfigCacheEntry {
+  mtimeMs: number;
+  size: number;
+  cfg: ReasonixConfig;
+}
+const readConfigCache = new Map<string, ReadConfigCacheEntry>();
+
+export function invalidateReadConfigCache(target?: string): void {
+  if (target === undefined) {
+    readConfigCache.clear();
+    return;
+  }
+  readConfigCache.delete(target);
+}
+
 export function readConfig(path: string = defaultConfigPath()): ReasonixConfig {
   for (const candidate of configCandidates(path)) {
+    let stat: { mtimeMs: number; size: number };
+    try {
+      const s = statSync(candidate);
+      stat = { mtimeMs: s.mtimeMs, size: s.size };
+    } catch {
+      readConfigCache.delete(candidate);
+      continue;
+    }
+    const cached = readConfigCache.get(candidate);
+    if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+      return cached.cfg;
+    }
     try {
       const raw = readFileSync(candidate, "utf8");
       const parsed = candidate.endsWith(".toon")
@@ -431,6 +470,11 @@ export function readConfig(path: string = defaultConfigPath()): ReasonixConfig {
         for (const segments of STRING_ARRAY_FIELDS) {
           sanitizeStringArrayField(cfg, segments, candidate);
         }
+        readConfigCache.set(candidate, {
+          mtimeMs: stat.mtimeMs,
+          size: stat.size,
+          cfg: cfg as ReasonixConfig,
+        });
         return cfg as ReasonixConfig;
       }
     } catch {
@@ -444,6 +488,9 @@ export function writeConfig(cfg: ReasonixConfig, path: string = defaultConfigPat
   const target = shouldUseToonConfig(path) ? configToonPath(path) : path;
   const cleanCfg = omitUndefinedFields(cfg);
   mkdirSync(dirname(target), { recursive: true });
+  // Drop the cache entry before writing so a same-turn read after this write
+  // doesn't return stale cfg when mtime resolution is coarse (P1-D race fix).
+  invalidateReadConfigCache(target);
   const content = target.endsWith(".toon")
     ? `${encodeToonPayload(cleanCfg)}\n`
     : JSON.stringify(cleanCfg, null, 2);
@@ -505,12 +552,8 @@ export function resolveCodeRelationsEnabled(
   cfg?: ReasonixConfig["codeRelations"],
   env: string | undefined = process.env.REASONIX_CODEREL,
 ): boolean {
-  const normalized = env?.trim().toLowerCase();
-  if (normalized) {
-    if (normalized === "0" || normalized === "false" || normalized === "off") return false;
-    if (normalized === "none" || normalized === "disabled") return false;
-    if (normalized === "1" || normalized === "true" || normalized === "on") return true;
-  }
+  const fromEnv = parseBooleanEnv(env);
+  if (fromEnv !== null) return fromEnv;
   if (typeof cfg === "boolean") return cfg;
   if (!cfg) return true;
   return cfg.enabled !== false;
@@ -518,6 +561,35 @@ export function resolveCodeRelationsEnabled(
 
 export function loadCodeRelationsEnabled(path: string = defaultConfigPath()): boolean {
   return resolveCodeRelationsEnabled(readConfig(path).codeRelations);
+}
+
+export function resolveCodeGraphEnabled(
+  cfg?: ReasonixConfig["codeGraph"],
+  env: string | undefined = process.env.REASONIX_CODE_GRAPH,
+): boolean {
+  const fromEnv = parseBooleanEnv(env);
+  if (fromEnv !== null) return fromEnv;
+  if (typeof cfg === "boolean") return cfg;
+  if (!cfg) return true;
+  return cfg.enabled !== false;
+}
+
+export function loadCodeGraphEnabled(path: string = defaultConfigPath()): boolean {
+  return resolveCodeGraphEnabled(readConfig(path).codeGraph);
+}
+
+export function resolveCodeGraphIncludeBody(
+  cfg?: ReasonixConfig["codeGraph"],
+  env: string | undefined = process.env.REASONIX_CODE_GRAPH_BODY,
+): boolean {
+  const fromEnv = parseBooleanEnv(env);
+  if (fromEnv !== null) return fromEnv;
+  if (typeof cfg === "boolean" || !cfg) return false;
+  return cfg.includeBody === true;
+}
+
+export function loadCodeGraphIncludeBody(path: string = defaultConfigPath()): boolean {
+  return resolveCodeGraphIncludeBody(readConfig(path).codeGraph);
 }
 
 function parseToonMode(value: string | undefined): ToonMode | null {
@@ -529,6 +601,15 @@ function parseToonMode(value: string | undefined): ToonMode | null {
   if (normalized === "all" || normalized === "results" || normalized === "prefix") {
     return normalized;
   }
+  return null;
+}
+
+function parseBooleanEnv(value: string | undefined): boolean | null {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === "0" || normalized === "false" || normalized === "off") return false;
+  if (normalized === "none" || normalized === "disabled") return false;
+  if (normalized === "1" || normalized === "true" || normalized === "on") return true;
   return null;
 }
 

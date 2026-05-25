@@ -40,11 +40,18 @@ try {
   console.log("=== Per-tool sizes (bytes) ===");
   console.log("name".padEnd(24), "desc".padStart(7), "schema".padStart(7), "total".padStart(7));
   for (const r of rows) {
-    console.log(r.name.padEnd(24), String(r.desc).padStart(7), String(r.schema).padStart(7), String(r.total).padStart(7));
+    console.log(
+      r.name.padEnd(24),
+      String(r.desc).padStart(7),
+      String(r.schema).padStart(7),
+      String(r.total).padStart(7),
+    );
   }
   const sumDesc = rows.reduce((s, r) => s + r.desc, 0);
   const sumSchema = rows.reduce((s, r) => s + r.schema, 0);
-  console.log(`\nTOTAL: ${rows.length} tools, ${sumDesc} desc + ${sumSchema} schema = ${sumDesc + sumSchema} bytes`);
+  console.log(
+    `\nTOTAL: ${rows.length} tools, ${sumDesc} desc + ${sumSchema} schema = ${sumDesc + sumSchema} bytes`,
+  );
 } finally {
   rmSync(root, { recursive: true, force: true });
 }

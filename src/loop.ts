@@ -244,11 +244,14 @@ export class CacheFirstLoop {
 
     this._streamPreference = opts.stream ?? true;
     this.stream = this._streamPreference;
+    const allowedNames = new Set([...this.prefix.toolSpecs.map((s) => s.function.name)]);
     this.prefix.onEpoch((evt) => {
       this.cacheMonitor.recordEpochEvent("prefix-mutation", {
         added: evt.type === "add" ? [evt.name] : [],
         removed: evt.type === "remove" ? [evt.name] : [],
       });
+      if (evt.type === "add") allowedNames.add(evt.name);
+      else allowedNames.delete(evt.name);
     });
 
     // Any compaction (fold / heal / shrink) replaces the active log, so the
@@ -261,7 +264,6 @@ export class CacheFirstLoop {
       this.webFetchCache.invalidateAll();
     });
 
-    const allowedNames = new Set([...this.prefix.toolSpecs.map((s) => s.function.name)]);
     // Storm breaker clears its window on mutating calls so read → edit → verify isn't a storm.
     const registry = this.tools;
     const isStormExempt = (call: ToolCall): boolean => {

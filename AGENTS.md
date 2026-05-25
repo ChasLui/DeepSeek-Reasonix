@@ -26,6 +26,7 @@ Main source lives in `src/`: `src/cli/` holds CLI commands and Ink UI, `src/tool
 | `src/ports/` + `src/adapters/` | Port interfaces + concrete impls (e.g. `event-sink-jsonl.ts`) |
 | `src/code/edit-blocks.ts` | SEARCH/REPLACE parser + apply gate — **byte-for-byte exact match** |
 | `src/index/` | Local semantic vector index (`reasonix index`) |
+| `src/index/code-graph/` | JSON code-graph fast path for `find_references` / `impact`; immediate `src/code-query/` remains fallback |
 | `src/frame/` | Cell-grid → ANSI renderer used by the TUI log |
 | `src/memory/` + `src/transcript/` + `src/telemetry/` | Persistence layers |
 | `src/net/` | Proxy / no-proxy resolution |

@@ -8,6 +8,7 @@ import { DeepSeekClient, pickPrimaryBalance } from "../../client.js";
 import {
   defaultConfigPath,
   loadBaseUrl,
+  loadCodeGraphEnabled,
   loadCodeRelationsEnabled,
   loadFilesystemDedupEnabled,
   loadProxyConfig,
@@ -20,6 +21,7 @@ import {
 import { loadDotenv } from "../../env.js";
 import { loadHooks } from "../../hooks.js";
 import { t } from "../../i18n/index.js";
+import { getCodeGraphStats, readCodeGraphArtifactStats } from "../../index/code-graph/stats.js";
 import { indexExists } from "../../index/semantic/builder.js";
 import { checkOllamaStatus } from "../../index/semantic/ollama-launcher.js";
 import { countRecentObservationEvents } from "../../memory/observation.js";
@@ -67,6 +69,7 @@ export async function runDoctorChecks(
     checkHooks(projectRoot),
     checkOllama(projectRoot),
     checkProject(projectRoot),
+    checkCodeGraph(projectRoot),
   ]);
   return [
     r[0],
@@ -85,6 +88,7 @@ export async function runDoctorChecks(
     checkMemoryHybridCli(),
     checkReadDedup(),
     checkCodeRelations(),
+    r[8],
     checkToon(),
     checkBudget(),
     checkToolset(),
@@ -198,6 +202,55 @@ function checkCodeRelations(): Check {
   return { id: "code-rel", label: "code-rel     ", level: "ok", detail };
 }
 
+async function checkCodeGraph(projectRoot: string): Promise<Check> {
+  const enabled = loadCodeGraphEnabled();
+  const env = process.env.REASONIX_CODE_GRAPH?.trim();
+  if (!enabled) {
+    const detail = env
+      ? `disabled via REASONIX_CODE_GRAPH=${env}`
+      : "disabled via config.codeGraph";
+    return { id: "code-graph", label: "code-graph   ", level: "ok", detail };
+  }
+  try {
+    const live = getCodeGraphStats();
+    const artifact = await readCodeGraphArtifactStats(projectRoot);
+    if (!artifact) {
+      if (live.buildTimeouts > 0) {
+        return {
+          id: "code-graph",
+          label: "code-graph   ",
+          level: "warn",
+          detail: `build-timeout=${live.lastBuildTimeoutMs ?? "n/a"}ms; no code graph index built`,
+        };
+      }
+      return {
+        id: "code-graph",
+        label: "code-graph   ",
+        level: "ok",
+        detail: "not in use (no code graph index built; `reasonix code-index rebuild` to enable)",
+      };
+    }
+    const lastBuild =
+      live.lastBuildElapsedMs === undefined ? "n/a" : `${live.lastBuildElapsedMs}ms`;
+    const buildTimeout =
+      live.buildTimeouts > 0 ? ` build-timeout=${live.lastBuildTimeoutMs ?? "n/a"}ms` : "";
+    const detail = `nodes=${artifact.nodes} edges=${artifact.edges} files=${artifact.files} size=${formatBytes(artifact.artifactBytes)} stale=${formatPercent(artifact.stalenessRatio)} last_build=${lastBuild}${buildTimeout}`;
+    return {
+      id: "code-graph",
+      label: "code-graph   ",
+      level: artifact.stalenessRatio > 0 || live.buildTimeouts > 0 ? "warn" : "ok",
+      detail,
+    };
+  } catch (err) {
+    return {
+      id: "code-graph",
+      label: "code-graph   ",
+      level: "warn",
+      detail: `index unreadable — ${(err as Error).message}`,
+    };
+  }
+}
+
 function checkToon(): Check {
   const mode = loadToonMode();
   const env = process.env.REASONIX_TOON?.trim();
@@ -208,6 +261,16 @@ function checkToon(): Check {
         : "disabled via config.toon"
       : `enabled mode=${mode} — protocol envelopes stay JSON`;
   return { id: "toon", label: "toon         ", level: "ok", detail };
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+function formatPercent(value: number): string {
+  return `${(value * 100).toFixed(1)}%`;
 }
 
 /** Cross-session rolling budget status — reads the shared usage.jsonl aggregate

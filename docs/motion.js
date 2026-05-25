@@ -5,9 +5,7 @@
  * because metric numbers count up from zero, and that's a one-shot
  * effect that stops as soon as the counter reaches its target. */
 
-(function () {
-  "use strict";
-
+(() => {
   var prefersReduced =
     typeof window.matchMedia === "function" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -20,16 +18,16 @@
   }
 
   function fill(el) {
-    var target = parseFloat(el.getAttribute("data-target") || "0");
-    var decimals = parseInt(el.getAttribute("data-decimals") || "0", 10);
+    var target = Number.parseFloat(el.getAttribute("data-target") || "0");
+    var decimals = Number.parseInt(el.getAttribute("data-decimals") || "0", 10);
     var prefix = el.getAttribute("data-prefix") || "";
     var suffix = el.getAttribute("data-suffix") || "";
     el.textContent = format(target, decimals, prefix, suffix);
   }
 
   function animate(el) {
-    var target = parseFloat(el.getAttribute("data-target") || "0");
-    var decimals = parseInt(el.getAttribute("data-decimals") || "0", 10);
+    var target = Number.parseFloat(el.getAttribute("data-target") || "0");
+    var decimals = Number.parseInt(el.getAttribute("data-decimals") || "0", 10);
     var prefix = el.getAttribute("data-prefix") || "";
     var suffix = el.getAttribute("data-suffix") || "";
     var dur = 1400;
@@ -55,8 +53,8 @@
     }
 
     var io = new IntersectionObserver(
-      function (entries) {
-        entries.forEach(function (e) {
+      (entries) => {
+        entries.forEach((e) => {
           if (e.isIntersecting) {
             animate(e.target);
             io.unobserve(e.target);
@@ -65,7 +63,9 @@
       },
       { threshold: 0.4 },
     );
-    nodes.forEach(function (n) { io.observe(n); });
+    nodes.forEach((n) => {
+      io.observe(n);
+    });
   }
 
   if (document.readyState === "loading") {

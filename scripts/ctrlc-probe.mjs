@@ -14,7 +14,9 @@ process.stdin.on("data", (chunk) => {
   const s = String(chunk);
   for (const ch of s) {
     const code = ch.charCodeAt(0);
-    process.stdout.write(`got byte: 0x${code.toString(16).padStart(2, "0")} (${JSON.stringify(ch)})\r\n`);
+    process.stdout.write(
+      `got byte: 0x${code.toString(16).padStart(2, "0")} (${JSON.stringify(ch)})\r\n`,
+    );
     if (ch === "\x03") {
       process.stdout.write("→ \\x03 detected, exiting.\r\n");
       process.exit(0);

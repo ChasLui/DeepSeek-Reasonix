@@ -14,6 +14,7 @@ import {
 } from "../code-query/relations.js";
 import { recordCodeRelationQuery } from "../code-query/stats.js";
 import { extractSymbols } from "../code-query/symbols.js";
+import { loadCodeGraphEnabled } from "../config.js";
 import type { ToolCallContext, ToolRegistry } from "../tools.js";
 
 export interface CodeQueryToolOpts {
@@ -111,9 +112,9 @@ export function registerCodeQueryTools(registry: ToolRegistry, opts: CodeQueryTo
   registry.register({
     name: "find_references",
     description:
-      "On-demand code relation query for TS/TSX/JS/JSX/Python/Go/Rust/Java without a persistent graph. Use for 'who calls X', 'what does X call', or import relationships before editing. Best-effort, deterministic, confidence-tagged; heavy transitive graph work should use external GitNexus MCP. Result: {symbol,relation,records:[{file,line,column,from?,to?,confidence,reason,snippet?}],bestEffort}.",
-    readOnly: true,
-    parallelSafe: true,
+      "Code relation query for TS/TSX/JS/JSX/Python/Go/Rust/Java. Uses the JSON code graph fast path for callers/callees/imports/importers when available, and falls back to immediate scan for missing, timed-out, or unsupported graph cases. Use for 'who calls X', 'what does X call', or import relationships before editing. Best-effort, deterministic, confidence-tagged; heavy transitive graph work should use external GitNexus MCP. Result: {symbol,relation,records:[{file,line,column,from?,to?,confidence,reason,snippet?}],bestEffort}.",
+    readOnlyCheck: (args: { relation?: unknown }) => !canRefreshCodeGraph(args.relation),
+    parallelSafe: false,
     stormExempt: true,
     parameters: {
       type: "object",
@@ -159,8 +160,9 @@ export function registerCodeQueryTools(registry: ToolRegistry, opts: CodeQueryTo
   registry.register({
     name: "detect_changes",
     description:
-      "Map current git diff hunks to affected code symbols by tree-sitter span overlap. Use after edits to self-check what symbols changed before choosing tests. scope: unstaged (default), staged, or all. includeCallers=true expands each changed symbol to direct callers via find_references. No persistent index.",
-    readOnly: true,
+      "Map current git diff hunks to affected code symbols by tree-sitter span overlap. Use after edits to self-check what symbols changed before choosing tests. scope: unstaged (default), staged, or all. includeCallers=true expands each changed symbol to direct callers via find_references and may refresh the JSON code graph.",
+    readOnlyCheck: (args: { includeCallers?: unknown }) =>
+      !(args.includeCallers === true && loadCodeGraphEnabled()),
     parallelSafe: false,
     stormExempt: true,
     parameters: {
@@ -203,7 +205,7 @@ export function registerCodeQueryTools(registry: ToolRegistry, opts: CodeQueryTo
     name: "impact",
     description:
       "Best-effort shallow reverse impact analysis. Starts from symbol, follows direct callers up to maxDepth<=2, and groups records by depth with confidence tags. Use for quick edit blast-radius checks; complete transitive closures/Cypher belong to external GitNexus MCP.",
-    readOnly: true,
+    readOnlyCheck: () => !loadCodeGraphEnabled(),
     parallelSafe: false,
     stormExempt: true,
     parameters: {
@@ -267,6 +269,16 @@ export function registerCodeQueryTools(registry: ToolRegistry, opts: CodeQueryTo
       }
     },
   });
+}
+
+function canRefreshCodeGraph(relation: unknown): boolean {
+  return (
+    loadCodeGraphEnabled() &&
+    (relation === "callers" ||
+      relation === "callees" ||
+      relation === "imports" ||
+      relation === "importers")
+  );
 }
 
 function resolveProjectPath(rootDir: string, raw: string): string {
