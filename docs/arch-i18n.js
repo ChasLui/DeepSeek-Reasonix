@@ -15,6 +15,7 @@
     "arch.toc.title": "On this page",
     "arch.toc.philosophy": "Design philosophy",
     "arch.toc.pillar1": "Pillar 1 — Cache",
+    "arch.toc.thinking": "Thinking contract",
     "arch.toc.pillar2": "Pillar 2 — Repair",
     "arch.toc.pillar3": "Pillar 3 — Cost",
     "arch.toc.modules": "Module layout",
@@ -52,6 +53,18 @@
       "Each tool declares <code>parallelSafe?: boolean</code> (default <code>false</code>). The loop dispatcher groups consecutive parallel-safe calls into chunks and races them via <code>Promise.allSettled</code>; the first non-parallel-safe call ends the chunk and runs alone (serial barrier — read-after-write order preserved). Tool-result yields and history append still land in declared order regardless of which call settles first, so the model sees the same shape it would under a fully serial dispatch.",
     "p1.parallel.optins":
       "Built-in opt-ins: read-only filesystem (<code>read_file</code>, <code>list_directory</code>, <code>directory_tree</code>, <code>search_files</code>, <code>search_content</code>, <code>get_file_info</code>), web (<code>web_search</code>, <code>web_fetch</code>), <code>recall_memory</code>, <code>semantic_search</code>, isolated child loops (<code>run_skill</code>, <code>spawn_subagent</code>), in-memory job queries (<code>job_output</code>, <code>list_jobs</code>). Mutating / side-effecting tools stay default. MCP-bridged tools default <code>false</code> — third-party tools opt in only when the server explicitly declares parallel safety.",
+
+    "thinking.title": "Thinking mode contract",
+    "thinking.intro":
+      "DeepSeek's thinking-mode docs snapshot (2026-05-25) defines the request/response shape Reasonix treats as a protocol contract, not a UI preference.",
+    "thinking.flash":
+      "Live v4-flash attestation on 2026-05-25 returned HTTP 200 with non-empty <code>reasoning_content</code> for <code>thinking.type=enabled</code>, <code>thinking.type=disabled</code>, and omitted thinking controls. Reasonix therefore keeps <code>thinkingModeForModel(\"deepseek-v4-flash\")</code> enabled and <code>isThinkingModeModel(\"deepseek-v4-flash\")</code> true.",
+    "thinking.invA":
+      "<strong>Inv-A — Tool-call round-trip.</strong> Assistant turns with <code>tool_calls</code> must preserve <code>reasoning_content</code> on later chat calls, or the next DeepSeek request can fail with 400. Reasonix keeps it through <code>buildAssistantMessage</code>, <code>stampMissingReasoningForThinkingMode</code>, <code>replaceTailAssistantMessage</code>, and scavenge.",
+    "thinking.invB":
+      "<strong>Inv-B — Sampling param silence.</strong> In thinking mode, DeepSeek silently ignores <code>temperature</code>, <code>top_p</code>, <code>presence_penalty</code>, and <code>frequency_penalty</code> rather than rejecting the request. <code>buildPayload</code> leaves them in place so payloads stay diffable against OpenAI-style tooling.",
+    "thinking.invC":
+      "<strong>Inv-C — Third-party endpoint compatibility.</strong> Azure-compatible endpoints can reject <code>extra_body.thinking.type</code>, so <code>_isAzureEndpoint</code> strips it. Other third-party endpoints follow the same path when <code>thinkingModeForModel()</code> returns <code>undefined</code>.",
 
     "p2.title": "Pillar 2 — Tool-Call Repair",
     "p2.problem": "<strong>Problem.</strong> Empirical DeepSeek failure modes:",
@@ -92,7 +105,7 @@
       "Users who predict a hard task type <code>/pro</code>; the <strong>next</strong> turn runs on <code>v4-pro</code>, then auto-disarms. No preset churn, no forgotten revert. Armed state is visible as a yellow <code>⇧ pro armed</code> pill in the header.",
     "p3.h.escalation": "4.4 Failure-signal auto-escalation",
     "p3.esc.body":
-      "The loop counts visible "flash is struggling" events per turn:",
+      "The loop counts visible &ldquo;flash is struggling&rdquo; events per turn:",
     "p3.esc.e1":
       "<code>edit_file</code> / <code>write_file</code> SEARCH-not-found errors",
     "p3.esc.e2":
@@ -135,6 +148,7 @@
     "arch.toc.title": "本页目录",
     "arch.toc.philosophy": "设计哲学",
     "arch.toc.pillar1": "支柱一 — 缓存优先循环",
+    "arch.toc.thinking": "思考契约",
     "arch.toc.pillar2": "支柱二 — 工具调用修复",
     "arch.toc.pillar3": "支柱三 — 成本控制",
     "arch.toc.modules": "模块布局",
@@ -173,6 +187,18 @@
     "p1.parallel.optins":
       "内置并行安全工具：只读文件系统（<code>read_file</code>、<code>list_directory</code>、<code>directory_tree</code>、<code>search_files</code>、<code>search_content</code>、<code>get_file_info</code>）、Web（<code>web_search</code>、<code>web_fetch</code>）、<code>recall_memory</code>、<code>semantic_search</code>、隔离子循环（<code>run_skill</code>、<code>spawn_subagent</code>）、内存中任务查询（<code>job_output</code>、<code>list_jobs</code>）。有副作用的工具保持默认 false。MCP 桥接工具默认 false——第三方工具只有服务端明确声明并行安全时才可选入。",
 
+    "thinking.title": "思考模式契约",
+    "thinking.intro":
+      "DeepSeek 思考模式文档快照（2026-05-25）定义了 Reasonix 视为协议契约的请求 / 响应形状，而不是 UI 偏好。",
+    "thinking.flash":
+      "v4-flash 实测支持：2026-05-25 live attestation 中，<code>thinking.type=enabled</code>、<code>thinking.type=disabled</code> 和省略 thinking 控制三种请求都返回 HTTP 200 且包含非空 <code>reasoning_content</code>。因此 Reasonix 保持 <code>thinkingModeForModel(\"deepseek-v4-flash\")</code> 为 enabled，并保持 <code>isThinkingModeModel(\"deepseek-v4-flash\")</code> 为 true。",
+    "thinking.invA":
+      "<strong>Inv-A —— 工具调用回传。</strong>含 <code>tool_calls</code> 的 assistant 轮次在后续 chat 调用中必须保留 <code>reasoning_content</code>，否则下一次 DeepSeek 请求可能返回 400。Reasonix 通过 <code>buildAssistantMessage</code>、<code>stampMissingReasoningForThinkingMode</code>、<code>replaceTailAssistantMessage</code> 和 scavenge 保留该字段。",
+    "thinking.invB":
+      "<strong>Inv-B —— 采样参数沉默。</strong>在思考模式下，DeepSeek 会静默忽略 <code>temperature</code>、<code>top_p</code>、<code>presence_penalty</code>、<code>frequency_penalty</code>，而不是拒绝请求。<code>buildPayload</code> 保留这些字段，让 payload 仍可与 OpenAI 风格工具链做 diff。",
+    "thinking.invC":
+      "<strong>Inv-C —— 第三方端点兼容。</strong>Azure 兼容端点可能拒绝 <code>extra_body.thinking.type</code>，所以 <code>_isAzureEndpoint</code> 会切除该字段。其它第三方端点也走同一兼容路径：当 <code>thinkingModeForModel()</code> 返回 <code>undefined</code> 时跳过该字段。",
+
     "p2.title": "支柱二 — 工具调用修复",
     "p2.problem": "<strong>问题。</strong>DeepSeek 实测失败模式：",
     "p2.fm1":
@@ -201,7 +227,7 @@
     "p3.tiers.body":
       "三个预设在<strong>模型层级</strong>和<strong>推理力度</strong>之间做权衡：",
     "p3.tiers.aux":
-      "所有辅助调用——<code>forceSummaryAfterIterLimit</code>、subagent 派生、截断修复重试——无论用户预设如何，均硬编码为 <code>v4-flash + effort=high</code>。没有理由以 pro 价格来"把工具结果改写成散文"或跑 <code>explore</code> subagent 的 grep 链。",
+      "所有辅助调用——<code>forceSummaryAfterIterLimit</code>、subagent 派生、截断修复重试——无论用户预设如何，均硬编码为 <code>v4-flash + effort=high</code>。没有理由以 pro 价格来&ldquo;把工具结果改写成散文&rdquo;或跑 <code>explore</code> subagent 的 grep 链。",
     "p3.h.compact": "4.2 轮末自动压缩",
     "p3.compact.body":
       "每轮结束时，日志中超过 <code>TURN_END_RESULT_CAP_TOKENS</code>（3000）的工具结果会被压缩到该上限。读它的那一轮模型拿到了完整文本；后续轮次看到的是紧凑摘要，需要时可以重新读取。多一次 <code>read_file</code> 调用远比每次 prompt 都拖 12 KB 便宜。",
@@ -212,7 +238,7 @@
       "预判当前任务较难时输入 <code>/pro</code>；<strong>下一轮</strong>在 <code>v4-pro</code> 上运行，随后自动解除。无需反复切预设，不会忘记还原。标头会显示黄色 <code>⇧ pro armed</code> 标签。",
     "p3.h.escalation": "4.4 失败信号自动升级",
     "p3.esc.body":
-      "循环统计每轮的"flash 在挣扎"事件：",
+      "循环统计每轮的&ldquo;flash 在挣扎&rdquo;事件：",
     "p3.esc.e1":
       "<code>edit_file</code> / <code>write_file</code> 的 SEARCH-not-found 错误",
     "p3.esc.e2":

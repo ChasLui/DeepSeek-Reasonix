@@ -1,7 +1,7 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type DesktopOpenTab,
   addProjectPathAllowed,
@@ -556,8 +556,54 @@ describe("config", () => {
   });
 
   it("loadReasoningEffort coerces unknown values back to 'max'", () => {
+    const writeSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     writeConfig({ reasoningEffort: "turbo" as any }, path);
-    expect(loadReasoningEffort(path)).toBe("max");
+    try {
+      expect(loadReasoningEffort(path)).toBe("max");
+    } finally {
+      writeSpy.mockRestore();
+    }
+  });
+
+  it("loadReasoningEffort writes stderr warning once on invalid value", async () => {
+    for (const raw of ["medium", "", "low"]) {
+      const casePath = join(dir, `invalid-effort-${raw || "empty"}.json`);
+      writeFileSync(casePath, JSON.stringify({ reasoningEffort: raw }), "utf8");
+      vi.resetModules();
+      const { loadReasoningEffort: loadFreshReasoningEffort } = await import("../src/config.js");
+      const writeSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+      try {
+        expect(loadFreshReasoningEffort(casePath)).toBe("max");
+        expect(loadFreshReasoningEffort(casePath)).toBe("max");
+        expect(writeSpy).toHaveBeenCalledTimes(1);
+        expect(writeSpy.mock.calls[0]?.[0]).toBe(
+          `▸ reasoningEffort: ignored invalid value ${JSON.stringify(raw)} — using "max". Valid: high, max.\n`,
+        );
+      } finally {
+        writeSpy.mockRestore();
+      }
+    }
+  });
+
+  it("loadReasoningEffort does not warn on high/max/undefined", async () => {
+    const cases = [
+      ["high", { reasoningEffort: "high" }],
+      ["max", { reasoningEffort: "max" }],
+      ["unset", {}],
+    ] as const;
+    const writeSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    try {
+      for (const [name, cfg] of cases) {
+        const casePath = join(dir, `valid-effort-${name}.json`);
+        writeFileSync(casePath, JSON.stringify(cfg), "utf8");
+        vi.resetModules();
+        const { loadReasoningEffort: loadFreshReasoningEffort } = await import("../src/config.js");
+        expect(loadFreshReasoningEffort(casePath)).toBe(name === "high" ? "high" : "max");
+      }
+      expect(writeSpy).not.toHaveBeenCalled();
+    } finally {
+      writeSpy.mockRestore();
+    }
   });
 
   it("saveReasoningEffort doesn't clobber other persisted fields", () => {

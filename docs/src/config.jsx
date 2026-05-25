@@ -192,7 +192,7 @@ Only focus on the code touched by this diff — don't go off-topic.`,
   "apiKey": "sk-***",
   "model": "deepseek-v4-flash",
   "preset": "balanced",
-  "effort": "medium",
+  "effort": "high",
   "theme": "ember",
   "autoApply": false,
   "approval": {

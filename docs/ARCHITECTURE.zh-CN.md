@@ -59,6 +59,37 @@ web（`web_search`、`web_fetch`）、`recall_memory`、`semantic_search`、
 （`job_output`、`list_jobs`）。有变更 / 副作用的工具保持默认。MCP 桥接的
 工具默认 `false` —— 第三方工具仅在 server 明确声明并行安全时才 opt in。
 
+## 思考模式契约
+
+DeepSeek 思考模式文档快照（2026-05-25，
+https://api-docs.deepseek.com/zh-cn/guides/thinking_mode）定义了 Reasonix
+视为协议契约的请求 / 响应形状，而不是 UI 偏好。
+
+v4-flash 实测支持：2026-05-25 live attestation 中，`thinking.type=enabled`、
+`thinking.type=disabled` 和省略 thinking 控制三种请求都返回 HTTP 200 且包含
+非空 `reasoning_content`。因此 Reasonix 保持
+`thinkingModeForModel("deepseek-v4-flash")` 为 enabled，并保持
+`isThinkingModeModel("deepseek-v4-flash")` 为 true。
+
+**Inv-A —— 工具调用回传。** 含 `tool_calls` 的 assistant 轮次在后续 chat
+调用中必须保留 `reasoning_content`，否则下一次 DeepSeek 请求可能返回 400。
+Reasonix 通过 `buildAssistantMessage`（位于 `src/loop/messages.ts`）、
+`stampMissingReasoningForThinkingMode`（位于 `src/loop/healing.ts`）、
+`replaceTailAssistantMessage`（位于 `src/loop.ts`）和 scavenge（位于
+`src/repair/scavenge.ts`）共同保留这个字段。
+
+**Inv-B —— 采样参数沉默。** 在思考模式下，DeepSeek 会静默忽略
+`temperature`、`top_p`、`presence_penalty`、`frequency_penalty`，而不是拒绝请求。
+`buildPayload`（位于 `src/client.ts`）故意保留这些字段，让 Reasonix payload
+仍可与 OpenAI 风格工具链做 diff，同时依赖服务端的不报错契约。
+
+**Inv-C —— 第三方端点兼容。** Azure 兼容端点可能拒绝 DeepSeek 专有的
+`extra_body.thinking.type`，所以 `_isAzureEndpoint`（位于 `src/client.ts`）会切除
+该字段。其它第三方端点也走同一兼容路径：当 `thinkingModeForModel()`（位于
+`src/loop/thinking.ts`）返回 `undefined` 时跳过该字段。
+
+Last attested against DeepSeek docs: 2026-05-25 (URL above).
+
 ### 支柱 2 —— Tool-Call Repair
 
 **问题。** 经验观察到的 DeepSeek 失败模式：

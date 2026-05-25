@@ -168,6 +168,7 @@
           <ul>
             <li><a href="#philosophy" data-i18n="arch.toc.philosophy">Design philosophy</a></li>
             <li><a href="#pillar1" data-i18n="arch.toc.pillar1">Pillar 1 — Cache</a></li>
+            <li><a href="#thinking-mode-contract" data-i18n="arch.toc.thinking">Thinking contract</a></li>
             <li><a href="#pillar2" data-i18n="arch.toc.pillar2">Pillar 2 — Repair</a></li>
             <li><a href="#pillar3" data-i18n="arch.toc.pillar3">Pillar 3 — Cost</a></li>
             <li><a href="#modules" data-i18n="arch.toc.modules">Module layout</a></li>
@@ -269,6 +270,48 @@
               <code>list_jobs</code>). Mutating / side-effecting tools stay default.
               MCP-bridged tools default <code>false</code> — third-party tools opt in only
               when the server explicitly declares parallel safety.
+            </p>
+          </section>
+
+          <section id="thinking-mode-contract">
+            <h2 data-i18n="thinking.title">Thinking mode contract</h2>
+            <p data-i18n="thinking.intro">
+              DeepSeek's thinking-mode docs snapshot (2026-05-25) defines the
+              request/response shape Reasonix treats as a protocol contract, not a UI
+              preference.
+            </p>
+            <p data-i18n="thinking.flash">
+              Live v4-flash attestation on 2026-05-25 returned HTTP 200 with non-empty
+              <code>reasoning_content</code> for <code>thinking.type=enabled</code>,
+              <code>thinking.type=disabled</code>, and omitted thinking controls.
+              Reasonix therefore keeps <code>thinkingModeForModel("deepseek-v4-flash")</code>
+              enabled and <code>isThinkingModeModel("deepseek-v4-flash")</code> true.
+            </p>
+            <p data-i18n="thinking.invA">
+              <strong>Inv-A — Tool-call round-trip.</strong> Assistant turns with
+              <code>tool_calls</code> must preserve <code>reasoning_content</code> on
+              later chat calls, or the next DeepSeek request can fail with 400.
+              Reasonix keeps it through <code>buildAssistantMessage</code>,
+              <code>stampMissingReasoningForThinkingMode</code>,
+              <code>replaceTailAssistantMessage</code>, and scavenge.
+            </p>
+            <p data-i18n="thinking.invB">
+              <strong>Inv-B — Sampling param silence.</strong> In thinking mode,
+              DeepSeek silently ignores <code>temperature</code>, <code>top_p</code>,
+              <code>presence_penalty</code>, and <code>frequency_penalty</code> rather
+              than rejecting the request. <code>buildPayload</code> leaves them in place
+              so payloads stay diffable against OpenAI-style tooling.
+            </p>
+            <p data-i18n="thinking.invC">
+              <strong>Inv-C — Third-party endpoint compatibility.</strong>
+              Azure-compatible endpoints can reject <code>extra_body.thinking.type</code>,
+              so <code>_isAzureEndpoint</code> strips it. Other third-party endpoints
+              follow the same path when <code>thinkingModeForModel()</code> returns
+              <code>undefined</code>.
+            </p>
+            <p>
+              Last attested against DeepSeek docs: 2026-05-25
+              (<a href="https://api-docs.deepseek.com/zh-cn/guides/thinking_mode">URL above</a>).
             </p>
           </section>
 

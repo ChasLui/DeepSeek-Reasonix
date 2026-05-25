@@ -108,6 +108,41 @@ are emitted for observability. Auxiliary calls still route to v4-flash
 per Pillar 3, so a full flash bucket never promotes summaries or subagents
 to pro just to escape a queue.
 
+## Thinking mode contract
+
+DeepSeek's thinking-mode docs snapshot (2026-05-25,
+https://api-docs.deepseek.com/zh-cn/guides/thinking_mode) defines the
+request/response shape that Reasonix treats as a protocol contract, not a UI
+preference.
+
+Live v4-flash attestation on 2026-05-25 returned HTTP 200 with non-empty
+`reasoning_content` for `thinking.type=enabled`, `thinking.type=disabled`, and
+omitted thinking controls. Reasonix therefore keeps
+`thinkingModeForModel("deepseek-v4-flash")` enabled and
+`isThinkingModeModel("deepseek-v4-flash")` true.
+
+**Inv-A — Tool-call round-trip.** An assistant turn that contains `tool_calls`
+must keep `reasoning_content` when it is sent back in later chat calls, or the
+next DeepSeek request can fail with 400. Reasonix keeps that field through
+`buildAssistantMessage` (in `src/loop/messages.ts`),
+`stampMissingReasoningForThinkingMode` (in `src/loop/healing.ts`),
+`replaceTailAssistantMessage` (in `src/loop.ts`), and scavenge (in
+`src/repair/scavenge.ts`).
+
+**Inv-B — Sampling param silence.** In thinking mode, DeepSeek silently ignores
+`temperature`, `top_p`, `presence_penalty`, and `frequency_penalty` rather than
+rejecting the request. `buildPayload` (in `src/client.ts`) deliberately leaves
+those fields in place so Reasonix payloads stay diffable against OpenAI-style
+tooling while relying on the server's no-error contract.
+
+**Inv-C — Third-party endpoint compatibility.** Azure-compatible endpoints can
+reject DeepSeek's proprietary `extra_body.thinking.type`, so `_isAzureEndpoint`
+(in `src/client.ts`) strips that field. Other third-party endpoints follow the
+same compatibility path when `thinkingModeForModel()` (in
+`src/loop/thinking.ts`) returns `undefined`.
+
+Last attested against DeepSeek docs: 2026-05-25 (URL above).
+
 ### Pillar 2 — Tool-Call Repair
 
 **Problem.** Empirical DeepSeek failure modes:

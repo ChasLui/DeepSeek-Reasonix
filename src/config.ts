@@ -24,6 +24,7 @@ export type PresetName = "auto" | "flash" | "pro" | "fast" | "smart" | "max";
 export type EditMode = "review" | "auto" | "yolo";
 
 export type ReasoningEffort = "high" | "max";
+let reasoningEffortInvalidWarned = false;
 
 export type EngineeringLifecycleMode = "off" | "strict";
 
@@ -1329,8 +1330,16 @@ export function macOSModifierHintShown(path: string = defaultConfigPath()): bool
 
 /** Unknown / missing fall back to "max" so hand-edited bad config can't silently override the default. */
 export function loadReasoningEffort(path: string = defaultConfigPath()): ReasoningEffort {
-  const v = readConfig(path).reasoningEffort;
-  return v === "high" ? "high" : "max";
+  const v: unknown = readConfig(path).reasoningEffort;
+  if (v === "high") return "high";
+  if (v === "max") return "max";
+  if (v !== undefined && !reasoningEffortInvalidWarned) {
+    reasoningEffortInvalidWarned = true;
+    process.stderr.write(
+      `▸ reasoningEffort: ignored invalid value ${JSON.stringify(v)} — using "max". Valid: high, max.\n`,
+    );
+  }
+  return "max";
 }
 
 export function loadTheme(path: string = defaultConfigPath()): ThemeName | "auto" | undefined {
