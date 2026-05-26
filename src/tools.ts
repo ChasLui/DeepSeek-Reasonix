@@ -18,6 +18,8 @@ import { decodeToolResultObject } from "./toon/decode-result.js";
 import { serializeStringResult, serializeToolResult } from "./toon/encode-result.js";
 import type { JSONSchema, ToolSpec } from "./types.js";
 
+const TOOL_ALIAS_MAP = new Map<string, string>([["Task", "spawn_subagent"]]);
+
 export interface ToolCallContext {
   signal?: AbortSignal;
   /** Inject a mock PauseGate for tests. When absent, tools use the singleton. */
@@ -226,10 +228,23 @@ export class ToolRegistry {
       webFetchCache?: WebFetchCache;
     } = {},
   ): Promise<string> {
-    const tool = this._tools.get(name);
+    const originalName = name;
+    let dispatchName = name;
+    let aliasOriginalName: string | null = null;
+    let tool = this._tools.get(dispatchName);
     if (!tool) {
-      return this._serializeResult({ error: `unknown tool: ${name}` });
+      const resolved = TOOL_ALIAS_MAP.get(originalName);
+      if (resolved) {
+        dispatchName = resolved;
+        tool = this._tools.get(dispatchName);
+        if (tool) aliasOriginalName = originalName;
+      }
+      if (!tool) {
+        this._bumpRepair(originalName, "unknown-tool-unaliased");
+        return this._serializeResult({ error: `unknown tool: ${originalName}` });
+      }
     }
+    const repairStatsName = aliasOriginalName ?? dispatchName;
     const rawFingerprint = rawFingerprintArgs(argumentsRaw);
     let args: Record<string, unknown>;
     if (typeof argumentsRaw === "string") {
@@ -243,14 +258,15 @@ export class ToolRegistry {
         } catch (strictErr) {
           const loose = tryParseLoose(trimmed);
           if (!loose || !isPlainObjectValue(loose.value)) {
+            if (aliasOriginalName) this._bumpRepair(aliasOriginalName, "unknown-tool-unaliased");
             return this._noteMalformed(
-              name,
+              dispatchName,
               rawFingerprint,
               `invalid tool arguments JSON: ${(strictErr as Error).message}`,
             );
           }
           parsed = loose.value;
-          if (loose.repaired) this._bumpRepair(name, "jsonrepair-fallback");
+          if (loose.repaired) this._bumpRepair(repairStatsName, "jsonrepair-fallback");
         }
         args = (parsed ?? {}) as Record<string, unknown>;
       }
@@ -272,31 +288,34 @@ export class ToolRegistry {
     // is type=string so the walker wouldn't flag it, but it's still wrong.
     const sweep = unwrapDegenerateAutolinks(args);
     if (sweep.changed) {
-      for (let i = 0; i < sweep.unwrapped; i++) this._bumpRepair(name, "autolink-unwrapped");
+      for (let i = 0; i < sweep.unwrapped; i++) {
+        this._bumpRepair(repairStatsName, "autolink-unwrapped");
+      }
     }
 
     if (tool.parameters && !tool.lenientArgs) {
       let issues = validate(tool.parameters, args);
       if (issues.length > 0) {
-        const repaired = this._tryRepair(name, tool.parameters, args, issues);
+        const repaired = this._tryRepair(repairStatsName, tool.parameters, args, issues);
         if (repaired) issues = validate(tool.parameters, args);
       }
       if (issues.length > 0) {
+        if (aliasOriginalName) this._bumpRepair(aliasOriginalName, "unknown-tool-unaliased");
         return this._noteMalformed(
-          name,
+          dispatchName,
           fingerprint,
           `argument validation failed:\n${formatIssues(issues)}\nFix the listed paths and retry.`,
         );
       }
     }
-    this._lastMalformed.delete(name);
+    this._lastMalformed.delete(dispatchName);
 
     // Plan-mode enforcement — runs AFTER arg parsing so a tool with a
     // runtime `readOnlyCheck` can inspect the actual args (e.g.
     // `run_command` is read-only iff the command matches its allowlist).
     if (this._planMode && !isReadOnlyCall(tool, args)) {
       return this._serializeResult({
-        error: `${name}: unavailable in plan mode — this is a read-only exploration phase. Use read_file / list_directory / search_files / directory_tree / web_search / allowlisted shell commands to investigate. Call submit_plan with your proposed plan when you're ready for the user's review.`,
+        error: `${dispatchName}: unavailable in plan mode — this is a read-only exploration phase. Use read_file / list_directory / search_files / directory_tree / web_search / allowlisted shell commands to investigate. Call submit_plan with your proposed plan when you're ready for the user's review.`,
         rejectedReason: "plan-mode",
       });
     }
@@ -311,18 +330,18 @@ export class ToolRegistry {
       : this._interceptors.map((entry) => entry.fn);
     for (const interceptor of chain) {
       try {
-        const short = await interceptor(name, args);
+        const short = await interceptor(dispatchName, args);
         if (typeof short === "string") {
           const guarded = this._noteGateRejection(
-            name,
+            dispatchName,
             fingerprint,
             this._serializeStringResult(short),
           );
-          return this._augmentResult(name, args, guarded);
+          return this._augmentResult(dispatchName, args, guarded);
         }
       } catch (err) {
         return this._serializeResult({
-          error: `${name}: interceptor failed — ${(err as Error).message}`,
+          error: `${dispatchName}: interceptor failed — ${(err as Error).message}`,
         });
       }
     }
@@ -333,15 +352,16 @@ export class ToolRegistry {
     // pending calls from running to completion after the user gave up.
     if (opts.signal?.aborted) {
       return this._serializeResult({
-        error: `${name}: aborted before dispatch (user interrupt)`,
+        error: `${dispatchName}: aborted before dispatch (user interrupt)`,
         rejectedReason: "aborted",
       });
     }
 
     let finalResult: string;
     try {
+      if (aliasOriginalName) this._bumpRepair(aliasOriginalName, "unknown-tool-aliased");
       try {
-        this._auditListener?.({ name, args });
+        this._auditListener?.({ name: dispatchName, args });
       } catch {
         /* audit path must never break tool execution */
       }
@@ -390,8 +410,8 @@ export class ToolRegistry {
       }
     }
 
-    finalResult = this._noteGateRejection(name, fingerprint, finalResult);
-    return this._augmentResult(name, args, finalResult);
+    finalResult = this._noteGateRejection(dispatchName, fingerprint, finalResult);
+    return this._augmentResult(dispatchName, args, finalResult);
   }
 
   private _augmentResult(name: string, args: Record<string, unknown>, result: string): string {

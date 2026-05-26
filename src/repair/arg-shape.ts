@@ -8,7 +8,9 @@ export type RepairKind =
   | "bare-string-wrapped"
   | "numeric-string-coerced"
   | "autolink-unwrapped"
-  | "jsonrepair-fallback";
+  | "jsonrepair-fallback"
+  | "unknown-tool-aliased"
+  | "unknown-tool-unaliased";
 
 export interface RepairOutcome {
   changed: boolean;
