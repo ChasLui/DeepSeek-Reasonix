@@ -116,15 +116,15 @@ export const EN: TranslationSchema = {
           rows: [
             {
               key: "drag",
-              text: "select text — terminal-native, no modifier needed",
+              text: "selects text by default; if you turned mouse tracking on, use Shift+Drag or /mouse off",
             },
             {
               key: "right-click",
-              text: "your terminal's native menu (paste / copy on Windows Terminal etc.)",
+              text: "your terminal's native menu by default; mouse tracking can capture it",
             },
             {
               key: "wheel",
-              text: "scrolls chat history (works on web/cloud/SSH terminals too)",
+              text: "scrolls chat when the terminal translates wheel input; /mouse on enables app-level routing",
             },
             {
               key: "↑ / ↓",
@@ -132,7 +132,7 @@ export const EN: TranslationSchema = {
             },
             {
               key: "PgUp / PgDn",
-              text: "scroll chat history (mouse wheel routes here too)",
+              text: "scroll chat history (app-routed wheel follows this path when /mouse on)",
             },
           ],
         },
@@ -184,6 +184,10 @@ export const EN: TranslationSchema = {
               key: "Ctrl+R",
               text: "toggle verbose mode — full reasoning + tool output, no head/tail elision",
             },
+            {
+              key: "Alt+M",
+              text: "toggle mouse tracking — on routes wheel, off restores native drag-select",
+            },
           ],
         },
         {
@@ -191,15 +195,19 @@ export const EN: TranslationSchema = {
           rows: [
             {
               key: "wheel",
-              text: "scrolls chat history (works on web/cloud/SSH terminals too)",
+              text: "scrolls chat when the terminal translates wheel input; /mouse on enables app-level routing",
             },
             {
               key: "drag",
-              text: "selects text natively — direct copy works, no modifier",
+              text: "native drag-select by default; mouse:on may capture plain drag",
             },
             {
               key: "right-click",
-              text: "terminal-native (paste menu on Windows Terminal etc.)",
+              text: "terminal-native when mouse tracking is off or your terminal bypasses it",
+            },
+            {
+              key: "/mouse",
+              text: "toggle tracking at runtime: /mouse on, /mouse off, /mouse toggle",
             },
           ],
         },
@@ -208,11 +216,11 @@ export const EN: TranslationSchema = {
           rows: [
             {
               key: "select text",
-              text: "drag to select — terminal-native (no modifier needed)",
+              text: "drag by default; if mouse tracking is on, use Shift+Drag or /mouse off",
             },
             {
               key: "/copy",
-              text: "vim/tmux-style copy mode — works in SSH/mosh/tmux where drag-select can't extend past the viewport",
+              text: "copy mode with mouse drag, double/triple click, or j/k/v/y — works when terminal drag-select can't extend past the viewport",
             },
             {
               key: "copy",
@@ -247,12 +255,13 @@ export const EN: TranslationSchema = {
         },
       ],
       footer:
-        "Wheel scrolls chat on most terminals (web/cloud/SSH included) — SGR mouse tracking is on by default and stays out of the way of native drag-select and right-click. Pass --no-mouse to opt out.",
+        "Native drag-select is the default. Wheel scroll uses terminal alternate-scroll when supported; use Alt+M or /mouse on only if you need SGR 1000/1006 app-level routing.",
     },
     tipShownOnce: "shown once",
     modelOverride: "override the default model",
     noSession: "disable session persistence for this run",
-    noMouseHint: "disable SGR mouse tracking; restores native drag-select and right-click",
+    noMouseHint:
+      "force terminal mouse modes off; keeps native drag-select and right-click terminal-owned",
     noProxyHint: "ignore HTTPS_PROXY / HTTP_PROXY for this run; go direct",
     resumeHint: "force-resume the named session (even if idle)",
     newHint: "force a fresh session (ignore --session / --continue)",
@@ -320,9 +329,7 @@ export const EN: TranslationSchema = {
   },
   slash: {
     help: { description: "show the full command reference" },
-    copy: {
-      description: "open vim/tmux-style copy mode — j/k navigate, v select, y yank to clipboard",
-    },
+    copy: { description: "open copy mode — mouse drag/double/triple click or j/k/v/y yank" },
     status: { description: "current model, flags, context, session" },
     preset: {
       description: "model bundle — auto escalates flash → pro, flash/pro lock",
@@ -422,6 +429,10 @@ export const EN: TranslationSchema = {
       description: "open a GitHub issue with diagnostic info copied to clipboard",
     },
     keys: { description: "keyboard + mouse + copy/paste reference" },
+    mouse: {
+      description: "toggle terminal mouse tracking; off restores native drag-select",
+      argsHint: "[on|off|toggle]",
+    },
     plans: {
       description: "list this session's active + archived plans, newest first",
     },
@@ -689,6 +700,9 @@ export const EN: TranslationSchema = {
     memoryWriteFailed: "# memory write failed",
     verboseOn: "▸ verbose mode on — full reasoning + tool output",
     verboseOff: "▸ verbose mode off — head/tail elision restored",
+    mouseOn:
+      "▸ mouse tracking on — wheel scroll enabled; use Shift+Drag or /mouse off for native selection",
+    mouseOff: "▸ mouse tracking off — drag-select restored; alternate-scroll may still route wheel",
     commandFailed: "! command failed",
     btwUsage: "▸ /btw <question> — ask a side question without polluting the conversation context.",
     btwHeader: "≫ btw",
@@ -868,6 +882,7 @@ export const EN: TranslationSchema = {
       loopStarted:
         '▸ loop started — re-submitting "{prompt}" every {duration}. Type anything (or /loop stop) to cancel.',
       keysNeedsTui: "/keys needs a TUI context (postKeys wired).",
+      mouseUsage: "Usage: /mouse [on|off|toggle]",
       unknownCommand: "unknown command: /{cmd} — did you mean {list}?",
       unknownCommandShort: "unknown command: /{cmd}  (try /help)",
     },
@@ -1741,10 +1756,12 @@ export const EN: TranslationSchema = {
   },
   copyMode: {
     title: "── COPY MODE ──",
-    help: "j/k or ↑/↓ move · v select · y yank · g/G top/bottom · q quit",
+    help: "mouse drag yanks · double word · triple line · j/k move · v select · y yank · q quit",
     statusBar: "line {cur}/{total} · selection: {sel}",
     statusYanked: "yanked {size} chars (osc52={osc52})",
+    statusYankedFile: "yanked {size} chars (file={path})",
     statusEmpty: "nothing selected",
+    statusCancelled: "selection cancelled",
     empty: "(no chat content yet — say something to the model first)",
     labelUser: "you",
     labelAssistant: "assistant",

@@ -143,6 +143,7 @@ import { useViewerBroadcast } from "./dashboard/use-picker-broadcast.js";
 import { formatEditResults } from "./edit-history.js";
 import { loopEventToDashboard } from "./effects/loop-to-dashboard.js";
 import { appendGlobalMemory, appendProjectMemory, detectHashMemory } from "./hash-memory.js";
+import { shouldRouteHistoryHandoffToChatScroll } from "./history-scroll-routing.js";
 import { applySlashResult } from "./hooks/apply-slash-result.js";
 import { handleAssistantFinal } from "./hooks/handle-assistant-final.js";
 import {
@@ -180,6 +181,8 @@ import { handleMcpBrowseSlash } from "./mcp-browse.js";
 import { formatMcpLifecycleEvent } from "./mcp-lifecycle.js";
 import { replaceMcpServerSummary } from "./mcp-server-list.js";
 import { formatMcpSlowToast } from "./mcp-toast.js";
+import { toggleMouseMode } from "./mouse-mode.js";
+import type { MultilineAction } from "./multiline-keys.js";
 import { openUrl } from "./open-url.js";
 import { formatLongPaste } from "./paste-collapse.js";
 import { extractOpenQuestionsSection } from "./plan-open-questions.js";
@@ -202,6 +205,7 @@ import { hydrateCardsFromMessages } from "./state/hydrate.js";
 import { InflightProvider } from "./state/inflight-context.js";
 import { AgentStoreProvider, useAgentState, useAgentStore } from "./state/provider.js";
 import { VerboseContext } from "./state/verbose-context.js";
+import { getStdinReader } from "./stdin-reader.js";
 import { isLegacyWindowsConsole } from "./terminal-host.js";
 import { ThemeProvider } from "./theme/context.js";
 import { listThemeNames } from "./theme/tokens.js";
@@ -452,6 +456,7 @@ export function App(props: AppProps): React.ReactElement {
       showFeedbackHint: cfg.showFeedbackHint !== false,
     };
   }, []);
+  const copyModeMultiClickMs = React.useMemo(() => readConfig().copyMode?.multiClickMs, []);
   return (
     <ThemeProvider name={themeName}>
       <AgentStoreProvider session={session} initialCards={initialCards}>
@@ -461,6 +466,7 @@ export function App(props: AppProps): React.ReactElement {
             themeName={themeName}
             setThemeName={setThemeName}
             statusBar={statusBar}
+            copyModeMultiClickMs={copyModeMultiClickMs}
           />
         </ChatScrollProvider>
       </AgentStoreProvider>
@@ -472,6 +478,7 @@ type AppInnerProps = AppProps & {
   themeName: ThemeName;
   setThemeName: React.Dispatch<React.SetStateAction<ThemeName>>;
   statusBar: StatusBarConfig;
+  copyModeMultiClickMs?: number;
 };
 
 function AppInner({
@@ -502,6 +509,7 @@ function AppInner({
   themeName,
   setThemeName,
   statusBar,
+  copyModeMultiClickMs,
 }: AppInnerProps) {
   markPhase("app_inner_start");
   const log = useScrollback();
@@ -1538,52 +1546,88 @@ function AppInner({
   // Ctrl+P / Ctrl+N from PromptInput route here. When any input-prefix
   // picker is open (slash / @ / slash-arg), the keys navigate that picker
   // — consistent with ↑/↓. Otherwise they walk prompt history (issue #647).
-  const handleHistoryPrev = useCallback(() => {
-    if (atState && atState.entries.length > 0) {
-      setAtSelected((i) => Math.max(0, i - 1));
-      return;
-    }
-    if (slashArgMatches && slashArgMatches.length > 0) {
-      setSlashArgSelected((i) => Math.max(0, i - 1));
-      return;
-    }
-    if (slashMatches && slashMatches.length > 0) {
-      setSlashSelected((i) => Math.max(0, i - 1));
-      return;
-    }
-    recallPrev();
-  }, [
-    atState,
-    slashArgMatches,
-    slashMatches,
-    setAtSelected,
-    setSlashArgSelected,
-    setSlashSelected,
-    recallPrev,
-  ]);
-  const handleHistoryNext = useCallback(() => {
-    if (atState && atState.entries.length > 0) {
-      setAtSelected((i) => Math.min(atState.entries.length - 1, i + 1));
-      return;
-    }
-    if (slashArgMatches && slashArgMatches.length > 0) {
-      setSlashArgSelected((i) => Math.min(slashArgMatches.length - 1, i + 1));
-      return;
-    }
-    if (slashMatches && slashMatches.length > 0) {
-      setSlashSelected((i) => Math.min(slashMatches.length - 1, i + 1));
-      return;
-    }
-    recallNext();
-  }, [
-    atState,
-    slashArgMatches,
-    slashMatches,
-    setAtSelected,
-    setSlashArgSelected,
-    setSlashSelected,
-    recallNext,
-  ]);
+  const handleHistoryPrev = useCallback(
+    (source: MultilineAction["historyHandoffSource"]) => {
+      if (atState && atState.entries.length > 0) {
+        setAtSelected((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (slashArgMatches && slashArgMatches.length > 0) {
+        setSlashArgSelected((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (slashMatches && slashMatches.length > 0) {
+        setSlashSelected((i) => Math.max(0, i - 1));
+        return;
+      }
+      const scrollState = chatScroll.getState();
+      if (
+        shouldRouteHistoryHandoffToChatScroll({
+          source,
+          direction: "prev",
+          input,
+          scrollRows: scrollState.scrollRows,
+          maxScroll: scrollState.maxScroll,
+        })
+      ) {
+        chatScroll.scrollUp();
+        return;
+      }
+      recallPrev();
+    },
+    [
+      atState,
+      chatScroll,
+      input,
+      slashArgMatches,
+      slashMatches,
+      setAtSelected,
+      setSlashArgSelected,
+      setSlashSelected,
+      recallPrev,
+    ],
+  );
+  const handleHistoryNext = useCallback(
+    (source: MultilineAction["historyHandoffSource"]) => {
+      if (atState && atState.entries.length > 0) {
+        setAtSelected((i) => Math.min(atState.entries.length - 1, i + 1));
+        return;
+      }
+      if (slashArgMatches && slashArgMatches.length > 0) {
+        setSlashArgSelected((i) => Math.min(slashArgMatches.length - 1, i + 1));
+        return;
+      }
+      if (slashMatches && slashMatches.length > 0) {
+        setSlashSelected((i) => Math.min(slashMatches.length - 1, i + 1));
+        return;
+      }
+      const scrollState = chatScroll.getState();
+      if (
+        shouldRouteHistoryHandoffToChatScroll({
+          source,
+          direction: "next",
+          input,
+          scrollRows: scrollState.scrollRows,
+          maxScroll: scrollState.maxScroll,
+        })
+      ) {
+        chatScroll.scrollDown();
+        return;
+      }
+      recallNext();
+    },
+    [
+      atState,
+      chatScroll,
+      input,
+      slashArgMatches,
+      slashMatches,
+      setAtSelected,
+      setSlashArgSelected,
+      setSlashSelected,
+      recallNext,
+    ],
+  );
 
   // Surface a one-time banner about session state on first mount.
   const sessionBannerShown = useRef(false);
@@ -1711,6 +1755,14 @@ function AppInner({
       log.pushInfo(next ? t("app.verboseOn") : t("app.verboseOff"));
       return next;
     });
+  });
+
+  // Alt+M 避开 IXON 下常被终端吞掉的 Ctrl+S。
+  useKeystroke((ev) => {
+    if (!(ev.alt && ev.input.toLowerCase() === "m")) return;
+    const result = toggleMouseMode();
+    if (!result.active) getStdinReader().resetParseState();
+    log.pushInfo(result.active ? t("app.mouseOn") : t("app.mouseOff"));
   });
 
   // Chat scroll keys. Mouse wheel + PgUp/PgDn always scroll; End jumps
@@ -4542,6 +4594,7 @@ function AppInner({
                 ) : pendingCopyMode ? (
                   <CopyMode
                     cards={agentStore.getState().cards}
+                    multiClickMs={copyModeMultiClickMs}
                     onClose={(yanked) => {
                       setPendingCopyMode(false);
                       if (yanked) {

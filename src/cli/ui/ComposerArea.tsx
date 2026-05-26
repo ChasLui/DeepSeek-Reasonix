@@ -9,6 +9,7 @@ import stringWidth from "string-width";
 
 import type { EditMode } from "../../config.js";
 import type { JobRegistry } from "../../tools/jobs.js";
+import type { MultilineAction } from "./multiline-keys.js";
 
 import { AtMentionSuggestions } from "./AtMentionSuggestions.js";
 import { PromptInput } from "./PromptInput.js";
@@ -42,8 +43,8 @@ export interface ComposerAreaProps {
   setInput: (next: string) => void;
   busy: boolean;
   onSubmit: (raw: string) => Promise<void>;
-  onHistoryPrev: () => void;
-  onHistoryNext: () => void;
+  onHistoryPrev: (source: MultilineAction["historyHandoffSource"]) => void;
+  onHistoryNext: (source: MultilineAction["historyHandoffSource"]) => void;
   onOpenExternalEditor: () => void;
   onCursorChange: (cursor: number) => void;
 

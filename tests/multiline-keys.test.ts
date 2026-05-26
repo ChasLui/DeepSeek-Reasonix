@@ -156,8 +156,12 @@ describe("processMultilineKey — cursor motion", () => {
   });
 
   it("↑/↓ on single-line buffer hand off to prompt history", () => {
-    expect(processMultilineKey("hello", 3, key({ upArrow: true })).historyHandoff).toBe("prev");
-    expect(processMultilineKey("hello", 3, key({ downArrow: true })).historyHandoff).toBe("next");
+    const up = processMultilineKey("hello", 3, key({ upArrow: true }));
+    const down = processMultilineKey("hello", 3, key({ downArrow: true }));
+    expect(up.historyHandoff).toBe("prev");
+    expect(up.historyHandoffSource).toBe("arrow");
+    expect(down.historyHandoff).toBe("next");
+    expect(down.historyHandoffSource).toBe("arrow");
     expect(processMultilineKey("", 0, key({ upArrow: true })).historyHandoff).toBe("prev");
     expect(processMultilineKey("", 0, key({ downArrow: true })).historyHandoff).toBe("next");
   });
@@ -178,12 +182,14 @@ describe("processMultilineKey — cursor motion", () => {
       cursor: null,
       submit: false,
       historyHandoff: "prev",
+      historyHandoffSource: "readline",
     });
     expect(processMultilineKey("", 0, key({ ctrl: true, input: "n" }))).toEqual({
       next: null,
       cursor: null,
       submit: false,
       historyHandoff: "next",
+      historyHandoffSource: "readline",
     });
     expect(processMultilineKey("hello", 3, key({ ctrl: true, input: "p" })).historyHandoff).toBe(
       "prev",

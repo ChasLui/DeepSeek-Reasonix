@@ -34,6 +34,9 @@ import {
   macOSModifierHintShown,
   markEditModeHintShown,
   markMacOSModifierHintShown,
+  markMouseClipboardHintShown,
+  mouseClipboardHintFlagPath,
+  mouseClipboardHintShown,
   readConfig,
   redactKey,
   redactSemanticEmbeddingConfig,
@@ -657,6 +660,22 @@ describe("config", () => {
     markEditModeHintShown(path);
     expect(editModeHintShown(path)).toBe(true);
     expect(loadEditMode(path)).toBe("auto");
+  });
+
+  it("mouseClipboardHintShown persists to the state flag and honors legacy config", () => {
+    const configPath = join(dir, ".reasonix", "config.json");
+    const flagPath = mouseClipboardHintFlagPath(configPath);
+    expect(mouseClipboardHintShown(configPath)).toBe(false);
+
+    markMouseClipboardHintShown(configPath);
+
+    expect(mouseClipboardHintShown(configPath)).toBe(true);
+    expect(readFileSync(flagPath, "utf8")).toBe("shown\n");
+    expect(readConfig(configPath).mouseClipboardHintShown).toBeUndefined();
+
+    const legacyPath = join(dir, "legacy-config.json");
+    writeConfig({ mouseClipboardHintShown: true }, legacyPath);
+    expect(mouseClipboardHintShown(legacyPath)).toBe(true);
   });
 
   it("macOSModifierHintShown defaults to false and toggles on markMacOSModifierHintShown", () => {

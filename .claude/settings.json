@@ -96,6 +96,16 @@
         ]
       },
       {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.wolf/hooks/pre-bash.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "mcp__serena__.*",
         "hooks": [
           {
@@ -123,7 +133,7 @@
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.wolf/hooks/post-write.js\"",
-            "timeout": 10
+            "timeout": 15
           }
         ]
       }
@@ -139,6 +149,46 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.wolf/hooks/user-prompt-submit.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.wolf/hooks/session-end.js\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.wolf/hooks/subagent-stop.js\"",
+            "timeout": 5
+          }
+        ]
+      }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "node \"$CLAUDE_PROJECT_DIR/.wolf/hooks/statusline.js\""
   }
 }

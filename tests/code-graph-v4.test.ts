@@ -468,27 +468,40 @@ describe("code graph v4 index", () => {
     );
     writeProjectFile(root, "src/c.ts", 'import "./a";\nexport const c = 1;\n');
     await buildCodeGraph(root);
+    const graphOpts = { codeGraphStaleTimeoutMs: 2_000 };
 
-    const graphImports = await findReferences(root, {
-      symbol: "run",
-      relation: "imports",
-      scope: "src",
-    });
+    const graphImports = await findReferences(
+      root,
+      {
+        symbol: "run",
+        relation: "imports",
+        scope: "src",
+      },
+      graphOpts,
+    );
     const immediateImports = await findReferences(
       root,
       { symbol: "run", relation: "imports", scope: "src" },
       { codeGraph: false },
     );
-    const graphImporters = await findReferences(root, {
-      symbol: "helper",
-      relation: "importers",
-      scope: "src",
-    });
-    const graphFileImporters = await findReferences(root, {
-      symbol: "src/a.ts",
-      relation: "importers",
-      scope: "src",
-    });
+    const graphImporters = await findReferences(
+      root,
+      {
+        symbol: "helper",
+        relation: "importers",
+        scope: "src",
+      },
+      graphOpts,
+    );
+    const graphFileImporters = await findReferences(
+      root,
+      {
+        symbol: "src/a.ts",
+        relation: "importers",
+        scope: "src",
+      },
+      graphOpts,
+    );
     const stats = getCodeGraphStats();
 
     expect(stats.fallbacks).toBe(0);

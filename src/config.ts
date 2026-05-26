@@ -2,7 +2,7 @@
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { z } from "zod";
 import type { BudgetPeriod, BudgetScope, BudgetWindow } from "./budget/window.js";
 import { type ThemeName, isThemeName, resolveThemeName } from "./cli/ui/theme/tokens.js";
@@ -195,8 +195,11 @@ export interface ReasonixConfig {
   /** Exa API key. Falls back to EXA_API_KEY env var. Free 1000/mo signup at https://exa.ai */
   exaApiKey?: string;
 
-  /** TUI mouse-wheel scrolling via SGR mouse tracking. Default true. Set false to fall back to native terminal drag-select for copy (then wheel is terminal-dependent — most terminals translate wheel→arrow in alt-screen, some don't). */
+  /** TUI SGR mouse tracking. Default false so native drag-select stays terminal-owned; set true only if alternate-scroll is insufficient. */
   mouseTracking?: boolean;
+  copyMode?: {
+    multiClickMs?: number;
+  };
   dashboard?: {
     /** Pin the embedded dashboard to a fixed port — required for stable SSH tunnels. 0/absent → ephemeral. */
     port?: number;
@@ -1321,7 +1324,16 @@ export function editModeHintShown(path: string = defaultConfigPath()): boolean {
 
 /** True when the mouse-tracking + clipboard tip has been shown. */
 export function mouseClipboardHintShown(path: string = defaultConfigPath()): boolean {
-  return readConfig(path).mouseClipboardHintShown === true;
+  return (
+    readConfig(path).mouseClipboardHintShown === true ||
+    existsSync(mouseClipboardHintFlagPath(path))
+  );
+}
+
+export function mouseClipboardHintFlagPath(path: string = defaultConfigPath()): string {
+  const configDir = dirname(path);
+  const homeLike = basename(configDir) === ".reasonix" ? dirname(configDir) : configDir;
+  return join(homeLike, ".local", "state", "reasonix", "seen-mouse-hint.flag");
 }
 
 export function macOSModifierHintShown(path: string = defaultConfigPath()): boolean {
@@ -1565,10 +1577,15 @@ export function markEditModeHintShown(path: string = defaultConfigPath()): void 
 
 /** Mark the mouse + clipboard tip as shown. */
 export function markMouseClipboardHintShown(path: string = defaultConfigPath()): void {
-  const cfg = readConfig(path);
-  if (cfg.mouseClipboardHintShown === true) return;
-  cfg.mouseClipboardHintShown = true;
-  writeConfig(cfg, path);
+  const flagPath = mouseClipboardHintFlagPath(path);
+  if (existsSync(flagPath)) return;
+  mkdirSync(dirname(flagPath), { recursive: true });
+  writeFileSync(flagPath, "shown\n", "utf8");
+  try {
+    chmodSync(flagPath, 0o600);
+  } catch {
+    /* best-effort; the hint flag is not secret */
+  }
 }
 
 export function markMacOSModifierHintShown(path: string = defaultConfigPath()): void {

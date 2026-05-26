@@ -40,7 +40,7 @@ Run `reasonix --help` (or any subcommand with `--help`) for the full flag list. 
 | `--no-config` | Ignore `~/.reasonix/config.json` for this run |
 | `--no-dashboard` | Don't auto-start the embedded web dashboard |
 | `--no-alt-screen` | Render to scrollback instead of the alt-screen buffer (preserves chat in shell history; legacy mode, can ghost on resize) |
-| `--no-mouse` | Disable DECSET 1007 (alternate-scroll); wheel reverts to native terminal scroll |
+| `--no-mouse` | Force SGR 1000/1006 mouse tracking off; native drag-select/right-click stays terminal-owned |
 
 ### Environment knobs
 
@@ -71,7 +71,8 @@ Type `/` mid-chat to open the picker. Aliases shown in parentheses. Code-mode-on
 | `/retry` | Truncate and resend your last message — fresh sample |
 | `/compact` | Fold older turns into a summary (cache-safe). Auto-fires at 50% ctx; this is the manual trigger |
 | `/stop` | Abort the current model turn (typed alternative to Esc) |
-| `/copy` | Open vim/tmux-style copy mode — `j`/`k` navigate, `v` select, `y` yank to clipboard. The right answer for SSH / mosh / tmux where drag-select can't extend past the viewport |
+| `/copy` | Open copy mode — mouse drag yanks a span, double-click yanks a word/path, triple-click yanks a line; `j`/`k`, `v`, `y` keep the keyboard path |
+| `/mouse [on\|off\|toggle]` | Toggle terminal mouse tracking at runtime; `on` routes wheel events, `off` restores terminal-native drag-select |
 
 ### Setup
 
@@ -171,6 +172,7 @@ Type `/` mid-chat to open the picker. Aliases shown in parentheses. Code-mode-on
 | `Ctrl+C` | Cancel current input / abort the running model turn; press again quickly (~800ms) to quit (NOT copy — see clipboard) |
 | `PgUp` / `PgDn` | Scroll chat history a page at a time. While plan details are expanded, scroll the bounded detail window |
 | `End` | Jump chat to the most recent line |
+| `Alt+M` | Toggle mouse tracking; `on` routes wheel events, `off` restores terminal-native drag-select |
 
 ### Edit-gate (code mode)
 
@@ -186,21 +188,21 @@ Type `/` mid-chat to open the picker. Aliases shown in parentheses. Code-mode-on
 
 | Action | What it does |
 |---|---|
-| Wheel | Scrolls chat history (works on web / cloud / SSH terminals too) |
-| Drag | Selects text natively — no modifier needed |
-| Right-click | Terminal-native (e.g. paste menu on Windows Terminal) |
+| Wheel | Scrolls chat history when your terminal translates wheel input; use `/mouse on` if you need app-level routing |
+| Drag | Terminal-native selection by default; with mouse tracking on, some terminals send drag as mouse reports |
+| Right-click | Terminal-native by default; mouse tracking can capture it in some terminals |
 
-Reasonix sets DECSET 1007 (alternate-scroll) only — wheel events translate to ↑/↓ keypresses for the app, but native click/drag selection is left untouched. Pass `--no-mouse` to opt out entirely.
+Reasonix leaves SGR 1000/1006 mouse tracking off by default so plain drag-select and right-click stay owned by the terminal. If your terminal does not translate wheel input in the alternate screen, use `Alt+M`, `/mouse on`, or config `mouseTracking: true` to opt into app-level wheel routing. In that mode, plain drag may be captured by the app; use `Shift+Drag`, `Alt+M`, or `/mouse off` to return to terminal-native selection.
 
 ---
 
 ## Copy / paste
 
-The default path is **terminal-native**. Drag to select, then use your terminal's normal copy keys:
+The default path is **terminal-native**. Drag to select, then use your terminal's normal copy keys. When tracking is on, use `Shift+Drag` if your terminal captures plain drag, or run `/mouse off`.
 
 | Action | How |
 |---|---|
-| Select text | Drag — terminal-native (no modifier) |
+| Select text | Drag by default; if mouse tracking is on, use `Shift+Drag` or `/mouse off` |
 | Copy | `Ctrl+Shift+C` (Win / Linux) · `Cmd+C` (macOS) — or auto-copy-on-select if your terminal does it |
 | Paste | `Ctrl+V` or `Ctrl+Shift+V` (Win / Linux) · `Cmd+V` (macOS) |
 | Multi-line paste | Bracketed paste — pastes stay one block, no auto-submit on intermediate newlines |
@@ -209,13 +211,16 @@ The default path is **terminal-native**. Drag to select, then use your terminal'
 
 In SSH / mosh / tmux, the alt-screen buffer prevents the terminal from extending the selection past the visible viewport — there is no scrollback above the alt-screen to drag into. Two fixes:
 
-1. **`/copy`** — open vim/tmux-style copy mode in-app. Snapshots the current chat to a navigable buffer; `y` yanks to clipboard via OSC 52 (with a temp-file fallback for terminals that don't support it).
+1. **`/copy`** — open copy mode in-app. Snapshots the current chat to a navigable buffer; mouse drag yanks a character span, double-click yanks a word/path segment, triple-click yanks the line, and `y` keeps the keyboard path. Clipboard writes go through OSC 52 with a temp-file fallback for terminals that don't support it.
 2. **`--no-alt-screen`** — render to shell scrollback instead. Drag-select then works terminal-natively (the chat content is real lines in the scrollback above your cursor). Trade-off: redraw can ghost on resize.
 
 ### `/copy` — copy mode keys
 
 | Key | What it does |
 |---|---|
+| Mouse drag | Select a visible character span and yank it on release |
+| Mouse double-click | Yank the word/path segment under the pointer |
+| Mouse triple-click | Yank the visible line under the pointer |
 | `j` / `↓` | Cursor down one line |
 | `k` / `↑` | Cursor up one line |
 | `PgUp` / `PgDn` | Page up / down |

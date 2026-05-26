@@ -33,6 +33,7 @@ export interface MultilineAction {
   submitValue?: string;
   /** Set on Ctrl+P / Ctrl+N when no in-buffer cursor move applies — parent recalls prompt history. */
   historyHandoff?: "prev" | "next";
+  historyHandoffSource?: "arrow" | "readline";
   /** Reducer is pure — hands raw paste to PromptInput which allocates a sentinel and inserts that. */
   pasteRequest?: { content: string };
   /** Ctrl+X — hand the current buffer to $EDITOR; parent re-injects on exit. */
@@ -88,14 +89,22 @@ export function processMultilineKey(
       const moved = moveCursorUp(value, cursor);
       if (moved !== cursor) return { next: null, cursor: moved, submit: false };
     }
-    return { ...NOOP, historyHandoff: "prev" };
+    return {
+      ...NOOP,
+      historyHandoff: "prev",
+      historyHandoffSource: key.upArrow ? "arrow" : "readline",
+    };
   }
   if (key.downArrow || (key.ctrl && key.input === "n")) {
     if (value.includes("\n")) {
       const moved = moveCursorDown(value, cursor);
       if (moved !== cursor) return { next: null, cursor: moved, submit: false };
     }
-    return { ...NOOP, historyHandoff: "next" };
+    return {
+      ...NOOP,
+      historyHandoff: "next",
+      historyHandoffSource: key.downArrow ? "arrow" : "readline",
+    };
   }
 
   if (key.leftArrow) {

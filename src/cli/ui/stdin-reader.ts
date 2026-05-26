@@ -2,6 +2,7 @@
 
 import { stdin } from "node:process";
 import { nullPrototype } from "../../utils/safe-object.js";
+import { isMouseModeActive } from "./mouse-mode.js";
 
 export interface KeyEvent {
   /** Empty for control keys (arrows / Enter / Esc); holds the letter for Ctrl+/Alt+. */
@@ -254,6 +255,12 @@ export function looksLikeUnbracketedPaste(chunk: string): boolean {
   return false;
 }
 
+function isMouseEvent(ev: KeyEvent): boolean {
+  return Boolean(
+    ev.mouseClick || ev.mouseDrag || ev.mouseRelease || ev.mouseScrollUp || ev.mouseScrollDown,
+  );
+}
+
 export class StdinReader {
   private subscribers = new Set<Subscriber>();
   private state: "idle" | "esc" | "csi" | "ss3" | "paste" = "idle";
@@ -305,10 +312,7 @@ export class StdinReader {
       // setRawMode may throw if stdin is already closed; ignore.
     }
     stdin.pause();
-    this.cancelEscTimer();
-    this.state = "idle";
-    this.csiBuf = "";
-    this.pasteBuf = "";
+    this.resetParseState();
     this.started = false;
   }
 
@@ -324,7 +328,15 @@ export class StdinReader {
     this.handleChunk(chunk);
   }
 
+  resetParseState(): void {
+    this.cancelEscTimer();
+    this.state = "idle";
+    this.csiBuf = "";
+    this.pasteBuf = "";
+  }
+
   private dispatch(ev: KeyEvent): void {
+    if (isMouseEvent(ev) && !isMouseModeActive()) return;
     for (const sub of this.subscribers) sub(ev);
   }
 

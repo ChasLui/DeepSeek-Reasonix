@@ -3,7 +3,12 @@ import React, { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { useKeystroke } from "./keystroke-context.js";
 import { useReserveRows } from "./layout/viewport-budget.js";
-import { type MultilineKey, lineAndColumn, processMultilineKey } from "./multiline-keys.js";
+import {
+  type MultilineAction,
+  type MultilineKey,
+  lineAndColumn,
+  processMultilineKey,
+} from "./multiline-keys.js";
 import {
   PASTE_SENTINEL_RANGE,
   type PasteEntry,
@@ -45,8 +50,8 @@ export interface PromptInputProps {
   disabled?: boolean;
   placeholder?: string;
   /** Ctrl+P / Ctrl+N hand off here when no in-buffer cursor move applies — parent walks history and swaps `value` via `onChange`. */
-  onHistoryPrev?: () => void;
-  onHistoryNext?: () => void;
+  onHistoryPrev?: (source: MultilineAction["historyHandoffSource"]) => void;
+  onHistoryNext?: (source: MultilineAction["historyHandoffSource"]) => void;
   /** Ctrl+X — parent spawns $EDITOR with the current buffer and re-injects on exit. */
   onOpenExternalEditor?: () => void;
   onCursorChange?: (cursor: number) => void;
@@ -178,8 +183,8 @@ export function PromptInput({
       }
       onSubmit(expanded);
     }
-    if (action.historyHandoff === "prev") onHistoryPrev?.();
-    if (action.historyHandoff === "next") onHistoryNext?.();
+    if (action.historyHandoff === "prev") onHistoryPrev?.(action.historyHandoffSource);
+    if (action.historyHandoff === "next") onHistoryNext?.(action.historyHandoffSource);
     if (action.openExternalEditor) onOpenExternalEditor?.();
   }, !disabled);
 

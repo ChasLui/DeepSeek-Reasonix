@@ -1,6 +1,8 @@
 import { wrapToCells } from "@/frame/width.js";
 import { t, tObj } from "@/i18n/index.js";
 import { formatDuration, formatLoopStatus, parseLoopCommand } from "../../loop.js";
+import { setMouseMode, toggleMouseMode } from "../../mouse-mode.js";
+import { getStdinReader } from "../../stdin-reader.js";
 import { SLASH_COMMANDS, SLASH_GROUP_ORDER, orderSlashCommandsByGroup } from "../commands.js";
 import type { SlashHandler } from "../dispatch.js";
 import type { SlashCommandSpec, SlashGroup } from "../types.js";
@@ -153,6 +155,16 @@ const keys: SlashHandler = (_args, _loop, ctx) => {
 
 const copy: SlashHandler = () => ({ openCopyMode: true });
 
+const mouse: SlashHandler = (args) => {
+  const mode = (args[0] ?? "toggle").toLowerCase();
+  if (mode !== "on" && mode !== "off" && mode !== "toggle") {
+    return { info: t("handlers.basic.mouseUsage") };
+  }
+  const result = mode === "toggle" ? toggleMouseMode() : setMouseMode(mode === "on");
+  if (!result.active) getStdinReader().resetParseState();
+  return { info: result.active ? t("app.mouseOn") : t("app.mouseOff") };
+};
+
 export const handlers: Record<string, SlashHandler> = {
   exit,
   new: resetLog,
@@ -161,4 +173,5 @@ export const handlers: Record<string, SlashHandler> = {
   loop,
   keys,
   copy,
+  mouse,
 };

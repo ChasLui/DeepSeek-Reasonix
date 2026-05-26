@@ -8,6 +8,17 @@ Reasonix is a DeepSeek-native coding agent (CLI + TUI + Tauri desktop). The arch
 
 Node ≥ 22, TS 5.6+ ES2022 ESM, Vitest, Biome, tsup. npm workspaces (`packages/core-utils` is the only sub-workspace; `desktop/` is a separate sibling project).
 
+## Working mode (read before editing)
+
+Four behavioral rules, derived from [Karpathy's LLM-coding pitfalls](https://github.com/multica-ai/andrej-karpathy-skills) and specialized for this strict, single-provider stack. Detailed anchors live in [`CLAUDE.md`](./CLAUDE.md#working-principles).
+
+1. **Think before coding** — surface assumptions; if multiple interpretations exist, ask. Before borrowing or planning, grep the authoritative source (`docs/ARCHITECTURE.md`, current `HEAD`) — memory and prior plans drift.
+2. **Simplicity first** — minimum code that solves the actual ask. No speculative features, no "future-provider" abstractions, no error handling for impossible scenarios.
+3. **Surgical changes** — every changed line must trace to the user request. Match existing style. Don't reformat adjacent code or run bare `biome --write` (scope creep cerebrum-recorded 2026-05-25).
+4. **Goal-driven execution** — convert "fix the bug" into "write a failing test, then make it pass." For multi-step work, write the plan first with explicit verify checkpoints (`bin/plan-lint.sh` enforces this for RAL plans).
+
+Bias: **caution over speed** for anything touching `src/loop.ts`, `src/repair/`, `src/tools/`, `src/mcp/`. For trivial single-line fixes, use judgment.
+
 ## Project Structure & Module Organization
 
 Main source lives in `src/`: `src/cli/` holds CLI commands and Ink UI, `src/tools/` tool definitions, `src/mcp/` MCP clients and transports, `src/core/` the event kernel, `src/ports/` interfaces, `src/adapters/` implementations. Tests are flat Vitest files in `tests/*.test.ts`; shared helpers live in `tests/helpers/`. `dashboard/` is the web dashboard, `desktop/` the Tauri app, `benchmarks/` evaluation harnesses, `packages/*` npm workspaces. Treat `dist/`, coverage output, and `.reasonix/semantic/` as generated.

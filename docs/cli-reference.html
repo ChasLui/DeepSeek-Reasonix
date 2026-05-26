@@ -303,7 +303,7 @@
                 </tr>
                 <tr>
                   <td><code>--no-mouse</code></td>
-                  <td>Disable DECSET 1007 (alternate-scroll); wheel reverts to native terminal scroll</td>
+                  <td>Force SGR 1000/1006 mouse tracking off; native drag-select/right-click stays terminal-owned</td>
                 </tr>
               </tbody>
             </table>
@@ -347,7 +347,11 @@
                 </tr>
                 <tr>
                   <td><code>/copy</code></td>
-                  <td>Open vim/tmux-style copy mode — <code>j</code>/<code>k</code> navigate, <code>v</code> select, <code>y</code> yank to clipboard. The right answer for SSH / mosh / tmux where drag-select can't extend past the viewport</td>
+                  <td>Open copy mode — mouse drag yanks a span, double-click yanks a word/path, triple-click yanks a line; <code>j</code>/<code>k</code>, <code>v</code>, <code>y</code> keep the keyboard path</td>
+                </tr>
+                <tr>
+                  <td><code>/mouse [on|off|toggle]</code></td>
+                  <td>Toggle terminal mouse tracking at runtime; <code>on</code> routes wheel events, <code>off</code> restores terminal-native drag-select</td>
                 </tr>
               </tbody>
             </table>
@@ -636,6 +640,10 @@
                   <td><code>End</code></td>
                   <td>Jump chat to the most recent line</td>
                 </tr>
+                <tr>
+                  <td><code>Alt+M</code></td>
+                  <td>Toggle mouse tracking; <code>on</code> routes wheel events, <code>off</code> restores terminal-native drag-select</td>
+                </tr>
               </tbody>
             </table>
 
@@ -676,22 +684,26 @@
               <tbody>
                 <tr>
                   <td>Wheel</td>
-                  <td>Scrolls chat history (works on web / cloud / SSH terminals too)</td>
+                  <td>Scrolls chat history when your terminal translates wheel input; use <code>/mouse on</code> if you need app-level routing</td>
                 </tr>
                 <tr>
                   <td>Drag</td>
-                  <td>Selects text natively — no modifier needed</td>
+                  <td>Terminal-native selection by default; with mouse tracking on, some terminals send drag as mouse reports</td>
                 </tr>
                 <tr>
                   <td>Right-click</td>
-                  <td>Terminal-native (e.g. paste menu on Windows Terminal)</td>
+                  <td>Terminal-native by default; mouse tracking can capture it in some terminals</td>
                 </tr>
               </tbody>
             </table>
             <p data-i18n="ms.body">
-              Reasonix sets DECSET 1007 (alternate-scroll) only — wheel events translate to
-              ↑/↓ keypresses for the app, but native click/drag selection is left untouched.
-              Pass <code>--no-mouse</code> to opt out entirely.
+              Reasonix leaves SGR 1000/1006 mouse tracking off by default so plain
+              drag-select and right-click stay owned by the terminal. If your terminal does
+              not translate wheel input in the alternate screen, use <code>Alt+M</code>,
+              <code>/mouse on</code>, or config <code>mouseTracking: true</code> to opt into
+              app-level wheel routing. In that mode, plain drag may be captured by the app;
+              use <code>Shift+Drag</code>, <code>Alt+M</code>, or <code>/mouse off</code> to
+              return to terminal-native selection.
             </p>
           </section>
 
@@ -699,7 +711,9 @@
             <h2 data-i18n="cp.title">Copy / paste</h2>
             <p data-i18n="cp.body">
               The default path is <strong>terminal-native</strong>. Drag to select, then use
-              your terminal's normal copy keys:
+              your terminal's normal copy keys. When tracking is on, use
+              <code>Shift+Drag</code> if your terminal captures plain drag, or run
+              <code>/mouse off</code>.
             </p>
             <table class="cmd-table">
               <thead>
@@ -711,7 +725,7 @@
               <tbody>
                 <tr>
                   <td>Select text</td>
-                  <td>Drag — terminal-native (no modifier)</td>
+                  <td>Drag by default; if mouse tracking is on, use <code>Shift+Drag</code> or <code>/mouse off</code></td>
                 </tr>
                 <tr>
                   <td>Copy</td>
@@ -736,10 +750,11 @@
             </p>
             <ol>
               <li data-i18n="cp.fix1">
-                <strong><code>/copy</code></strong> — open vim/tmux-style copy mode in-app.
-                Snapshots the current chat to a navigable buffer; <code>y</code> yanks to
-                clipboard via OSC 52 (with a temp-file fallback for terminals that don't
-                support it).
+                <strong><code>/copy</code></strong> — open copy mode in-app. Snapshots the
+                current chat to a navigable buffer; mouse drag yanks a character span,
+                double-click yanks a word/path segment, triple-click yanks the line, and
+                <code>y</code> keeps the keyboard path. Clipboard writes go through OSC 52 with
+                a temp-file fallback for terminals that don't support it.
               </li>
               <li data-i18n="cp.fix2">
                 <strong><code>--no-alt-screen</code></strong> — render to shell scrollback
@@ -758,6 +773,18 @@
                 </tr>
               </thead>
               <tbody>
+                <tr>
+                  <td>Mouse drag</td>
+                  <td>Select a visible character span and yank it on release</td>
+                </tr>
+                <tr>
+                  <td>Mouse double-click</td>
+                  <td>Yank the word/path segment under the pointer</td>
+                </tr>
+                <tr>
+                  <td>Mouse triple-click</td>
+                  <td>Yank the visible line under the pointer</td>
+                </tr>
                 <tr>
                   <td><code>j</code> / <code>↓</code></td>
                   <td>Cursor down one line</td>

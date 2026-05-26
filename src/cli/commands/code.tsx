@@ -27,6 +27,7 @@ import { t } from "../../i18n/index.js";
 import { detectForeignAgentPlatform } from "../../memory/project.js";
 import { sanitizeName } from "../../memory/session.js";
 import { markPhase } from "../startup-profile.js";
+import { disableMouseMode } from "../ui/mouse-mode.js";
 import { presetNameForSettings, resolvePreset } from "../ui/presets.js";
 import { chatCommand } from "./chat.js";
 
@@ -63,7 +64,7 @@ export interface CodeOptions {
   systemAppend?: string;
   /** Path to a UTF-8 text file whose contents are appended to the code system prompt. */
   systemAppendFile?: string;
-  /** Disable SGR mouse tracking so the terminal keeps native selection and right-click behavior. */
+  /** Disable terminal mouse modes so the terminal keeps native selection and right-click behavior. */
   noMouse?: boolean;
 }
 
@@ -111,18 +112,17 @@ export async function codeCommand(opts: CodeOptions = {}): Promise<void> {
     process.stderr.write(t("code.workspaceConflict", { platforms: foreign.join(", ") }));
   }
 
-  // Belt-and-suspenders cleanup: even though spawn(detached:false)
-  // should tie child processes to the parent's lifetime, Windows cmd.exe
-  // wrappers occasionally leak. We DON'T install SIGINT/SIGTERM
-  // handlers here — that overrode Node's default "exit on Ctrl+C" with
-  // a silent no-op, which made Ctrl+C feel broken in the TUI. App.tsx
-  // owns the SIGINT path now (it shows the quit-armed banner and calls
-  // exit() on confirmation); this 'exit' hook just guarantees the job
-  // registry is drained on the way out, regardless of which exit path
-  // fired.
-  process.once("exit", () => {
+  const cleanupTerminalAndJobs = () => {
+    disableMouseMode();
     void jobs.shutdown();
-  });
+  };
+  const cleanupAndExit = (code: number) => {
+    cleanupTerminalAndJobs();
+    process.exit(code);
+  };
+  process.once("exit", cleanupTerminalAndJobs);
+  process.once("SIGINT", () => cleanupAndExit(130));
+  process.once("SIGTERM", () => cleanupAndExit(143));
 
   let systemAppendFileContents: string | undefined;
   if (opts.systemAppend !== undefined && opts.systemAppend.trim().length === 0) {

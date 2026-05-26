@@ -1,6 +1,7 @@
 /** Stdin reader CSI parser — drives the state machine via `feed()`; safety net for the input layer. */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { disableMouseMode, enableMouseMode } from "../src/cli/ui/mouse-mode.js";
 import {
   type KeyEvent,
   StdinReader,
@@ -403,6 +404,30 @@ describe("StdinReader — ESC + char (Alt+key)", () => {
 });
 
 describe("StdinReader — SGR mouse reports (issue #867)", () => {
+  let origWrite: typeof process.stdout.write;
+  let origIsTTY: boolean | undefined;
+
+  beforeEach(() => {
+    origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (() => true) as typeof process.stdout.write;
+    origIsTTY = process.stdout.isTTY;
+    Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
+    enableMouseMode();
+  });
+
+  afterEach(() => {
+    disableMouseMode();
+    process.stdout.write = origWrite;
+    Object.defineProperty(process.stdout, "isTTY", { value: origIsTTY, configurable: true });
+  });
+
+  it("drops mouse reports while mouse mode is inactive", () => {
+    const { reader, events } = setup();
+    disableMouseMode();
+    reader.feed("\x1b[<64;10;5M");
+    expect(events).toEqual([]);
+  });
+
   it("dispatches wheel-up as mouseScrollUp (with ESC)", () => {
     const { reader, events } = setup();
     reader.feed("\x1b[<64;10;5M");

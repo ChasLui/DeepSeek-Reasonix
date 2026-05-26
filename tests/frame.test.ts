@@ -13,6 +13,7 @@ import {
   pad,
   rowText,
   slice,
+  sliceCells,
   stringWidth,
   text,
   viewport,
@@ -85,6 +86,24 @@ describe("graphemes / stringWidth", () => {
   it("handles combining diacriticals", () => {
     // "é" written as e + combining acute should be width 1
     expect(stringWidth("e\u0301")).toBe(1);
+  });
+});
+
+describe("sliceCells", () => {
+  it("slices by visual cells without adding ellipsis", () => {
+    expect(sliceCells("abcdef", 1, 4)).toBe("bcd");
+  });
+
+  it("keeps CJK graphemes intact at cell boundaries", () => {
+    expect(sliceCells("a你好b", 1, 5)).toBe("你好");
+  });
+
+  it("drops a wide grapheme when the cut lands through its middle", () => {
+    expect(sliceCells("a你b", 2, 3)).toBe("");
+  });
+
+  it("keeps emoji grapheme clusters intact", () => {
+    expect(sliceCells("a👨‍👩‍👧b", 1, 3)).toBe("👨‍👩‍👧");
   });
 });
 

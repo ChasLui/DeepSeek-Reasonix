@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { disableMouseMode, isMouseModeActive } from "../src/cli/ui/mouse-mode.js";
 import {
   SLASH_COMMANDS,
   SLASH_GROUP_ORDER,
@@ -121,6 +122,36 @@ describe("handleSlash", () => {
     ].map((match) => match[1]);
     expect(groupHeaders).toEqual(SLASH_GROUP_ORDER.map((group) => group.toUpperCase()));
     expect(info.indexOf("  SETUP")).toBeLessThan(info.indexOf("  CHAT"));
+  });
+
+  it("/help explains how to restore native drag selection", () => {
+    const info = handleSlash("help", [], makeLoop()).info ?? "";
+    expect(info).toContain("/mouse");
+    expect(info).toContain("native drag-select");
+  });
+
+  it("/mouse toggles terminal tracking and validates args", () => {
+    const origWrite = process.stdout.write.bind(process.stdout);
+    const origIsTTY = process.stdout.isTTY;
+    process.stdout.write = (() => true) as typeof process.stdout.write;
+    Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
+
+    try {
+      const on = handleSlash("mouse", ["on"], makeLoop());
+      expect(on.info).toContain("mouse tracking on");
+      expect(isMouseModeActive()).toBe(true);
+
+      const off = handleSlash("mouse", ["off"], makeLoop());
+      expect(off.info).toContain("mouse tracking off");
+      expect(isMouseModeActive()).toBe(false);
+
+      const invalid = handleSlash("mouse", ["maybe"], makeLoop());
+      expect(invalid.info).toBe("Usage: /mouse [on|off|toggle]");
+    } finally {
+      disableMouseMode();
+      process.stdout.write = origWrite;
+      Object.defineProperty(process.stdout, "isTTY", { value: origIsTTY, configurable: true });
+    }
   });
 
   it("/title starts AI session title regeneration", async () => {
@@ -570,7 +601,7 @@ describe("handleSlash", () => {
     // Case-insensitive.
     expect(suggestSlashCommands("HE").map((s) => s.cmd)).toEqual(["help"]);
     // Empty prefix returns the full non-advanced release list, including code commands.
-    expect(suggestSlashCommands("", true)).toHaveLength(43);
+    expect(suggestSlashCommands("", true)).toHaveLength(44);
     expect(suggestSlashCommands("", true).map((s) => s.cmd)).toContain("logs");
     expect(suggestSlashCommands("", true).map((s) => s.cmd)).toContain("language");
     expect(suggestSlashCommands("lan").map((s) => s.cmd)).toContain("language");

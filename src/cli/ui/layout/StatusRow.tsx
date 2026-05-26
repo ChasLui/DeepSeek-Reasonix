@@ -1,9 +1,9 @@
 import { Box, Text, useStdout } from "ink";
-// biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
 import { t } from "../../../i18n/index.js";
 import { DEEPSEEK_CONTEXT_TOKENS, DEFAULT_CONTEXT_TOKENS } from "../../../telemetry/stats.js";
 import { VERSION } from "../../../version.js";
+import { getMouseModeSnapshot, subscribeMouseMode } from "../mouse-mode.js";
 import { formatTokens } from "../primitives.js";
 import { Countdown } from "../primitives/Countdown.js";
 import { useAgentState } from "../state/provider.js";
@@ -61,7 +61,13 @@ export function StatusRow({
   const status = useAgentState((s) => s.status);
   const session = useAgentState((s) => s.session);
   const { stdout } = useStdout();
+  const mouseActive = React.useSyncExternalStore(subscribeMouseMode, getMouseModeSnapshot);
   const cols = stdout?.columns ?? 80;
+  const mouseLabel = mouseActive
+    ? "mouse:on"
+    : cols >= 96
+      ? "mouse:off (drag to select)"
+      : "mouse:off";
   const hasTurn = status.cost > 0;
   const hasSession = status.sessionCost > 0;
   const hasBalance = typeof status.balance === "number";
@@ -167,6 +173,12 @@ export function StatusRow({
             </Pill>
           </>
         )}
+        <Gap />
+        <Pill>
+          <Text color={FG.faint} backgroundColor={BG} wrap="truncate">
+            {mouseLabel}
+          </Text>
+        </Pill>
         {statusBar.showFeedbackHint && cols >= FEEDBACK_HINT_MIN_COLS && (
           <>
             <Gap />

@@ -1,5 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { disableMouseMode, enableMouseMode } from "../src/cli/ui/mouse-mode.js";
+import {
+  disableAlternateScrollMode,
+  disableMouseMode,
+  enableAlternateScrollMode,
+  enableMouseMode,
+  getMouseModeSnapshot,
+  isMouseModeActive,
+  setMouseMode,
+  subscribeMouseMode,
+  toggleMouseMode,
+} from "../src/cli/ui/mouse-mode.js";
 
 describe("mouse-mode SGR enable/disable", () => {
   let writes: string[];
@@ -17,11 +27,13 @@ describe("mouse-mode SGR enable/disable", () => {
     Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
     // Reset module state — disable first to clear `active` from any prior test.
     disableMouseMode();
+    disableAlternateScrollMode();
     writes.length = 0;
   });
 
   afterEach(() => {
     disableMouseMode();
+    disableAlternateScrollMode();
     process.stdout.write = origWrite;
     Object.defineProperty(process.stdout, "isTTY", { value: origIsTTY, configurable: true });
   });
@@ -44,17 +56,55 @@ describe("mouse-mode SGR enable/disable", () => {
     expect(writes.join("")).toBe("\u001b[?1006l\u001b[?1000l");
   });
 
-  it("disable without prior enable is a no-op", () => {
+  it("set/toggle return the active snapshot and changed flag", () => {
+    expect(isMouseModeActive()).toBe(false);
+    expect(setMouseMode(true)).toEqual({ active: true, changed: true });
+    expect(setMouseMode(true)).toEqual({ active: true, changed: false });
+    expect(toggleMouseMode()).toEqual({ active: false, changed: true });
+    expect(getMouseModeSnapshot()).toBe(false);
+  });
+
+  it("subscribers are notified only when active state changes", () => {
+    const snapshots: boolean[] = [];
+    const unsubscribe = subscribeMouseMode(() => snapshots.push(getMouseModeSnapshot()));
+
+    setMouseMode(true);
+    setMouseMode(true);
+    setMouseMode(false);
+    unsubscribe();
+    setMouseMode(true);
+
+    expect(snapshots).toEqual([true, false]);
+  });
+
+  it("disable without prior enable still clears stale terminal tracking", () => {
     disableMouseMode();
-    expect(writes.length).toBe(0);
+    expect(writes.join("")).toBe("\u001b[?1006l\u001b[?1000l");
+    expect(isMouseModeActive()).toBe(false);
+  });
+
+  it("alternate-scroll writes only DECSET 1007 and does not enable SGR tracking", () => {
+    enableAlternateScrollMode();
+    expect(writes.join("")).toBe("\u001b[?1007h");
+    expect(isMouseModeActive()).toBe(false);
+  });
+
+  it("alternate-scroll disable clears DECSET 1007 without changing SGR state", () => {
+    enableAlternateScrollMode();
+    writes.length = 0;
+    disableAlternateScrollMode();
+    expect(writes.join("")).toBe("\u001b[?1007l");
+    expect(isMouseModeActive()).toBe(false);
   });
 
   it("enable when stdout isn't a TTY is a no-op", () => {
     Object.defineProperty(process.stdout, "isTTY", { value: false, configurable: true });
     enableMouseMode();
+    enableAlternateScrollMode();
     expect(writes.length).toBe(0);
     // And subsequent disable is also a no-op (active flag never flipped).
     disableMouseMode();
-    expect(writes.length).toBe(0);
+    disableAlternateScrollMode();
+    expect(writes.join("")).toBe("");
   });
 });

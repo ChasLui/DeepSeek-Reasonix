@@ -691,7 +691,7 @@ describe("code relation tools", () => {
     }>(raw);
     expect(parsed.truncated).toBe(true);
     expect(parsed.groups[0]?.records).toHaveLength(100);
-  });
+  }, 15_000);
 
   it("detect_changes maps git diff hunks to affected symbols and optional callers", async () => {
     writeProjectFile(

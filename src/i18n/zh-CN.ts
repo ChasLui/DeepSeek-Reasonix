@@ -110,14 +110,17 @@ export const zhCN: TranslationSchema = {
       sections: [
         {
           rows: [
-            { key: "拖动", text: "直接选中文本 — 终端原生，不需要按 Shift" },
+            {
+              key: "拖动",
+              text: "默认直接终端原生选中文本；如果开了 mouse tracking，用 Shift+拖动 或 /mouse off",
+            },
             {
               key: "右键",
-              text: "终端原生菜单（Windows Terminal 等的复制 / 粘贴）",
+              text: "默认使用终端原生菜单；mouse tracking 开启后可能被捕获",
             },
             {
               key: "滚轮",
-              text: "滚动聊天记录（Web / 云端 / SSH 终端也能用）",
+              text: "终端会转换滚轮输入时可滚动聊天；/mouse on 可开启应用级路由",
             },
             {
               key: "↑ / ↓",
@@ -125,7 +128,7 @@ export const zhCN: TranslationSchema = {
             },
             {
               key: "PgUp / PgDn",
-              text: "滚动聊天记录（鼠标滚轮也走这条路径）",
+              text: "滚动聊天记录（/mouse on 后应用级滚轮走这条路径）",
             },
           ],
         },
@@ -168,6 +171,10 @@ export const zhCN: TranslationSchema = {
               key: "Ctrl+R",
               text: "切换详细模式 — 显示完整推理 + 工具输出，不省略",
             },
+            {
+              key: "Alt+M",
+              text: "切换 mouse tracking — 开启路由滚轮，关闭恢复终端原生拖选",
+            },
           ],
         },
         {
@@ -175,10 +182,14 @@ export const zhCN: TranslationSchema = {
           rows: [
             {
               key: "滚轮",
-              text: "滚动聊天记录（Web / 云端 / SSH 终端也能用）",
+              text: "终端会转换滚轮输入时可滚动聊天；/mouse on 可开启应用级路由",
             },
-            { key: "拖动", text: "原生选中文本 — 直接复制，不需要修饰键" },
-            { key: "右键", text: "终端原生（Windows Terminal 等的粘贴菜单）" },
+            {
+              key: "拖动",
+              text: "默认走终端原生拖选；mouse:on 可能捕获普通拖动",
+            },
+            { key: "右键", text: "mouse tracking 关闭或终端绕过捕获时走原生菜单" },
+            { key: "/mouse", text: "运行时切换：/mouse on、/mouse off、/mouse toggle" },
           ],
         },
         {
@@ -186,11 +197,11 @@ export const zhCN: TranslationSchema = {
           rows: [
             {
               key: "选中文字",
-              text: "直接拖动 — 终端原生（不需要任何修饰键）",
+              text: "默认直接拖选；如果开了 mouse tracking，用 Shift+拖动 或 /mouse off",
             },
             {
               key: "/copy",
-              text: "vim/tmux 风格复制模式 — SSH / mosh / tmux 下拖选越过可视区无效时用这个",
+              text: "复制模式支持鼠标拖选、双/三击或 j/k/v/y；终端拖选无法越过可视区时用这个",
             },
             {
               key: "复制",
@@ -216,12 +227,12 @@ export const zhCN: TranslationSchema = {
         },
       ],
       footer:
-        "滚轮在大多数终端（含 Web / 云端 / SSH）都能滚聊天 — 默认开启 SGR 鼠标跟踪，但不会影响终端原生拖选和右键菜单。直接拖动选中文本无需 Shift。传入 --no-mouse 可关闭。",
+        "默认保留终端原生拖选。终端支持 alternate-scroll 时滚轮可直接滚动；只有需要 SGR 1000/1006 应用级路由时才用 Alt+M 或 /mouse on。",
     },
     tipShownOnce: "仅显示一次",
     modelOverride: "覆盖默认模型",
     noSession: "禁用本次运行的会话持久化",
-    noMouseHint: "关闭 SGR 鼠标跟踪；恢复终端原生拖选和右键行为",
+    noMouseHint: "强制关闭终端 mouse 模式；保持终端原生拖选和右键行为",
     noProxyHint: "本次运行忽略 HTTPS_PROXY / HTTP_PROXY，直连",
     resumeHint: "强制恢复指定会话（即使空闲）",
     newHint: "强制创建新会话（忽略 --session / --continue）",
@@ -288,7 +299,7 @@ export const zhCN: TranslationSchema = {
   slash: {
     help: { description: "显示完整命令参考" },
     copy: {
-      description: "进入 vim/tmux 风格复制模式 — j/k 移动、v 起选区、y 复制到剪贴板",
+      description: "进入复制模式 — 鼠标拖选、双/三击或 j/k/v/y 复制",
     },
     status: { description: "当前模型、标志、上下文、会话" },
     preset: {
@@ -363,6 +374,10 @@ export const zhCN: TranslationSchema = {
       argsHint: "[tokens]",
     },
     keys: { description: "键盘 + 鼠标 + 复制粘贴参考" },
+    mouse: {
+      description: "切换终端 mouse tracking；关闭后恢复终端原生拖选",
+      argsHint: "[on|off|toggle]",
+    },
     cwd: {
       description:
         "切换工作区根目录 — 重新指向文件/Shell/记忆工具，重载项目 hooks，刷新 @ 引用遍历器",
@@ -623,6 +638,8 @@ export const zhCN: TranslationSchema = {
     memoryWriteFailed: "# 记忆写入失败",
     verboseOn: "▸ 详细模式已开 — 显示完整推理 + 工具输出",
     verboseOff: "▸ 详细模式已关 — 恢复头尾省略",
+    mouseOn: "▸ mouse tracking 已开 — 滚轮滚动启用；原生拖选用 Shift+拖动 或 /mouse off",
+    mouseOff: "▸ mouse tracking 已关 — 已恢复终端拖选；alternate-scroll 仍可能路由滚轮",
     commandFailed: "! 命令失败",
     btwUsage: "▸ /btw <问题> — 顺便问个题外话，不会写入当前会话上下文。",
     btwHeader: "≫ btw",
@@ -784,6 +801,7 @@ export const zhCN: TranslationSchema = {
       loopStarted:
         '▸ 循环已启动 — 每 {duration} 重新提交 "{prompt}"。输入任何内容（或 /loop stop）取消。',
       keysNeedsTui: "/keys 需要 TUI 上下文（postKeys 已连接）。",
+      mouseUsage: "用法：/mouse [on|off|toggle]",
       unknownCommand: "未知命令：/{cmd} — 你是不是想用 {list}？",
       unknownCommandShort: "未知命令：/{cmd}  （试试 /help）",
     },
@@ -1609,10 +1627,12 @@ export const zhCN: TranslationSchema = {
   },
   copyMode: {
     title: "── 复制模式 ──",
-    help: "j/k 或 ↑/↓ 移动 · v 起选区 · y 复制 · g/G 顶/底 · q 退出",
+    help: "鼠标拖选即复制 · 双击词 · 三击行 · j/k 移动 · v 起选区 · y 复制 · q 退出",
     statusBar: "第 {cur}/{total} 行 · 选区：{sel}",
     statusYanked: "已复制 {size} 字符（osc52={osc52}）",
+    statusYankedFile: "已复制 {size} 字符（文件：{path}）",
     statusEmpty: "未选中内容",
+    statusCancelled: "已取消选择",
     empty: "（还没有聊天内容 — 先和模型说点什么）",
     labelUser: "你",
     labelAssistant: "助手",

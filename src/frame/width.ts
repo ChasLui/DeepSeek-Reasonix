@@ -37,6 +37,24 @@ export function clipToCells(s: string, maxCells: number): string {
   return `${out}…`;
 }
 
+/** Grapheme-safe visual-cell slice without adding ellipsis. End is exclusive. */
+export function sliceCells(s: string, fromCell: number, toCell: number): string {
+  if (toCell <= fromCell) return "";
+  const from = Math.max(0, fromCell);
+  const to = Math.max(from, toCell);
+  let out = "";
+  let cells = 0;
+  for (const g of graphemes(s)) {
+    const w = graphemeWidth(g);
+    const start = cells;
+    const end = cells + w;
+    if (start >= to) break;
+    if (start >= from && end <= to) out += g;
+    cells = end;
+  }
+  return out;
+}
+
 /** Wrap to `maxCells`-wide chunks for tail-window semantics — caller can `slice(-N)` to pull true visual last lines. Empty input yields one empty chunk so paragraph breaks survive the round-trip. */
 export function wrapToCells(s: string, maxCells: number): string[] {
   if (maxCells <= 0) return [];

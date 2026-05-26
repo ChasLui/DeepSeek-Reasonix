@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "pathEConsidered": false,
+  "requirements": {
+    "minE0Rows": 1,
+    "minE3Rows": 12,
+    "minE4Rows": 30,
+    "minFr104Rows": 7,
+    "minE2Rows": 30
+  },
+  "outDir": "/tmp/reasonix-tui-selection-manual",
+  "e0": [
+    {
+      "terminal": "Terminal.app",
+      "os": "macOS 26.5",
+      "command": "node docs/spike/tui-selection/e0-selection-probe.mjs",
+      "defaultDragSelectResult": "highlight and clipboard contains selected text",
+      "mouseOnDragSelectResult": "no highlight",
+      "mouseOffAfterMouseOnResult": "highlight and clipboard contains selected text",
+      "shiftDragWhileMouseOnResult": "terminal bypass works only with Shift",
+      "clipboardResult": "highlight and clipboard contains selected text",
+      "evidence": ["e0-terminal-app.txt"]
+    }
+  ],
+  "e2": [],
+  "e3": [
+    {
+      "terminal": "Terminal.app",
+      "os": "macOS 26.5",
+      "sample": "ToolCard syntax + CJK + emoji",
+      "scheme": "chalk.inverse",
+      "readability": 4,
+      "colorResetCorrect": "yes",
+      "eolSpill": "no",
+      "screenshot": "screenshots/e3-terminal-inverse.png"
+    }
+  ],
+  "e4": [
+    {
+      "terminal": "Terminal.app",
+      "context": "local",
+      "ixonState": "ixon enabled; stop = ^S",
+      "ctrlSReachesApp": "no",
+      "altMReachesApp": "yes",
+      "ctrlTReachesApp": "yes",
+      "recommendedBinding": "Alt+M",
+      "evidence": ["e4-terminal-app-local.txt"]
+    }
+  ],
+  "fr104": [
+    {
+      "terminal": "Terminal.app",
+      "context": "local",
+      "prefixRows": 0,
+      "probeResult": "PASS",
+      "evidence": ["fr104-terminal-app-prefix-0.txt"]
+    }
+  ]
+}

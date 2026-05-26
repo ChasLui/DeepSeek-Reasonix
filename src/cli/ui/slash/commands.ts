@@ -158,7 +158,14 @@ export const SLASH_COMMANDS: readonly SlashCommandSpec[] = [
   {
     cmd: "copy",
     group: "chat",
-    summary: "vim/tmux-style copy mode — j/k navigate, v select, y yank to clipboard",
+    summary: "copy mode — mouse drag/double/triple click or j/k/v/y yank to clipboard",
+  },
+  {
+    cmd: "mouse",
+    group: "chat",
+    argsHint: "[on|off|toggle]",
+    summary: "toggle terminal mouse tracking; off restores native drag-select",
+    argCompleter: ["on", "off", "toggle"],
   },
   {
     cmd: "feedback",

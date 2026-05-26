@@ -14,4 +14,4 @@ export {
   vstack,
 } from "./frame.js";
 export { frameToAnsi, rowText } from "./ansi.js";
-export { graphemeWidth, graphemes, stringWidth } from "./width.js";
+export { graphemeWidth, graphemes, sliceCells, stringWidth } from "./width.js";

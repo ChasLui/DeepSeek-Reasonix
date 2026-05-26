@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+type ProcessCleanupEvent = "exit" | "SIGINT" | "SIGTERM";
+
 const mocks = vi.hoisted(() => {
   const renderMock = vi.fn();
+  const enableAlternateScrollModeMock = vi.fn();
+  const disableAlternateScrollModeMock = vi.fn();
   const enableMouseModeMock = vi.fn();
   const disableMouseModeMock = vi.fn();
   const loadApiKeyMock = vi.fn(() => "sk-test");
@@ -57,7 +61,9 @@ const mocks = vi.hoisted(() => {
   return {
     bridgeMcpToolsMock,
     closeMock,
+    disableAlternateScrollModeMock,
     disableMouseModeMock,
+    enableAlternateScrollModeMock,
     enableMouseModeMock,
     FakeMcpClient,
     FakeTransport,
@@ -93,7 +99,9 @@ vi.mock("../src/env.js", () => ({
 }));
 
 vi.mock("../src/cli/ui/mouse-mode.js", () => ({
+  disableAlternateScrollMode: mocks.disableAlternateScrollModeMock,
   disableMouseMode: mocks.disableMouseModeMock,
+  enableAlternateScrollMode: mocks.enableAlternateScrollModeMock,
   enableMouseMode: mocks.enableMouseModeMock,
 }));
 
@@ -133,7 +141,12 @@ vi.mock("../src/mcp/streamable-http.js", () => ({
 }));
 
 async function captureStartupState(opts?: {
-  readConfig?: { mcpDisabled?: string[]; setupCompleted?: boolean; mcp?: string[] };
+  readConfig?: {
+    mcpDisabled?: string[];
+    mouseTracking?: boolean;
+    setupCompleted?: boolean;
+    mcp?: string[];
+  };
   initializeError?: Error;
   bridgeError?: Error;
   mcp?: string[];
@@ -144,6 +157,8 @@ async function captureStartupState(opts?: {
   mocks.renderMock.mockReset();
   mocks.enableMouseModeMock.mockClear();
   mocks.disableMouseModeMock.mockClear();
+  mocks.enableAlternateScrollModeMock.mockClear();
+  mocks.disableAlternateScrollModeMock.mockClear();
   mocks.loadDotenvMock.mockClear();
   mocks.loadApiKeyMock.mockClear();
   mocks.initializeMock.mockReset();
@@ -209,13 +224,30 @@ async function captureStartupState(opts?: {
   ]);
   setLanguageRuntime(opts?.lang ?? "EN");
 
-  await chatCommand({
-    model: "deepseek-chat",
-    system: "s",
-    mcp: opts?.mcp ?? ["fs=npx -y @scope/fs /tmp"],
-    seedTools: new ToolRegistry(),
-    noMouse: opts?.noMouse,
-  });
+  const cleanupEvents = [
+    "exit",
+    "SIGINT",
+    "SIGTERM",
+  ] as const satisfies readonly ProcessCleanupEvent[];
+  const originalListeners = new Map<ProcessCleanupEvent, Set<(...args: unknown[]) => void>>(
+    cleanupEvents.map((event) => [event, new Set(process.listeners(event))]),
+  );
+  try {
+    await chatCommand({
+      model: "deepseek-chat",
+      system: "s",
+      mcp: opts?.mcp ?? ["fs=npx -y @scope/fs /tmp"],
+      seedTools: new ToolRegistry(),
+      noMouse: opts?.noMouse,
+    });
+  } finally {
+    for (const event of cleanupEvents) {
+      const original = originalListeners.get(event) ?? new Set();
+      for (const listener of process.listeners(event)) {
+        if (!original.has(listener)) process.removeListener(event, listener);
+      }
+    }
+  }
 
   expect(capturedProps).not.toBeNull();
   return {
@@ -259,12 +291,24 @@ describe("chatCommand MCP startup summary states", { timeout: 15_000 }, () => {
     expect(mocks.bridgeMcpToolsMock).not.toHaveBeenCalled();
   });
 
-  it("enables mouse tracking by default and honors noMouse opt-out", async () => {
+  it("keeps SGR mouse tracking off by default and honors explicit opt-in/noMouse", async () => {
     await captureStartupState();
+    expect(mocks.enableAlternateScrollModeMock).toHaveBeenCalledTimes(1);
+    expect(mocks.enableMouseModeMock).not.toHaveBeenCalled();
+
+    await captureStartupState({ readConfig: { mouseTracking: true } });
+    expect(mocks.enableAlternateScrollModeMock).toHaveBeenCalledTimes(1);
     expect(mocks.enableMouseModeMock).toHaveBeenCalledTimes(1);
 
-    await captureStartupState({ noMouse: true });
+    await captureStartupState({ readConfig: { mouseTracking: true }, noMouse: true });
+    expect(mocks.enableAlternateScrollModeMock).not.toHaveBeenCalled();
     expect(mocks.enableMouseModeMock).not.toHaveBeenCalled();
+  });
+
+  it("clears terminal mouse modes during cleanup even when startup stays native", async () => {
+    await captureStartupState({ noMouse: true });
+    expect(mocks.disableMouseModeMock).toHaveBeenCalled();
+    expect(mocks.disableAlternateScrollModeMock).toHaveBeenCalled();
   });
 
   it("leaves Ctrl+C under Reasonix's raw stdin handler instead of Ink exitOnCtrlC", async () => {
@@ -282,7 +326,7 @@ describe("chatCommand MCP startup summary states", { timeout: 15_000 }, () => {
     expect(mocks.initializeMock).not.toHaveBeenCalled();
   });
 
-  const COPY_HINT = "/copy  →  vim-style copy mode (j/k navigate, v select, y yank to clipboard)";
+  const COPY_HINT = "/copy  →  copy mode (mouse drag/double/triple click or j/k/v/y)";
 
   it("adds empty-MCP hint exactly when setup is completed and configured MCP list is empty", async () => {
     const props = await captureStartupState({

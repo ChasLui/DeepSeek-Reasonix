@@ -18,6 +18,11 @@ ignored_paths:
   - .turbo/
   - .tools/
   - .npm-cache/
+  - .wolf/
+  - .maos/
+  - .codex/
+  - .gemini/
+  - .claude/
   - node_modules/
   - desktop/node_modules/
   - dist/

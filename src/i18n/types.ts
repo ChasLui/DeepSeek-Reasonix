@@ -193,6 +193,8 @@ export interface TranslationSchema {
     memoryWriteFailed: string;
     verboseOn: string;
     verboseOff: string;
+    mouseOn: string;
+    mouseOff: string;
     commandFailed: string;
     btwUsage: string;
     btwHeader: string;
@@ -758,7 +760,9 @@ export interface TranslationSchema {
     help: string;
     statusBar: string;
     statusYanked: string;
+    statusYankedFile: string;
     statusEmpty: string;
+    statusCancelled: string;
     empty: string;
     labelUser: string;
     labelAssistant: string;

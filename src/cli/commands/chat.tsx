@@ -28,7 +28,12 @@ import { SessionPicker } from "../ui/SessionPicker.js";
 import { Setup } from "../ui/Setup.js";
 import { drainTtyResponses } from "../ui/drain-tty.js";
 import { KeystrokeProvider } from "../ui/keystroke-context.js";
-import { disableMouseMode, enableMouseMode } from "../ui/mouse-mode.js";
+import {
+  disableAlternateScrollMode,
+  disableMouseMode,
+  enableAlternateScrollMode,
+  enableMouseMode,
+} from "../ui/mouse-mode.js";
 import type { McpServerSummary } from "../ui/slash.js";
 import {
   type McpLifecycleNotice,
@@ -106,7 +111,7 @@ export interface ChatOptions {
   dashboardHost?: string;
   /** Stable dashboard URL token (#968). `undefined` mints a fresh per-boot token. */
   dashboardToken?: string;
-  /** Disable SGR mouse tracking so the terminal keeps native selection and right-click behavior. */
+  /** Disable terminal mouse modes so the terminal keeps native selection and right-click behavior. */
   noMouse?: boolean;
 }
 
@@ -288,9 +293,7 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
   if (cfg.setupCompleted === true && (cfg.mcp?.length ?? 0) === 0 && mcpSpecs.length === 0) {
     startupInfoHints.push(t("mcpHealth.emptyHint"));
   }
-  startupInfoHints.push(
-    "/copy  →  vim-style copy mode (j/k navigate, v select, y yank to clipboard)",
-  );
+  startupInfoHints.push("/copy  →  copy mode (mouse drag/double/triple click or j/k/v/y)");
 
   // Register web search/fetch tools unless explicitly disabled. DDG
   // backs them with no key required; the model invokes them whenever
@@ -361,21 +364,26 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
   // a spurious MaxListenersExceededWarning. Raise the ceiling.
   process.stdout.setMaxListeners(200);
 
-  // Wheel scrolling. Opt-out via `mouseTracking: false` for users who
-  // prefer native drag-select copy (Shift+drag still selects with mouse
-  // mode on in most terminals). exit hooks cover hard kills so the
-  // sequence doesn't leak into the parent shell.
-  if (!opts.noMouse && cfg.mouseTracking !== false) {
-    enableMouseMode();
-    process.once("exit", disableMouseMode);
-    process.once("SIGINT", () => {
-      disableMouseMode();
-      process.exit(130);
-    });
-    process.once("SIGTERM", () => {
-      disableMouseMode();
-      process.exit(143);
-    });
+  // 退出清理必须覆盖启动后通过 /mouse on 打开的跟踪状态。
+  const cleanupTerminalMouseModes = () => {
+    disableMouseMode();
+    disableAlternateScrollMode();
+  };
+  process.once("exit", cleanupTerminalMouseModes);
+  process.once("SIGINT", () => {
+    cleanupTerminalMouseModes();
+    process.exit(130);
+  });
+  process.once("SIGTERM", () => {
+    cleanupTerminalMouseModes();
+    process.exit(143);
+  });
+
+  if (!opts.noMouse) {
+    enableAlternateScrollMode();
+    if (cfg.mouseTracking === true) {
+      enableMouseMode();
+    }
   }
 
   const { waitUntilExit } = render(
@@ -399,7 +407,7 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
   try {
     await waitUntilExit();
   } finally {
-    disableMouseMode();
+    cleanupTerminalMouseModes();
     await runtime.closeAll();
     qqChannel?.stop();
     await drainTtyResponses();
