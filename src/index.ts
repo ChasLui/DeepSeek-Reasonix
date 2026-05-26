@@ -1,7 +1,14 @@
 /** Reasonix — DeepSeek-native agent framework. Library entry point. */
 
-export { DeepSeekClient, Usage } from "./client.js";
-export type { ChatResponse, StreamChunk, DeepSeekClientOptions } from "./client.js";
+export { DeepSeekClient, DeepSeekRequestShapeError, Usage } from "./client.js";
+export type {
+  ChatResponse,
+  DeepSeekClientOptions,
+  FimCompletionChoice,
+  FimCompletionResponse,
+  JsonModeEmptyResponseInfo,
+  StreamChunk,
+} from "./client.js";
 
 export {
   CacheFirstLoop,
@@ -306,9 +313,18 @@ export type { ReasonixConfig } from "./config.js";
 
 export type {
   ChatMessage,
+  ChatPrefixOptions,
+  ChatRequestOptions,
+  CompletionTokensDetails,
+  FimCompletionOptions,
+  MessagesWithPrefix,
+  PrefixAssistantMessage,
+  RawUsage,
   ToolCall,
+  ToolChoice,
   ToolSpec,
   ToolFunctionSpec,
+  StreamOptions,
   Role,
   JSONSchema,
 } from "./types.js";

@@ -22,6 +22,7 @@ function usage(overrides: Partial<Usage> = {}): Usage {
     overrides.totalTokens ?? 120,
     overrides.promptCacheHitTokens ?? 80,
     overrides.promptCacheMissTokens ?? 20,
+    overrides.reasoningTokens ?? 0,
   );
 }
 
@@ -46,6 +47,7 @@ describe("appendUsage + readUsageLog", () => {
       path,
     });
     expect(record.session).toBe("default");
+    expect(record.reasoningTokens).toBe(0);
     expect(record.costUsd).toBeGreaterThan(0);
     expect(record.claudeEquivUsd).toBeGreaterThan(record.costUsd);
 
@@ -53,6 +55,21 @@ describe("appendUsage + readUsageLog", () => {
     expect(loaded).toHaveLength(1);
     expect(loaded[0]?.ts).toBe(1_700_000_000_000);
     expect(loaded[0]?.session).toBe("default");
+  });
+
+  it("persists and aggregates reasoning tokens", () => {
+    const now = 1_700_000_000_000;
+    appendUsage({
+      session: "default",
+      model: "deepseek-v4-pro",
+      usage: usage({ reasoningTokens: 42 }),
+      now,
+      path,
+    });
+
+    const [record] = readUsageLog(path);
+    expect(record?.reasoningTokens).toBe(42);
+    expect(aggregateUsage(record ? [record] : [], { now }).buckets[0]?.reasoningTokens).toBe(42);
   });
 
   it("returns [] when the log does not exist", () => {

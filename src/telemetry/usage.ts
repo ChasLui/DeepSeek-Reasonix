@@ -35,6 +35,7 @@ export interface UsageRecord {
   model: string;
   promptTokens: number;
   completionTokens: number;
+  reasoningTokens?: number;
   cacheHitTokens: number;
   cacheMissTokens: number;
   /** Total cost of the turn in USD. */
@@ -145,6 +146,7 @@ export function appendUsage(input: AppendUsageInput): UsageRecord {
     model: input.model,
     promptTokens: input.usage.promptTokens,
     completionTokens: input.usage.completionTokens,
+    reasoningTokens: input.usage.reasoningTokens,
     cacheHitTokens: input.usage.promptCacheHitTokens,
     cacheMissTokens: input.usage.promptCacheMissTokens,
     costUsd: costUsd(input.model, input.usage),
@@ -205,6 +207,7 @@ function isValidRecord(rec: unknown): rec is UsageRecord {
     typeof r.model === "string" &&
     typeof r.promptTokens === "number" &&
     typeof r.completionTokens === "number" &&
+    (r.reasoningTokens === undefined || typeof r.reasoningTokens === "number") &&
     typeof r.cacheHitTokens === "number" &&
     typeof r.cacheMissTokens === "number" &&
     typeof r.costUsd === "number" &&
@@ -220,6 +223,7 @@ export interface UsageBucket {
   turns: number;
   promptTokens: number;
   completionTokens: number;
+  reasoningTokens: number;
   cacheHitTokens: number;
   cacheMissTokens: number;
   costUsd: number;
@@ -246,6 +250,7 @@ function emptyBucket(label: string, since: number): UsageBucket {
     turns: 0,
     promptTokens: 0,
     completionTokens: 0,
+    reasoningTokens: 0,
     cacheHitTokens: 0,
     cacheMissTokens: 0,
     costUsd: 0,
@@ -258,6 +263,7 @@ function addToBucket(b: UsageBucket, r: UsageRecord): void {
   b.turns += 1;
   b.promptTokens += r.promptTokens;
   b.completionTokens += r.completionTokens;
+  b.reasoningTokens += r.reasoningTokens ?? 0;
   b.cacheHitTokens += r.cacheHitTokens;
   b.cacheMissTokens += r.cacheMissTokens;
   b.costUsd += r.costUsd;

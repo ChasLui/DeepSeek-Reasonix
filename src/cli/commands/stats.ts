@@ -232,6 +232,7 @@ function header(): string {
   return [
     pad("", 10),
     pad("turns", 8, "right"),
+    pad("reasoning", 10, "right"),
     pad("cache hit", 10, "right"),
     pad("cost (USD)", 14, "right"),
     pad("cache saved", 14, "right"),
@@ -241,7 +242,7 @@ function header(): string {
 }
 
 function divider(): string {
-  return "-".repeat(86);
+  return "-".repeat(98);
 }
 
 function bucketRow(b: UsageBucket): string {
@@ -250,6 +251,7 @@ function bucketRow(b: UsageBucket): string {
   return [
     pad(b.label, 10),
     pad(b.turns.toString(), 8, "right"),
+    pad(b.turns > 0 && b.reasoningTokens > 0 ? b.reasoningTokens.toString() : "—", 10, "right"),
     pad(b.turns > 0 ? `${(hit * 100).toFixed(1)}%` : "—", 10, "right"),
     pad(b.turns > 0 ? `$${b.costUsd.toFixed(6)}` : "—", 14, "right"),
     pad(

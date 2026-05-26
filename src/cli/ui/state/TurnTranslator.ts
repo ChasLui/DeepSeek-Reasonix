@@ -74,7 +74,7 @@ export class TurnTranslator {
     this.log.endTurn(
       {
         prompt: stats.usage.promptTokens,
-        reason: Math.round(reasoningText.length / 4),
+        reason: stats.usage.reasoningTokens || Math.round(reasoningText.length / 4),
         output: stats.usage.completionTokens,
         cacheHit: stats.cacheHitRatio,
         cost: stats.cost,

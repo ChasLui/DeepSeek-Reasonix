@@ -1,27 +1,21 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import { t, useLang } from "../i18n/index.js";
 import { api } from "../lib/api.js";
 import { fmtNum, fmtPct, fmtUsd } from "../lib/format.js";
 import { html } from "../lib/html.js";
 import { usePoll } from "../lib/use-poll.js";
-import { t, useLang } from "../i18n/index.js";
 
 type UPlotInstance = {
   destroy(): void;
   setSize(opts: { width: number; height: number }): void;
 };
 
-type UPlotConstructor = new (
-  opts: unknown,
-  data: unknown,
-  el: HTMLElement,
-) => UPlotInstance;
+type UPlotConstructor = new (opts: unknown, data: unknown, el: HTMLElement) => UPlotInstance;
 
 let uPlotPromise: Promise<UPlotConstructor> | null = null;
 function loadUPlot(): Promise<UPlotConstructor> {
   if (!uPlotPromise) {
-    uPlotPromise = import("uplot").then(
-      (m) => (m.default ?? m) as UPlotConstructor,
-    );
+    uPlotPromise = import("uplot").then((m) => (m.default ?? m) as UPlotConstructor);
   }
   return uPlotPromise;
 }
@@ -123,6 +117,7 @@ function UsageChart({ days }: { days: UsageDay[] }) {
 interface Bucket {
   label: string;
   turns: number;
+  reasoningTokens: number;
   cacheHitTokens: number;
   cacheMissTokens: number;
   costUsd: number;
@@ -169,7 +164,8 @@ export function UsagePanel() {
 
   if (loading && !summary)
     return html`<div class="card" style="color:var(--fg-3)">${t("usage.loading")}</div>`;
-  if (error) return html`<div class="card accent-err">${t("common.loadingFailed", { name: "usage", error: error.message })}</div>`;
+  if (error)
+    return html`<div class="card accent-err">${t("common.loadingFailed", { name: "usage", error: error.message })}</div>`;
   if (!summary) return null;
   const u = summary;
 
@@ -211,6 +207,7 @@ export function UsagePanel() {
                     <tr>
                       <th>${t("usage.colWindow")}</th>
                       <th class="num">${t("usage.colTurns")}</th>
+                      <th class="num">${t("usage.colReasoning")}</th>
                       <th class="num">${t("usage.colCacheHit")}</th>
                       <th class="num">${t("usage.colCost")}</th>
                       <th class="num">${t("usage.colCacheSaved")}</th>
@@ -230,6 +227,7 @@ export function UsagePanel() {
                         <tr>
                           <td class="dim">${b.label}</td>
                           <td class="num">${fmtNum(b.turns)}</td>
+                          <td class="num">${b.reasoningTokens > 0 ? fmtNum(b.reasoningTokens) : "—"}</td>
                           <td class="num">${b.turns > 0 ? fmtPct(hitRatio) : "—"}</td>
                           <td class="num">${b.turns > 0 ? fmtUsd(b.costUsd) : "—"}</td>
                           <td class="num">${b.turns > 0 && b.cacheSavingsUsd > 0 ? fmtUsd(b.cacheSavingsUsd) : "—"}</td>

@@ -117,7 +117,7 @@ export interface CacheFirstLoopOptions {
 export interface ReconfigurableOptions {
   model?: string;
   stream?: boolean;
-  /** V4 thinking mode only; deepseek-chat ignores. */
+  /** V4 thinking mode only. */
   reasoningEffort?: "high" | "max";
   /** `false` pins to `model` — disables the model-marker scavenge that flips flash→pro. */
   autoEscalate?: boolean;

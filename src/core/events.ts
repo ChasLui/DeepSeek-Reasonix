@@ -285,6 +285,7 @@ export interface BudgetView {
   capUsd: number | null;
   promptTokens: number;
   completionTokens: number;
+  reasoningTokens: number;
   cacheHitTokens: number;
   cacheMissTokens: number;
   warned: boolean;

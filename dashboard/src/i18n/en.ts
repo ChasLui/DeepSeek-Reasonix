@@ -277,6 +277,7 @@ export const en = {
     windows: "Rolling windows",
     colWindow: "window",
     colTurns: "turns",
+    colReasoning: "reasoning",
     colCacheHit: "cache hit",
     colCost: "cost (USD)",
     colCacheSaved: "cache saved",
@@ -308,7 +309,8 @@ export const en = {
     newHint: "Archive the current conversation and start a fresh one",
     switchBtn: "Switch to this session",
     deleteBtn: "Delete",
-    deleteConfirm: "Delete session \"{name}\"? This removes the transcript file and cannot be undone.",
+    deleteConfirm:
+      'Delete session "{name}"? This removes the transcript file and cannot be undone.',
     cantDeleteActive: "Switch to a different session before deleting this one.",
     attachRequired:
       "Live session operations need an attached CLI session. Launch via reasonix chat or open the dashboard from inside a TUI session.",

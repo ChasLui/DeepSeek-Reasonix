@@ -1018,6 +1018,7 @@ export const EN: TranslationSchema = {
       modelUsage: "usage: /model <id>   ({hint})",
       modelNotInCatalog:
         "model → {id}   (⚠ not in the fetched catalog: {list}. If this is wrong the next call will 400 — run /models to refresh.)",
+      modelLegacyMigrated: "model → {target}   ({id} is deprecated; using its v4 target)",
       modelSet: "model → {id}",
       presetAuto: "preset → auto  (v4-flash → v4-pro on hard turns · default)",
       presetFlash: "preset → flash  (v4-flash always · cheapest · /pro still bumps one turn)",
@@ -1573,6 +1574,7 @@ export const EN: TranslationSchema = {
     cannotList: "cannot list \u2014 {message}",
     parseFailed: "couldn't parse settings.json \u2014 {message}",
     probeFailed: "probe failed \u2014 {message}",
+    legacyModel: "legacy model {model} is deprecated; migrate to {target}. Command: `{command}`",
   },
   webErrors: {
     status:

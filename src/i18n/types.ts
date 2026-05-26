@@ -627,6 +627,7 @@ export interface TranslationSchema {
     cannotList: string;
     parseFailed: string;
     probeFailed: string;
+    legacyModel: string;
   };
   webErrors: {
     status: string;

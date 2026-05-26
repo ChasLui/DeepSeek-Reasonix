@@ -1,6 +1,7 @@
 import { Box, Text, useStdout } from "ink";
 import React, { useState } from "react";
 import { t } from "../../i18n/index.js";
+import { legacyModelTarget, withoutLegacyModelIds } from "../../model-aliases.js";
 import { useKeystroke } from "./keystroke-context.js";
 import { PRESETS, PRESET_DESCRIPTIONS } from "./presets.js";
 import { PILL_MODEL, Pill, modelBadgeFor } from "./primitives/Pill.js";
@@ -38,16 +39,17 @@ export function ModelPicker({
   onChoose,
   onRefresh,
 }: ModelPickerProps): React.ReactElement {
-  const modelList = (models && models.length > 0 ? models : FALLBACK_MODELS).slice();
-  if (!modelList.includes(current)) modelList.unshift(current);
+  const currentModel = legacyModelTarget(current) ?? current;
+  const modelList = withoutLegacyModelIds(models && models.length > 0 ? models : FALLBACK_MODELS);
+  if (!modelList.includes(currentModel)) modelList.unshift(currentModel);
   const presetRows: Row[] = PRESET_NAMES.map((name) => ({ kind: "preset", name }));
   const modelRows: Row[] = modelList.map((id) => ({ kind: "model", id }));
   const rows: Row[] = [...presetRows, ...modelRows];
 
-  const activePreset = detectActivePreset(current, currentEffort, currentAutoEscalate);
+  const activePreset = detectActivePreset(currentModel, currentEffort, currentAutoEscalate);
   const initialIndex = activePreset
     ? PRESET_NAMES.indexOf(activePreset)
-    : presetRows.length + Math.max(0, modelList.indexOf(current));
+    : presetRows.length + Math.max(0, modelList.indexOf(currentModel));
   const [focus, setFocus] = useState(initialIndex);
   const { stdout } = useStdout();
   const termRows = stdout?.rows ?? 40;
@@ -128,7 +130,7 @@ export function ModelPicker({
               key={`m-${row.id}`}
               id={row.id}
               focused={focused}
-              active={!activePreset && row.id === current}
+              active={!activePreset && row.id === currentModel}
             />
           );
         return (
@@ -211,9 +213,4 @@ function detectActivePreset(
 }
 
 /** Hard-coded known DeepSeek ids — used when the API catalog hasn't loaded yet so the picker isn't empty on first open. */
-const FALLBACK_MODELS: ReadonlyArray<string> = [
-  "deepseek-v4-flash",
-  "deepseek-v4-pro",
-  "deepseek-chat",
-  "deepseek-reasoner",
-];
+const FALLBACK_MODELS: ReadonlyArray<string> = ["deepseek-v4-flash", "deepseek-v4-pro"];

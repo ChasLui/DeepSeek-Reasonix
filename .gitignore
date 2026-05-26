@@ -97,7 +97,6 @@ bun.lock
 .ccb/
 .wolf/
 docs/plans/*
-!docs/plans/*-attestation.md
 bin/plan-lint.sh
 tmp/
 .claude/scheduled_tasks.lock

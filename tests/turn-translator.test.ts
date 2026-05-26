@@ -128,7 +128,10 @@ describe("TurnTranslator", () => {
     t.toolAbort("Error: failed");
     const endCall = calls.find((c) => c.method === "endTool");
     expect(endCall?.args[0]).toBe("tool-1");
-    expect(endCall?.args[1]).toMatchObject({ output: "Error: failed", aborted: true });
+    expect(endCall?.args[1]).toMatchObject({
+      output: "Error: failed",
+      aborted: true,
+    });
   });
 
   it("reasoningDone derives paragraphs and tokens from accumulated text", () => {
@@ -161,6 +164,35 @@ describe("TurnTranslator", () => {
       cacheHit: 0.91,
       cost: 0.0014,
     });
+  });
+
+  it("turnEnd prefers reasoningTokens from API over char/4 estimate", () => {
+    const { log, calls } = makeMockLog();
+    const t = new TurnTranslator(log);
+    // Usage(prompt, completion, total, cacheHit, cacheMiss, reasoningTokens=42)
+    const s = stats({ usage: new Usage(10, 5, 15, 8, 2, 42) });
+    t.turnEnd(s, "x".repeat(400)); // char/4=100 would shadow 42 if we used ??
+    const endTurn = calls.find((c) => c.method === "endTurn");
+    expect((endTurn?.args[0] as { reason: number }).reason).toBe(42);
+  });
+
+  it("turnEnd falls back to char/4 when API reports reasoningTokens=0", () => {
+    const { log, calls } = makeMockLog();
+    const t = new TurnTranslator(log);
+    // Compat endpoint without completion_tokens_details — reasoningTokens defaults to 0.
+    const s = stats({ usage: new Usage(10, 5, 15, 8, 2, 0) });
+    t.turnEnd(s, "x".repeat(400));
+    const endTurn = calls.find((c) => c.method === "endTurn");
+    expect((endTurn?.args[0] as { reason: number }).reason).toBe(100);
+  });
+
+  it("turnEnd returns 0 when both reasoningTokens and reasoningText are empty", () => {
+    const { log, calls } = makeMockLog();
+    const t = new TurnTranslator(log);
+    const s = stats({ usage: new Usage(10, 5, 15, 8, 2, 0) });
+    t.turnEnd(s, "");
+    const endTurn = calls.find((c) => c.method === "endTurn");
+    expect((endTurn?.args[0] as { reason: number }).reason).toBe(0);
   });
 
   it("abort closes any open reasoning, streaming, and tool cards", () => {

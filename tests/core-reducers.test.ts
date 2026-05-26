@@ -130,7 +130,12 @@ describe("budget reducer", () => {
         turn: 1,
         content: "",
         toolCalls: [],
-        usage: { prompt_tokens: 100, completion_tokens: 50, prompt_cache_hit_tokens: 80 },
+        usage: {
+          prompt_tokens: 100,
+          completion_tokens: 50,
+          completion_tokens_details: { reasoning_tokens: 12 },
+          prompt_cache_hit_tokens: 80,
+        },
         costUsd: 0.002,
       }),
     );
@@ -149,6 +154,7 @@ describe("budget reducer", () => {
     expect(v.spentUsd).toBeCloseTo(0.007);
     expect(v.promptTokens).toBe(300);
     expect(v.completionTokens).toBe(50);
+    expect(v.reasoningTokens).toBe(12);
     expect(v.cacheHitTokens).toBe(80);
     expect(v.cacheMissTokens).toBe(200);
     expect(v.capUsd).toBe(10);

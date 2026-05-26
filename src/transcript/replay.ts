@@ -1,6 +1,7 @@
 /** Reconstruct session economics from a transcript alone — offline audit, no API key. */
 
 import { Usage } from "../client.js";
+import { legacyModelTarget } from "../model-aliases.js";
 import {
   type SessionSummary,
   type TurnStats,
@@ -43,6 +44,8 @@ export interface ReplayStats extends SessionSummary {
   perTurn: TurnStats[];
   /** Unique models that appeared in the transcript's assistant_final records. */
   models: string[];
+  /** Legacy model ids encountered while replaying old transcripts. */
+  legacyModelDeprecations: Array<{ model: string; target: string }>;
   /** Unique prefix hashes that appeared. Length > 1 means the prefix churned (cache-hostile). */
   prefixHashes: string[];
   /** Count of user-role records (user turns issued). */
@@ -59,6 +62,7 @@ export function replayFromFile(path: string): { parsed: ReadTranscriptResult; st
 export function computeReplayStats(records: TranscriptRecord[]): ReplayStats {
   const turns: TurnStats[] = [];
   const models = new Set<string>();
+  const legacyModelDeprecations = new Map<string, string>();
   const prefixHashes = new Set<string>();
   let userTurns = 0;
   let toolCalls = 0;
@@ -67,7 +71,11 @@ export function computeReplayStats(records: TranscriptRecord[]): ReplayStats {
     if (rec.role === "user") userTurns++;
     else if (rec.role === "tool") toolCalls++;
     else if (rec.role === "assistant_final") {
-      if (rec.model) models.add(rec.model);
+      if (rec.model) {
+        models.add(rec.model);
+        const target = legacyModelTarget(rec.model);
+        if (target) legacyModelDeprecations.set(rec.model, target);
+      }
       if (rec.prefixHash) prefixHashes.add(rec.prefixHash);
       if (rec.usage && rec.model) {
         const u = new Usage(
@@ -76,6 +84,7 @@ export function computeReplayStats(records: TranscriptRecord[]): ReplayStats {
           rec.usage.total_tokens ?? 0,
           rec.usage.prompt_cache_hit_tokens ?? 0,
           rec.usage.prompt_cache_miss_tokens ?? 0,
+          rec.usage.completion_tokens_details?.reasoning_tokens ?? 0,
         );
         turns.push({
           turn: rec.turn,
@@ -94,6 +103,12 @@ export function computeReplayStats(records: TranscriptRecord[]): ReplayStats {
   return {
     perTurn: turns,
     models: [...models],
+    legacyModelDeprecations: Array.from(legacyModelDeprecations.entries()).map(
+      ([model, target]) => ({
+        model,
+        target,
+      }),
+    ),
     prefixHashes: [...prefixHashes],
     userTurns,
     toolCalls,

@@ -25,6 +25,7 @@ export function emptyBudget(capUsd: number | null = null): BudgetView {
     capUsd,
     promptTokens: 0,
     completionTokens: 0,
+    reasoningTokens: 0,
     cacheHitTokens: 0,
     cacheMissTokens: 0,
     warned: false,
@@ -121,6 +122,7 @@ export const budget: Reducer<BudgetView> = (v, ev) => {
         spentUsd: v.spentUsd + ev.costUsd,
         promptTokens: v.promptTokens + (u.prompt_tokens ?? 0),
         completionTokens: v.completionTokens + (u.completion_tokens ?? 0),
+        reasoningTokens: v.reasoningTokens + (u.completion_tokens_details?.reasoning_tokens ?? 0),
         cacheHitTokens: v.cacheHitTokens + (u.prompt_cache_hit_tokens ?? 0),
         cacheMissTokens: v.cacheMissTokens + (u.prompt_cache_miss_tokens ?? 0),
       };

@@ -8,6 +8,7 @@ import { type CheckpointMeta, fmtAgo, restoreCheckpoint } from "../code/checkpoi
 import { loadQQConfig, resolveThemePreference, saveQQConfig } from "../config.js";
 import { t } from "../i18n/index.js";
 import { type SessionInfo, freshSessionName } from "../memory/session.js";
+import { withoutLegacyModelIds } from "../model-aliases.js";
 import type { ChoiceOption } from "../tools/choice.js";
 import type { PlanStep } from "../tools/plan.js";
 import type { QQAccessConfig } from "./access.js";
@@ -777,14 +778,9 @@ export function useQQChannel({
       "auto",
       "flash",
       "pro",
-      ...((models && models.length > 0
-        ? models
-        : [
-            "deepseek-v4-flash",
-            "deepseek-v4-pro",
-            "deepseek-chat",
-            "deepseek-reasoner",
-          ]) as string[]),
+      ...withoutLegacyModelIds(
+        models && models.length > 0 ? models : ["deepseek-v4-flash", "deepseek-v4-pro"],
+      ),
     ],
     [],
   );

@@ -141,7 +141,50 @@ reject DeepSeek's proprietary `extra_body.thinking.type`, so `_isAzureEndpoint`
 same compatibility path when `thinkingModeForModel()` (in
 `src/loop/thinking.ts`) returns `undefined`.
 
-Last attested against DeepSeek docs: 2026-05-25 (URL above).
+Last attested against DeepSeek docs: 2026-05-26 (URL above).
+
+## API surface
+
+DeepSeek's chat-completion and FIM-completion docs snapshots (2026-05-26,
+https://api-docs.deepseek.com/api/create-chat-completion and
+https://api-docs.deepseek.com/api/create-completion) are the source of truth for
+request shape. The public model surface is `deepseek-v4-flash` and
+`deepseek-v4-pro`; the pricing docs mark `deepseek-chat` and `deepseek-reasoner`
+as future-deprecated compatibility names that map to v4-flash non-thinking and
+thinking modes. Reasonix therefore removes those legacy ids from user-facing
+pickers and `/model` writes, but keeps load-bearing legacy aliases for old
+config files, old transcripts, pricing replay, and thinking-mode guards.
+
+`src/client.ts` is the single request-shape boundary. It maps current
+DeepSeek parameters directly: `response_format`, `stop`, `stream_options`
+with streamed usage enabled by default, `tool_choice`, function-tool
+`strict`, `logprobs`, `top_logprobs`, and `user_id`. It also validates the
+client-owned constraints that are cheap and unambiguous: `tools.length <= 128`,
+`top_logprobs` requires `logprobs=true`, and `user_id` must match DeepSeek's
+allowed character set and 512-character cap. Server-owned semantics such as
+stop-sequence behavior stay upstream-owned.
+
+The beta chat-prefix feature is a separate entry point: `chatPrefix()` routes
+to `/beta/chat/completions`, requires the final message to be an assistant
+message with `prefix: true`, and strips thinking controls before sending the
+request. `reasonix doctor` includes an `api-prefix` check that runs the same
+minimal prefix path so beta endpoint reachability is verified by a real
+consumer path, not by string construction. Combining `chatPrefix()` with
+`tools`/`tool_choice` is an undocumented region of the DeepSeek API surface
+— it transmits unchanged and may 400 or silently degrade depending on the
+upstream model; callers experimenting here own the risk.
+
+The beta FIM feature is another separate entry point: `completeFim()` routes to
+`/beta/completions`, maps the legacy completion fields `prompt`, `suffix`,
+`echo`, `logprobs`, `max_tokens`, `stop`, `temperature`, and `top_p`, and forces
+`stream: false`. It never sends chat `messages` or thinking controls.
+
+Usage accounting preserves DeepSeek's `completion_tokens_details.reasoning_tokens`
+through client, core events, transcript replay, telemetry, server API, TUI, and
+dashboard surfaces. JSON mode is intentionally observational: an empty
+`content` with `finish_reason="stop"` triggers telemetry, but `buildPayload`
+does not throw because the API treats JSON-output prompting quality as a caller
+responsibility.
 
 ### Pillar 2 — Tool-Call Repair
 

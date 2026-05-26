@@ -53,7 +53,45 @@ describe("PromptFingerprint", () => {
       systemCharDelta: 0,
     });
   });
+
+  it("changes toolsHash when strict is injected — caller must accept cache reset", () => {
+    const fp = new PromptFingerprint();
+    const before = fp.snapshot(
+      new ImmutablePrefix({ system: "x", toolSpecs: [tool("a"), tool("b")] }),
+    );
+    const after = fp.snapshot(
+      new ImmutablePrefix({
+        system: "x",
+        toolSpecs: [strictTool("a"), strictTool("b")],
+      }),
+    );
+
+    // Plan Open Q-7: toolsStrict:true on existing tools is a known cache-invalidator.
+    // Lock the contract: hashes must diverge so callers don't silently believe
+    // the cache survived a strict-mode flip.
+    expect(after.toolsHash).not.toBe(before.toolsHash);
+    expect([...after.perToolHashes.keys()].sort()).toEqual(["a", "b"]);
+  });
+
+  it("keeps toolsHash stable across snapshots when nothing changes", () => {
+    const fp = new PromptFingerprint();
+    const a = fp.snapshot(new ImmutablePrefix({ system: "x", toolSpecs: [tool("a"), tool("b")] }));
+    const b = fp.snapshot(new ImmutablePrefix({ system: "x", toolSpecs: [tool("a"), tool("b")] }));
+    expect(a.toolsHash).toBe(b.toolsHash);
+  });
 });
+
+function strictTool(name: string): ToolSpec {
+  return {
+    type: "function",
+    function: {
+      name,
+      description: "description",
+      parameters: { type: "object" },
+      strict: true,
+    },
+  };
+}
 
 function tool(name: string): ToolSpec {
   return {

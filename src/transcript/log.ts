@@ -70,6 +70,11 @@ export function recordFromLoopEvent(
       prompt_cache_hit_tokens: ev.stats.usage.promptCacheHitTokens,
       prompt_cache_miss_tokens: ev.stats.usage.promptCacheMissTokens,
     };
+    if (ev.stats.usage.reasoningTokens > 0) {
+      rec.usage.completion_tokens_details = {
+        reasoning_tokens: ev.stats.usage.reasoningTokens,
+      };
+    }
     rec.cost = ev.stats.cost;
     rec.model = ev.stats.model;
     rec.prefixHash = extra.prefixHash;

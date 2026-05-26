@@ -26,12 +26,14 @@ import { indexExists } from "../../index/semantic/builder.js";
 import { checkOllamaStatus } from "../../index/semantic/ollama-launcher.js";
 import { countRecentObservationEvents } from "../../memory/observation.js";
 import { listSessions } from "../../memory/session.js";
+import { legacyModelTarget } from "../../model-aliases.js";
 import { detectProxyUrl, matchesNoProxy, resolveNoProxy } from "../../net/proxy.js";
 import type {
   CacheBreakReasonCategory,
   PromptCacheStats,
 } from "../../observability/prompt-cache-monitor.js";
 import { resolveConcurrencySettings } from "../../rate-limit/index.js";
+import { getJsonModeEmptyResponseStats } from "../../telemetry/json-mode.js";
 import { readUsageSince } from "../../telemetry/usage.js";
 import { resolveDataPath } from "../../tokenizer.js";
 import { getVfsStats } from "../../tools/shell/vfs-lite.js";
@@ -68,6 +70,7 @@ export async function runDoctorChecks(
     checkApiKey(),
     checkConfig(),
     checkApiReach(),
+    checkApiPrefixReach(),
     checkTokenizer(),
     checkSessions(),
     checkHooks(projectRoot),
@@ -78,6 +81,7 @@ export async function runDoctorChecks(
   return [
     r[0],
     r[1],
+    checkLegacyModelConfig(),
     ...checkProxy(),
     r[2],
     r[3],
@@ -85,6 +89,7 @@ export async function runDoctorChecks(
     r[5],
     r[6],
     r[7],
+    r[8],
     checkVfsLite(),
     checkToolCache(),
     checkPromptCache(opts.promptCacheStats),
@@ -92,12 +97,67 @@ export async function runDoctorChecks(
     checkMemoryHybridCli(),
     checkReadDedup(),
     checkCodeRelations(),
-    r[8],
+    r[9],
     checkToon(),
     checkBudget(),
     checkRateLimitConfig(),
     checkToolset(),
+    checkJsonModeEmptyResponses(),
   ];
+}
+
+function checkJsonModeEmptyResponses(): Check {
+  const stats = getJsonModeEmptyResponseStats();
+  if (stats.total === 0) {
+    return {
+      id: "json-mode",
+      label: "json mode    ",
+      level: "ok",
+      detail: "no empty responses observed (in-process counter)",
+    };
+  }
+  const byModel = Object.entries(stats.byModel)
+    .map(([m, n]) => `${m}=${n}`)
+    .join(", ");
+  return {
+    id: "json-mode",
+    label: "json mode    ",
+    level: "warn",
+    detail: `${stats.total} empty json-mode responses (${byModel}) — prompt the model to keep the literal word "json"`,
+  };
+}
+
+function checkLegacyModelConfig(): Check {
+  const cfg = readConfig() as { model?: unknown };
+  if (typeof cfg.model !== "string") {
+    return {
+      id: "legacy-model",
+      label: "model        ",
+      level: "ok",
+      detail: "no legacy model id in config",
+    };
+  }
+  const target = legacyModelTarget(cfg.model);
+  if (!target) {
+    return {
+      id: "legacy-model",
+      label: "model        ",
+      level: "ok",
+      detail: `config model=${cfg.model}`,
+    };
+  }
+  const preset = target === "deepseek-v4-pro" ? "pro" : "flash";
+  const command = `reasonix chat --preset ${preset}`;
+  return {
+    id: "legacy-model",
+    label: "model        ",
+    level: "warn",
+    detail: t("doctorErrors.legacyModel", {
+      model: cfg.model,
+      target,
+      command,
+    }),
+  };
 }
 
 function checkToolCache(): Check {
@@ -176,10 +236,16 @@ function promptCacheAssessmentFor(stats: PromptCacheStats | undefined): {
     (category) => !PROMPT_CACHE_FALLBACK_CATEGORIES.has(category),
   );
   if (nonFallback) {
-    return { level: "warn", detail: `local prompt drift category=${nonFallback}` };
+    return {
+      level: "warn",
+      detail: `local prompt drift category=${nonFallback}`,
+    };
   }
   if (categories.length === stats.breaks || categories.length > 0) {
-    return { level: "info", detail: "DeepSeek best-effort cache; no local prompt drift" };
+    return {
+      level: "info",
+      detail: "DeepSeek best-effort cache; no local prompt drift",
+    };
   }
   return { level: "warn", detail: "local prompt drift category=unknown" };
 }
@@ -626,6 +692,71 @@ async function checkApiReach(): Promise<Check> {
       label: "api reach    ",
       level: "fail",
       detail: `${(err as Error).message}`,
+    };
+  }
+}
+
+async function checkApiPrefixReach(): Promise<Check> {
+  if (process.env.REASONIX_DOCTOR_SKIP_PREFIX_PING === "1") {
+    return {
+      id: "api-prefix",
+      label: "api prefix   ",
+      level: "info",
+      detail: "skipped via REASONIX_DOCTOR_SKIP_PREFIX_PING=1",
+    };
+  }
+  const key = process.env.DEEPSEEK_API_KEY ?? readConfig().apiKey;
+  if (!key) {
+    return {
+      id: "api-prefix",
+      label: "api prefix   ",
+      level: "warn",
+      detail: "skipped — no api key to test /beta/chat/completions with",
+    };
+  }
+  const baseUrl = loadBaseUrl();
+  // Prefix completion (/beta/chat/completions) is a DeepSeek-only feature;
+  // openai-compat gateways and Azure mirrors do not expose it. Skipping
+  // here avoids surfacing "fail" on perfectly valid non-DeepSeek configs.
+  if (baseUrl && !/^https?:\/\/[^/]*deepseek\.com(\/|$)/i.test(baseUrl)) {
+    return {
+      id: "api-prefix",
+      label: "api prefix   ",
+      level: "warn",
+      detail: `skipped — non-DeepSeek baseUrl (${baseUrl})`,
+    };
+  }
+  const cfg = readConfig() as { model?: unknown };
+  // Pick the user's actual model so the ping fails fast on real-world
+  // misconfigurations (eg user pinned a model id that doesn't exist).
+  // Falls back to v4-flash if no model is configured.
+  const cfgModel = typeof cfg.model === "string" ? cfg.model : undefined;
+  const pingModel = cfgModel ? (legacyModelTarget(cfgModel) ?? cfgModel) : undefined;
+  try {
+    const client = new DeepSeekClient({
+      apiKey: key,
+      baseUrl,
+      timeoutMs: 8_000,
+    });
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 8_000);
+    try {
+      await client.pingChatPrefix({ model: pingModel, signal: ctl.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+    return {
+      id: "api-prefix",
+      label: "api prefix   ",
+      level: "ok",
+      detail: "/beta/chat/completions prefix ping ok",
+    };
+  } catch (err) {
+    return {
+      id: "api-prefix",
+      label: "api prefix   ",
+      level: "fail",
+      detail: `/beta/chat/completions prefix ping failed: ${(err as Error).message}`,
     };
   }
 }

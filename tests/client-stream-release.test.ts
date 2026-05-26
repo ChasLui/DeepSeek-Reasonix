@@ -31,7 +31,9 @@ describe("DeepSeekClient releases concurrency tokens", () => {
   });
 
   it("releases token on stream !resp.ok", async () => {
-    const bucket = new ConcurrencyBucket({ rateLimit: { concurrency: { pro: 1 } } });
+    const bucket = new ConcurrencyBucket({
+      rateLimit: { concurrency: { pro: 1 } },
+    });
     const client = clientWith(
       vi.fn(async () => new Response("boom", { status: 500 })) as unknown as typeof fetch,
       bucket,
@@ -45,7 +47,9 @@ describe("DeepSeekClient releases concurrency tokens", () => {
   });
 
   it("releases token on stream ok with missing body", async () => {
-    const bucket = new ConcurrencyBucket({ rateLimit: { concurrency: { pro: 1 } } });
+    const bucket = new ConcurrencyBucket({
+      rateLimit: { concurrency: { pro: 1 } },
+    });
     const client = clientWith(
       vi.fn(async () => new Response(null, { status: 200 })) as unknown as typeof fetch,
       bucket,
@@ -59,13 +63,53 @@ describe("DeepSeekClient releases concurrency tokens", () => {
   });
 
   it("releases token on chat response JSON parse error", async () => {
-    const bucket = new ConcurrencyBucket({ rateLimit: { concurrency: { pro: 1 } } });
+    const bucket = new ConcurrencyBucket({
+      rateLimit: { concurrency: { pro: 1 } },
+    });
     const client = clientWith(
       vi.fn(async () => new Response("not json", { status: 200 })) as unknown as typeof fetch,
       bucket,
     );
 
     await expect(client.chat({ model: "deepseek-v4-pro", messages: [] })).rejects.toThrow();
+
+    expect(bucket.stats("deepseek-v4-pro").inUse).toBe(0);
+  });
+
+  it("releases token on completeFim 5xx response", async () => {
+    const bucket = new ConcurrencyBucket({
+      rateLimit: { concurrency: { pro: 1 } },
+    });
+    const client = clientWith(
+      vi.fn(async () => new Response("boom", { status: 502 })) as unknown as typeof fetch,
+      bucket,
+    );
+
+    await expect(client.completeFim({ model: "deepseek-v4-pro", prompt: "x" })).rejects.toThrow(
+      /DeepSeek 502/,
+    );
+
+    expect(bucket.stats("deepseek-v4-pro").inUse).toBe(0);
+  });
+
+  it("releases token on completeFim response with missing choices", async () => {
+    const bucket = new ConcurrencyBucket({
+      rateLimit: { concurrency: { pro: 1 } },
+    });
+    const client = clientWith(
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: "bad" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+      ) as unknown as typeof fetch,
+      bucket,
+    );
+
+    await expect(client.completeFim({ model: "deepseek-v4-pro", prompt: "x" })).rejects.toThrow(
+      /missing choices array/,
+    );
 
     expect(bucket.stats("deepseek-v4-pro").inUse).toBe(0);
   });
@@ -83,7 +127,9 @@ describe("DeepSeekClient releases concurrency tokens", () => {
         throw new Error("reader exploded");
       },
     });
-    const bucket = new ConcurrencyBucket({ rateLimit: { concurrency: { pro: 1 } } });
+    const bucket = new ConcurrencyBucket({
+      rateLimit: { concurrency: { pro: 1 } },
+    });
     const client = clientWith(
       vi.fn(async () => new Response(body, { status: 200 })) as unknown as typeof fetch,
       bucket,
@@ -121,9 +167,15 @@ describe("DeepSeekClient releases concurrency tokens", () => {
       seenSignal = init?.signal ?? undefined;
       return new Response(body, { status: 200 });
     }) as unknown as typeof fetch;
-    const bucket = new ConcurrencyBucket({ rateLimit: { concurrency: { pro: 1 } } });
+    const bucket = new ConcurrencyBucket({
+      rateLimit: { concurrency: { pro: 1 } },
+    });
     const client = clientWith(fetchFn, bucket);
-    const stream = client.stream({ model: "deepseek-v4-pro", messages: [], signal: ctrl.signal });
+    const stream = client.stream({
+      model: "deepseek-v4-pro",
+      messages: [],
+      signal: ctrl.signal,
+    });
 
     const first = await stream.next();
     expect(first.value?.contentDelta).toBe("a");
@@ -138,7 +190,9 @@ describe("DeepSeekClient releases concurrency tokens", () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
     const ctrl = new AbortController();
-    const bucket = new ConcurrencyBucket({ rateLimit: { concurrency: { pro: 1 } } });
+    const bucket = new ConcurrencyBucket({
+      rateLimit: { concurrency: { pro: 1 } },
+    });
     const fetchFn = vi.fn(
       async () => new Response(okChat, { status: 200 }),
     ) as unknown as typeof fetch;
@@ -151,7 +205,11 @@ describe("DeepSeekClient releases concurrency tokens", () => {
     });
 
     await client.chat({ model: "deepseek-v4-pro", messages: [] });
-    const second = client.chat({ model: "deepseek-v4-pro", messages: [], signal: ctrl.signal });
+    const second = client.chat({
+      model: "deepseek-v4-pro",
+      messages: [],
+      signal: ctrl.signal,
+    });
     await vi.advanceTimersByTimeAsync(0);
     ctrl.abort(new DOMException("Aborted", "AbortError"));
 
@@ -162,7 +220,9 @@ describe("DeepSeekClient releases concurrency tokens", () => {
 
   it("releases token when aborted during fetch", async () => {
     const ctrl = new AbortController();
-    const bucket = new ConcurrencyBucket({ rateLimit: { concurrency: { pro: 1 } } });
+    const bucket = new ConcurrencyBucket({
+      rateLimit: { concurrency: { pro: 1 } },
+    });
     let resolveFetchStarted!: () => void;
     const fetchStarted = new Promise<void>((resolve) => {
       resolveFetchStarted = resolve;
@@ -179,7 +239,11 @@ describe("DeepSeekClient releases concurrency tokens", () => {
     }) as unknown as typeof fetch;
     const client = clientWith(fetchFn, bucket);
 
-    const pending = client.chat({ model: "deepseek-v4-pro", messages: [], signal: ctrl.signal });
+    const pending = client.chat({
+      model: "deepseek-v4-pro",
+      messages: [],
+      signal: ctrl.signal,
+    });
     await fetchStarted;
     ctrl.abort(new DOMException("Aborted", "AbortError"));
 
@@ -188,7 +252,9 @@ describe("DeepSeekClient releases concurrency tokens", () => {
   });
 
   it("does not double release when a token release is called twice", async () => {
-    const bucket = new ConcurrencyBucket({ rateLimit: { concurrency: { pro: 1 } } });
+    const bucket = new ConcurrencyBucket({
+      rateLimit: { concurrency: { pro: 1 } },
+    });
     const token = await bucket.acquire("deepseek-v4-pro");
 
     token.release();
@@ -198,7 +264,9 @@ describe("DeepSeekClient releases concurrency tokens", () => {
   });
 
   it("releases token after successful chat", async () => {
-    const bucket = new ConcurrencyBucket({ rateLimit: { concurrency: { pro: 1 } } });
+    const bucket = new ConcurrencyBucket({
+      rateLimit: { concurrency: { pro: 1 } },
+    });
     const client = clientWith(
       vi.fn(async () => new Response(okChat, { status: 200 })) as unknown as typeof fetch,
       bucket,
@@ -213,7 +281,10 @@ describe("DeepSeekClient releases concurrency tokens", () => {
     vi.useFakeTimers();
     const bucket = new ConcurrencyBucket({
       rateLimit: { concurrency: { pro: 1 } },
-      env: { REASONIX_QUEUE_GIVEUP_MS: "100", REASONIX_QUEUE_HINT_MS: "100000" },
+      env: {
+        REASONIX_QUEUE_GIVEUP_MS: "100",
+        REASONIX_QUEUE_HINT_MS: "100000",
+      },
     });
     const holder = await bucket.acquire("deepseek-v4-pro");
     const fetchFn = vi.fn(
@@ -233,7 +304,10 @@ describe("DeepSeekClient releases concurrency tokens", () => {
 
     await expect(promise).resolves.toMatchObject({ content: "ok" });
     expect(fetchFn).toHaveBeenCalledTimes(1);
-    expect(bucket.stats("deepseek-v4-pro")).toMatchObject({ inUse: 0, queued: 0 });
+    expect(bucket.stats("deepseek-v4-pro")).toMatchObject({
+      inUse: 0,
+      queued: 0,
+    });
   });
 
   it("initializes the default process bucket from rateLimit concurrency config", () => {

@@ -274,6 +274,7 @@ export const zhCN = {
     windows: "滚动窗口",
     colWindow: "时间范围",
     colTurns: "轮次",
+    colReasoning: "推理 tokens",
     colCacheHit: "缓存命中",
     colCost: "费用 (USD)",
     colCacheSaved: "缓存节省",

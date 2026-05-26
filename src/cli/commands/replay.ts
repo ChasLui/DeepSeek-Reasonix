@@ -61,6 +61,9 @@ function printReplay(opts: ReplayOptions): void {
   console.log(`claude equivalent:   $${stats.claudeEquivalentUsd.toFixed(6)}`);
   console.log(`savings vs claude:   ${stats.savingsVsClaudePct.toFixed(1)}%`);
   console.log(`models:              ${stats.models.join(", ") || "—"}`);
+  for (const item of stats.legacyModelDeprecations) {
+    console.log(`model deprecation:   ${item.model} → ${item.target}`);
+  }
   console.log(`prefix hashes:       ${stats.prefixHashes.length} distinct`);
   if (stats.prefixHashes.length === 1) {
     console.log(`  (byte-stable prefix: ${stats.prefixHashes[0]?.slice(0, 16)}…)`);

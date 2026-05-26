@@ -48,6 +48,9 @@ describe("computeReplayStats", () => {
     expect(stats.totalCostUsd).toBeCloseTo(0.00018, 6);
     expect(stats.prefixHashes).toEqual(["stable123"]);
     expect(stats.models).toEqual(["deepseek-chat"]);
+    expect(stats.legacyModelDeprecations).toEqual([
+      { model: "deepseek-chat", target: "deepseek-v4-flash" },
+    ]);
   });
 
   it("detects prefix churn when multiple hashes appear (baseline-style transcript)", () => {

@@ -33,7 +33,7 @@ describe("ModelPicker (#371)", () => {
     });
     expect(text).toContain("deepseek-v4-flash");
     expect(text).toContain("deepseek-v4-pro");
-    expect(text).toContain("deepseek-reasoner");
+    expect(text).not.toContain("deepseek-reasoner");
   });
 
   it("lists the three presets above the model list", () => {
@@ -76,6 +76,8 @@ describe("ModelPicker (#371)", () => {
     const text = renderPicker({ models: null, current: "deepseek-v4-flash" });
     expect(text).toContain("deepseek-v4-flash");
     expect(text).toContain("deepseek-v4-pro");
+    expect(text).not.toContain("deepseek-chat");
+    expect(text).not.toContain("deepseek-reasoner");
   });
 
   it("shows the explicit empty hint when catalog loaded but is empty", () => {
@@ -89,6 +91,17 @@ describe("ModelPicker (#371)", () => {
       current: "deepseek-experimental-x",
     });
     expect(text).toContain("deepseek-experimental-x");
+  });
+
+  it("maps a legacy current id to its v4 target", () => {
+    const text = renderPicker({
+      models: ["deepseek-v4-flash", "deepseek-v4-pro"],
+      current: "deepseek-reasoner",
+      currentEffort: "high",
+      currentAutoEscalate: false,
+    });
+    expect(text).toContain("deepseek-v4-pro");
+    expect(text).not.toContain("deepseek-reasoner");
   });
 
   it("renders the keybind hint footer", () => {

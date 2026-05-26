@@ -6,6 +6,7 @@ import {
   savePreset,
 } from "@/config.js";
 import { t } from "@/i18n/index.js";
+import { legacyModelTarget } from "@/model-aliases.js";
 import { PRESETS } from "../../presets.js";
 import type { SlashHandler } from "../dispatch.js";
 
@@ -21,11 +22,13 @@ const model: SlashHandler = (args, loop, ctx) => {
   if (!id) {
     return { openModelPicker: true };
   }
+  const migrated = legacyModelTarget(id);
+  const modelId = migrated ?? id;
   // Manual model pick = explicit pin: disable auto-escalate so flash doesn't
   // get bumped, and persist the inferred preset so a relaunch keeps the choice.
-  loop.configure({ model: id, autoEscalate: false });
-  ctx.dispatch?.({ type: "session.model.change", model: id });
-  const inferred = inferPresetFromModel(id);
+  loop.configure({ model: modelId, autoEscalate: false });
+  ctx.dispatch?.({ type: "session.model.change", model: modelId });
+  const inferred = inferPresetFromModel(modelId);
   ctx.dispatch?.({ type: "session.preset.change", preset: inferred });
   if (inferred) {
     try {
@@ -34,15 +37,18 @@ const model: SlashHandler = (args, loop, ctx) => {
       /* disk full / perms — runtime change still took effect */
     }
   }
-  if (known && known.length > 0 && !known.includes(id)) {
+  if (migrated) {
+    return { info: t("handlers.model.modelLegacyMigrated", { id, target: migrated }) };
+  }
+  if (known && known.length > 0 && !known.includes(modelId)) {
     return {
       info: t("handlers.model.modelNotInCatalog", {
-        id,
+        id: modelId,
         list: known.join(", "),
       }),
     };
   }
-  return { info: t("handlers.model.modelSet", { id }) };
+  return { info: t("handlers.model.modelSet", { id: modelId }) };
 };
 
 const preset: SlashHandler = (args, loop, ctx) => {

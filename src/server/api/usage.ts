@@ -9,6 +9,7 @@ interface DailyBucket {
   turns: number;
   promptTokens: number;
   completionTokens: number;
+  reasoningTokens: number;
   cacheHitTokens: number;
   cacheMissTokens: number;
   costUsd: number;
@@ -30,6 +31,7 @@ function buildSeries(records: ReturnType<typeof readUsageLog>): DailyBucket[] {
         turns: 0,
         promptTokens: 0,
         completionTokens: 0,
+        reasoningTokens: 0,
         cacheHitTokens: 0,
         cacheMissTokens: 0,
         costUsd: 0,
@@ -40,6 +42,7 @@ function buildSeries(records: ReturnType<typeof readUsageLog>): DailyBucket[] {
     b.turns += 1;
     b.promptTokens += r.promptTokens;
     b.completionTokens += r.completionTokens;
+    b.reasoningTokens += r.reasoningTokens ?? 0;
     b.cacheHitTokens += r.cacheHitTokens;
     b.cacheMissTokens += r.cacheMissTokens;
     b.costUsd += r.costUsd;

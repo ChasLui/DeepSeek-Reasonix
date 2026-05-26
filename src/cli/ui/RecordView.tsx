@@ -49,6 +49,12 @@ export function RecordView({ rec, compact = false }: RecordViewProps) {
             </Text>
           ) : null}
           {rec.usage ? <CacheBadge usage={rec.usage} /> : null}
+          {rec.usage?.completion_tokens_details?.reasoning_tokens ? (
+            <Text dimColor>
+              {" reasoning "}
+              {rec.usage.completion_tokens_details.reasoning_tokens}
+            </Text>
+          ) : null}
         </Box>
         {rec.content ? (
           <Text>{rec.content}</Text>

@@ -244,6 +244,11 @@ export class Eventizer {
           prompt_cache_miss_tokens: ev.stats.usage.promptCacheMissTokens,
         }
       : {};
+    if (ev.stats?.usage.reasoningTokens) {
+      usage.completion_tokens_details = {
+        reasoning_tokens: ev.stats.usage.reasoningTokens,
+      };
+    }
     const costUsd = ev.stats?.cost ?? 0;
     const out: ModelFinalEvent = {
       id: ++this.nextId,

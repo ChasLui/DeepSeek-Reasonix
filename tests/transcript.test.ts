@@ -37,7 +37,7 @@ describe("transcript writer / reader round-trip", () => {
 
     // Build a realistic assistant_final event using SessionStats.
     const stats = new SessionStats();
-    const usage = new Usage(1000, 100, 1100, 800, 200);
+    const usage = new Usage(1000, 100, 1100, 800, 200, 33);
     const turnStats = stats.record(1, "deepseek-chat", usage);
 
     const assistantEv: LoopEvent = {
@@ -76,6 +76,7 @@ describe("transcript writer / reader round-trip", () => {
     expect(a.role).toBe("assistant_final");
     expect(a.content).toBe("Hello world.");
     expect(a.usage?.prompt_cache_hit_tokens).toBe(800);
+    expect(a.usage?.completion_tokens_details?.reasoning_tokens).toBe(33);
     expect(a.cost).toBeGreaterThan(0);
     expect(a.model).toBe("deepseek-chat");
     expect(a.prefixHash).toBe("abc123def456");

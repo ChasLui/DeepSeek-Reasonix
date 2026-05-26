@@ -443,6 +443,7 @@ export function bucketForModel(model: string): RateLimitBucketName {
   if (
     normalized === "v4-flash" ||
     normalized === "deepseek-v4-flash" ||
+    // @deprecated Legacy aliases stay bucket-compatible for old config files.
     normalized === "deepseek-chat" ||
     normalized === "deepseek-reasoner"
   ) {

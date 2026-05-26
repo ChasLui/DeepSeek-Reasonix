@@ -1,5 +1,6 @@
 import type { Usage } from "../client.js";
 import { loadPricingOverride } from "../config.js";
+import { LEGACY_MODEL_MIGRATION } from "../model-aliases.js";
 import { nullPrototype } from "../utils/safe-object.js";
 
 /** USD per 1M tokens; display currency conversion happens at the UI boundary. */
@@ -17,12 +18,13 @@ export const DEEPSEEK_PRICING: Record<
     inputCacheMiss: 0.435,
     output: 0.87,
   },
-  // Compat aliases — priced as v4-flash per the deprecation notice.
+  /** @deprecated Use LEGACY_MODEL_MIGRATION to fold old transcripts into v4 pricing. */
   "deepseek-chat": {
     inputCacheHit: 0.0028,
     inputCacheMiss: 0.14,
     output: 0.28,
   },
+  /** @deprecated Use LEGACY_MODEL_MIGRATION to fold old transcripts into v4 pricing. */
   "deepseek-reasoner": {
     inputCacheHit: 0.0028,
     inputCacheMiss: 0.14,
@@ -33,8 +35,11 @@ export const DEEPSEEK_PRICING: Record<
 export type ModelPricing = (typeof DEEPSEEK_PRICING)[string];
 
 export function pricingFor(model: string, path?: string): ModelPricing | undefined {
-  const defaults = DEEPSEEK_PRICING[model];
-  const override = loadPricingOverride(path)[model];
+  const pricingModel =
+    LEGACY_MODEL_MIGRATION[model as keyof typeof LEGACY_MODEL_MIGRATION] ?? model;
+  const defaults = DEEPSEEK_PRICING[pricingModel];
+  const overrides = loadPricingOverride(path);
+  const override = overrides[model] ?? overrides[pricingModel];
   if (!override) return defaults;
   const pricing = { ...defaults, ...override };
   if (
@@ -54,7 +59,9 @@ export const CLAUDE_SONNET_PRICING = { input: 3.0, output: 15.0 };
 export const DEEPSEEK_CONTEXT_TOKENS: Record<string, number> = nullPrototype({
   "deepseek-v4-flash": 1_000_000,
   "deepseek-v4-pro": 1_000_000,
+  /** @deprecated Kept for legacy transcript/config replay only. */
   "deepseek-chat": 1_000_000,
+  /** @deprecated Kept for legacy transcript/config replay only. */
   "deepseek-reasoner": 1_000_000,
 });
 

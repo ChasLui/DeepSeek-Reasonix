@@ -88,7 +88,42 @@ Reasonix 通过 `buildAssistantMessage`（位于 `src/loop/messages.ts`）、
 该字段。其它第三方端点也走同一兼容路径：当 `thinkingModeForModel()`（位于
 `src/loop/thinking.ts`）返回 `undefined` 时跳过该字段。
 
-Last attested against DeepSeek docs: 2026-05-25 (URL above).
+Last attested against DeepSeek docs: 2026-05-26 (URL above).
+
+## API surface
+
+DeepSeek 对话补全与 FIM 补全文档快照（2026-05-26，
+https://api-docs.deepseek.com/zh-cn/api/create-chat-completion 与
+https://api-docs.deepseek.com/zh-cn/api/create-completion）是请求形状的唯一来源。
+公开模型面只暴露 `deepseek-v4-flash` 与 `deepseek-v4-pro`；pricing 文档把
+`deepseek-chat` 与 `deepseek-reasoner` 标记为未来弃用的兼容名称，分别映射到
+v4-flash 的非思考和思考模式。因此 Reasonix 从面向用户的 picker 与 `/model`
+写入路径中移除 legacy id，但保留老配置、老 transcript、pricing replay 和
+thinking-mode guard 所需的兼容别名。
+
+`src/client.ts` 是唯一请求形状边界。它直接映射当前 DeepSeek 参数：
+`response_format`、`stop`、默认开启 streamed usage 的 `stream_options`、
+`tool_choice`、function tool 的 `strict`、`logprobs`、`top_logprobs` 与
+`user_id`。它也验证便宜且无歧义的客户端约束：`tools.length <= 128`、
+`top_logprobs` 必须搭配 `logprobs=true`，以及 `user_id` 必须符合 DeepSeek
+允许字符集和 512 字符上限。stop sequence 的行为等服务端语义仍由上游负责。
+
+beta chat-prefix 是独立入口：`chatPrefix()` 路由到
+`/beta/chat/completions`，要求最后一条消息是带 `prefix: true` 的 assistant
+消息，并在发送前剥离 thinking 控制。`reasonix doctor` 包含 `api-prefix`
+检查，跑同一条最小 prefix 路径；beta endpoint 可达性由真实消费者路径验证，
+而不是靠字符串拼接。
+
+beta FIM 是另一条独立入口：`completeFim()` 路由到 `/beta/completions`，映射
+legacy completion 字段 `prompt`、`suffix`、`echo`、`logprobs`、`max_tokens`、
+`stop`、`temperature` 与 `top_p`，并固定 `stream: false`。它不会发送 chat
+`messages` 或 thinking 控制。
+
+Usage 统计会保留 DeepSeek 的
+`completion_tokens_details.reasoning_tokens`，并一路传到 client、core event、
+transcript replay、telemetry、server API、TUI 和 dashboard。JSON mode 只做
+观测：当 `finish_reason="stop"` 且 `content` 为空时记录 telemetry，但
+`buildPayload` 不抛错，因为 API 把 JSON-output prompt 质量视为调用方责任。
 
 ### 支柱 2 —— Tool-Call Repair
 

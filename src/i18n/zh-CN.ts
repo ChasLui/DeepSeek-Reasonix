@@ -921,6 +921,7 @@ export const zhCN: TranslationSchema = {
       modelUsage: "用法：/model <id>   （{hint}）",
       modelNotInCatalog:
         "model → {id}   （⚠ 不在获取的目录中：{list}。如果这是错误的，下次调用将返回 400 — 运行 /models 刷新。）",
+      modelLegacyMigrated: "model → {target}   （{id} 已弃用；使用对应 v4 目标）",
       modelSet: "model → {id}",
       presetAuto: "preset → auto  （v4-flash → v4-pro 在困难轮次切换 · 默认）",
       presetFlash: "preset → flash  （始终使用 v4-flash · 最便宜 · /pro 仍可临时提升一轮）",
@@ -1446,6 +1447,7 @@ export const zhCN: TranslationSchema = {
     cannotList: "无法列出 — {message}",
     parseFailed: "无法解析 settings.json — {message}",
     probeFailed: "探测失败 — {message}",
+    legacyModel: "legacy model {model} 已弃用；迁移到 {target}。命令：`{command}`",
   },
   webErrors: {
     status:

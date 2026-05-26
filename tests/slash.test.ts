@@ -148,16 +148,16 @@ describe("handleSlash", () => {
     expect(r.info).toMatch(/effort=max/);
   });
 
-  it("/model switches the model", () => {
+  it("/model switches the model and migrates legacy ids", () => {
     const loop = makeLoop();
     handleSlash("model", ["deepseek-reasoner"], loop);
-    expect(loop.model).toBe("deepseek-reasoner");
+    expect(loop.model).toBe("deepseek-v4-pro");
   });
 
   it("/model soft-warns when id is not in the fetched catalog but still switches", () => {
     const loop = makeLoop();
     const r = handleSlash("model", ["deepseek-made-up"], loop, {
-      models: ["deepseek-chat", "deepseek-reasoner"],
+      models: ["deepseek-v4-flash", "deepseek-v4-pro"],
     });
     expect(loop.model).toBe("deepseek-made-up");
     expect(r.info).toMatch(/not in the fetched catalog/);
@@ -166,7 +166,7 @@ describe("handleSlash", () => {
   it("/model with no arg opens the unified picker (#371)", () => {
     const loop = makeLoop();
     const r = handleSlash("model", [], loop, {
-      models: ["deepseek-chat", "deepseek-reasoner"],
+      models: ["deepseek-v4-flash", "deepseek-v4-pro"],
     });
     expect(r.openModelPicker).toBe(true);
   });
