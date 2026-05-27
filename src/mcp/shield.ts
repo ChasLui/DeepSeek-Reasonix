@@ -183,7 +183,7 @@ function enforceMaxSize(result: CallToolResult): CallToolResult {
     let maxIdx = -1;
     for (let j = 0; j < current.content.length; j++) {
       const block = current.content[j];
-      if (block.type === "text" && block.text.length > maxLen) {
+      if (block?.type === "text" && block.text.length > maxLen) {
         maxLen = block.text.length;
         maxIdx = j;
       }
@@ -193,9 +193,9 @@ function enforceMaxSize(result: CallToolResult): CallToolResult {
 
     const newContent = [...current.content];
     const block = newContent[maxIdx];
-    if (block.type === "text") {
+    if (block?.type === "text") {
       newContent[maxIdx] = {
-        ...block,
+        type: "text" as const,
         text: `${block.text.slice(0, Math.floor(maxLen / 2))}\n[...TRUNCATED to fit 64KB limit]`,
       };
     }
