@@ -41,7 +41,8 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p dashboard",
     "verify": "npm run build && npm run lint && npm run typecheck && npm run test --silent",
     "prepare": "simple-git-hooks || true",
-    "prepublishOnly": "npm run lint && npm run typecheck && npm run test && npm run build"
+    "prepublishOnly": "npm run lint && npm run typecheck && npm run test && npm run build",
+    "bench-shield": "tsx scripts/bench-mcp-shield.mts"
   },
   "simple-git-hooks": {
     "pre-commit": "npm run lint",

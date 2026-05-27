@@ -290,6 +290,8 @@ export interface ReasonixConfig {
   codeRelations?: boolean | CodeRelationsConfig;
   /** Persistent code graph index. REASONIX_CODE_GRAPH=0 bypasses it; body fields are opt-in. */
   codeGraph?: boolean | CodeGraphConfig;
+  /** MCP response shielding (shape-aware reduction before head+tail truncation). REASONIX_SHIELD=0 disables. */
+  mcpShield?: { enabled?: boolean };
   /** QQ Bot configuration */
   qq?: QQBotConfig;
 }

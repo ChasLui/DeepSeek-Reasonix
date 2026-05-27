@@ -432,6 +432,8 @@ layer can never break a turn.
 populated on every successful compact call. `fallback` is its own id, so a
 misbehaving filter is observable without crashing the loop.
 
+**MCP response shielding.** `flattenMcpResult` applies a shape-aware pre-pass (`src/mcp/shield.ts`) before head+tail truncation: (1) array cap ≤ 50 items, (2) heavy-field strip on array-of-objects keeping 20 signal fields, (3) string cap ≤ 8 KB, (4) total cap ≤ 64 KB with iterative shrink and image-only fail-close stub. Pure function, stateless — no stats accumulation. Kill switch: `REASONIX_SHIELD=0` or `config.mcpShield.enabled = false`. Borrowed from harshal-mcp-proxy (MIT); see `THIRD_PARTY_NOTICES.md`.
+
 ### Structured Payload Encoding — TOON
 
 TOON sits beside Pillar 4 as the structured-data path for payloads. Protocol

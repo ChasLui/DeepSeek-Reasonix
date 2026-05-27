@@ -173,6 +173,11 @@ One JSON file at `~/.reasonix/config.json` plus per-project overrides under `<pr
 | [Web search](https://esengine.github.io/DeepSeek-Reasonix/configuration.html#search) | Mojeek by default; switch to self-hosted SearXNG or Metaso with `/search-engine`. |
 | [Semantic index](https://esengine.github.io/DeepSeek-Reasonix/configuration.html#index) | `reasonix index` — local Ollama or any OpenAI-compatible embedding endpoint. |
 
+**MCP response shield** is on by default — shape-aware size reduction (array cap / heavy-field strip / string cap / 64 KB total cap) applied before head+tail truncation. Disable per-session with `REASONIX_SHIELD=0` or in `config.json`:
+```json
+{ "mcpShield": { "enabled": false } }
+```
+
 <br/>
 
 ## What makes Reasonix different

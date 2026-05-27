@@ -138,6 +138,8 @@ npx reasonix code --dir /path/to/project
 | [Web 搜索](https://esengine.github.io/DeepSeek-Reasonix/configuration.html?lang=zh#search) | 默认 Mojeek；用 `/search-engine` 可切到自托管的 SearXNG 或 Metaso。 |
 | [语义索引](https://esengine.github.io/DeepSeek-Reasonix/configuration.html?lang=zh#index) | `reasonix index` —— 本地 Ollama，或任何 OpenAI 兼容的 embedding 接口。 |
 
+**MCP 响应屏蔽**默认开启 —— 形状感知大小压缩（数组上限 / 重字段剥离 / 字符串上限 / 64 KB 总上限），在 head+tail 截断之前生效。通过环境变量 `REASONIX_SHIELD=0` 或 `config.json` 关闭：`{ "mcpShield": { "enabled": false } }`
+
 <br/>
 
 ## Reasonix 的不同之处

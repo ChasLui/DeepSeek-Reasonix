@@ -5,6 +5,7 @@ import { serializeStringResult } from "../toon/encode-result.js";
 import type { JSONSchema } from "../types.js";
 import type { McpClient } from "./client.js";
 import { LatencyTracker, type SlowEvent, type UnhealthyEvent } from "./latency.js";
+import { shieldMcpResult } from "./shield.js";
 import type {
   CallToolResult,
   McpContentBlock,
@@ -396,13 +397,27 @@ export interface FlattenOptions {
   /** Cap the flattened string at this many characters. Default: no cap. */
   maxChars?: number;
   toonMode?: ToonMode;
+  /** Shield kill-switch override — false bypasses MCP response shielding regardless of REASONIX_SHIELD. */
+  mcpShield?: { enabled?: boolean };
 }
 
 export function flattenMcpResult(result: CallToolResult, opts: FlattenOptions = {}): string {
   validateResultShape(result);
-  const parts = result.content.map((block) => blockToString(block, opts));
+  // Shield pre-pass: shape-aware reduction before head+tail truncation.
+  // Bypass via REASONIX_SHIELD=0 (env) or opts.mcpShield.enabled===false (config).
+  let shielded = result;
+  if (process.env.REASONIX_SHIELD !== "0" && opts.mcpShield?.enabled !== false) {
+    try {
+      shielded = shieldMcpResult(result);
+    } catch {
+      shielded = result; // fail-close: fallback to raw on unexpected shield error
+    }
+  }
+  const parts = shielded.content.map((block) => blockToString(block, opts));
   const joined = parts.join("\n").trim();
-  const prefixed = result.isError ? `ERROR: ${joined || "(no error message from server)"}` : joined;
+  const prefixed = shielded.isError
+    ? `ERROR: ${joined || "(no error message from server)"}`
+    : joined;
   return opts.maxChars ? truncateForModel(prefixed, opts.maxChars) : prefixed;
 }
 
