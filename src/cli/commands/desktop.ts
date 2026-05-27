@@ -1340,11 +1340,14 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
       getMcpPrefix: () => undefined,
       getRequestedCount: () => requested,
       progressSink: { current: null },
+      projectRoot: () => tab.rootDir,
       getToolSelection: () => resolveSessionToolset(),
     });
     tab.mcpRuntime = runtime;
     runtime.setLifecycleSink((notice) => {
       if (notice.kind === "slow") return; // not surfaced in the desktop panel
+      if (notice.kind === "unhealthy") return;
+      if (notice.kind === "permanently_failed") return;
       const cfg = readConfig().mcp ?? [];
       const target = cfg.find((raw) => {
         try {

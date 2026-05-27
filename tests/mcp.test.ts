@@ -1,6 +1,6 @@
 /** MCP client + bridge — in-process fake transport answering initialize / tools/list / tools/call. */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { McpClient } from "../src/mcp/client.js";
 import { bridgeMcpTools, flattenMcpResult } from "../src/mcp/registry.js";
 import type { McpTransport } from "../src/mcp/stdio.js";
@@ -356,6 +356,26 @@ describe("bridgeMcpTools (MCP → ToolRegistry)", () => {
     const result = await registry.dispatch("echo", JSON.stringify({ msg: "hello" }));
     expect(result).toContain("you said: hello");
 
+    await client.close();
+  });
+
+  it("records failed MCP calls into the unhealthy tracker path", async () => {
+    const transport = new FakeMcpTransport({
+      tools: [{ name: "boom", inputSchema: { type: "object", properties: {} } }],
+      errorFor: new Set(["boom"]),
+    });
+    const client = new McpClient({ transport });
+    const onUnhealthy = vi.fn();
+    await client.initialize();
+
+    const { registry } = await bridgeMcpTools(client, { onUnhealthy });
+    for (let i = 0; i < 5; i++) {
+      const out = await registry.dispatch("boom", "{}");
+      expect(out).toContain("server-side error");
+    }
+
+    expect(onUnhealthy).toHaveBeenCalledTimes(1);
+    expect(onUnhealthy.mock.calls[0]?.[0]).toMatchObject({ reason: "error_rate" });
     await client.close();
   });
 

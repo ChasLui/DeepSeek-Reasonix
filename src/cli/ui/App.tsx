@@ -1267,6 +1267,10 @@ function AppInner({
           `${notice.reason}\nrun \`reasonix setup\` to remove this entry, or fix the underlying issue (missing npm package, network, etc.).`,
         );
         bumpReady();
+      } else if (notice.kind === "unhealthy") {
+        log.pushWarning(`MCP ${notice.serverName} unhealthy`, notice.reason);
+      } else if (notice.kind === "permanently_failed") {
+        log.pushWarning(`MCP ${notice.name} permanently failed`, notice.reason);
       } else if (notice.kind === "tools-ready") {
         log.pushInfo(
           formatMcpLifecycleEvent({
@@ -3048,6 +3052,11 @@ function AppInner({
                 const r = await mcpRuntime.reloadFromConfig(loop);
                 setLiveMcpServers(r.summaries);
                 return r;
+              }
+            : undefined,
+          mcpRuntime: mcpRuntime
+            ? {
+                refilter: () => mcpRuntime.refilter(loop),
               }
             : undefined,
           latestVersion,

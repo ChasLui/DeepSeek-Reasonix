@@ -4,8 +4,14 @@ import { ToolRegistry } from "../tools.js";
 import { serializeStringResult } from "../toon/encode-result.js";
 import type { JSONSchema } from "../types.js";
 import type { McpClient } from "./client.js";
-import { LatencyTracker, type SlowEvent } from "./latency.js";
-import type { CallToolResult, McpContentBlock } from "./types.js";
+import { LatencyTracker, type SlowEvent, type UnhealthyEvent } from "./latency.js";
+import type {
+  CallToolResult,
+  McpContentBlock,
+  McpPromptMessage,
+  McpResourceContents,
+  McpTool,
+} from "./types.js";
 
 export interface BridgeOptions {
   /** Prefix for tool names — disambiguates collisions when bridging multiple servers. */
@@ -14,6 +20,8 @@ export interface BridgeOptions {
   registry?: ToolRegistry;
   /** Session toolset gate — when present, a bridged tool whose name returns false is unregistered and excluded from `registeredNames` (never enters the prefix). Absent ⟹ all bridged tools kept. */
   toolFilter?: (registeredName: string) => boolean;
+  /** Warm tools/list candidate loaded from the stdio schema cache after synchronous metadata verification. */
+  mcpToolsOverride?: McpTool[];
   /** Auto-flatten deep schemas (Pillar 3). Defaults to the registry's own default (true). */
   autoFlatten?: boolean;
   /** Cap on tool result chars; head+tail truncation. Floor against context-poisoning oversized reads. */
@@ -31,6 +39,8 @@ export interface BridgeOptions {
   slowThresholdMs?: number;
   /** Fired exactly when the per-server p95 transitions over `slowThresholdMs`. */
   onSlow?: (ev: SlowEvent) => void;
+  /** Fired once when latency or error samples cross the unhealthy threshold. */
+  onUnhealthy?: (ev: UnhealthyEvent) => void;
   /** Indirection so reconnect can swap the underlying client without re-registering tools. */
   host?: McpClientHost;
   /** Awaited before each `callTool` — resolves on `connected`, rejects on `failed`, caps via `readyTimeoutMs`. */
@@ -56,6 +66,8 @@ export interface BridgeResult {
   registry: ToolRegistry;
   /** Names actually registered (may differ from MCP names when a prefix is applied). */
   registeredNames: string[];
+  /** Raw server tool list used as reconnect/listChanged baseline. */
+  mcpTools: McpTool[];
   /** Names the server listed but the bridge skipped (e.g. invalid schemas). */
   skipped: Array<{ name: string; reason: string }>;
 }
@@ -100,13 +112,25 @@ export function registerSingleMcpTool(
       // Resolve client at call time via the host indirection so `/mcp reconnect`
       // can swap a fresh client in without re-bridging tools.
       const live = env.host.client;
-      const toolResult = await live.callTool(mcpTool.name, args, {
-        onProgress: env.onProgress
-          ? (info) => env.onProgress!({ toolName: registeredName, ...info })
-          : undefined,
-        signal: ctx?.signal,
-      });
-      if (env.tracker) env.tracker.record(Date.now() - t0);
+      let toolResult: CallToolResult;
+      try {
+        toolResult = await live.callTool(mcpTool.name, args, {
+          onProgress: env.onProgress
+            ? (info) => env.onProgress!({ toolName: registeredName, ...info })
+            : undefined,
+          signal: ctx?.signal,
+        });
+        if (env.tracker) env.tracker.record({ ok: true, elapsedMs: Date.now() - t0 });
+      } catch (err) {
+        if (env.tracker) {
+          env.tracker.record({
+            ok: false,
+            elapsedMs: Date.now() - t0,
+            errorKind: classifyMcpCallError(err),
+          });
+        }
+        throw err;
+      }
       return flattenMcpResult(toolResult, {
         maxChars: env.maxResultChars,
         toonMode: env.registry.toonMode,
@@ -178,15 +202,22 @@ export async function bridgeMcpTools(
   const registry = opts.registry ?? new ToolRegistry({ autoFlatten: opts.autoFlatten });
   const prefix = opts.namePrefix ?? "";
   const maxResultChars = opts.maxResultChars ?? DEFAULT_MAX_RESULT_CHARS;
-  const result: BridgeResult = { registry, registeredNames: [], skipped: [] };
+  const result: BridgeResult = {
+    registry,
+    registeredNames: [],
+    mcpTools: [],
+    skipped: [],
+  };
 
   const serverName = opts.serverName ?? prefix.replace(/_$/, "") ?? "anon";
-  const tracker = opts.onSlow
-    ? new LatencyTracker(serverName, {
-        thresholdMs: opts.slowThresholdMs,
-        onSlow: opts.onSlow,
-      })
-    : null;
+  const tracker =
+    opts.onSlow || opts.onUnhealthy
+      ? new LatencyTracker(serverName, {
+          thresholdMs: opts.slowThresholdMs,
+          onSlow: opts.onSlow,
+          onUnhealthy: opts.onUnhealthy,
+        })
+      : null;
   // Synthesize a host on the fly when the caller didn't provide one. Older
   // callers (tests, single-shot non-reconnectable bridges) get the live
   // `client` reference frozen in; reconnect-aware callers pass their own
@@ -203,7 +234,10 @@ export async function bridgeMcpTools(
     readyTimeoutMs: opts.readyTimeoutMs ?? DEFAULT_READY_TIMEOUT_MS,
     serverName,
   };
-  const listed = await client.listTools();
+  const listed = opts.mcpToolsOverride
+    ? { tools: opts.mcpToolsOverride }
+    : await client.listTools();
+  result.mcpTools = listed.tools;
   for (const mcpTool of listed.tools) {
     if (!mcpTool.name) {
       result.skipped.push({ name: "?", reason: "empty tool name" });
@@ -222,6 +256,140 @@ export async function bridgeMcpTools(
     result.registeredNames.push(registeredName);
   }
   return { ...result, env };
+}
+
+export async function bridgeMcpResources(
+  client: McpClient,
+  opts: Pick<BridgeOptions, "registry" | "serverName" | "maxResultChars"> = {},
+): Promise<BridgeResult> {
+  const registry = opts.registry ?? new ToolRegistry();
+  const result: BridgeResult = {
+    registry,
+    registeredNames: [],
+    mcpTools: [],
+    skipped: [],
+  };
+  if (!capabilityAdvertised(client.serverCapabilities.resources)) return result;
+  const knownResourceUris = new Set<string>();
+  const knownResourceTemplates = new Set<RegExp>();
+  const DEFAULT_SCHEMES: readonly string[] = ["http:", "https:"];
+  let allowedSchemes = new Set<string>(DEFAULT_SCHEMES);
+  const maxChars = opts.maxResultChars ?? DEFAULT_MAX_RESULT_CHARS;
+  const prefix = mcpToolNamespace(opts.serverName ?? client.serverInfo.name);
+
+  const listName = `${prefix}list_resources`;
+  registry.register({
+    name: listName,
+    description: "List resources exposed by this MCP server.",
+    parameters: { type: "object", properties: {} },
+    readOnly: true,
+    parallelSafe: true,
+    fn: async () => {
+      const listed = await client.listResources();
+      const nextSchemes = new Set<string>(DEFAULT_SCHEMES);
+      knownResourceUris.clear();
+      knownResourceTemplates.clear();
+      for (const resource of listed.resources) {
+        knownResourceUris.add(resource.uri);
+        const scheme = uriScheme(resource.uri);
+        if (scheme && !blockedUriScheme(scheme)) nextSchemes.add(scheme);
+      }
+      for (const template of resourceTemplates(listed)) {
+        knownResourceTemplates.add(uriTemplateToRegExp(template));
+        const scheme = uriScheme(template.replace(/\{[^}]+\}/g, "placeholder"));
+        if (scheme && !blockedUriScheme(scheme)) nextSchemes.add(scheme);
+      }
+      allowedSchemes = nextSchemes;
+      return JSON.stringify(listed, null, 2);
+    },
+  });
+  result.registeredNames.push(listName);
+
+  const readName = `${prefix}read_resource`;
+  registry.register({
+    name: readName,
+    description: "Read a previously listed resource from this MCP server.",
+    parameters: {
+      type: "object",
+      properties: {
+        uri: {
+          type: "string",
+          description: "Resource URI from list_resources.",
+        },
+      },
+      required: ["uri"],
+    },
+    readOnly: true,
+    fn: async (args: { uri?: unknown }) => {
+      const uri = typeof args.uri === "string" ? args.uri : "";
+      assertReadableResourceUri(uri, knownResourceUris, knownResourceTemplates, allowedSchemes);
+      const result = await client.readResource(uri);
+      return formatResourceContents(result.contents, maxChars);
+    },
+  });
+  result.registeredNames.push(readName);
+  return result;
+}
+
+export async function bridgeMcpPrompts(
+  client: McpClient,
+  opts: Pick<BridgeOptions, "registry" | "serverName" | "maxResultChars"> = {},
+): Promise<BridgeResult> {
+  const registry = opts.registry ?? new ToolRegistry();
+  const result: BridgeResult = {
+    registry,
+    registeredNames: [],
+    mcpTools: [],
+    skipped: [],
+  };
+  if (!capabilityAdvertised(client.serverCapabilities.prompts)) return result;
+  const maxChars = opts.maxResultChars ?? DEFAULT_MAX_RESULT_CHARS;
+  const prefix = mcpToolNamespace(opts.serverName ?? client.serverInfo.name);
+
+  const listName = `${prefix}list_prompts`;
+  registry.register({
+    name: listName,
+    description: "List prompt templates exposed by this MCP server.",
+    parameters: { type: "object", properties: {} },
+    readOnly: true,
+    parallelSafe: true,
+    fn: async () => JSON.stringify(await client.listPrompts(), null, 2),
+  });
+  result.registeredNames.push(listName);
+
+  const getName = `${prefix}get_prompt`;
+  registry.register({
+    name: getName,
+    description: "Get a prompt template from this MCP server.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        arguments: { type: "object", properties: {} },
+      },
+      required: ["name"],
+    },
+    readOnly: true,
+    fn: async (args: { name?: unknown; arguments?: unknown }) => {
+      const name = typeof args.name === "string" ? args.name : "";
+      if (!name) throw new Error("name is required");
+      const rawArgs =
+        args.arguments && typeof args.arguments === "object" && !Array.isArray(args.arguments)
+          ? stringRecord(args.arguments as Record<string, unknown>)
+          : undefined;
+      const prompt = await client.getPrompt(name, rawArgs);
+      return JSON.stringify(
+        {
+          ...prompt,
+          messages: prompt.messages.map((m) => sanitizePromptMessage(m, maxChars)),
+        },
+        null,
+        2,
+      );
+    },
+  });
+  result.registeredNames.push(getName);
+  return result;
 }
 
 export interface FlattenOptions {
@@ -271,6 +439,121 @@ function validateResultShape(result: CallToolResult): void {
         );
     }
   }
+}
+
+function classifyMcpCallError(err: unknown): "timeout" | "error" {
+  const message = err instanceof Error ? err.message : String(err);
+  return /\btimeout|timed out\b/i.test(message) ? "timeout" : "error";
+}
+
+function capabilityAdvertised(capability: unknown): boolean {
+  return typeof capability === "object" && capability !== null;
+}
+
+function mcpToolNamespace(serverName: string): string {
+  const cleaned = serverName.replace(/[^a-zA-Z0-9_]/g, "_").replace(/^_+|_+$/g, "");
+  return `mcp__${cleaned || "server"}__`;
+}
+
+function uriScheme(uri: string): string | null {
+  try {
+    return new URL(uri).protocol;
+  } catch {
+    return null;
+  }
+}
+
+function blockedUriScheme(scheme: string): boolean {
+  return ["data:", "javascript:", "vbscript:", "chrome:", "chrome-extension:"].includes(scheme);
+}
+
+function assertReadableResourceUri(
+  uri: string,
+  knownResourceUris: ReadonlySet<string>,
+  knownResourceTemplates: ReadonlySet<RegExp>,
+  allowedSchemes: ReadonlySet<string>,
+): void {
+  if (
+    !knownResourceUris.has(uri) &&
+    ![...knownResourceTemplates].some((template) => template.test(uri))
+  ) {
+    throw new Error("read_resource uri must come from this session's list_resources result");
+  }
+  const scheme = uriScheme(uri);
+  if (!scheme || blockedUriScheme(scheme) || !allowedSchemes.has(scheme)) {
+    throw new Error(`read_resource blocked URI scheme: ${scheme ?? "(none)"}`);
+  }
+}
+
+function resourceTemplates(listed: unknown): string[] {
+  const raw = (listed as { resourceTemplates?: unknown }).resourceTemplates;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((entry) =>
+      typeof entry === "object" && entry !== null
+        ? (entry as { uriTemplate?: unknown }).uriTemplate
+        : undefined,
+    )
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
+}
+
+function uriTemplateToRegExp(template: string): RegExp {
+  const pattern = template
+    .split(/(\{[^}]+\})/g)
+    .map((part) => (part.startsWith("{") ? "[^/]+" : part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+    .join("");
+  return new RegExp(`^${pattern}$`);
+}
+
+function formatResourceContents(
+  contents: readonly McpResourceContents[],
+  maxChars: number,
+): string {
+  const parts = contents.map((content) => {
+    if ("blob" in content) {
+      const size = estimateBase64DecodedBytes(content.blob);
+      if (size > maxChars) throw new Error(`resource blob exceeds ${maxChars} bytes`);
+      return `[binary resource ${content.uri}, ${content.mimeType ?? "application/octet-stream"}, ${size} bytes]`;
+    }
+    if (content.text.length > maxChars) throw new Error(`resource text exceeds ${maxChars} bytes`);
+    return content.text;
+  });
+  return parts.join("\n").trim();
+}
+
+function estimateBase64DecodedBytes(value: string): number {
+  const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((value.length * 3) / 4) - padding);
+}
+
+function sanitizePromptMessage(message: McpPromptMessage, maxChars: number): McpPromptMessage {
+  if (message.content.type !== "resource") return message;
+  const resource = message.content.resource;
+  if (!("blob" in resource)) {
+    if (resource.text.length <= maxChars) return message;
+    return {
+      ...message,
+      content: {
+        type: "text",
+        text: `[text resource ${resource.uri}, ${resource.mimeType ?? "text/plain"}, ${resource.text.length} bytes truncated]`,
+      },
+    };
+  }
+  return {
+    ...message,
+    content: {
+      type: "text",
+      text: `[binary resource ${resource.uri}, ${resource.mimeType ?? "application/octet-stream"}, ${estimateBase64DecodedBytes(resource.blob)} bytes]`,
+    },
+  };
+}
+
+function stringRecord(value: Record<string, unknown>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item === "string") out[key] = item;
+  }
+  return out;
 }
 
 /** Head + 1KB tail so error messages at end of stack traces aren't lost. */

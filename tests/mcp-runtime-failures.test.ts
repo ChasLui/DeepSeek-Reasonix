@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => {
   const closeMock = vi.fn(async () => undefined);
   const bridgeMcpToolsMock = vi.fn(async (_client: unknown, opts: any) => ({
     registeredNames: [],
+    mcpTools: [],
     env: {
       registry: opts.registry,
       host: opts.host,
@@ -34,6 +35,15 @@ const mocks = vi.hoisted(() => {
     async close() {
       return closeMock();
     }
+    onToolsListChanged() {
+      return () => undefined;
+    }
+    onResourcesListChanged() {
+      return () => undefined;
+    }
+    onPromptsListChanged() {
+      return () => undefined;
+    }
   }
 
   class FakeTransport {}
@@ -56,7 +66,12 @@ vi.mock("../src/config.js", async (importOriginal) => {
 
 vi.mock("../src/mcp/client.js", () => ({ McpClient: mocks.FakeMcpClient }));
 vi.mock("../src/mcp/inspect.js", () => ({ inspectMcpServer: mocks.inspectMcpServerMock }));
-vi.mock("../src/mcp/registry.js", () => ({ bridgeMcpTools: mocks.bridgeMcpToolsMock }));
+vi.mock("../src/mcp/registry.js", () => ({
+  bridgeMcpTools: mocks.bridgeMcpToolsMock,
+  bridgeMcpResources: vi.fn(async () => ({ registeredNames: [], mcpTools: [], skipped: [] })),
+  bridgeMcpPrompts: vi.fn(async () => ({ registeredNames: [], mcpTools: [], skipped: [] })),
+  registerSingleMcpTool: vi.fn(() => ""),
+}));
 vi.mock("../src/mcp/sse.js", () => ({ SseTransport: mocks.FakeTransport }));
 vi.mock("../src/mcp/stdio.js", () => ({ StdioTransport: mocks.FakeTransport }));
 vi.mock("../src/mcp/streamable-http.js", () => ({
@@ -82,6 +97,7 @@ describe("createMcpRuntime — failure tracking", () => {
       getMcpPrefix: () => undefined,
       getRequestedCount: () => 1,
       progressSink: { current: null },
+      projectRoot: () => process.cwd(),
     });
   }
 

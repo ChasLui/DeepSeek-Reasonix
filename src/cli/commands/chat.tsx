@@ -281,6 +281,7 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
     getMcpPrefix: () => opts.mcpPrefix,
     getRequestedCount: () => requestedSpecs.length,
     progressSink,
+    projectRoot: () => opts.codeMode?.rootDir ?? process.cwd(),
     getToolSelection: () => resolveSessionToolset(),
   });
 

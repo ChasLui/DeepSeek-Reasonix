@@ -131,6 +131,9 @@ export interface SlashContext {
     failed: Array<{ spec: string; reason: string }>;
     summaries: McpServerSummary[];
   }>;
+  mcpRuntime?: {
+    refilter: () => Promise<{ added: string[]; removed: string[] }>;
+  };
   /** `null` → still in flight OR offline; consumers can't distinguish, so always offer `refreshLatestVersion`. */
   latestVersion?: string | null;
   refreshLatestVersion?: () => void;

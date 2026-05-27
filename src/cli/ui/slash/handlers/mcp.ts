@@ -19,6 +19,14 @@ const mcp: SlashHandler = (args, loop, ctx) => {
   if (sub === "reconnect") {
     return triggerReconnect(args[1], servers, ctx.postInfo, loop);
   }
+  if (sub === "refilter") {
+    const mcpRuntime = ctx.mcpRuntime;
+    if (!mcpRuntime) return { info: "MCP runtime unavailable" };
+    void mcpRuntime.refilter().then((r) => {
+      ctx.postInfo?.(`MCP refilter: +${r.added.length} -${r.removed.length}`);
+    });
+    return { info: "MCP refilter started" };
+  }
   if (sub === "browse" || sub === "install" || sub === "marketplace") {
     return { openMcpHub: { tab: "marketplace" } };
   }

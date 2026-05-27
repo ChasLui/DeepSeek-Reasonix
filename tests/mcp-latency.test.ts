@@ -62,6 +62,32 @@ describe("LatencyTracker", () => {
     for (const ms of [5000, 5000, 5000, 5000, 5000]) t.record(ms);
     expect(onSlow).toHaveBeenCalledTimes(1);
   });
+
+  it("fires onUnhealthy once for a timeout streak", () => {
+    const onUnhealthy = vi.fn();
+    const t = new LatencyTracker("notion", { onUnhealthy });
+    for (let i = 0; i < 5; i++) t.record({ ok: false, elapsedMs: 100, errorKind: "timeout" });
+    for (let i = 0; i < 5; i++) t.record({ ok: false, elapsedMs: 100, errorKind: "timeout" });
+    expect(onUnhealthy).toHaveBeenCalledTimes(1);
+    expect(onUnhealthy.mock.calls[0]?.[0]).toMatchObject({
+      serverName: "notion",
+      reason: "timeout_streak",
+      timeoutStreak: 3,
+    });
+  });
+
+  it("fires onUnhealthy for error-rate windows even when p95 is fast", () => {
+    const onUnhealthy = vi.fn();
+    const t = new LatencyTracker("notion", { thresholdMs: 1000, onUnhealthy });
+    for (const ok of [false, false, false, true, true]) {
+      t.record({ ok, elapsedMs: 100, errorKind: ok ? undefined : "error" });
+    }
+    expect(onUnhealthy).toHaveBeenCalledTimes(1);
+    expect(onUnhealthy.mock.calls[0]?.[0]).toMatchObject({
+      reason: "error_rate",
+      errorRate: 0.6,
+    });
+  });
 });
 
 describe("formatMcpSlowToast", () => {

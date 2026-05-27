@@ -38,6 +38,8 @@ interface PendingRequest {
   timeout: NodeJS.Timeout;
 }
 
+type ListChangedHandler = () => void | Promise<void>;
+
 export class McpClient {
   private readonly transport: McpTransport;
   private readonly clientInfo: McpClientInfo;
@@ -50,6 +52,10 @@ export class McpClient {
   private _serverInfo: InitializeResult["serverInfo"] = { name: "", version: "" };
   private _protocolVersion = "";
   private _instructions: string | undefined;
+  private readonly toolsListChangedHandlers = new Set<ListChangedHandler>();
+  private readonly resourcesListChangedHandlers = new Set<ListChangedHandler>();
+  private readonly promptsListChangedHandlers = new Set<ListChangedHandler>();
+  private readonly notificationDropCounts = new Map<string, number>();
   // Progress-token → handler for notifications/progress routing. Tokens
   // are minted per call when the caller supplies an onProgress
   // callback; cleared when the final response lands (or the pending
@@ -176,6 +182,31 @@ export class McpClient {
     } satisfies GetPromptParams);
   }
 
+  onToolsListChanged(cb: ListChangedHandler): () => void {
+    this.toolsListChangedHandlers.add(cb);
+    return () => {
+      this.toolsListChangedHandlers.delete(cb);
+    };
+  }
+
+  onResourcesListChanged(cb: ListChangedHandler): () => void {
+    this.resourcesListChangedHandlers.add(cb);
+    return () => {
+      this.resourcesListChangedHandlers.delete(cb);
+    };
+  }
+
+  onPromptsListChanged(cb: ListChangedHandler): () => void {
+    this.promptsListChangedHandlers.add(cb);
+    return () => {
+      this.promptsListChangedHandlers.delete(cb);
+    };
+  }
+
+  notificationDropCount(metric: "mcp.notification.dropped.no_capability"): number {
+    return this.notificationDropCounts.get(metric) ?? 0;
+  }
+
   /** Close the transport and reject any outstanding requests. */
   async close(): Promise<void> {
     for (const [, pending] of this.pending) {
@@ -284,18 +315,9 @@ export class McpClient {
   }
 
   private dispatch(msg: JsonRpcMessage): void {
-    // Notifications (no `id`): route by method. Progress notifications
-    // go to the per-call handler if one was registered; everything
-    // else is dropped silently (we don't yet handle tools/list_changed
-    // or resources/list_changed).
     if (!("id" in msg) || msg.id === null || msg.id === undefined) {
-      if ("method" in msg && msg.method === "notifications/progress") {
-        const p = msg.params as ProgressNotificationParams | undefined;
-        if (!p || p.progressToken === undefined) return;
-        const handler = this.progressHandlers.get(p.progressToken);
-        if (!handler) return; // late notification after the call resolved
-        handler({ progress: p.progress, total: p.total, message: p.message });
-      }
+      if (!("method" in msg)) return;
+      this.dispatchNotification(msg.method, msg.params);
       return;
     }
     if (!("result" in msg) && !("error" in msg)) return; // it's a request from server
@@ -310,4 +332,57 @@ export class McpClient {
       pending.resolve(resp.result);
     }
   }
+
+  private dispatchNotification(method: string, params: unknown): void {
+    if (method === "notifications/progress") {
+      const p = params as ProgressNotificationParams | undefined;
+      if (!p || p.progressToken === undefined) return;
+      const handler = this.progressHandlers.get(p.progressToken);
+      if (!handler) return;
+      handler({ progress: p.progress, total: p.total, message: p.message });
+      return;
+    }
+    if (method === "notifications/tools/list_changed") {
+      this.dispatchListChanged(
+        this._serverCapabilities.tools?.listChanged === true,
+        this.toolsListChangedHandlers,
+      );
+      return;
+    }
+    if (method === "notifications/resources/list_changed") {
+      this.dispatchListChanged(
+        capabilityListChanged(this._serverCapabilities.resources),
+        this.resourcesListChangedHandlers,
+      );
+      return;
+    }
+    if (method === "notifications/prompts/list_changed") {
+      this.dispatchListChanged(
+        capabilityListChanged(this._serverCapabilities.prompts),
+        this.promptsListChangedHandlers,
+      );
+    }
+  }
+
+  private dispatchListChanged(enabled: boolean, handlers: Set<ListChangedHandler>): void {
+    if (!enabled) {
+      this.incrementDrop("mcp.notification.dropped.no_capability");
+      return;
+    }
+    for (const handler of handlers) {
+      Promise.resolve(handler()).catch(() => undefined);
+    }
+  }
+
+  private incrementDrop(metric: "mcp.notification.dropped.no_capability"): void {
+    this.notificationDropCounts.set(metric, (this.notificationDropCounts.get(metric) ?? 0) + 1);
+  }
+}
+
+function capabilityListChanged(capability: unknown): boolean {
+  return (
+    typeof capability === "object" &&
+    capability !== null &&
+    (capability as { listChanged?: unknown }).listChanged === true
+  );
 }
