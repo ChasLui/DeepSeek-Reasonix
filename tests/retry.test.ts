@@ -21,7 +21,10 @@ function makeFetch(responses: Array<Response | Error | (() => Response | Error)>
   };
 }
 
-const BASE: Parameters<typeof fetchWithRetry>[3] = { initialBackoffMs: 1, maxBackoffMs: 50 };
+const BASE: Parameters<typeof fetchWithRetry>[3] = {
+  initialBackoffMs: 1,
+  maxBackoffMs: 50,
+};
 
 describe("fetchWithRetry", () => {
   it("returns immediately on success", async () => {
@@ -75,12 +78,31 @@ describe("fetchWithRetry", () => {
   });
 
   it("gives up after maxAttempts and rethrows the last network error", async () => {
-    const err = new TypeError("dns lookup failed");
+    const err = new TypeError("fetch failed");
+    Object.defineProperty(err, "cause", { value: { code: "ENOTFOUND" } });
     const f = makeFetch([err, err, err]);
     await expect(
       fetchWithRetry(f.fn, "https://x", {}, { ...BASE, maxAttempts: 3 }),
-    ).rejects.toThrow(/dns lookup failed/);
+    ).rejects.toThrow(/fetch failed/);
     expect(f.calls).toBe(3);
+  });
+
+  it("does NOT retry permanent (non-network) errors", async () => {
+    const err = new TypeError("Failed to parse URL from not-a-url");
+    const f = makeFetch([err, err, err]);
+    await expect(
+      fetchWithRetry(f.fn, "https://x", {}, { ...BASE, maxAttempts: 3 }),
+    ).rejects.toThrow(/Failed to parse URL/);
+    expect(f.calls).toBe(1);
+  });
+
+  it("recognizes Undici cause.code (ECONNREFUSED) as transient", async () => {
+    const err = new TypeError("fetch failed");
+    Object.defineProperty(err, "cause", { value: { code: "ECONNREFUSED" } });
+    const f = makeFetch([err, new Response("ok", { status: 200 })]);
+    const r = await fetchWithRetry(f.fn, "https://x", {}, BASE);
+    expect(r.status).toBe(200);
+    expect(f.calls).toBe(2);
   });
 
   it("does NOT retry when request is aborted", async () => {

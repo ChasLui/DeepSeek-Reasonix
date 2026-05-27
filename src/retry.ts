@@ -61,12 +61,21 @@ export async function fetchWithRetry(
       await resp.text().catch(() => undefined);
 
       const waitMs = computeWait(attempt, initial, cap, retryAfter, overrideMs);
-      opts.onRetry?.({ attempt: attempt + 1, reason: `http ${resp.status}`, waitMs });
+      opts.onRetry?.({
+        attempt: attempt + 1,
+        reason: `http ${resp.status}`,
+        waitMs,
+      });
       await sleep(waitMs, opts.signal);
     } catch (err) {
       lastError = err;
       // Respect explicit aborts — do not retry.
       if (isAbortError(err) || opts.signal?.aborted) throw err;
+      // Permanent errors (invalid URL, malformed init, JSON parse) shouldn't
+      // burn the retry budget. Adapted from sindresorhus/is-network-error +
+      // Node Undici's cause.code convention.
+      const isTransient = isRateLimitTimeoutError(err) || isFetchNetworkError(err);
+      if (!isTransient) throw err;
       if (attempt === maxAttempts - 1) throw err;
 
       const waitMs = computeWait(attempt, initial, cap, null, undefined);
@@ -134,4 +143,53 @@ function messageOf(err: unknown): string {
   } catch {
     return "unknown error";
   }
+}
+
+const NETWORK_ERROR_MESSAGES = new Set([
+  "network error",
+  "NetworkError when attempting to fetch resource.",
+  "The Internet connection appears to be offline.",
+  "Network request failed",
+  "fetch failed",
+  "terminated",
+  " A network error occurred.",
+  "Network connection lost",
+]);
+
+const NETWORK_ERROR_CAUSE_CODES = new Set([
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "ETIMEDOUT",
+  "EPIPE",
+  "UND_ERR_SOCKET",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_BODY_TIMEOUT",
+]);
+
+/** Recognized fetch failures (cross-runtime + Node Undici cause.code). Anything else is permanent and bypasses retry. */
+function isFetchNetworkError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const error = err as {
+    name?: unknown;
+    message?: unknown;
+    stack?: unknown;
+    cause?: unknown;
+  };
+  if (error.name !== "TypeError" || typeof error.message !== "string") return false;
+  const message = error.message;
+  if (NETWORK_ERROR_MESSAGES.has(message)) return true;
+  if (message === "Failed to fetch") return true;
+  if (message.startsWith("Failed to fetch (") && message.endsWith(")")) return true;
+  if (message === "Load failed" || (message.startsWith("Load failed (") && message.endsWith(")"))) {
+    return error.stack === undefined;
+  }
+  if (message.startsWith("error sending request for url")) return true;
+  if (error.cause && typeof error.cause === "object") {
+    const code = (error.cause as { code?: unknown }).code;
+    if (typeof code === "string" && NETWORK_ERROR_CAUSE_CODES.has(code)) return true;
+  }
+  return false;
 }
