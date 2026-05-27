@@ -1,6 +1,6 @@
 /** MCP client + bridge — in-process fake transport answering initialize / tools/list / tools/call. */
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { McpClient } from "../src/mcp/client.js";
 import { bridgeMcpTools, flattenMcpResult } from "../src/mcp/registry.js";
 import type { McpTransport } from "../src/mcp/stdio.js";
@@ -375,7 +375,9 @@ describe("bridgeMcpTools (MCP → ToolRegistry)", () => {
     }
 
     expect(onUnhealthy).toHaveBeenCalledTimes(1);
-    expect(onUnhealthy.mock.calls[0]?.[0]).toMatchObject({ reason: "error_rate" });
+    expect(onUnhealthy.mock.calls[0]?.[0]).toMatchObject({
+      reason: "error_rate",
+    });
     await client.close();
   });
 
@@ -432,7 +434,11 @@ describe("flattenMcpResult", () => {
 
   it("truncates oversized results when maxChars is given, keeping head + tail", () => {
     const big = `${"X".repeat(50_000)}END_MARKER`;
-    const out = flattenMcpResult({ content: [{ type: "text", text: big }] }, { maxChars: 10_000 });
+    // mcpShield disabled: this test targets head+tail truncation only, not the shape-aware pre-pass
+    const out = flattenMcpResult(
+      { content: [{ type: "text", text: big }] },
+      { maxChars: 10_000, mcpShield: { enabled: false } },
+    );
     expect(out.length).toBeLessThan(11_000); // cap + a small envelope
     expect(out).toContain("truncated");
     // tail preservation: the distinctive END_MARKER at the original's end must survive
@@ -523,6 +529,12 @@ describe("flattenMcpResult: schema validation", () => {
 });
 
 describe("bridgeMcpTools: result-size cap", () => {
+  beforeEach(() => {
+    process.env.REASONIX_SHIELD = "0"; // test targets maxChars cap, not shield
+  });
+  afterEach(() => {
+    process.env.REASONIX_SHIELD = undefined;
+  });
   it("caps a giant MCP tool result before handing it to the registry", async () => {
     // Minimal local fake — just enough to exercise the dispatch path.
     const transport: McpTransport = {

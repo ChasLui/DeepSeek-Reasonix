@@ -35,17 +35,7 @@ export const SIGNAL_FIELDS = new Set([
 // biome-ignore lint/suspicious/noEmptyInterface: reserved for future cap overrides
 export interface ShieldOptions {}
 
-/**
- * Pure function — applies 4-rule shape-aware shield to a CallToolResult.
- * Stateless: no module-level state, no stats accumulation.
- * Rewritten without class/stats/ring-buffer from harshal-mcp-proxy ResponseShield (MIT).
- *
- * Rules applied in order:
- *  1. Array cap (content blocks + nested JSON arrays)
- *  2. Heavy-field strip (array-of-objects with avg field size > threshold)
- *  3. String cap (any string > MAX_STRING_LENGTH)
- *  4. Total size cap (iterative shrink + fail-close)
- */
+// Pure fn: (1) array cap ≤50, (2) heavy-field strip, (3) string cap ≤8KB, (4) total cap ≤64KB. Stateless. Borrowed from harshal-mcp-proxy (MIT).
 export function shieldMcpResult(raw: CallToolResult, _opts?: ShieldOptions): CallToolResult {
   // Rules 1-3: applied to text block content (recursively via processValue)
   let content: McpContentBlock[] = raw.content.map((block) => {
