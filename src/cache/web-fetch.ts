@@ -125,7 +125,14 @@ export class WebFetchCache {
 
   stats(): WebFetchCacheStats {
     if (this.disabled) {
-      return { hits: 0, misses: 0, evictions: 0, sizeBytes: 0, entries: 0, skipped: 0 };
+      return {
+        hits: 0,
+        misses: 0,
+        evictions: 0,
+        sizeBytes: 0,
+        entries: 0,
+        skipped: 0,
+      };
     }
     return {
       hits: this.hits,
@@ -162,7 +169,20 @@ function webFetchCacheKey(rawUrl: string, maxChars: number): string | null {
   }
   if (hasSensitiveFragmentParam(url.hash)) return null;
   url.hash = "";
+  normalizeForCacheKey(url);
   return `${url.href}|${maxChars}`;
+}
+
+function normalizeForCacheKey(url: URL): void {
+  if (url.hostname.startsWith("www.")) url.hostname = url.hostname.slice(4);
+  if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\/+$/, "");
+  if (url.searchParams.size > 1) {
+    const pairs = Array.from(url.searchParams.entries()).sort(([a], [b]) =>
+      a < b ? -1 : a > b ? 1 : 0,
+    );
+    url.search = "";
+    for (const [name, value] of pairs) url.searchParams.append(name, value);
+  }
 }
 
 function hasSensitiveFragmentParam(hash: string): boolean {
@@ -202,7 +222,12 @@ function estimatePageSize(page: PageContent): number {
 }
 
 function copyPage(page: PageContent): PageContent {
-  return { url: page.url, title: page.title, text: page.text, truncated: page.truncated };
+  return {
+    url: page.url,
+    title: page.title,
+    text: page.text,
+    truncated: page.truncated,
+  };
 }
 
 function readPositiveIntEnv(name: string): number | null {

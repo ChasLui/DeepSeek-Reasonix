@@ -20,8 +20,14 @@ describe("WebFetchCache", () => {
         ),
     ) as unknown as typeof fetch;
     try {
-      const first = await webFetch("https://example.com/demo", { cache, maxChars: 500 });
-      const second = await webFetch("https://example.com/demo", { cache, maxChars: 500 });
+      const first = await webFetch("https://example.com/demo", {
+        cache,
+        maxChars: 500,
+      });
+      const second = await webFetch("https://example.com/demo", {
+        cache,
+        maxChars: 500,
+      });
 
       expect(first.text).toBe(second.text);
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);
@@ -64,9 +70,15 @@ describe("WebFetchCache", () => {
       });
     }) as unknown as typeof fetch;
     try {
-      const first = await webFetch("https://example.com/ttl", { cache, maxChars: 500 });
+      const first = await webFetch("https://example.com/ttl", {
+        cache,
+        maxChars: 500,
+      });
       await new Promise((resolve) => setTimeout(resolve, 5));
-      const second = await webFetch("https://example.com/ttl", { cache, maxChars: 500 });
+      const second = await webFetch("https://example.com/ttl", {
+        cache,
+        maxChars: 500,
+      });
 
       expect(first.text).toContain("call 1");
       expect(second.text).toContain("call 2");
@@ -113,7 +125,12 @@ describe("WebFetchCache", () => {
       await webFetch(url, { cache, maxChars: 500 });
 
       expect(globalThis.fetch).toHaveBeenCalledTimes(2);
-      expect(cache.stats()).toMatchObject({ hits: 0, misses: 0, entries: 0, skipped: 4 });
+      expect(cache.stats()).toMatchObject({
+        hits: 0,
+        misses: 0,
+        entries: 0,
+        skipped: 4,
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -138,7 +155,12 @@ describe("WebFetchCache", () => {
     cache.set(url, 500, page);
 
     expect(cache.get(url, 500)).toBeNull();
-    expect(cache.stats()).toMatchObject({ hits: 0, misses: 0, entries: 0, skipped: 2 });
+    expect(cache.stats()).toMatchObject({
+      hits: 0,
+      misses: 0,
+      entries: 0,
+      skipped: 2,
+    });
   });
 
   it("skips URLs with credential-like fragment parameters", async () => {
@@ -157,7 +179,12 @@ describe("WebFetchCache", () => {
       await webFetch(url, { cache, maxChars: 500 });
 
       expect(globalThis.fetch).toHaveBeenCalledTimes(2);
-      expect(cache.stats()).toMatchObject({ hits: 0, misses: 0, entries: 0, skipped: 4 });
+      expect(cache.stats()).toMatchObject({
+        hits: 0,
+        misses: 0,
+        entries: 0,
+        skipped: 4,
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -174,11 +201,52 @@ describe("WebFetchCache", () => {
         }),
     ) as unknown as typeof fetch;
     try {
-      await webFetch("https://example.com/page#section-a", { cache, maxChars: 500 });
-      await webFetch("https://example.com/page#section-b", { cache, maxChars: 500 });
+      await webFetch("https://example.com/page#section-a", {
+        cache,
+        maxChars: 500,
+      });
+      await webFetch("https://example.com/page#section-b", {
+        cache,
+        maxChars: 500,
+      });
 
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);
       expect(cache.stats()).toMatchObject({ hits: 1, misses: 1, entries: 1 });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("normalizes www / trailing slash / query order to one cache key", async () => {
+    const originalFetch = globalThis.fetch;
+    const cache = new WebFetchCache({ ttlMs: 1_000 });
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response("<html><body><p>same page</p></body></html>", {
+          status: 200,
+          headers: { "Content-Type": "text/html" },
+        }),
+    ) as unknown as typeof fetch;
+    try {
+      await webFetch("https://www.example.com/page/?b=2&a=1", {
+        cache,
+        maxChars: 500,
+      });
+      await webFetch("https://example.com/page/?a=1&b=2", {
+        cache,
+        maxChars: 500,
+      });
+      await webFetch("https://www.example.com/page?b=2&a=1", {
+        cache,
+        maxChars: 500,
+      });
+      await webFetch("https://example.com/page?a=1&b=2", {
+        cache,
+        maxChars: 500,
+      });
+
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      expect(cache.stats()).toMatchObject({ hits: 3, misses: 1, entries: 1 });
     } finally {
       globalThis.fetch = originalFetch;
     }
