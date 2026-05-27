@@ -1,6 +1,6 @@
 # Repository Guidelines
 
-> Also read [`REASONIX.md`](./REASONIX.md) (working knowledge), [`CONTRIBUTING.md`](./CONTRIBUTING.md) (code rules — strictly enforced), and [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) (four pillars). This file is the index; those are the source of truth.
+> Also read [`REASONIX.md`](./REASONIX.md) (working knowledge), [`CONTRIBUTING.md`](./CONTRIBUTING.md) (code rules — strictly enforced), [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) (four pillars), [`.wolf/OPENWOLF.md`](./.wolf/OPENWOLF.md) (OpenWolf agent harness protocol — cerebrum / anatomy / buglog / memory.md mandate), and [`bin/plan-lint.sh`](./bin/plan-lint.sh) (RAL plan structure enforcement). This file is the index; those are the source of truth.
 
 ## What this is
 
@@ -76,13 +76,24 @@ Desktop (separate workspace, not part of root build): `cd desktop && npm install
 
 ## Architecture — the four pillars
 
-Edits to `src/loop.ts`, `src/repair/`, `src/tools/`, `src/mcp/` affect every session. Test before touching.
+Edits to `src/loop.ts`, `src/repair/`, `src/tools/`, `src/mcp/` affect every session. Test before touching. Authoritative definitions live in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md#the-four-pillars); the list below is index-level only.
 
-1. **Cache-first loop** (`src/loop.ts`, `src/memory.ts`). Context is partitioned into **immutable prefix** (hashed + pinned for the session), **append-only log** (no rewrites — reordering breaks DeepSeek prefix-cache), and **volatile scratch** (reset each turn, never sent upstream). Anything that rewrites earlier turns is a cache-correctness bug, not a feature.
-2. **Tool-call repair** (`src/repair/`). Four passes — `flatten` (schemas with >10 leaf params or depth >2 auto-dot-notated at registry time, re-nested at dispatch), `scavenge` (regex sweep of `reasoning_content` for forgotten `tool_calls`), `truncation` (close unbalanced JSON or request continuation), `storm` (suppress identical `(tool, args)` within a sliding window). These are DeepSeek failure modes, not generic safety nets.
-3. **Cost control** (`src/loop.ts` + `src/cli/ui/slash/handlers/`). Tiered defaults (`flash` / `auto` / `pro`), turn-end auto-compaction at `TURN_END_RESULT_CAP_TOKENS=3000`, `/pro` one-shot arming, failure-signal auto-escalation at threshold 3. Auxiliary calls (summary after iter limit, subagent spawns, repair retries) **hard-code `v4-flash + effort=high`** regardless of preset — never bill pro rates for paraphrasing.
-4. **Parallel tool dispatch**. Tools opt in via `parallelSafe?: boolean` (default `false`). Read-only FS / web / memory / `recall_memory` / `semantic_search` / isolated child loops are the built-in opt-ins. MCP-bridged tools default `false` unless the server declares parallel safety. Env: `REASONIX_PARALLEL_MAX=3` (cap 16), `REASONIX_TOOL_DISPATCH=serial` escape hatch.
-5. **Output compaction** (`src/compact/`, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#pillar-4--output-compaction-v048)). `rtk`-inspired per-command filter for `run_command` output (git status/log/diff, vitest/jest/pytest/cargo/go test, eslint/biome/tsc, ls/tree/find) + tee-to-disk for the raw bytes. `read_file` adds `level: "aggressive"` (regex signature extractor) for ts/js/py/go/rs. Disable with `REASONIX_COMPACT=0` / `compact.enabled=false`; tee disable with `REASONIX_TEE=0`. All filters are fail-safe — throws fall back to raw.
+1. **Cache-first loop** (`src/loop.ts`, `src/memory.ts`) — immutable prefix + append-only log + volatile scratch; any rewrite of earlier turns is a cache-correctness bug.
+2. **Tool-call repair** (`src/repair/`) — four passes: `flatten` / `scavenge` / `truncation` / `storm`; DeepSeek-specific failure modes, not generic safety nets.
+3. **Cost control** (`src/loop.ts` + `src/cli/ui/slash/handlers/`) — tiered `flash`/`auto`/`pro`, `TURN_END_RESULT_CAP_TOKENS=3000`, `/pro` one-shot, failure auto-escalation thr 3; auxiliary calls hard-coded `v4-flash + effort=high`.
+4. **Output compaction** (`src/compact/`) — `rtk`-inspired per-command filter for `run_command` + `read_file level: "aggressive"`; kill-switch `REASONIX_COMPACT=0` / `REASONIX_TEE=0`.
+
+Non-pillar but mandatory: **Parallel tool dispatch** — `parallelSafe?: boolean` (default false), `REASONIX_PARALLEL_MAX=3` (cap 16), `REASONIX_TOOL_DISPATCH=serial` escape; details in `docs/ARCHITECTURE.md`.
+
+## When to open a RAL plan
+
+Three triggers — any one applies, draft a RAL plan under `docs/plans/YYYY-MM-DD-<name>-ral.md` before coding:
+
+1. **Touches the four-pillar core** (`src/loop.ts`, `src/repair/`, `src/tools/`, `src/mcp/`) with > trivial single-line scope.
+2. **Borrows from another repo** — plan must attest authoritative source via `git rev-parse HEAD` + specific `file:line` anchors (cerebrum `plan-borrow-authoritative-grep-first`).
+3. **Multi-step refactor or feature** with ≥ 2 vertical slices, or any work whose verification needs >2 tool calls.
+
+Enforcement: `bash bin/plan-lint.sh docs/plans/<plan>.md` must exit 0 (E001 filename / E003 sections / E004 FR/NF/C/SC counts / E008 ≥1 slice / E009 HITL|AFK tags / E010 Task tags / E011 PLAN footer). Existing samples under `docs/plans/` are the style reference. Skip the gate only for one-line bug fixes whose verification is a single command.
 
 ## Coding Style & Naming Conventions
 

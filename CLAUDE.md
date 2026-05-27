@@ -6,36 +6,16 @@ This project uses OpenWolf for context management. Read and follow .wolf/OPENWOL
 
 ## Working principles
 
-Derived from Karpathy's four LLM-coding pitfalls ([multica-ai/andrej-karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills)), specialized for this repo's strict, opinionated, DeepSeek-only stack.
+The four behavioral rules (Think before coding / Simplicity first / Surgical changes / Goal-driven execution) live in [AGENTS.md "Working mode"](./AGENTS.md#working-mode-read-before-editing). This section only lists the cerebrum anchors and "apply when" triggers specific to Claude Code sessions.
 
-**1. Think before coding.** Surface assumptions; don't pick silently between interpretations. Before any non-trivial plan or borrow, **grep the authoritative source first** (e.g. `docs/ARCHITECTURE.md`, `AGENTS.md`, current `HEAD`) — memory snapshots may be stale.
+| Principle | Cerebrum anchors | Apply when |
+| --- | --- | --- |
+| Think before coding | `plan-drafting-antipatterns` / `plan-attestation-before-fr-design` / `plan-borrow-authoritative-grep-first` | Drafting RAL plans, borrowing from another repo, deciding refactor scope |
+| Simplicity first | AGENTS.md "Architecture — the four pillars", CONTRIBUTING.md "Libraries over hand-rolled" | Tempted to parameterize, add config flags, or wrap a one-shot in a helper |
+| Surgical changes | `biome-write-expands-commit` (2026-05-25; bash-guard hook now warns on bare `biome --write`) | Running formatters, refactoring, removing imports |
+| Goal-driven execution | existing RAL plans under `docs/plans/`, `bin/plan-lint.sh`; `maos:ralplan` skill | Any task longer than 2 tool calls, especially plan/borrow/refactor work |
 
-- Anchor: cerebrum `plan-drafting-antipatterns` (v2 epistemological vaporware, API-primitive-out-of-thin-air), `plan-attestation-before-fr-design`, `plan-borrow-authoritative-grep-first`.
-- Apply when: drafting RAL plans, borrowing from another repo, deciding on a refactor scope.
-
-**2. Simplicity first.** Minimum code that solves the actual ask. No speculative features, no "future-provider" abstractions, no error handling for impossible scenarios. AGENTS.md says it plainly: *"the architecture is opinionated, not generic — every abstraction exists because DeepSeek's prefix-cache mechanic or pricing demanded it."*
-
-- Anchor: AGENTS.md "Architecture — the four pillars", CONTRIBUTING.md "Libraries over hand-rolled".
-- Apply when: tempted to parameterize, add config flags, or wrap a one-shot in a helper.
-
-**3. Surgical changes.** Touch only what the request requires. Match existing style. Don't reformat adjacent code. If you spot unrelated dead code, mention it — don't delete it. Every changed line must trace to the ask.
-
-- Anchor: cerebrum `biome-write-expands-commit` (2026-05-25 — `biome --write` swept the repo, expanded a 27-file commit to 60). The bash-guard hook now warns on bare `biome --write`.
-- Apply when: running formatters, refactoring, removing imports — limit scope before acting.
-
-**4. Goal-driven execution.** Convert vague asks ("fix the bug", "make it faster") into a verifiable checklist before writing code:
-
-```text
-1. <step> → verify: <command/test that confirms>
-2. <step> → verify: <…>
-```
-
-Strong success criteria let you loop without re-asking. For plans: use `maos:ralplan` skill or `bin/plan-lint.sh` to enforce RAL structure (FRs, NFRs, slices, attestation).
-
-- Anchor: existing RAL plans under `docs/plans/`, `bin/plan-lint.sh`.
-- Apply when: any task longer than 2 tool calls, especially plan/borrow/refactor work.
-
-**Tradeoff stated:** these principles bias toward caution. For trivial single-line fixes, use judgment. For anything that touches `src/loop.ts`, `src/repair/`, `src/tools/`, `src/mcp/`, follow them strictly — those edits affect every session.
+Bias: caution over speed for edits to `src/loop.ts`, `src/repair/`, `src/tools/`, `src/mcp/` (per AGENTS.md). Trivial single-line fixes: use judgment.
 
 ## Memory subsystems — division of labor
 
