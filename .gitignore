@@ -98,5 +98,6 @@ bun.lock
 .wolf/
 docs/plans/*
 bin/plan-lint.sh
+bin/wolf-status.sh
 tmp/
 .claude/scheduled_tasks.lock

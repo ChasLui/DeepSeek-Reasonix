@@ -21,14 +21,16 @@ Bias: caution over speed for edits to `src/loop.ts`, `src/repair/`, `src/tools/`
 
 Three persistent stores, three different scopes. Don't duplicate; if a fact fits two, write it where consumers look first and link from the other.
 
-| Store | Path | Scope | When to write |
-| --- | --- | --- | --- |
-| **auto-memory** | `~/.claude/projects/-Users-chao-liu-...-DeepSeek-Reasonix/memory/` | Cross-session **facts**: user/feedback/project/reference. Each ≤150-char index entry. | User correction, surprising approval, new fact about external system |
-| **`.wolf/cerebrum.md`** | repo (gitignored) | Cross-session **patterns**: Do-Not-Repeat / User Preferences / Key Learnings / Decision Log | OPENWOLF protocol mandates after corrections, project-convention discovery, architectural decisions |
-| **`.wolf/memory.md`** | repo (gitignored) | Per-session **timeline**: `\| time \| action \| file \| outcome \| ~tokens \|` | Auto-appended by session-start + post-write hooks |
-| **`.wolf/anatomy.md`** | repo (gitignored) | File index: 1-line description + token est per file | post-write hook auto-maintains (skips `../` paths after 2026-05-26 fix) |
-| **`.wolf/buglog.json`** | repo (gitignored) | Bug fixes: error → root_cause → fix → tags. **Lookup-before-fix mandatory.** | Any bug fix, failed test, repeated edit on same file |
-| **`.serena/memories/`** | repo (gitignored) | Code-layer symbol knowledge (LSP-derived). Currently empty by design. | Reserved for `mcp__serena__write_memory` ts/rust symbol notes |
+| Store | Path | Scope | When to write | Rotation policy |
+| --- | --- | --- | --- | --- |
+| **auto-memory** | `~/.claude/projects/-Users-chao-liu-...-DeepSeek-Reasonix/memory/` | Cross-session **facts**: user/feedback/project/reference. Each ≤150-char index entry. | User correction, surprising approval, new fact about external system | One file per fact; MEMORY.md index truncates after 200 lines |
+| **`.wolf/cerebrum.md`** | repo (gitignored) | Cross-session **patterns**: Do-Not-Repeat / User Preferences / Key Learnings / Decision Log | OPENWOLF protocol mandates after corrections, project-convention discovery, architectural decisions | Manual; archive sections to `.wolf/archive/YYYY-MM/` when > 150KB (run `bash bin/wolf-status.sh`) |
+| **`.wolf/memory.md`** | repo (gitignored) | Per-session **timeline**: `\| time \| action \| file \| outcome \| ~tokens \|` | Auto-appended by session-start + post-write hooks | Append-only; archive older than current month when > 150KB |
+| **`.wolf/anatomy.md`** | repo (gitignored) | File index: 1-line description + token est per file | post-write hook auto-maintains (skips `../` paths after 2026-05-26 fix) | Rebuild from filesystem if > 150KB — entries reflect current files, not history |
+| **`.wolf/buglog.json`** | repo (gitignored) | Bug fixes: error → root_cause → fix → tags. **Lookup-before-fix mandatory.** | Any bug fix, failed test, repeated edit on same file | Append-only; consolidate `auto-detected` duplicates when > 150KB |
+| **`.serena/memories/`** | repo (gitignored) | Code-layer symbol knowledge (LSP-derived). Currently empty by design. | Reserved for `mcp__serena__write_memory` ts/rust symbol notes | Per-symbol files; no aggregation |
+
+**Size health-check**: `bash bin/wolf-status.sh` (dev-local OpenWolf tool, gitignored alongside `bin/plan-lint.sh`) reports current sizes vs thresholds (50KB warn / 150KB rotate; override with `REASONIX_WOLF_{WARN,ROTATE}_KB`). `--json` for CI consumption.
 
 ## Active hooks (.claude/settings.json → .wolf/hooks/)
 
