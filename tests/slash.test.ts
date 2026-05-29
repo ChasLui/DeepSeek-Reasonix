@@ -702,6 +702,13 @@ describe("handleSlash", () => {
     expect(suggestSlashCommands("lan").map((s) => s.cmd)).toContain("language");
   });
 
+  it("resolves Telegram-safe slash aliases", () => {
+    expect(parseSlash("/search_engine bing")).toEqual({
+      cmd: "search-engine",
+      args: ["bing"],
+    });
+  });
+
   describe("/btw — issue #725", () => {
     it("registers /btw under the chat group with a <question> argsHint", () => {
       const spec = SLASH_COMMANDS.find((s) => s.cmd === "btw");
