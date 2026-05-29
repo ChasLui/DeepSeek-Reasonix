@@ -17,6 +17,7 @@ import { codeSystemPrompt } from "../../code/prompt.js";
 import { applyPlanMode, buildCodeToolset } from "../../code/setup.js";
 import {
   DEFAULT_MODEL,
+  type DesktopCloseBehavior,
   type DesktopOpenTab,
   type EditMode,
   bridgeEndpointEnv,
@@ -25,6 +26,7 @@ import {
   loadApiKey,
   loadBaiduApiKey,
   loadBraveApiKey,
+  loadDesktopCloseBehavior,
   loadDesktopOpenTabs,
   loadEditMode,
   loadEditor,
@@ -50,6 +52,7 @@ import {
   webSearchEngine as readWebSearchEngine,
   saveApiKey,
   saveBaseUrl,
+  saveDesktopCloseBehavior,
   saveDesktopOpenTabs,
   saveEditMode,
   saveEditor,
@@ -172,6 +175,7 @@ type InMessage = { tabId?: string } & (
       recentWorkspaces?: string[];
       model?: string;
       editor?: string;
+      desktopCloseBehavior?: DesktopCloseBehavior;
       webSearchEngine?:
         | "bing"
         | "bing-intl"
@@ -241,6 +245,7 @@ interface SettingsEvent {
   recentWorkspaces: string[];
   model: string;
   editor?: string;
+  desktopCloseBehavior?: DesktopCloseBehavior;
   webSearchEngine?:
     | "bing"
     | "bing-intl"
@@ -764,6 +769,7 @@ function emitSettings(tab: Tab): void {
       recentWorkspaces: recent,
       model: tab.currentModel,
       editor: loadEditor(),
+      desktopCloseBehavior: loadDesktopCloseBehavior(),
       webSearchEngine: readWebSearchEngine(),
       webSearchEndpoint: readConfig().webSearchEndpoint,
       webSearchApiKeys: collectWebSearchApiKeyPrefixes(),
@@ -2819,6 +2825,12 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
           writeConfig(cfg);
         }
         if (msg.editor !== undefined) saveEditor(msg.editor);
+        if (
+          msg.desktopCloseBehavior === "closeToTray" ||
+          msg.desktopCloseBehavior === "closeToQuit"
+        ) {
+          saveDesktopCloseBehavior(msg.desktopCloseBehavior);
+        }
         if (msg.showSystemEvents !== undefined) saveShowSystemEvents(msg.showSystemEvents);
         if (
           msg.webSearchEngine !== undefined ||
