@@ -395,7 +395,13 @@ export function effectivePriority(
 }
 
 function highPriorityBlock(entries: MemoryEntry[], cfg?: ReasonixConfig): string | null {
-  const high = entries.filter((e) => effectivePriority(e, cfg) === "high");
+  // Sort by scope/name so the block is byte-identical regardless of entry source
+  // order — the file backend's readdir order and SQLite's row order differ, and this
+  // block is pinned into the immutable prefix (prefix-cache hash stability). Matches
+  // the index/TOON blocks, which already sort the same way.
+  const high = entries
+    .filter((e) => effectivePriority(e, cfg) === "high")
+    .sort((a, b) => `${a.scope}/${a.name}`.localeCompare(`${b.scope}/${b.name}`));
   if (high.length === 0) return null;
   const lines: string[] = [
     "# HIGH PRIORITY constraints (must observe)",
