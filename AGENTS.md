@@ -34,12 +34,12 @@ Main source lives in `src/`: `src/cli/` holds CLI commands and Ink UI, `src/tool
 | `src/tools/` | Tool defs — filesystem, shell, MCP bridge, plan, subagent, web, memory, skills, jobs |
 | `src/mcp/` | MCP client + transports (stdio + SSE + Streamable HTTP), registry |
 | `src/core/` | Event-log kernel — `events.ts` union, `reducers.ts` pure projections |
-| `src/ports/` + `src/adapters/` | Port interfaces + concrete impls (e.g. `event-sink-jsonl.ts`) |
+| `src/ports/` + `src/adapters/` | Port interfaces + concrete impls (e.g. `event-sink-sqlite.ts`) |
 | `src/code/edit-blocks.ts` | SEARCH/REPLACE parser + apply gate — **byte-for-byte exact match** |
 | `src/index/` | Local semantic vector index (`reasonix index`) |
 | `src/index/code-graph/` | JSON code-graph fast path for `find_references` / `impact`; immediate `src/code-query/` remains fallback |
 | `src/frame/` | Cell-grid → ANSI renderer used by the TUI log |
-| `src/memory/` + `src/transcript/` + `src/telemetry/` | Persistence layers |
+| `src/memory/` + `src/transcript/` + `src/telemetry/` + `src/storage/` | Persistence layers — **all backed by one SQLite DB** (`~/.reasonix/reasonix.db`); no file/jsonl backend, no `.store-version`, no `migrate-store`. `node:sqlite` is isolated to `src/storage/db.ts`. OUT of the DB (file-based): semantic index / code-graph / BM25 / caches / config. |
 | `src/net/` | Proxy / no-proxy resolution |
 | `src/server/` | Dashboard HTTP + REST API |
 | `src/cli/commands/` | `chat`, `code`, `run`, `doctor`, `replay`, `stats`, `events`, `index`, `mcp`, `prune-sessions`, `update` |

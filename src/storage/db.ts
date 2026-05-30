@@ -16,6 +16,8 @@ export interface Db {
   close(): void;
   readonly raw: DatabaseSync;
   readonly journalMode: string;
+  /** Absolute path this db was opened against (FR-016 path-correctness guard). */
+  readonly path: string;
 }
 
 let warningFilterInstalled = false;
@@ -76,6 +78,7 @@ function openDb(path: string): Db {
   const db: Db = {
     raw,
     journalMode,
+    path,
     prepare(sql) {
       let s = stmtCache.get(sql);
       if (!s) {
@@ -125,9 +128,42 @@ function openDb(path: string): Db {
 }
 
 let singleton: Db | null = null;
+let exitHookInstalled = false;
+
+// FR-015 exit checkpoint: useQuit.quitProcess calls process.exit(0), bypassing
+// Ink's cleanup, which would lose the last turn's un-checkpointed WAL frames.
+// One sync handler (registered once on first open) closes whatever singleton is
+// still open at exit — close() checkpoints the WAL. A no-op after resetDb()
+// nulls the singleton, which keeps it safe under vitest (one process, many
+// db.ts importers): it only ever closes a still-open singleton.
+function installExitCheckpoint(): void {
+  if (exitHookInstalled) return;
+  exitHookInstalled = true;
+  process.on("exit", () => {
+    if (!singleton) return;
+    try {
+      singleton.close();
+    } catch {
+      /* exit-time best-effort — nothing left to recover to */
+    }
+    singleton = null;
+  });
+}
 
 export function getDb(path?: string): Db {
-  if (!singleton) singleton = openDb(path ?? reasonixDbPath());
+  if (singleton) {
+    // FR-016: an explicit, different path must never silently inspect/return the
+    // already-open db (e.g. doctor passing a path that isn't the app's). Callers
+    // that legitimately switch paths reset() first.
+    if (path !== undefined && path !== singleton.path) {
+      throw new Error(
+        `getDb(${path}) requested but the singleton is already open on ${singleton.path} — call resetDb() before switching paths`,
+      );
+    }
+    return singleton;
+  }
+  installExitCheckpoint();
+  singleton = openDb(path ?? reasonixDbPath());
   return singleton;
 }
 
