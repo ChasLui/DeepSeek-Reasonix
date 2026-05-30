@@ -101,4 +101,4 @@ bin/plan-lint.sh
 bin/wolf-status.sh
 tmp/
 .claude/scheduled_tasks.lock
-.codex-borrow-no-go-review.md
+.codex-*-review.md
