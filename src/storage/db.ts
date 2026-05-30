@@ -1,8 +1,20 @@
 import { mkdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname } from "node:path";
-import { DatabaseSync, type StatementSync } from "node:sqlite";
+import type { StatementSync } from "node:sqlite";
 import { reasonixDbPath, secureDbFile } from "./path.js";
 import { migrate } from "./schema.js";
+
+// node:sqlite is loaded through createRequire (a runtime require) instead of a static
+// import. esbuild is too new-builtin-blind to keep `node:sqlite`: a static import gets
+// rewritten to an unresolvable bare `sqlite` (ERR_MODULE_NOT_FOUND in the bundled lib —
+// `require("sqlite")` does NOT resolve the builtin, only `require("node:sqlite")` does).
+// A runtime require resolves the builtin natively at load — verified for both the lib
+// (dist/index.js) and CLI (dist/cli) bundles by tests/bundle-smoke.test.ts. The
+// type-only import above is erased at build yet keeps db.ts the sole node:sqlite
+// textual reference (C-001).
+const nodeRequire = createRequire(import.meta.url);
+const { DatabaseSync } = nodeRequire("node:sqlite") as typeof import("node:sqlite");
 
 const BUSY_RETRY_MAX = 5;
 const BUSY_RETRY_BASE_MS = 10;
@@ -14,7 +26,7 @@ export interface Db {
   tx<T>(fn: () => T): T;
   withBusyRetry<T>(fn: () => T): T;
   close(): void;
-  readonly raw: DatabaseSync;
+  readonly raw: InstanceType<typeof DatabaseSync>;
   readonly journalMode: string;
   /** Absolute path this db was opened against (FR-016 path-correctness guard). */
   readonly path: string;
