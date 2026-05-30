@@ -9,6 +9,7 @@ import { DeepSeekClient } from "../src/client.js";
 import { loadBudgetWindows, resolveBudgetWindows, saveBudgetWindow } from "../src/config.js";
 import { CacheFirstLoop } from "../src/loop.js";
 import { ImmutablePrefix } from "../src/memory/runtime.js";
+import { resetDb } from "../src/storage/db.js";
 
 describe("budget window config writer", () => {
   let dir: string;
@@ -135,6 +136,9 @@ describe("/budget window slash", () => {
     vi.stubEnv("HOME", dir);
   });
   afterEach(() => {
+    // resetDb so a singleton opened under the stubbed HOME doesn't leak into
+    // the next test; the loop's usage reads go through the SQLite singleton.
+    resetDb();
     vi.unstubAllEnvs();
     rmSync(dir, { recursive: true, force: true });
   });
@@ -144,7 +148,6 @@ describe("/budget window slash", () => {
       client: fakeClient(),
       prefix: new ImmutablePrefix({ system: "s" }),
       stream: false,
-      usageLogPath: join(dir, "usage.jsonl"),
     });
   }
 

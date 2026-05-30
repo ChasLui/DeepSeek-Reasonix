@@ -515,6 +515,21 @@ the fast path. This prevents the 1s-timeout livelock on large repos.
 `docstring` fields are written. Telemetry and doctor output only report
 counts, sizes, elapsed time, and stale ratio.
 
+## Persistence — unified SQLite store
+
+A single SQLite database at `~/.reasonix/reasonix.db` (WAL mode,
+`auto_vacuum=INCREMENTAL`) is the **sole** backend for usage accounting,
+the event log, session metadata/messages, and user/project memory. There is
+no file/JSONL backend, no `.store-version` gate, and no `migrate-store`
+command — these transitional pieces were removed pre-launch. `node:sqlite` is
+isolated to `src/storage/db.ts` (one `DatabaseSync` singleton); the connection
+checkpoints the WAL on process exit so `quitProcess`' `process.exit(0)` never
+drops the last turn's frames. Schema migrations are forward-only
+(`src/storage/schema.ts`).
+
+Still file-backed (intentionally OUT of the DB): the semantic index, the
+code-graph, BM25 artifacts, in-memory tool caches, and config (`.toon`/`.json`).
+
 ## Module layout
 
 ```

@@ -2,25 +2,30 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { SqliteMemoryStore } from "../../src/adapters/memory-store-sqlite.js";
 import { type ResolvedHook, runHooks } from "../../src/hooks.js";
 import {
   countRecentObservationEvents,
   extractObservationFromHook,
 } from "../../src/memory/observation.js";
-import { MemoryStore } from "../../src/memory/user.js";
+import { openMemoryStore } from "../../src/memory/user.js";
+import { resetDb } from "../../src/storage/db.js";
 
+// SQLite-only: the observation store + its sidecar share getDb()/$HOME isolation.
 describe("hook-driven memory observation", () => {
   let home: string;
   let projectRoot: string;
-  let store: MemoryStore;
+  let store: SqliteMemoryStore;
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), "reasonix-observation-home-"));
     projectRoot = mkdtempSync(join(tmpdir(), "reasonix-observation-project-"));
-    store = new MemoryStore({ homeDir: home, projectRoot });
+    vi.stubEnv("HOME", home);
+    store = openMemoryStore({ homeDir: home, projectRoot });
   });
 
   afterEach(() => {
+    resetDb();
     vi.unstubAllEnvs();
     rmSync(home, { recursive: true, force: true });
     rmSync(projectRoot, { recursive: true, force: true });
@@ -61,11 +66,29 @@ describe("hook-driven memory observation", () => {
 
   it("rejects unsupported versions, invalid types, invalid names, and oversize fields", async () => {
     const lines = [
-      { v: 2, type: "project", name: "bad_version", description: "d", body: "b" },
+      {
+        v: 2,
+        type: "project",
+        name: "bad_version",
+        description: "d",
+        body: "b",
+      },
       { v: 1, type: "unknown", name: "bad_type", description: "d", body: "b" },
       { v: 1, type: "project", name: "../bad", description: "d", body: "b" },
-      { v: 1, type: "project", name: "long_desc", description: "x".repeat(201), body: "b" },
-      { v: 1, type: "project", name: "long_body", description: "d", body: "x".repeat(8193) },
+      {
+        v: 1,
+        type: "project",
+        name: "long_desc",
+        description: "x".repeat(201),
+        body: "b",
+      },
+      {
+        v: 1,
+        type: "project",
+        name: "long_body",
+        description: "d",
+        body: "x".repeat(8193),
+      },
     ]
       .map((line) => JSON.stringify(line))
       .join("\n");
@@ -118,7 +141,12 @@ describe("hook-driven memory observation", () => {
       {
         store,
         autoCapture: true,
-        budgets: { maxLines: 4, maxWrites: 2, aggregateBytes: 1000, aggregateTokens: 1000 },
+        budgets: {
+          maxLines: 4,
+          maxWrites: 2,
+          aggregateBytes: 1000,
+          aggregateTokens: 1000,
+        },
       },
     );
 

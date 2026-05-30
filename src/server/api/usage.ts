@@ -1,3 +1,4 @@
+import { reasonixDbPath } from "../../storage/path.js";
 import { cacheSavingsUsd } from "../../telemetry/stats.js";
 import { aggregateUsage, formatLogSize, readUsageLog } from "../../telemetry/usage.js";
 import type { DashboardContext } from "../context.js";
@@ -55,12 +56,13 @@ export async function handleUsage(
   method: string,
   rest: string[],
   _body: string,
-  ctx: DashboardContext,
+  _ctx: DashboardContext,
 ): Promise<ApiResult> {
   if (method !== "GET") {
     return { status: 405, body: { error: "GET only" } };
   }
-  const records = readUsageLog(ctx.usageLogPath);
+  const records = readUsageLog();
+  const dbPath = reasonixDbPath();
 
   // /api/usage/series → daily roll-ups for the chart. Separate sub-path
   // so the main /api/usage stays a small dashboard payload that polls
@@ -79,8 +81,8 @@ export async function handleUsage(
   return {
     status: 200,
     body: {
-      logPath: ctx.usageLogPath,
-      logSize: formatLogSize(ctx.usageLogPath),
+      logPath: dbPath,
+      logSize: formatLogSize(dbPath),
       recordCount: records.length,
       buckets: agg.buckets,
       byModel: agg.byModel,

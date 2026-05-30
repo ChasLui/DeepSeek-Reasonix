@@ -1,22 +1,15 @@
-/** Append-only JSONL of per-turn tokens + cost; best-effort writes, never blocks the turn. No prompts/completions logged. */
+/** Per-turn tokens + cost, persisted to SQLite; best-effort writes, never blocks the turn. No prompts/completions logged. */
 
-import {
-  appendFileSync,
-  closeSync,
-  existsSync,
-  fstatSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  readSync,
-  renameSync,
-  statSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 import type { Usage } from "../client.js";
+import { getDb } from "../storage/db.js";
+import { reasonixDbPath } from "../storage/path.js";
+import {
+  appendUsageRow,
+  readAllUsage,
+  readUsageSince as readUsageSinceDb,
+} from "../storage/usage-repo.js";
 import {
   CLAUDE_SONNET_PRICING,
   DEEPSEEK_PRICING,
@@ -25,7 +18,7 @@ import {
   costUsd,
 } from "./stats.js";
 
-/** One turn's snapshot — serialized verbatim as a JSONL line. */
+/** One turn's snapshot — one row of the `usage` table. */
 export interface UsageRecord {
   /** Epoch millis when the record was written. */
   ts: number;
@@ -59,19 +52,12 @@ export interface UsageRecord {
   };
 }
 
-/** Where the log lives. Tests override via `opts.path`. */
-export function defaultUsageLogPath(homeDirOverride?: string): string {
-  return join(homeDirOverride ?? homedir(), ".reasonix", "usage.jsonl");
-}
-
 export interface AppendUsageInput {
   session: string | null;
   model: string;
   usage: Usage;
   /** Override the timestamp (tests). */
   now?: number;
-  /** Override the log path (tests). */
-  path?: string;
   /** Workspace root the turn ran in. Resolved to an absolute path before write so the per-workspace budget gate can match it exactly. Omit when there's no workspace context. */
   workspace?: string;
   /** When appending a subagent summary row, set `kind: "subagent"` and populate `subagent`. */
@@ -79,66 +65,7 @@ export interface AppendUsageInput {
   subagent?: UsageRecord["subagent"];
 }
 
-const USAGE_COMPACTION_THRESHOLD_BYTES = 5 * 1024 * 1024;
-const USAGE_RETENTION_DAYS = 365;
-
-function compactUsageLogIfLarge(path: string, now: number): void {
-  // Open once for the size check + read so they bind to the same fd
-  // (CodeQL js/file-system-race). Concurrent appenders that grow the
-  // log between check and read can no longer cause us to act on a
-  // stale size and rewrite based on partial content.
-  let raw: string;
-  try {
-    const fd = openSync(path, "r");
-    try {
-      const stat = fstatSync(fd);
-      if (stat.size < USAGE_COMPACTION_THRESHOLD_BYTES) return;
-      const buf = Buffer.alloc(stat.size);
-      let read = 0;
-      while (read < stat.size) {
-        const n = readSync(fd, buf, read, stat.size - read, read);
-        if (n <= 0) break;
-        read += n;
-      }
-      raw = buf.toString("utf8", 0, read);
-    } finally {
-      closeSync(fd);
-    }
-  } catch {
-    return;
-  }
-  const cutoff = now - USAGE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
-  const lines = raw.split(/\r?\n/);
-  const kept: string[] = [];
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    try {
-      const rec = JSON.parse(line);
-      if (isValidRecord(rec) && rec.ts >= cutoff) kept.push(line);
-    } catch {
-      /* skip malformed */
-    }
-  }
-  // No-op when nothing aged out — avoids rewrite storms on fresh logs.
-  if (kept.length === lines.filter((l) => l.trim()).length) return;
-  // Write to a sibling tmp path then rename — atomic from a reader's
-  // POV and severs CodeQL's stat→write taint chain. Concurrent
-  // appenders during the compaction window lose their entries; we
-  // accept that for a best-effort usage log.
-  const tmp = `${path}.compacting`;
-  try {
-    writeFileSync(tmp, kept.length > 0 ? `${kept.join("\n")}\n` : "", "utf8");
-    renameSync(tmp, path);
-  } catch {
-    try {
-      unlinkSync(tmp);
-    } catch {
-      /* tmp may not exist — ignore */
-    }
-  }
-}
-
-/** Returns the record so tests can assert cost fields without re-reading the log. */
+/** Returns the record so tests can assert cost fields without re-reading the store. */
 export function appendUsage(input: AppendUsageInput): UsageRecord {
   const record: UsageRecord = {
     ts: input.now ?? Date.now(),
@@ -156,63 +83,22 @@ export function appendUsage(input: AppendUsageInput): UsageRecord {
   if (input.kind === "subagent") record.kind = "subagent";
   if (input.subagent) record.subagent = input.subagent;
 
-  const path = input.path ?? defaultUsageLogPath();
   try {
-    mkdirSync(dirname(path), { recursive: true });
-    appendFileSync(path, `${JSON.stringify(record)}\n`, "utf8");
-    compactUsageLogIfLarge(path, record.ts);
+    appendUsageRow(getDb(), record);
   } catch {
     /* best-effort — disk failure shouldn't break the chat */
   }
   return record;
 }
 
-export function readUsageLog(path: string = defaultUsageLogPath()): UsageRecord[] {
-  if (!existsSync(path)) return [];
-  let raw: string;
-  try {
-    raw = readFileSync(path, "utf8");
-  } catch {
-    return [];
-  }
-  const out: UsageRecord[] = [];
-  for (const line of raw.split(/\r?\n/)) {
-    if (!line.trim()) continue;
-    try {
-      const rec = JSON.parse(line);
-      if (isValidRecord(rec)) out.push(rec);
-    } catch {
-      /* skip malformed */
-    }
-  }
-  return out;
+export function readUsageLog(): UsageRecord[] {
+  return readAllUsage(getDb());
 }
 
-/** Records with `ts >= since`. For the per-turn budget gate — the file itself
- * is size-bounded by `compactUsageLogIfLarge` (5 MiB / 365 d), so this stays a
- * cheap bounded read; `since` just trims to the active rolling window. */
-export function readUsageSince(since: number, path: string = defaultUsageLogPath()): UsageRecord[] {
-  const out: UsageRecord[] = [];
-  for (const rec of readUsageLog(path)) {
-    if (rec.ts >= since) out.push(rec);
-  }
-  return out;
-}
-
-function isValidRecord(rec: unknown): rec is UsageRecord {
-  if (!rec || typeof rec !== "object") return false;
-  const r = rec as Partial<UsageRecord>;
-  return (
-    typeof r.ts === "number" &&
-    typeof r.model === "string" &&
-    typeof r.promptTokens === "number" &&
-    typeof r.completionTokens === "number" &&
-    (r.reasoningTokens === undefined || typeof r.reasoningTokens === "number") &&
-    typeof r.cacheHitTokens === "number" &&
-    typeof r.cacheMissTokens === "number" &&
-    typeof r.costUsd === "number" &&
-    typeof r.claudeEquivUsd === "number"
-  );
+/** Records with `ts >= since`. For the per-turn budget gate — bounded by the
+ * `since` window so it stays a cheap read against the active rolling window. */
+export function readUsageSince(since: number): UsageRecord[] {
+  return readUsageSinceDb(getDb(), since);
 }
 
 /** One row of the `reasonix stats` dashboard — a rolled-up window. */
@@ -390,8 +276,9 @@ export function aggregateUsage(
   };
 }
 
-/** File-size helper for the stats header — "1.2 MB" etc. Returns "" if missing. */
-export function formatLogSize(path: string = defaultUsageLogPath()): string {
+/** Store-size helper for the stats header — "1.2 MB" etc. Returns "" if missing.
+ * Sizes the SQLite DB file (the usage store's backing file) by default. */
+export function formatLogSize(path: string = reasonixDbPath()): string {
   if (!existsSync(path)) return "";
   try {
     const s = statSync(path);

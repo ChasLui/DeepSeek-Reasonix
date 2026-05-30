@@ -63,7 +63,7 @@ import {
 import { PromptCacheMonitor } from "./observability/prompt-cache-monitor.js";
 import { type RepairReport, ToolCallRepair } from "./repair/index.js";
 import { SessionStats, type TurnStats } from "./telemetry/stats.js";
-import { defaultUsageLogPath, readUsageSince } from "./telemetry/usage.js";
+import { readUsageSince } from "./telemetry/usage.js";
 import { ToolRegistry } from "./tools.js";
 import { ReadDedupState } from "./tools/fs/read-dedup.js";
 import { serializeToolResult } from "./toon/encode-result.js";
@@ -97,10 +97,8 @@ export interface CacheFirstLoopOptions {
   autoEscalate?: boolean;
   /** Soft USD cap — warns at 80%, refuses next turn at 100%. Opt-in (default no cap). */
   budgetUsd?: number;
-  /** Cross-session rolling spend guardrails (daily/weekly/monthly, any combination). Reads the shared usage.jsonl aggregate (no separate ledger), so subagent + every session's spend counts. Empty/undefined → no window guardrail. */
+  /** Cross-session rolling spend guardrails (daily/weekly/monthly, any combination). Reads the shared usage aggregate from SQLite (no separate ledger), so subagent + every session's spend counts. Empty/undefined → no window guardrail. */
   budgetWindows?: BudgetWindow[];
-  /** Override the usage log path the window gate reads (tests). Defaults to the shared `~/.reasonix/usage.jsonl`. */
-  usageLogPath?: string;
   /** Workspace root for `scope: "workspace"` budget windows. Resolved before use; absent ⟹ workspace windows are inert in this loop. */
   workspace?: string;
   session?: string;
@@ -155,8 +153,6 @@ export class CacheFirstLoop {
   budgetWindows: BudgetWindow[];
   /** One-shot 80% warning latch, keyed `scope:period` so a global and a workspace window of the same period warn independently. */
   private readonly _windowBudgetWarned = new Set<string>();
-  /** Usage log the window gate reads — shared across sessions; overridable for tests. */
-  private readonly usageLogPath: string;
   /** Resolved workspace root for `scope: "workspace"` windows. Undefined ⟹ no workspace context, so workspace-scoped windows never block here. */
   private readonly workspace: string | undefined;
   sessionName: string | null;
@@ -234,7 +230,6 @@ export class CacheFirstLoop {
     this.budgetUsd =
       typeof opts.budgetUsd === "number" && opts.budgetUsd > 0 ? opts.budgetUsd : null;
     this.budgetWindows = opts.budgetWindows ?? [];
-    this.usageLogPath = opts.usageLogPath ?? defaultUsageLogPath();
     this.workspace = opts.workspace ? resolve(opts.workspace) : undefined;
 
     this.hooks = opts.hooks ?? [];
@@ -460,14 +455,14 @@ export class CacheFirstLoop {
     this._windowBudgetWarned.clear();
   }
 
-  /** Each rolling window's spend vs cap (reads usage.jsonl once, widest lookback).
+  /** Each rolling window's spend vs cap (reads usage from SQLite once, widest lookback).
    * Global windows count all spend; workspace windows only this loop's workspace.
    * Used by the gate, `/budget` slash, doctor, and stats. */
   budgetWindowStatuses(): BudgetWindowState[] {
     if (this.budgetWindows.length === 0) return [];
     const now = Date.now();
     const maxDays = Math.max(...this.budgetWindows.map((w) => periodWindowDays(w.period)));
-    const records = readUsageSince(now - maxDays * 24 * 60 * 60 * 1000, this.usageLogPath);
+    const records = readUsageSince(now - maxDays * 24 * 60 * 60 * 1000);
     return checkBudgetWindows(records, this.budgetWindows, {
       now,
       workspace: this.workspace,

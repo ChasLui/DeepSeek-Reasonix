@@ -1,10 +1,11 @@
 import { spawnSync } from "node:child_process";
-import type { MemoryScope, MemoryStore } from "../../../memory/user.js";
+import type { SqliteMemoryStore } from "../../../adapters/memory-store-sqlite.js";
+import type { MemoryScope } from "../../../memory/user.js";
 import type { SlashResult } from "./types.js";
 
 /** Bare names try project scope first (more specific) before falling back to global. */
 export function resolveMemoryTarget(
-  store: MemoryStore,
+  store: SqliteMemoryStore,
   raw: string,
 ): { scope: MemoryScope; name: string } | null {
   const slash = raw.indexOf("/");
@@ -67,7 +68,10 @@ export function stripOuterQuotes(s: string): string {
 }
 
 export function runGitCommit(rootDir: string, message: string): SlashResult {
-  const add = spawnSync("git", ["add", "-A"], { cwd: rootDir, encoding: "utf8" });
+  const add = spawnSync("git", ["add", "-A"], {
+    cwd: rootDir,
+    encoding: "utf8",
+  });
   if (add.error || add.status !== 0) {
     return { info: `git add failed (${add.status ?? "?"}):\n${gitTail(add)}` };
   }
@@ -76,10 +80,14 @@ export function runGitCommit(rootDir: string, message: string): SlashResult {
     encoding: "utf8",
   });
   if (commit.error || commit.status !== 0) {
-    return { info: `git commit failed (${commit.status ?? "?"}):\n${gitTail(commit)}` };
+    return {
+      info: `git commit failed (${commit.status ?? "?"}):\n${gitTail(commit)}`,
+    };
   }
   const firstLine = (commit.stdout || "").split(/\r?\n/)[0] ?? "";
-  return { info: `▸ committed: ${message}${firstLine ? `\n  ${firstLine}` : ""}` };
+  return {
+    info: `▸ committed: ${message}${firstLine ? `\n  ${firstLine}` : ""}`,
+  };
 }
 
 /** On Windows or missing cwd, stderr/stdout can be undefined — fall back to error.message. */

@@ -14,7 +14,6 @@ import type { DashboardContext } from "../src/server/context.js";
 function makeCtx(configPath: string): DashboardContext {
   return {
     configPath,
-    usageLogPath: join(configPath, "..", "usage.json"),
     mode: "standalone",
   };
 }

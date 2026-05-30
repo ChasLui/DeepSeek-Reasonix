@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addProjectShellAllowed, loadProjectShellAllowed } from "../src/config.js";
 import type { DashboardContext } from "../src/server/context.js";
 import {
@@ -12,6 +12,7 @@ import {
   constantTimeEquals,
   startDashboardServer,
 } from "../src/server/index.js";
+import { resetDb } from "../src/storage/db.js";
 import { ToolRegistry } from "../src/tools.js";
 
 interface FetchResult {
@@ -22,7 +23,12 @@ interface FetchResult {
 
 async function call(
   url: string,
-  opts: { method?: string; token?: string; tokenInHeader?: boolean; body?: unknown } = {},
+  opts: {
+    method?: string;
+    token?: string;
+    tokenInHeader?: boolean;
+    body?: unknown;
+  } = {},
 ): Promise<FetchResult> {
   const method = opts.method ?? "GET";
   const u = new URL(url);
@@ -64,25 +70,26 @@ describe("constantTimeEquals", () => {
 describe("dashboard server: auth + CSRF", () => {
   let dir: string;
   let cfgPath: string;
-  let usagePath: string;
   let handle: DashboardServerHandle | null = null;
   const TOKEN = "deadbeefcafebabe1234567890abcdefdeadbeefcafebabe1234567890abcdef";
 
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), "reasonix-dashtest-"));
+    vi.stubEnv("HOME", dir);
+    resetDb();
     cfgPath = join(dir, "config.json");
-    usagePath = join(dir, "usage.jsonl");
     handle = await startDashboardServer(
       {
         mode: "standalone",
         configPath: cfgPath,
-        usageLogPath: usagePath,
       },
       { token: TOKEN },
     );
   });
 
   afterEach(async () => {
+    resetDb();
+    vi.unstubAllEnvs();
     await handle?.close();
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
@@ -94,7 +101,9 @@ describe("dashboard server: auth + CSRF", () => {
   });
 
   it("accepts /api/overview with token in query", async () => {
-    const r = await call(`${handle!.url.split("?")[0]}api/overview`, { token: TOKEN });
+    const r = await call(`${handle!.url.split("?")[0]}api/overview`, {
+      token: TOKEN,
+    });
     expect(r.status).toBe(200);
     expect(r.body.mode).toBe("standalone");
     expect(typeof r.body.version).toBe("string");
@@ -139,7 +148,9 @@ describe("dashboard server: auth + CSRF", () => {
   });
 
   it("404s an unknown endpoint (token-gated)", async () => {
-    const r = await call(`${handle!.url.split("?")[0]}api/nonsuch`, { token: TOKEN });
+    const r = await call(`${handle!.url.split("?")[0]}api/nonsuch`, {
+      token: TOKEN,
+    });
     expect(r.status).toBe(404);
   });
 
@@ -157,18 +168,20 @@ describe("dashboard server: auth + CSRF", () => {
 describe("dashboard server: endpoints", () => {
   let dir: string;
   let cfgPath: string;
-  let usagePath: string;
   let handle: DashboardServerHandle | null = null;
   const TOKEN = "f".repeat(64);
   const PROJ = "/test/project";
 
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), "reasonix-dash-ep-"));
+    vi.stubEnv("HOME", dir);
+    resetDb();
     cfgPath = join(dir, "config.json");
-    usagePath = join(dir, "usage.jsonl");
   });
 
   afterEach(async () => {
+    resetDb();
+    vi.unstubAllEnvs();
     await handle?.close();
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
@@ -178,7 +191,6 @@ describe("dashboard server: endpoints", () => {
       {
         mode: "attached",
         configPath: cfgPath,
-        usageLogPath: usagePath,
         ...extra,
       },
       { token: TOKEN },
@@ -220,7 +232,7 @@ describe("dashboard server: endpoints", () => {
 
   it("GET /api/tools returns 503 in standalone mode", async () => {
     handle = await startDashboardServer(
-      { mode: "standalone", configPath: cfgPath, usageLogPath: usagePath },
+      { mode: "standalone", configPath: cfgPath },
       { token: TOKEN },
     );
     const base = handle.url.split("?")[0]!;
@@ -326,7 +338,9 @@ describe("dashboard server: endpoints", () => {
         path: flatPath,
       });
 
-      const read = await call(`${base}api/skills/project/flat-skill`, { token: TOKEN });
+      const read = await call(`${base}api/skills/project/flat-skill`, {
+        token: TOKEN,
+      });
       expect(read.status).toBe(200);
       expect(read.body.path).toBe(flatPath);
       expect(read.body.body).toContain("flat body");
@@ -428,7 +442,10 @@ describe("dashboard server: endpoints", () => {
 
   it("GET /api/permissions lists builtin always; project list when cwd is set", async () => {
     addProjectShellAllowed(PROJ, "npm run build", cfgPath);
-    const base = await boot({ getCurrentCwd: () => PROJ, getEditMode: () => "review" });
+    const base = await boot({
+      getCurrentCwd: () => PROJ,
+      getEditMode: () => "review",
+    });
     const r = await call(`${base}api/permissions`, { token: TOKEN });
     expect(r.status).toBe(200);
     expect(r.body.builtin.length).toBeGreaterThan(10); // we ship 30+ builtin entries
@@ -526,17 +543,20 @@ describe("dashboard server: SPA shell", () => {
 
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), "reasonix-dash-spa-"));
+    vi.stubEnv("HOME", dir);
+    resetDb();
     handle = await startDashboardServer(
       {
         mode: "standalone",
         configPath: join(dir, "config.json"),
-        usageLogPath: join(dir, "usage.jsonl"),
       },
       { token: TOKEN },
     );
   });
 
   afterEach(async () => {
+    resetDb();
+    vi.unstubAllEnvs();
     await handle?.close();
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
@@ -573,7 +593,9 @@ describe("dashboard server: SPA shell", () => {
 
   const dashAppExists = existsSync(join(process.cwd(), "dashboard", "dist", "app.js"));
   (dashAppExists ? it : it.skip)("GET /assets/app.js serves the script when authed", async () => {
-    const r = await call(`${handle!.url.split("?")[0]}assets/app.js`, { token: TOKEN });
+    const r = await call(`${handle!.url.split("?")[0]}assets/app.js`, {
+      token: TOKEN,
+    });
     expect(r.status).toBe(200);
     expect(r.headers.get("content-type")).toMatch(/javascript/);
   });
@@ -582,17 +604,19 @@ describe("dashboard server: SPA shell", () => {
 describe("dashboard server: chat bridge", () => {
   let dir: string;
   let cfgPath: string;
-  let usagePath: string;
   let handle: DashboardServerHandle | null = null;
   const TOKEN = "c".repeat(64);
 
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), "reasonix-dash-chat-"));
+    vi.stubEnv("HOME", dir);
+    resetDb();
     cfgPath = join(dir, "config.json");
-    usagePath = join(dir, "usage.jsonl");
   });
 
   afterEach(async () => {
+    resetDb();
+    vi.unstubAllEnvs();
     await handle?.close();
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
@@ -602,7 +626,6 @@ describe("dashboard server: chat bridge", () => {
       {
         mode: "attached",
         configPath: cfgPath,
-        usageLogPath: usagePath,
         ...extra,
       },
       { token: TOKEN },
@@ -753,25 +776,26 @@ describe("dashboard server: chat bridge", () => {
 describe("dashboard server: v0.13 panels", () => {
   let dir: string;
   let cfgPath: string;
-  let usagePath: string;
   let handle: DashboardServerHandle | null = null;
   const TOKEN = "d".repeat(64);
 
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), "reasonix-dash-v013-"));
+    vi.stubEnv("HOME", dir);
+    resetDb();
     cfgPath = join(dir, "config.json");
-    usagePath = join(dir, "usage.jsonl");
     handle = await startDashboardServer(
       {
         mode: "attached",
         configPath: cfgPath,
-        usageLogPath: usagePath,
       },
       { token: TOKEN },
     );
   });
 
   afterEach(async () => {
+    resetDb();
+    vi.unstubAllEnvs();
     await handle?.close();
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
@@ -797,7 +821,9 @@ describe("dashboard server: v0.13 panels", () => {
 
   it("GET /api/sessions/<missing> returns 404", async () => {
     const base = handle!.url.split("?")[0]!;
-    const r = await call(`${base}api/sessions/no-such-session`, { token: TOKEN });
+    const r = await call(`${base}api/sessions/no-such-session`, {
+      token: TOKEN,
+    });
     expect(r.status).toBe(404);
   });
 
@@ -847,24 +873,26 @@ describe("dashboard server: v0.13 panels", () => {
 describe("dashboard server: modal mirroring (workspace / checkpoint / revision)", () => {
   let dir: string;
   let cfgPath: string;
-  let usagePath: string;
   let handle: DashboardServerHandle | null = null;
   const TOKEN = "e".repeat(64);
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "reasonix-dash-modal-"));
+    vi.stubEnv("HOME", dir);
+    resetDb();
     cfgPath = join(dir, "config.json");
-    usagePath = join(dir, "usage.jsonl");
   });
 
   afterEach(async () => {
+    resetDb();
+    vi.unstubAllEnvs();
     await handle?.close();
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
 
   async function boot(extra: Partial<DashboardContext> = {}): Promise<string> {
     handle = await startDashboardServer(
-      { mode: "attached", configPath: cfgPath, usageLogPath: usagePath, ...extra },
+      { mode: "attached", configPath: cfgPath, ...extra },
       { token: TOKEN },
     );
     return handle.url.split("?")[0]!;
@@ -1076,24 +1104,26 @@ describe("dashboard server: modal mirroring (workspace / checkpoint / revision)"
 describe("dashboard server: D-1 settings + auto-loop surface", () => {
   let dir: string;
   let cfgPath: string;
-  let usagePath: string;
   let handle: DashboardServerHandle | null = null;
   const TOKEN = "f".repeat(64);
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "reasonix-d1-"));
+    vi.stubEnv("HOME", dir);
+    resetDb();
     cfgPath = join(dir, "config.json");
-    usagePath = join(dir, "usage.jsonl");
   });
 
   afterEach(async () => {
+    resetDb();
+    vi.unstubAllEnvs();
     await handle?.close();
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
 
   async function boot(extra: Partial<DashboardContext> = {}): Promise<string> {
     handle = await startDashboardServer(
-      { mode: "attached", configPath: cfgPath, usageLogPath: usagePath, ...extra },
+      { mode: "attached", configPath: cfgPath, ...extra },
       { token: TOKEN },
     );
     return handle.url.split("?")[0]!;
@@ -1155,7 +1185,12 @@ describe("dashboard server: D-1 settings + auto-loop surface", () => {
   });
 
   it("GET /api/loop/status returns the live status snapshot", async () => {
-    const snap = { prompt: "ping", intervalMs: 30_000, iter: 3, nextFireMs: 12_000 };
+    const snap = {
+      prompt: "ping",
+      intervalMs: 30_000,
+      iter: 3,
+      nextFireMs: 12_000,
+    };
     const base = await boot({ getLoopRunStatus: () => snap });
     const r = await call(`${base}api/loop/status`, { token: TOKEN });
     expect(r.status).toBe(200);
@@ -1210,7 +1245,9 @@ describe("dashboard server: D-1 settings + auto-loop surface", () => {
   });
 
   it("GET /api/models returns the cached catalog + pricing + current model", async () => {
-    const base = await boot({ getModels: () => ["deepseek-v4-flash", "deepseek-v4-pro"] });
+    const base = await boot({
+      getModels: () => ["deepseek-v4-flash", "deepseek-v4-pro"],
+    });
     const r = await call(`${base}api/models`, { token: TOKEN });
     expect(r.status).toBe(200);
     expect(r.body.models).toEqual(["deepseek-v4-flash", "deepseek-v4-pro"]);
@@ -1249,15 +1286,15 @@ describe("dashboard server: D-1 settings + auto-loop surface", () => {
 describe("dashboard server: checkpoint API", () => {
   let dir: string;
   let cfgPath: string;
-  let usagePath: string;
   let handle: DashboardServerHandle | null = null;
   const TOKEN = "f".repeat(64);
   let cwd: string;
 
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), "reasonix-dash-cp-"));
+    vi.stubEnv("HOME", dir);
+    resetDb();
     cfgPath = join(dir, "config.json");
-    usagePath = join(dir, "usage.jsonl");
     // Init a tiny git repo so checkpoint-create works
     cwd = join(dir, "repo");
     await mkdir(cwd, { recursive: true });
@@ -1281,6 +1318,8 @@ describe("dashboard server: checkpoint API", () => {
   });
 
   afterEach(async () => {
+    resetDb();
+    vi.unstubAllEnvs();
     await handle?.close();
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
@@ -1290,7 +1329,6 @@ describe("dashboard server: checkpoint API", () => {
       {
         mode: "attached",
         configPath: cfgPath,
-        usageLogPath: usagePath,
         getCurrentCwd: () => cwd,
       },
       { token: TOKEN },
@@ -1351,7 +1389,9 @@ describe("dashboard server: checkpoint API", () => {
     });
     // Modify file after snapshot so diff is non-empty
     await writeFile(join(cwd, "hello.txt"), "hello world from checkpoint\n");
-    const r = await call(`${base}api/checkpoint-diffs?id=${created.body.id}`, { token: TOKEN });
+    const r = await call(`${base}api/checkpoint-diffs?id=${created.body.id}`, {
+      token: TOKEN,
+    });
     expect(r.status).toBe(200);
     expect(Array.isArray(r.body)).toBe(true);
     expect(r.body.length).toBe(1);

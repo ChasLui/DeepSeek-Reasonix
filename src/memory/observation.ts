@@ -1,16 +1,12 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
+import type { SqliteMemoryStore } from "../adapters/memory-store-sqlite.js";
 import type { ReasonixConfig } from "../config.js";
 import type { HookPayload } from "../hooks.js";
 import { countTokens } from "../tokenizer.js";
 import { memoryRootFromHome } from "./access.js";
-import {
-  BUILTIN_MEMORY_TYPES,
-  type MemoryScope,
-  type MemoryStore,
-  sanitizeMemoryName,
-} from "./user.js";
+import { BUILTIN_MEMORY_TYPES, type MemoryScope, sanitizeMemoryName } from "./user.js";
 
 export interface ObservationBudgets {
   maxLines?: number;
@@ -21,7 +17,7 @@ export interface ObservationBudgets {
 }
 
 export interface ObservationOptions {
-  store: MemoryStore;
+  store: SqliteMemoryStore;
   autoCapture?: boolean;
   budgets?: ObservationBudgets;
   config?: ReasonixConfig;
@@ -176,8 +172,9 @@ function skip(result: ObservationResult, reason: string): void {
   result.reasons.push(reason);
 }
 
-function appendObservationEvent(store: MemoryStore, scope: MemoryScope, name: string): void {
-  const root = dirname(store.dir("global"));
+function appendObservationEvent(store: SqliteMemoryStore, scope: MemoryScope, name: string): void {
+  // Sidecar lives under the memory root — no per-scope dir() needed under SQLite.
+  const root = store.memoryRoot();
   mkdirSync(root, { recursive: true });
   appendFileSync(
     join(root, OBSERVATION_FILE),

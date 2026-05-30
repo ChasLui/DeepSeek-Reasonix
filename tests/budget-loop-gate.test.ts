@@ -1,7 +1,7 @@
-/** Cross-session rolling budget gate — reads the shared usage.jsonl aggregate,
- * blocks the next turn post-hoc, never mutates the append-only log. */
+/** Cross-session rolling budget gate — reads the shared usage aggregate from
+ * SQLite, blocks the next turn post-hoc, never mutates the store. */
 
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,6 +9,8 @@ import type { BudgetWindow } from "../src/budget/window.js";
 import { DeepSeekClient } from "../src/client.js";
 import { CacheFirstLoop } from "../src/loop.js";
 import { ImmutablePrefix } from "../src/memory/runtime.js";
+import { getDb, resetDb } from "../src/storage/db.js";
+import { appendUsageRow } from "../src/storage/usage-repo.js";
 import type { UsageRecord } from "../src/telemetry/usage.js";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -47,11 +49,11 @@ function makeClient(fetchFn: typeof fetch): DeepSeekClient {
 }
 
 function seedUsage(
-  path: string,
   records: Array<{ tsOffset: number; costUsd: number; workspace?: string }>,
 ): void {
   const now = Date.now();
-  const lines = records.map((r) => {
+  const db = getDb();
+  for (const r of records) {
     const rec: UsageRecord = {
       ts: now + r.tsOffset,
       session: "seeded",
@@ -64,34 +66,34 @@ function seedUsage(
       claudeEquivUsd: 0,
       ...(r.workspace ? { workspace: r.workspace } : {}),
     };
-    return JSON.stringify(rec);
-  });
-  writeFileSync(path, lines.length ? `${lines.join("\n")}\n` : "", "utf8");
+    appendUsageRow(db, rec);
+  }
 }
 
 const DAILY_1USD: BudgetWindow = { period: "daily", capUsd: 1 };
 
 describe("CacheFirstLoop window budget gate", () => {
   let dir: string;
-  let usagePath: string;
 
+  // The loop's budget gate reads the SQLite singleton via readUsageSince();
+  // open it against a fresh tmp db per test for isolation.
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "budget-gate-"));
-    usagePath = join(dir, "usage.jsonl");
+    getDb(join(dir, "reasonix.db"));
   });
   afterEach(() => {
+    resetDb();
     rmSync(dir, { recursive: true, force: true });
   });
 
   it("blocks the next turn once the window's spend reaches the cap", async () => {
-    seedUsage(usagePath, [{ tsOffset: -1000, costUsd: 1.5 }]);
+    seedUsage([{ tsOffset: -1000, costUsd: 1.5 }]);
     const fetcher = fakeFetch();
     const loop = new CacheFirstLoop({
       client: makeClient(fetcher.fn),
       prefix: new ImmutablePrefix({ system: "s" }),
       stream: false,
       budgetWindows: [DAILY_1USD],
-      usageLogPath: usagePath,
     });
 
     const events: { role: string; error?: string }[] = [];
@@ -108,14 +110,13 @@ describe("CacheFirstLoop window budget gate", () => {
   });
 
   it("warns once at 80% but lets the turn run", async () => {
-    seedUsage(usagePath, [{ tsOffset: -1000, costUsd: 0.85 }]);
+    seedUsage([{ tsOffset: -1000, costUsd: 0.85 }]);
     const fetcher = fakeFetch();
     const loop = new CacheFirstLoop({
       client: makeClient(fetcher.fn),
       prefix: new ImmutablePrefix({ system: "s" }),
       stream: false,
       budgetWindows: [DAILY_1USD],
-      usageLogPath: usagePath,
     });
 
     const roles: string[] = [];
@@ -130,14 +131,13 @@ describe("CacheFirstLoop window budget gate", () => {
   });
 
   it("does not exist below 80% — turn runs clean", async () => {
-    seedUsage(usagePath, [{ tsOffset: -1000, costUsd: 0.1 }]);
+    seedUsage([{ tsOffset: -1000, costUsd: 0.1 }]);
     const fetcher = fakeFetch();
     const loop = new CacheFirstLoop({
       client: makeClient(fetcher.fn),
       prefix: new ImmutablePrefix({ system: "s" }),
       stream: false,
       budgetWindows: [DAILY_1USD],
-      usageLogPath: usagePath,
     });
 
     const roles: string[] = [];
@@ -149,14 +149,13 @@ describe("CacheFirstLoop window budget gate", () => {
 
   it("rolling window: spend older than the window does not count (auto-recovers)", async () => {
     // $9 spent 2 days ago — outside the daily window, so it must NOT block.
-    seedUsage(usagePath, [{ tsOffset: -2 * DAY, costUsd: 9 }]);
+    seedUsage([{ tsOffset: -2 * DAY, costUsd: 9 }]);
     const fetcher = fakeFetch();
     const loop = new CacheFirstLoop({
       client: makeClient(fetcher.fn),
       prefix: new ImmutablePrefix({ system: "s" }),
       stream: false,
       budgetWindows: [DAILY_1USD],
-      usageLogPath: usagePath,
     });
 
     const roles: string[] = [];
@@ -167,14 +166,13 @@ describe("CacheFirstLoop window budget gate", () => {
   });
 
   it("no budgetWindow → byte-identical to baseline (no gate, no events)", async () => {
-    seedUsage(usagePath, [{ tsOffset: -1000, costUsd: 9999 }]);
+    seedUsage([{ tsOffset: -1000, costUsd: 9999 }]);
     const fetcher = fakeFetch();
     const loop = new CacheFirstLoop({
       client: makeClient(fetcher.fn),
       prefix: new ImmutablePrefix({ system: "s" }),
       stream: false,
       // no budgetWindows — even huge prior spend is ignored
-      usageLogPath: usagePath,
     });
     expect(loop.budgetWindows).toHaveLength(0);
 
@@ -187,7 +185,7 @@ describe("CacheFirstLoop window budget gate", () => {
 
   it("window cap and per-session cap coexist; whichever trips first blocks", async () => {
     // Window is fine (no prior spend) but the per-session cap is already over.
-    seedUsage(usagePath, []);
+    seedUsage([]);
     const fetcher = fakeFetch();
     const loop = new CacheFirstLoop({
       client: makeClient(fetcher.fn),
@@ -195,7 +193,6 @@ describe("CacheFirstLoop window budget gate", () => {
       stream: false,
       budgetUsd: 1.0,
       budgetWindows: [DAILY_1USD],
-      usageLogPath: usagePath,
     });
     (
       loop.stats.turns as unknown as Array<{
@@ -218,14 +215,13 @@ describe("CacheFirstLoop window budget gate", () => {
   });
 
   it("setBudgetWindows mid-session takes effect on the next turn's gate", async () => {
-    seedUsage(usagePath, [{ tsOffset: -1000, costUsd: 1.5 }]);
+    seedUsage([{ tsOffset: -1000, costUsd: 1.5 }]);
     const fetcher = fakeFetch();
     const loop = new CacheFirstLoop({
       client: makeClient(fetcher.fn),
       prefix: new ImmutablePrefix({ system: "s" }),
       stream: false,
       // starts with no window → first turn runs despite the seeded $1.5
-      usageLogPath: usagePath,
     });
     expect(loop.budgetWindowStatuses()).toHaveLength(0);
 
@@ -254,7 +250,7 @@ describe("CacheFirstLoop window budget gate", () => {
   };
 
   it("a workspace window blocks on the loop's own workspace spend", async () => {
-    seedUsage(usagePath, [
+    seedUsage([
       { tsOffset: -1000, costUsd: 1.5, workspace: WS_A },
       { tsOffset: -1000, costUsd: 99, workspace: WS_B }, // other workspace — must not count
     ]);
@@ -265,7 +261,6 @@ describe("CacheFirstLoop window budget gate", () => {
       stream: false,
       budgetWindows: [DAILY_1USD_WS],
       workspace: WS_A,
-      usageLogPath: usagePath,
     });
 
     const events: { role: string; error?: string }[] = [];
@@ -278,7 +273,7 @@ describe("CacheFirstLoop window budget gate", () => {
 
   it("a different workspace is not blocked by another workspace's spend", async () => {
     // All the spend belongs to WS_A; a loop scoped to WS_B sees none of it.
-    seedUsage(usagePath, [{ tsOffset: -1000, costUsd: 99, workspace: WS_A }]);
+    seedUsage([{ tsOffset: -1000, costUsd: 99, workspace: WS_A }]);
     const fetcher = fakeFetch();
     const loop = new CacheFirstLoop({
       client: makeClient(fetcher.fn),
@@ -286,7 +281,6 @@ describe("CacheFirstLoop window budget gate", () => {
       stream: false,
       budgetWindows: [DAILY_1USD_WS],
       workspace: WS_B,
-      usageLogPath: usagePath,
     });
 
     const roles: string[] = [];
@@ -297,7 +291,7 @@ describe("CacheFirstLoop window budget gate", () => {
   });
 
   it("a workspace window in a loop with no workspace context is inert", async () => {
-    seedUsage(usagePath, [{ tsOffset: -1000, costUsd: 99, workspace: WS_A }]);
+    seedUsage([{ tsOffset: -1000, costUsd: 99, workspace: WS_A }]);
     const fetcher = fakeFetch();
     const loop = new CacheFirstLoop({
       client: makeClient(fetcher.fn),
@@ -305,7 +299,6 @@ describe("CacheFirstLoop window budget gate", () => {
       stream: false,
       budgetWindows: [DAILY_1USD_WS],
       // no workspace — workspace-scoped windows can't attribute spend, so never block
-      usageLogPath: usagePath,
     });
     expect(loop.budgetWindowStatuses()[0]?.state).toBe("ok");
 

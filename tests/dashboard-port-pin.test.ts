@@ -13,7 +13,6 @@ function ctx(dir: string) {
   return {
     mode: "standalone" as const,
     configPath: join(dir, "config.json"),
-    usageLogPath: join(dir, "usage.jsonl"),
   };
 }
 

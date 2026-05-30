@@ -3,11 +3,7 @@ import { relative, resolve } from "node:path";
 import { derivePrefix } from "@reasonix/core-utils";
 import { Box, Text, useStdin, useStdout } from "ink";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  type JsonlEventSink,
-  eventLogPath,
-  openEventSink,
-} from "../../adapters/event-sink-jsonl.js";
+import { SqliteEventSink } from "../../adapters/event-sink-sqlite.js";
 import { type AtUrlExpansion, expandAtMentions, expandAtUrls } from "../../at-mentions.js";
 import { getOrCreateDeepSeekClient } from "../../client-singleton.js";
 import {
@@ -76,7 +72,8 @@ import {
   renameSession,
   sanitizeName,
 } from "../../memory/session.js";
-import { MemoryStore } from "../../memory/user.js";
+import { openMemoryStore } from "../../memory/user.js";
+import type { EventSink } from "../../ports/event-sink.js";
 import type { QQChannel } from "../../qq/channel.js";
 import { useQQChannel } from "../../qq/use-qq-channel.js";
 import type {
@@ -93,12 +90,12 @@ import {
   shouldAutoNameSession,
 } from "../../session-title.js";
 import { loadSlashUsage, recordSlashUse } from "../../slash-usage.js";
+import { getDb } from "../../storage/db.js";
 import {
   DEEPSEEK_CONTEXT_TOKENS,
   DEFAULT_CONTEXT_TOKENS,
   type SessionSummary,
 } from "../../telemetry/stats.js";
-import { defaultUsageLogPath } from "../../telemetry/usage.js";
 import type { ToolRegistry } from "../../tools.js";
 import type { ChoiceOption } from "../../tools/choice.js";
 import { looksLikeAbsoluteSystemPath, pathIsUnder } from "../../tools/filesystem.js";
@@ -975,10 +972,10 @@ function AppInner({
   // typed Event log accumulates at `~/.reasonix/sessions/<name>.events.jsonl`.
   // Old transcript path is unchanged —this is a parallel artifact, not
   // a replacement. Future replay / projection consumers read from here.
-  const eventSinkRef = useRef<JsonlEventSink | null>(null);
+  const eventSinkRef = useRef<EventSink | null>(null);
   const eventizerRef = useRef<Eventizer | null>(null);
   if (session && !eventSinkRef.current) {
-    eventSinkRef.current = openEventSink(eventLogPath(session));
+    eventSinkRef.current = new SqliteEventSink(getDb(), sanitizeName(session));
     eventizerRef.current = new Eventizer();
     eventSinkRef.current.append(eventizerRef.current.emitSessionOpened(0, session, 0));
   }
@@ -2269,7 +2266,6 @@ function AppInner({
         {
           mode: "attached",
           configPath: defaultConfigPath(),
-          usageLogPath: defaultUsageLogPath(),
           loop,
           tools,
           getMcpServers: () => liveMcpServersRef.current,
@@ -3523,7 +3519,7 @@ function AppInner({
             try {
               const cfg = readConfig();
               if (!cfg.memory?.autoCapture || process.env.REASONIX_MEMORY_AUTO === "0") return;
-              const store = new MemoryStore({ projectRoot: currentRootDir });
+              const store = openMemoryStore({ projectRoot: currentRootDir });
               for (const outcome of stopReport.outcomes) {
                 await extractObservationFromHook(
                   stopPayload,

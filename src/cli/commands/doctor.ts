@@ -33,6 +33,9 @@ import type {
   PromptCacheStats,
 } from "../../observability/prompt-cache-monitor.js";
 import { resolveConcurrencySettings } from "../../rate-limit/index.js";
+import { getDb } from "../../storage/db.js";
+import { reasonixDbPath } from "../../storage/path.js";
+import { appliedVersions } from "../../storage/schema.js";
 import { getJsonModeEmptyResponseStats } from "../../telemetry/json-mode.js";
 import { readUsageSince } from "../../telemetry/usage.js";
 import { resolveDataPath } from "../../tokenizer.js";
@@ -87,6 +90,7 @@ export async function runDoctorChecks(
     r[3],
     r[4],
     r[5],
+    checkStorageBackend(),
     r[6],
     r[7],
     r[8],
@@ -104,6 +108,56 @@ export async function runDoctorChecks(
     checkToolset(),
     checkJsonModeEmptyResponses(),
   ];
+}
+
+function checkStorageBackend(): Check {
+  // SQLite is the sole persistence backend (no file/jsonl path, no gate).
+  const label = "storage      ";
+  const dbPath = reasonixDbPath();
+  try {
+    // getDb() with no arg opens the canonical reasonixDbPath() singleton — the
+    // same DB the app uses (FR-016: never inspect a path the app isn't on).
+    const db = getDb();
+    const integrity = (
+      db.prepare("PRAGMA integrity_check").get() as { integrity_check?: string } | undefined
+    )?.integrity_check;
+    if (integrity !== "ok") {
+      return {
+        id: "storage",
+        label,
+        level: "fail",
+        detail: `SQLite integrity_check=${integrity ?? "unknown"} — DB may be corrupt (${dbPath})`,
+      };
+    }
+    const schemaV = appliedVersions(db).at(-1) ?? 0;
+    // -wal size: un-checkpointed frames. Large + persistent → checkpoint stalled.
+    let walDetail = "";
+    try {
+      walDetail = ` · wal ${fmtBytes(statSync(`${dbPath}-wal`).size)}`;
+    } catch {
+      /* no -wal (rollback journal / fully checkpointed) — fine */
+    }
+    // Retention: incremental_vacuum reclaims pages freed by deleted rows. Off the
+    // hot path (doctor only); a no-op when auto_vacuum=INCREMENTAL has none pending.
+    try {
+      db.exec("PRAGMA incremental_vacuum");
+    } catch {
+      /* best-effort — never fails the storage check */
+    }
+    return {
+      id: "storage",
+      label,
+      level: "ok",
+      detail: `SQLite backend · integrity ok · schema v${schemaV}${walDetail}`,
+    };
+  } catch (err) {
+    return {
+      id: "storage",
+      label,
+      level: "fail",
+      detail: `SQLite backend unusable: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
 }
 
 function checkJsonModeEmptyResponses(): Check {

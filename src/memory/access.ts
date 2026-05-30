@@ -1,20 +1,20 @@
 import {
   appendFileSync,
-  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
   readdirSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import type { SqliteMemoryStore } from "../adapters/memory-store-sqlite.js";
 import {
   type MemoryEntry,
   type MemoryPriority,
   type MemoryScope,
-  type MemoryStore,
   sanitizeMemoryName,
 } from "./user.js";
 
@@ -125,7 +125,7 @@ export function computeDecayScore(
   return Math.exp(-ageDays / halfLife) * priority * Math.log1p(accessCount + priority);
 }
 
-export function forget(store: MemoryStore, opts: ForgetOptions): ForgetResult {
+export function forget(store: SqliteMemoryStore, opts: ForgetOptions): ForgetResult {
   const dryRun = opts.dryRun !== false;
   const now = opts.now ?? new Date();
   const root = memoryRootFromStore(store);
@@ -148,12 +148,16 @@ export function forget(store: MemoryStore, opts: ForgetOptions): ForgetResult {
     };
 
     if (!dryRun) {
-      const source = store.pathFor(entry.scope, entry.name);
-      const trashPath = uniqueTrashPath(root, entry.name, now);
-      mkdirSync(dirname(trashPath), { recursive: true });
-      copyFileSync(source, trashPath);
-      if (store.delete(entry.scope, entry.name)) softDeleted += 1;
-      candidate.trashPath = trashPath;
+      // No source file under SQLite — materialize the row to the same Markdown the
+      // file backend wrote so trash stays human-recoverable, then drop the row.
+      const md = store.exportMarkdown(entry.scope, entry.name);
+      if (md !== null) {
+        const trashPath = uniqueTrashPath(root, entry.name, now);
+        mkdirSync(dirname(trashPath), { recursive: true });
+        writeFileSync(trashPath, md, "utf8");
+        if (store.delete(entry.scope, entry.name)) softDeleted += 1;
+        candidate.trashPath = trashPath;
+      }
     }
     candidates.push(candidate);
   }
@@ -161,7 +165,7 @@ export function forget(store: MemoryStore, opts: ForgetOptions): ForgetResult {
   return { previewed: candidates.length, softDeleted, candidates };
 }
 
-export function purge(store: MemoryStore, opts: PurgeOptions = {}): PurgeResult {
+export function purge(store: SqliteMemoryStore, opts: PurgeOptions = {}): PurgeResult {
   if (opts.ciGuard !== false && /^true$/i.test(process.env.CI ?? "")) {
     throw new Error("refusing to purge memory trash while CI=true");
   }
@@ -196,7 +200,11 @@ function parseAccessLine(line: string): { ts: string; scope: MemoryScope; name: 
     if (typeof value.ts !== "string" || Number.isNaN(Date.parse(value.ts))) return null;
     if (value.scope !== "global" && value.scope !== "project") return null;
     if (typeof value.name !== "string") return null;
-    return { ts: value.ts, scope: value.scope, name: sanitizeMemoryName(value.name) };
+    return {
+      ts: value.ts,
+      scope: value.scope,
+      name: sanitizeMemoryName(value.name),
+    };
   } catch {
     return null;
   }
@@ -208,7 +216,7 @@ function priorityWeight(priority: MemoryPriority | undefined): number {
   return 1;
 }
 
-function memoryRootFromStore(store: MemoryStore): string {
+function memoryRootFromStore(store: SqliteMemoryStore): string {
   return dirname(store.dir("global"));
 }
 
