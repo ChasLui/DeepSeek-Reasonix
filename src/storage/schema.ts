@@ -7,7 +7,8 @@ interface Migration {
 }
 
 // Business-table migrations applied in version order. version 1 = usage (Slice 2),
-// version 2 = events (Slice 3); sessions / memory follow in later slices.
+// version 2 = events (Slice 3), version 3 = sessions (Slice 4a), version 4 = memory
+// (Slice 4b), version 5 = migration_state (activation: migrate-store idempotency).
 const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -74,6 +75,20 @@ const MIGRATIONS: Migration[] = [
       // memory would UPSERT over each other in the shared DB (FR-019).
       db.exec(
         "CREATE TABLE memory (scope TEXT NOT NULL, project_hash TEXT NOT NULL DEFAULT '', name TEXT NOT NULL, type TEXT NOT NULL, description TEXT NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL, priority TEXT, expires TEXT, PRIMARY KEY (scope, project_hash, name))",
+      );
+    },
+  },
+  {
+    version: 5,
+    name: "migration_state",
+    up: (db) => {
+      // Per-subsystem migration ledger so `migrate-store` is idempotent: a row here
+      // means that subsystem's file data was already copied into SQLite, so a re-run
+      // skips it (never double-imports). archived_to records where the source files
+      // were moved (never deleted — FR rollback safety); NULL when nothing was found
+      // to archive. Separate from schema_migrations (DDL) — this tracks DATA import.
+      db.exec(
+        "CREATE TABLE migration_state (subsystem TEXT PRIMARY KEY, migrated_at TEXT NOT NULL, source_count INTEGER NOT NULL, archived_to TEXT)",
       );
     },
   },

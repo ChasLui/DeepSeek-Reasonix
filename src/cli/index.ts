@@ -462,6 +462,21 @@ program
   });
 
 program
+  .command("migrate-store")
+  .description("Copy file-backed storage into the unified SQLite DB (the activation step)")
+  .option("--activate", "flip .store-version to sqlite after a clean copy")
+  .option("--dry-run", "preview record counts without writing or switching")
+  .option("--only <subsystems>", "comma-separated subset: usage,sessions,events,memory")
+  .action(async (opts) => {
+    const { migrateStoreCommand } = await import("./commands/migrate-store.js");
+    migrateStoreCommand({
+      activate: !!opts.activate,
+      dryRun: !!opts.dryRun,
+      only: opts.only,
+    });
+  });
+
+program
   .command("events <name>")
   .description(t("cli.events"))
   .option("--type <type>", t("ui.eventTypeHint"))

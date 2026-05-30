@@ -22,8 +22,11 @@ import { storeBackend } from "../storage/select.js";
 import {
   appendSessionMessageDb,
   deleteSessionDb,
+  listSessionMetaDb,
   loadSessionMessagesDb,
+  loadSessionMetaDb,
   replaceLog,
+  upsertSessionMeta,
 } from "../storage/sessions-repo.js";
 import type { ChatMessage } from "../types.js";
 
@@ -289,6 +292,29 @@ export function listSessions(opts?: {
   workspaceFilter?: string;
   sourceFilter?: string;
 }): SessionInfo[] {
+  if (storeBackend() === "sqlite") {
+    const want = opts?.workspaceFilter ? normalizeWorkspace(opts.workspaceFilter) : null;
+    return listSessionMetaDb(getDb())
+      .filter((row) => {
+        if (opts?.sourceFilter && row.meta.source !== opts.sourceFilter) return false;
+        if (want !== null) {
+          if (typeof row.meta.workspace !== "string") return false;
+          if (normalizeWorkspace(row.meta.workspace) !== want) return false;
+        }
+        return true;
+      })
+      .map((row) => ({
+        name: row.name,
+        // No file under SQLite — synthesize the canonical jsonl path so callers
+        // that key on `.path` for identity/display keep working.
+        path: sessionPath(row.name),
+        size: 0,
+        messageCount: row.messageCount,
+        mtime: row.updatedAt ? new Date(row.updatedAt) : new Date(0),
+        meta: row.meta,
+      }))
+      .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+  }
   const dir = sessionsDir();
   if (!existsSync(dir)) return [];
   const want = opts?.workspaceFilter ? normalizeWorkspace(opts.workspaceFilter) : null;
@@ -354,6 +380,7 @@ function metaPath(name: string): string {
 }
 
 export function loadSessionMeta(name: string): SessionMeta {
+  if (storeBackend() === "sqlite") return loadSessionMetaDb(getDb(), sanitizeName(name));
   const p = metaPath(name);
   if (!existsSync(p)) return {};
   try {
@@ -367,6 +394,10 @@ export function loadSessionMeta(name: string): SessionMeta {
 export function patchSessionMeta(name: string, patch: Partial<SessionMeta>): SessionMeta {
   const cur = loadSessionMeta(name);
   const next: SessionMeta = { ...cur, ...patch };
+  if (storeBackend() === "sqlite") {
+    upsertSessionMeta(getDb(), sanitizeName(name), next, new Date().toISOString());
+    return next;
+  }
   const p = metaPath(name);
   mkdirSync(dirname(p), { recursive: true });
   writeFileSync(p, JSON.stringify(next), "utf8");
