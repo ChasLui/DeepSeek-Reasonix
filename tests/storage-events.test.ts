@@ -2,7 +2,11 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { SqliteEventSink, SqliteEventSource } from "../src/adapters/event-sink-sqlite.js";
+import {
+  SqliteEventSink,
+  SqliteEventSource,
+  readSessionEventsDb,
+} from "../src/adapters/event-sink-sqlite.js";
 import type { Event } from "../src/core/events.js";
 import { getDb, resetDb } from "../src/storage/db.js";
 
@@ -67,5 +71,16 @@ describe("storage/event-sink-sqlite", () => {
     expect(() => db.exec("UPDATE events SET type = 'x' WHERE session = 's1'")).toThrow(
       /append-only/,
     );
+  });
+
+  it("readSessionEventsDb (sync) matches the async source — powers the events CLI", () => {
+    const db = getDb(tmpPath());
+    const sink = new SqliteEventSink(db, "s1");
+    sink.append(ev("user.message", 0, { text: "hi" }));
+    sink.append(ev("model.delta", 0, { chunk: "x" }));
+    sink.append(ev("model.final", 0, { text: "hello" }));
+    const out = readSessionEventsDb(db, "s1");
+    expect(out.map((e) => e.type)).toEqual(["user.message", "model.final"]);
+    expect(readSessionEventsDb(db, "missing")).toEqual([]);
   });
 });

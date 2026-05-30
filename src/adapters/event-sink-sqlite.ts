@@ -50,11 +50,15 @@ export class SqliteEventSource implements EventSource {
   // Fine for replay/inspection; chunk with LIMIT/OFFSET if a session ever outgrows
   // memory.
   async *read(sessionName: string): AsyncIterable<Event> {
-    const rows = this.db
-      .prepare("SELECT payload FROM events WHERE session = ? ORDER BY event_id")
-      .all(sessionName) as Array<{ payload: string }>;
-    for (const row of rows) {
-      yield JSON.parse(row.payload) as Event;
-    }
+    for (const ev of readSessionEventsDb(this.db, sessionName)) yield ev;
   }
+}
+
+// Synchronous read for the `events` CLI command (which is sync); the async
+// EventSource.read above wraps this to satisfy the AsyncIterable port.
+export function readSessionEventsDb(db: Db, sessionName: string): Event[] {
+  const rows = db
+    .prepare("SELECT payload FROM events WHERE session = ? ORDER BY event_id")
+    .all(sessionName) as Array<{ payload: string }>;
+  return rows.map((r) => JSON.parse(r.payload) as Event);
 }
