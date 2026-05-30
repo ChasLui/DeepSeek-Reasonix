@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { SqliteMemoryStore } from "../adapters/memory-store-sqlite.js";
 import {
   type ReasonixConfig,
   type ToonMode,
@@ -20,6 +21,8 @@ import {
 } from "../config.js";
 import { parseFrontmatter } from "../frontmatter.js";
 import { applySkillsIndex } from "../skills.js";
+import { getDb } from "../storage/db.js";
+import { storeBackend } from "../storage/select.js";
 import { formatPromptPayloadBlock, toonPrefixEnabled } from "../toon/prompt-payload.js";
 import { applyProjectMemory, memoryEnabled } from "./project.js";
 
@@ -86,7 +89,11 @@ export function projectHash(rootDir: string): string {
   return createHash("sha1").update(abs).digest("hex").slice(0, 16);
 }
 
-function scopeDir(opts: { homeDir: string; scope: MemoryScope; projectRoot?: string }): string {
+function scopeDir(opts: {
+  homeDir: string;
+  scope: MemoryScope;
+  projectRoot?: string;
+}): string {
   if (opts.scope === "global") {
     return join(opts.homeDir, USER_MEMORY_DIR, "global");
   }
@@ -146,7 +153,11 @@ export class MemoryStore {
 
   /** Directory this store writes `scope` files into, creating it if needed. */
   dir(scope: MemoryScope): string {
-    const d = scopeDir({ homeDir: this.homeDir, scope, projectRoot: this.projectRoot });
+    const d = scopeDir({
+      homeDir: this.homeDir,
+      scope,
+      projectRoot: this.projectRoot,
+    });
     ensureDir(d);
     return d;
   }
@@ -214,7 +225,11 @@ export class MemoryStore {
     const out: MemoryEntry[] = [];
     const scopes: MemoryScope[] = this.projectRoot ? ["global", "project"] : ["global"];
     for (const scope of scopes) {
-      const dir = scopeDir({ homeDir: this.homeDir, scope, projectRoot: this.projectRoot });
+      const dir = scopeDir({
+        homeDir: this.homeDir,
+        scope,
+        projectRoot: this.projectRoot,
+      });
       if (!existsSync(dir)) continue;
       let entries: string[];
       try {
@@ -278,7 +293,11 @@ export class MemoryStore {
 
   /** Sorted by name — same file set must produce byte-identical MEMORY.md for stable prefix hashing. */
   private regenerateIndex(scope: MemoryScope): void {
-    const dir = scopeDir({ homeDir: this.homeDir, scope, projectRoot: this.projectRoot });
+    const dir = scopeDir({
+      homeDir: this.homeDir,
+      scope,
+      projectRoot: this.projectRoot,
+    });
     if (!existsSync(dir)) return;
     let files: string[];
     try {
@@ -299,7 +318,12 @@ export class MemoryStore {
       const name = f.slice(0, -3);
       try {
         const entry = this.read(scope, name);
-        lines.push(indexLine({ name: entry.name || name, description: entry.description }));
+        lines.push(
+          indexLine({
+            name: entry.name || name,
+            description: entry.description,
+          }),
+        );
       } catch {
         // Malformed: still surface it in the index so the user notices.
         lines.push(`- [${name}](${name}.md) — (malformed, check frontmatter)`);
@@ -316,9 +340,12 @@ export class MemoryStore {
 }
 
 /** Freeform `#g` destination, distinct from MEMORY.md's curated index of named files. */
-export function readGlobalReasonixMemory(
-  homeDir: string = join(homedir(), ".reasonix"),
-): { path: string; content: string; originalChars: number; truncated: boolean } | null {
+export function readGlobalReasonixMemory(homeDir: string = join(homedir(), ".reasonix")): {
+  path: string;
+  content: string;
+  originalChars: number;
+  truncated: boolean;
+} | null {
   const path = join(homeDir, "REASONIX.md");
   if (!existsSync(path)) return null;
   let raw: string;
@@ -388,13 +415,38 @@ function highPriorityBlock(entries: MemoryEntry[], cfg?: ReasonixConfig): string
 /** Empty index → omit the whole block (otherwise we'd add bytes to the prefix hash for nothing). */
 export function applyUserMemory(
   basePrompt: string,
-  opts: { homeDir?: string; projectRoot?: string; cfg?: ReasonixConfig; toonMode?: ToonMode } = {},
+  opts: {
+    homeDir?: string;
+    projectRoot?: string;
+    cfg?: ReasonixConfig;
+    toonMode?: ToonMode;
+  } = {},
 ): string {
   if (!memoryEnabled()) return basePrompt;
-  const store = new MemoryStore(opts);
-  const global = store.loadIndex("global");
-  const project = store.hasProjectScope() ? store.loadIndex("project") : null;
-  const entries = store.list();
+  let global: {
+    content: string;
+    originalChars: number;
+    truncated: boolean;
+  } | null;
+  let project: {
+    content: string;
+    originalChars: number;
+    truncated: boolean;
+  } | null;
+  let entries: MemoryEntry[];
+  if (storeBackend() === "sqlite") {
+    // SqliteMemoryStore mirrors loadIndex/list/hasProjectScope synchronously so the
+    // prefix block stays byte-identical to the file backend (SC-003).
+    const store = new SqliteMemoryStore(getDb(), opts.projectRoot);
+    global = store.loadIndexContent("global");
+    project = store.hasProjectScope() ? store.loadIndexContent("project") : null;
+    entries = store.listEntriesSync();
+  } else {
+    const store = new MemoryStore(opts);
+    global = store.loadIndex("global");
+    project = store.hasProjectScope() ? store.loadIndex("project") : null;
+    entries = store.list();
+  }
   const high = highPriorityBlock(entries, opts.cfg);
   if (!global && !project && !high) return basePrompt;
   const parts: string[] = [basePrompt];

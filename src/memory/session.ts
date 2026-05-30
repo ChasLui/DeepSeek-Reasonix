@@ -17,6 +17,14 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, posix as posixPath, win32 as win32Path } from "node:path";
+import { getDb } from "../storage/db.js";
+import { storeBackend } from "../storage/select.js";
+import {
+  appendSessionMessageDb,
+  deleteSessionDb,
+  loadSessionMessagesDb,
+  replaceLog,
+} from "../storage/sessions-repo.js";
 import type { ChatMessage } from "../types.js";
 
 const SESSION_SIDECAR_EXTS = [
@@ -162,6 +170,7 @@ export function resolveSession(
 }
 
 export function loadSessionMessages(name: string): ChatMessage[] {
+  if (storeBackend() === "sqlite") return loadSessionMessagesDb(getDb(), sanitizeName(name));
   const path = sessionPath(name);
   if (!existsSync(path)) return [];
   const live = readSessionMessages(path);
@@ -262,6 +271,10 @@ function readSessionMessages(
 }
 
 export function appendSessionMessage(name: string, message: ChatMessage): void {
+  if (storeBackend() === "sqlite") {
+    appendSessionMessageDb(getDb(), sanitizeName(name), message);
+    return;
+  }
   const path = sessionPath(name);
   mkdirSync(dirname(path), { recursive: true });
   appendFileSync(path, `${JSON.stringify(message)}\n`, "utf8");
@@ -299,7 +312,16 @@ export function listSessions(opts?: {
         }
         const stat = statSync(path);
         const messageCount = countLines(path);
-        return [{ name, path, size: stat.size, messageCount, mtime: stat.mtime, meta }];
+        return [
+          {
+            name,
+            path,
+            size: stat.size,
+            messageCount,
+            mtime: stat.mtime,
+            meta,
+          },
+        ];
       })
       .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
   } catch {
@@ -392,6 +414,10 @@ export function pruneStaleSessions(daysOld = 90): string[] {
 }
 
 export function deleteSession(name: string): boolean {
+  if (storeBackend() === "sqlite") {
+    deleteSessionDb(getDb(), sanitizeName(name));
+    return true;
+  }
   const path = sessionPath(name);
   try {
     unlinkSync(path);
@@ -411,6 +437,10 @@ export function deleteSession(name: string): boolean {
 
 /** Crash-safe rewrite: snapshot the previous live log, write a sibling tmp file, then atomically swap it in. */
 export function rewriteSession(name: string, messages: ChatMessage[]): void {
+  if (storeBackend() === "sqlite") {
+    replaceLog(getDb(), sanitizeName(name), messages);
+    return;
+  }
   const path = sessionPath(name);
   mkdirSync(dirname(path), { recursive: true });
   const body = messages.map((m) => JSON.stringify(m)).join("\n");
@@ -593,7 +623,11 @@ function stringifyToolArguments(raw: unknown): string {
 
 function extractSessionId(raw: unknown): string | undefined {
   if (!raw || typeof raw !== "object") return undefined;
-  const value = raw as { sessionId?: unknown; session_id?: unknown; conversationId?: unknown };
+  const value = raw as {
+    sessionId?: unknown;
+    session_id?: unknown;
+    conversationId?: unknown;
+  };
   for (const candidate of [value.sessionId, value.session_id, value.conversationId]) {
     if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
   }

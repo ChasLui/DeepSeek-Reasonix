@@ -17,6 +17,13 @@ import {
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { Usage } from "../client.js";
+import { getDb } from "../storage/db.js";
+import { storeBackend } from "../storage/select.js";
+import {
+  appendUsageRow,
+  readAllUsage,
+  readUsageSince as readUsageSinceDb,
+} from "../storage/usage-repo.js";
 import {
   CLAUDE_SONNET_PRICING,
   DEEPSEEK_PRICING,
@@ -156,6 +163,16 @@ export function appendUsage(input: AppendUsageInput): UsageRecord {
   if (input.kind === "subagent") record.kind = "subagent";
   if (input.subagent) record.subagent = input.subagent;
 
+  // SQLite backend (post-cutover) when no explicit path. An explicit path is a
+  // test/legacy override and stays on JSONL (keeps the gate test-isolated too).
+  if (!input.path && storeBackend() === "sqlite") {
+    try {
+      appendUsageRow(getDb(), record);
+    } catch {
+      /* best-effort — disk failure shouldn't break the chat */
+    }
+    return record;
+  }
   const path = input.path ?? defaultUsageLogPath();
   try {
     mkdirSync(dirname(path), { recursive: true });
@@ -167,11 +184,13 @@ export function appendUsage(input: AppendUsageInput): UsageRecord {
   return record;
 }
 
-export function readUsageLog(path: string = defaultUsageLogPath()): UsageRecord[] {
-  if (!existsSync(path)) return [];
+export function readUsageLog(path?: string): UsageRecord[] {
+  if (!path && storeBackend() === "sqlite") return readAllUsage(getDb());
+  const resolved = path ?? defaultUsageLogPath();
+  if (!existsSync(resolved)) return [];
   let raw: string;
   try {
-    raw = readFileSync(path, "utf8");
+    raw = readFileSync(resolved, "utf8");
   } catch {
     return [];
   }
@@ -191,7 +210,8 @@ export function readUsageLog(path: string = defaultUsageLogPath()): UsageRecord[
 /** Records with `ts >= since`. For the per-turn budget gate — the file itself
  * is size-bounded by `compactUsageLogIfLarge` (5 MiB / 365 d), so this stays a
  * cheap bounded read; `since` just trims to the active rolling window. */
-export function readUsageSince(since: number, path: string = defaultUsageLogPath()): UsageRecord[] {
+export function readUsageSince(since: number, path?: string): UsageRecord[] {
+  if (!path && storeBackend() === "sqlite") return readUsageSinceDb(getDb(), since);
   const out: UsageRecord[] = [];
   for (const rec of readUsageLog(path)) {
     if (rec.ts >= since) out.push(rec);
