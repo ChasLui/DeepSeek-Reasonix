@@ -33,6 +33,10 @@ import type {
   PromptCacheStats,
 } from "../../observability/prompt-cache-monitor.js";
 import { resolveConcurrencySettings } from "../../rate-limit/index.js";
+import { getDb } from "../../storage/db.js";
+import { reasonixDbPath } from "../../storage/path.js";
+import { appliedVersions } from "../../storage/schema.js";
+import { storeBackend } from "../../storage/select.js";
 import { getJsonModeEmptyResponseStats } from "../../telemetry/json-mode.js";
 import { readUsageSince } from "../../telemetry/usage.js";
 import { resolveDataPath } from "../../tokenizer.js";
@@ -87,6 +91,7 @@ export async function runDoctorChecks(
     r[3],
     r[4],
     r[5],
+    checkStorageBackend(),
     r[6],
     r[7],
     r[8],
@@ -104,6 +109,60 @@ export async function runDoctorChecks(
     checkToolset(),
     checkJsonModeEmptyResponses(),
   ];
+}
+
+function checkStorageBackend(): Check {
+  const label = "storage      ";
+  if (storeBackend() !== "sqlite") {
+    return {
+      id: "storage",
+      label,
+      level: "info",
+      detail: "file backend (jsonl) — `reasonix migrate-store --activate` switches to SQLite",
+    };
+  }
+  const dbPath = reasonixDbPath();
+  if (!existsSync(dbPath)) {
+    return {
+      id: "storage",
+      label,
+      level: "fail",
+      detail: `.store-version says sqlite but ${dbPath} is missing — re-run migrate-store or delete .store-version`,
+    };
+  }
+  try {
+    const db = getDb(dbPath);
+    const integrity = (
+      db.prepare("PRAGMA integrity_check").get() as { integrity_check?: string } | undefined
+    )?.integrity_check;
+    if (integrity !== "ok") {
+      return {
+        id: "storage",
+        label,
+        level: "fail",
+        detail: `SQLite integrity_check=${integrity ?? "unknown"} — DB may be corrupt (${dbPath})`,
+      };
+    }
+    const migrated = (
+      db.prepare("SELECT subsystem FROM migration_state ORDER BY subsystem").all() as Array<{
+        subsystem: string;
+      }>
+    ).map((row) => row.subsystem);
+    const schemaV = appliedVersions(db).at(-1) ?? 0;
+    return {
+      id: "storage",
+      label,
+      level: "ok",
+      detail: `SQLite backend · integrity ok · schema v${schemaV} · migrated: ${migrated.length ? migrated.join(",") : "none"}`,
+    };
+  } catch (err) {
+    return {
+      id: "storage",
+      label,
+      level: "fail",
+      detail: `SQLite selected but the builtin driver is unusable: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
 }
 
 function checkJsonModeEmptyResponses(): Check {
