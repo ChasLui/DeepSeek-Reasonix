@@ -62,3 +62,12 @@ export function readSessionEventsDb(db: Db, sessionName: string): Event[] {
     .all(sessionName) as Array<{ payload: string }>;
   return rows.map((r) => JSON.parse(r.payload) as Event);
 }
+
+// Distinct sessions that have events, used by server cockpit/hooks panels to
+// enumerate sources (replaces the old `*.events.jsonl` sidecar globbing).
+export function listSessionsWithEvents(db: Db): string[] {
+  const rows = db.prepare("SELECT DISTINCT session FROM events").all() as Array<{
+    session: string;
+  }>;
+  return rows.map((r) => r.session);
+}

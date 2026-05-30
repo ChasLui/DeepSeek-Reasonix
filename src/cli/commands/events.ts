@@ -1,11 +1,8 @@
-import { eventLogPath } from "../../adapters/event-sink-jsonl.js";
 import { readSessionEventsDb } from "../../adapters/event-sink-sqlite.js";
-import { readEventLogFile } from "../../adapters/event-source-jsonl.js";
 import type { Event } from "../../core/events.js";
 import { replay as replayReducers } from "../../core/reducers.js";
 import { sanitizeName } from "../../memory/session.js";
 import { getDb } from "../../storage/db.js";
-import { storeBackend } from "../../storage/select.js";
 
 export interface EventsOptions {
   name: string;
@@ -17,17 +14,13 @@ export interface EventsOptions {
 }
 
 export function eventsCommand(opts: EventsOptions): void {
-  const sqlite = storeBackend() === "sqlite";
-  const path = eventLogPath(opts.name);
-  const source = sqlite ? "SQLite events table" : path;
-  let events = sqlite
-    ? readSessionEventsDb(getDb(), sanitizeName(opts.name))
-    : readEventLogFile(path);
+  const source = "SQLite events table";
+  let events = readSessionEventsDb(getDb(), sanitizeName(opts.name));
 
   if (events.length === 0) {
     console.error(`no events for session "${opts.name}"`);
     console.error(`looked at: ${source}`);
-    console.error("(sessions auto-create the sidecar on first turn — has this session run yet?)");
+    console.error("(sessions record events on their first turn — has this session run yet?)");
     process.exit(1);
     return;
   }

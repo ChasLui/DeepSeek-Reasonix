@@ -1,6 +1,5 @@
-import { existsSync } from "node:fs";
-import { readEventLogFile, recentEventFiles } from "../../adapters/event-source-jsonl.js";
-import { sessionsDir as defaultSessionsDir } from "../../memory/session.js";
+import { listSessionsWithEvents, readSessionEventsDb } from "../../adapters/event-sink-sqlite.js";
+import { getDb } from "../../storage/db.js";
 
 export interface HookRunRow {
   hookName: string;
@@ -9,24 +8,25 @@ export interface HookRunRow {
   whenMs: number;
 }
 
+const DAY_MS = 86_400_000;
+const STALE_DAYS = 30;
 const HOOK_LOG_CAP = 12;
 
 export function readRecentHookRuns(
   now: number = Date.now(),
-  sessionsDirOverride?: string,
+  _sessionsDirOverride?: string,
 ): ReadonlyArray<HookRunRow> | null {
-  const dir = sessionsDirOverride ?? defaultSessionsDir();
-  if (!existsSync(dir)) return null;
-  const files = recentEventFiles(dir, now);
-  if (files.length === 0) return null;
+  const db = getDb();
+  const sessions = listSessionsWithEvents(db);
+  if (sessions.length === 0) return null;
 
+  const cutoff = now - STALE_DAYS * DAY_MS;
   const rows: HookRunRow[] = [];
-  for (const file of files) {
-    const events = readEventLogFile(file);
-    for (const ev of events) {
+  for (const session of sessions) {
+    for (const ev of readSessionEventsDb(db, session)) {
       if (ev.type !== "hook.fired") continue;
       const ts = Date.parse(ev.ts);
-      if (!Number.isFinite(ts)) continue;
+      if (!Number.isFinite(ts) || ts < cutoff) continue;
       rows.push({
         hookName: ev.hookName,
         phase: ev.phase,

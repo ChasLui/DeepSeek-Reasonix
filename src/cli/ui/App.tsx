@@ -3,7 +3,6 @@ import { relative, resolve } from "node:path";
 import { derivePrefix } from "@reasonix/core-utils";
 import { Box, Text, useStdin, useStdout } from "ink";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { eventLogPath, openEventSink } from "../../adapters/event-sink-jsonl.js";
 import { SqliteEventSink } from "../../adapters/event-sink-sqlite.js";
 import { type AtUrlExpansion, expandAtMentions, expandAtUrls } from "../../at-mentions.js";
 import { getOrCreateDeepSeekClient } from "../../client-singleton.js";
@@ -92,7 +91,6 @@ import {
 } from "../../session-title.js";
 import { loadSlashUsage, recordSlashUse } from "../../slash-usage.js";
 import { getDb } from "../../storage/db.js";
-import { storeBackend } from "../../storage/select.js";
 import {
   DEEPSEEK_CONTEXT_TOKENS,
   DEFAULT_CONTEXT_TOKENS,
@@ -977,10 +975,7 @@ function AppInner({
   const eventSinkRef = useRef<EventSink | null>(null);
   const eventizerRef = useRef<Eventizer | null>(null);
   if (session && !eventSinkRef.current) {
-    eventSinkRef.current =
-      storeBackend() === "sqlite"
-        ? new SqliteEventSink(getDb(), sanitizeName(session))
-        : openEventSink(eventLogPath(session));
+    eventSinkRef.current = new SqliteEventSink(getDb(), sanitizeName(session));
     eventizerRef.current = new Eventizer();
     eventSinkRef.current.append(eventizerRef.current.emitSessionOpened(0, session, 0));
   }

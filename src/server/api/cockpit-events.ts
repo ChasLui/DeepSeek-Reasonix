@@ -1,7 +1,6 @@
-import { existsSync } from "node:fs";
-import { readEventLogFile, recentEventFiles } from "../../adapters/event-source-jsonl.js";
+import { listSessionsWithEvents, readSessionEventsDb } from "../../adapters/event-sink-sqlite.js";
 import type { Event } from "../../core/events.js";
-import { sessionsDir as defaultSessionsDir } from "../../memory/session.js";
+import { getDb } from "../../storage/db.js";
 
 export interface CockpitToolCallsKpi {
   total: number;
@@ -31,20 +30,17 @@ export interface EventsCockpit {
 }
 
 const DAY_MS = 86_400_000;
-const RECENT_FILES_CAP = 8;
+const STALE_DAYS = 30;
+const RECENT_SESSIONS_CAP = 8;
 const PLAN_FEED_CAP = 4;
 const TOOL_FEED_CAP = 6;
 
 export function computeEventsCockpit(
   now: number = Date.now(),
-  sessionsDirOverride?: string,
+  _sessionsDirOverride?: string,
 ): EventsCockpit {
-  const dir = sessionsDirOverride ?? defaultSessionsDir();
-  if (!existsSync(dir)) {
-    return { toolCalls24h: null, recentPlans: null, toolActivity: null };
-  }
-  const files = recentEventFiles(dir, now, RECENT_FILES_CAP);
-  if (files.length === 0) {
+  const sessions = recentEventSessions(now);
+  if (sessions.length === 0) {
     return { toolCalls24h: null, recentPlans: null, toolActivity: null };
   }
 
@@ -55,8 +51,7 @@ export function computeEventsCockpit(
   const allTools: CockpitToolFeedRow[] = [];
   const allPlans: CockpitRecentPlan[] = [];
 
-  for (const file of files) {
-    const events = readEventLogFile(file);
+  for (const events of sessions) {
     if (events.length === 0) continue;
     countToolCalls(events, cutoff24h, cutoff48h, (in24h) => {
       if (in24h) calls24h++;
@@ -120,7 +115,12 @@ function collectToolActivity(events: ReadonlyArray<Event>, into: CockpitToolFeed
 }
 
 function collectPlans(events: ReadonlyArray<Event>, into: CockpitRecentPlan[]): void {
-  let current: { id: string; title: string; totalSteps: number; whenMs: number } | null = null;
+  let current: {
+    id: string;
+    title: string;
+    totalSteps: number;
+    whenMs: number;
+  } | null = null;
   let completed = new Set<string>();
   for (const ev of events) {
     if (ev.type === "plan.submitted") {
@@ -194,4 +194,27 @@ function summarizeArgs(args: string): string {
 function parseTs(ts: string): number | null {
   const n = Date.parse(ts);
   return Number.isFinite(n) ? n : null;
+}
+
+// SQLite replacement for the old recent-`*.events.jsonl`-files scan: read every
+// session's events, drop sessions whose newest event is older than the stale
+// cutoff (recency applied on event `ts` instead of file mtime), then keep the
+// most-recently-active sessions up to the cap.
+function recentEventSessions(now: number): Event[][] {
+  const db = getDb();
+  const cutoff = now - STALE_DAYS * DAY_MS;
+  const fresh: Array<{ events: Event[]; latest: number }> = [];
+  for (const session of listSessionsWithEvents(db)) {
+    const events = readSessionEventsDb(db, session);
+    if (events.length === 0) continue;
+    let latest = Number.NEGATIVE_INFINITY;
+    for (const ev of events) {
+      const ts = parseTs(ev.ts);
+      if (ts !== null && ts > latest) latest = ts;
+    }
+    if (latest < cutoff) continue;
+    fresh.push({ events, latest });
+  }
+  fresh.sort((a, b) => b.latest - a.latest);
+  return fresh.slice(0, RECENT_SESSIONS_CAP).map((f) => f.events);
 }

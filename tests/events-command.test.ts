@@ -1,32 +1,35 @@
 /** `reasonix events <name>` formatter — per-event-type detail rendering + filter / projection flags. */
 
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SqliteEventSink } from "../src/adapters/event-sink-sqlite.js";
 import { eventsCommand } from "../src/cli/commands/events.js";
-import { sessionsDir } from "../src/memory/session.js";
+import type { Event } from "../src/core/events.js";
+import { sanitizeName } from "../src/memory/session.js";
+import { getDb, resetDb } from "../src/storage/db.js";
 
-let dir: string;
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "reasonix-events-cmd-"));
-  // Override the home dir so eventLogPath resolves into our temp area.
-  process.env.HOME = dir;
-  process.env.USERPROFILE = dir;
+  getDb(join(mkdtempSync(join(tmpdir(), "reasonix-events-cmd-")), "reasonix.db"));
 });
 afterEach(() => {
-  rmSync(dir, { recursive: true, force: true });
+  resetDb();
 });
 
-function seed(name: string, lines: string[]): void {
-  const target = join(sessionsDir(), `${name}.events.jsonl`);
-  const fs = require("node:fs") as typeof import("node:fs");
-  fs.mkdirSync(join(target, ".."), { recursive: true });
-  writeFileSync(target, lines.map((l) => `${l}\n`).join(""), "utf8");
+function seed(name: string, events: Event[]): void {
+  const sink = new SqliteEventSink(getDb(), sanitizeName(name));
+  for (const ev of events) sink.append(ev);
 }
 
-const ev = (id: number, type: string, extra: Record<string, unknown>): string =>
-  JSON.stringify({ id, ts: "2026-04-29T12:00:00Z", turn: 1, type, ...extra });
+const ev = (id: number, type: string, extra: Record<string, unknown>): Event =>
+  ({
+    id,
+    ts: "2026-04-29T12:00:00Z",
+    turn: 1,
+    type,
+    ...extra,
+  }) as unknown as Event;
 
 describe("eventsCommand", () => {
   it("formats common event types with sensible details", () => {
@@ -38,14 +41,26 @@ describe("eventsCommand", () => {
         reasoningEffort: "max",
         prefixHash: "abcd1234ef",
       }),
-      ev(4, "tool.intent", { callId: "tc-1", name: "list_directory", args: '{"path":"src"}' }),
+      ev(4, "tool.intent", {
+        callId: "tc-1",
+        name: "list_directory",
+        args: '{"path":"src"}',
+      }),
       ev(5, "tool.dispatched", { callId: "tc-1" }),
-      ev(6, "tool.result", { callId: "tc-1", ok: true, output: "App.tsx\n", durationMs: 12 }),
+      ev(6, "tool.result", {
+        callId: "tc-1",
+        ok: true,
+        output: "App.tsx\n",
+        durationMs: 12,
+      }),
       ev(7, "tool.call", {
         name: "run_command",
         args: { command: "npm test", apiKey: "[redacted]" },
       }),
-      ev(8, "tool.confirm.allow", { kind: "run_command", payload: { command: "npm test" } }),
+      ev(8, "tool.confirm.allow", {
+        kind: "run_command",
+        payload: { command: "npm test" },
+      }),
     ]);
 
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -94,7 +109,7 @@ describe("eventsCommand", () => {
     expect(out).not.toContain('"a"');
   });
 
-  it("--json passes through raw JSONL", () => {
+  it("--json passes through raw event JSON", () => {
     seed("demo", [ev(1, "status", { text: "raw" })]);
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     eventsCommand({ name: "demo", json: true });
@@ -112,7 +127,10 @@ describe("eventsCommand", () => {
     const out = log.mock.calls.map((c) => String(c[0])).join("\n");
     log.mockRestore();
     const parsed = JSON.parse(out);
-    expect(parsed.conversation.messages[0]).toMatchObject({ role: "user", content: "hi" });
+    expect(parsed.conversation.messages[0]).toMatchObject({
+      role: "user",
+      content: "hi",
+    });
     expect(parsed.session.currentTurn).toBe(1);
   });
 
