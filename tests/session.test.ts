@@ -1,14 +1,6 @@
-import {
-  appendFileSync,
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  utimesSync,
-  writeFileSync,
-} from "node:fs";
-import { homedir, tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeepSeekClient } from "../src/client.js";
 import { CacheFirstLoop } from "../src/loop.js";
@@ -30,9 +22,10 @@ import {
   rewriteSession,
   sanitizeName,
   sessionPath,
-  sessionsDir,
   timestampSuffix,
 } from "../src/memory/session.js";
+import { getDb, resetDb } from "../src/storage/db.js";
+import { upsertSessionMeta } from "../src/storage/sessions-repo.js";
 
 describe("sanitizeName", () => {
   it("keeps alphanumerics, CJK, dashes, underscores", () => {
@@ -49,9 +42,15 @@ describe("sanitizeName", () => {
   });
 });
 
+// Backdate a session's mtime by writing an explicit updated_at on its meta row —
+// the SQLite analog of utimesSync on the old jsonl. listSessions/pruneStale read
+// mtime from sessions.updated_at.
+function backdateSession(name: string, when: Date): void {
+  upsertSessionMeta(getDb(), sanitizeName(name), {}, when.toISOString());
+}
+
 describe("session persistence", () => {
   let tmp: string;
-  const realHome = homedir();
 
   beforeEach(() => {
     tmp = mkdtempSync(join(tmpdir(), "reasonix-session-"));
@@ -59,9 +58,12 @@ describe("session persistence", () => {
     vi.stubEnv("HOME", tmp); // Unix
     // os.homedir() is cached per-process on some platforms — override via spy.
     vi.spyOn(require("node:os"), "homedir").mockReturnValue(tmp);
+    // Re-open the singleton DB under the freshly-homed tmp dir.
+    resetDb();
   });
 
   afterEach(() => {
+    resetDb();
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
@@ -75,7 +77,7 @@ describe("session persistence", () => {
     expect(p.startsWith(tmp)).toBe(true);
   });
 
-  it("loadSessionMessages returns [] when the file doesn't exist", () => {
+  it("loadSessionMessages returns [] when the session has no rows", () => {
     expect(loadSessionMessages("ghost")).toEqual([]);
   });
 
@@ -88,50 +90,10 @@ describe("session persistence", () => {
     expect(msgs[1]).toEqual({ role: "assistant", content: "hello" });
   });
 
-  it("tolerates malformed lines (skips them)", () => {
-    appendSessionMessage("mix", { role: "user", content: "a" });
-    // inject a garbage line directly
-    const p = sessionPath("mix");
-    writeFileSync(p, `${readFileSync(p, "utf8")}not json\n`);
-    appendSessionMessage("mix", { role: "user", content: "b" });
-    const msgs = loadSessionMessages("mix");
-    expect(msgs.length).toBe(2);
-  });
-
-  it("rewriteSession snapshots a non-empty live transcript before replacing it", () => {
+  it("rewriteSession replaces the live log", () => {
     appendSessionMessage("safe-rewrite", { role: "user", content: "old" });
-
     rewriteSession("safe-rewrite", [{ role: "user", content: "new" }]);
-
     expect(loadSessionMessages("safe-rewrite")).toEqual([{ role: "user", content: "new" }]);
-    expect(readFileSync(`${sessionPath("safe-rewrite")}.bak`, "utf8")).toBe(
-      `${JSON.stringify({ role: "user", content: "old" })}\n`,
-    );
-  });
-
-  it("loadSessionMessages falls back to backup when the live transcript has no valid entries", () => {
-    appendSessionMessage("recover-corrupt", { role: "user", content: "saved" });
-    const p = sessionPath("recover-corrupt");
-    writeFileSync(`${p}.bak`, readFileSync(p, "utf8"));
-    writeFileSync(p, "not json\nalso not json\n");
-
-    expect(loadSessionMessages("recover-corrupt")).toEqual([{ role: "user", content: "saved" }]);
-  });
-
-  it("loadSessionMessages does not resurrect backup when the live transcript is empty", () => {
-    appendSessionMessage("empty-live", { role: "user", content: "old" });
-    const p = sessionPath("empty-live");
-    writeFileSync(`${p}.bak`, readFileSync(p, "utf8"));
-    writeFileSync(p, "");
-
-    expect(loadSessionMessages("empty-live")).toEqual([]);
-  });
-
-  it("listSessions ignores jsonl backup sidecars", () => {
-    appendSessionMessage("visible", { role: "user", content: "x" });
-    writeFileSync(`${sessionPath("visible")}.bak`, `${JSON.stringify({ role: "user" })}\n`);
-
-    expect(listSessions().map((s) => s.name)).toEqual(["visible"]);
   });
 
   it("listSessions returns metadata sorted by mtime desc", () => {
@@ -145,14 +107,6 @@ describe("session persistence", () => {
     expect(names).toContain("beta");
     const beta = items.find((s) => s.name === "beta")!;
     expect(beta.messageCount).toBe(2);
-    expect(beta.size).toBeGreaterThan(0);
-  });
-
-  it("listSessions excludes .events.jsonl sidecars", () => {
-    appendSessionMessage("real", { role: "user", content: "x" });
-    writeFileSync(sessionPath("real").replace(/\.jsonl$/, ".events.jsonl"), '{"id":1}\n');
-    const names = listSessions().map((s) => s.name);
-    expect(names).toEqual(["real"]);
   });
 
   it("listSessionsForWorkspace matches meta.workspace and hides untagged sessions", () => {
@@ -172,7 +126,7 @@ describe("session persistence", () => {
     expect(names).toEqual(["a"]);
   });
 
-  it("listSessionsForWorkspace preserves messageCount + size for matched sessions (issue #1179)", () => {
+  it("listSessionsForWorkspace preserves messageCount for matched sessions (issue #1179)", () => {
     // Workspace pre-filter must not strip the metadata downstream consumers rely on.
     appendSessionMessage("here", { role: "user", content: "hello" });
     appendSessionMessage("here", { role: "assistant", content: "world" });
@@ -182,145 +136,65 @@ describe("session persistence", () => {
     const matched = listSessionsForWorkspace("/proj/a");
     expect(matched.map((s) => s.name)).toEqual(["here"]);
     expect(matched[0]!.messageCount).toBe(2);
-    expect(matched[0]!.size).toBeGreaterThan(0);
     expect(matched[0]!.meta.workspace).toBe("/proj/a");
   });
 
-  it("listSessions messageCount counts a final line without trailing newline", () => {
-    appendSessionMessage("tail", { role: "user", content: "a" });
-    // Simulate a hand-edited / corrupted save: append a line WITHOUT the
-    // trailing \n that appendSessionMessage normally writes.
-    const p = sessionPath("tail");
-    appendFileSync(p, JSON.stringify({ role: "user", content: "b" }), "utf8");
-    const item = listSessions().find((s) => s.name === "tail")!;
-    expect(item.messageCount).toBe(2);
-  });
-
-  it("renameSession also moves the .events.jsonl sidecar", () => {
+  it("renameSession moves the conversation log to the new name, zero orphans", () => {
     appendSessionMessage("orig", { role: "user", content: "x" });
-    const oldEvents = sessionPath("orig").replace(/\.jsonl$/, ".events.jsonl");
-    writeFileSync(oldEvents, '{"id":1}\n');
     expect(renameSession("orig", "renamed")).toBe(true);
-    expect(existsSync(oldEvents)).toBe(false);
-    expect(existsSync(sessionPath("renamed").replace(/\.jsonl$/, ".events.jsonl"))).toBe(true);
+    expect(loadSessionMessages("orig")).toEqual([]);
+    expect(loadSessionMessages("renamed")).toEqual([{ role: "user", content: "x" }]);
   });
 
-  it("renameSession also moves the .jsonl.bak recovery sidecar", () => {
-    appendSessionMessage("bak-orig", { role: "user", content: "x" });
-    const oldBackup = `${sessionPath("bak-orig")}.bak`;
-    writeFileSync(oldBackup, `${JSON.stringify({ role: "user", content: "backup" })}\n`);
-
-    expect(renameSession("bak-orig", "bak-renamed")).toBe(true);
-
-    expect(existsSync(oldBackup)).toBe(false);
-    expect(existsSync(`${sessionPath("bak-renamed")}.bak`)).toBe(true);
-  });
-
-  it("deleteSession removes the .events.jsonl sidecar too", () => {
-    appendSessionMessage("trash", { role: "user", content: "x" });
-    const events = sessionPath("trash").replace(/\.jsonl$/, ".events.jsonl");
-    writeFileSync(events, '{"id":1}\n');
-    deleteSession("trash");
-    expect(existsSync(events)).toBe(false);
-  });
-
-  it("deleteSession removes the .jsonl.bak recovery sidecar too", () => {
-    appendSessionMessage("backup-trash", { role: "user", content: "x" });
-    const backup = `${sessionPath("backup-trash")}.bak`;
-    writeFileSync(backup, `${JSON.stringify({ role: "user", content: "backup" })}\n`);
-
-    deleteSession("backup-trash");
-
-    expect(existsSync(backup)).toBe(false);
-  });
-
-  it("deleteSession removes the file", () => {
-    appendSessionMessage("gone", { role: "user", content: "x" });
-    expect(existsSync(sessionPath("gone"))).toBe(true);
-    expect(deleteSession("gone")).toBe(true);
-    expect(existsSync(sessionPath("gone"))).toBe(false);
-    expect(deleteSession("gone")).toBe(false);
-  });
-
-  it("deleteSession removes the plan-state sidecar too", () => {
-    appendSessionMessage("plan-sidecar", { role: "user", content: "hi" });
-    const planPath = sessionPath("plan-sidecar").replace(/\.jsonl$/, ".plan.json");
-    writeFileSync(
-      planPath,
-      JSON.stringify({
-        version: 1,
-        steps: [{ id: "s1", title: "t", action: "a" }],
-        completedStepIds: [],
-        updatedAt: new Date().toISOString(),
-      }),
-    );
-    expect(existsSync(planPath)).toBe(true);
-    deleteSession("plan-sidecar");
-    expect(existsSync(sessionPath("plan-sidecar"))).toBe(false);
-    expect(existsSync(planPath)).toBe(false);
+  it("renameSession returns false on a collision with an existing session", () => {
+    appendSessionMessage("from", { role: "user", content: "x" });
+    appendSessionMessage("to", { role: "user", content: "y" });
+    expect(renameSession("from", "to")).toBe(false);
+    expect(loadSessionMessages("from")).toEqual([{ role: "user", content: "x" }]);
+    expect(loadSessionMessages("to")).toEqual([{ role: "user", content: "y" }]);
   });
 
   it("pruneStaleSessions deletes sessions older than the cutoff and leaves fresh ones", () => {
-    // Three sessions: two backdated past the 90-day default, one
-    // fresh. Backdate via utimesSync since createTime/mtime is what
-    // listSessions reads.
     appendSessionMessage("ancient1", { role: "user", content: "x" });
     appendSessionMessage("ancient2", { role: "user", content: "x" });
     appendSessionMessage("recent", { role: "user", content: "x" });
     const oldDate = new Date(Date.now() - 200 * 24 * 60 * 60 * 1000);
-    utimesSync(sessionPath("ancient1"), oldDate, oldDate);
-    utimesSync(sessionPath("ancient2"), oldDate, oldDate);
+    backdateSession("ancient1", oldDate);
+    backdateSession("ancient2", oldDate);
+    backdateSession("recent", new Date());
 
     const removed = pruneStaleSessions(90);
     expect(removed.sort()).toEqual(["ancient1", "ancient2"]);
-    expect(existsSync(sessionPath("ancient1"))).toBe(false);
-    expect(existsSync(sessionPath("ancient2"))).toBe(false);
-    expect(existsSync(sessionPath("recent"))).toBe(true);
+    expect(loadSessionMessages("ancient1")).toEqual([]);
+    expect(loadSessionMessages("ancient2")).toEqual([]);
+    expect(loadSessionMessages("recent")).toEqual([{ role: "user", content: "x" }]);
   });
 
   it("pruneStaleSessions with a tighter cutoff catches sessions the default would skip", () => {
     appendSessionMessage("yesterday", { role: "user", content: "x" });
     const yest = new Date(Date.now() - 36 * 60 * 60 * 1000); // 1.5 days
-    utimesSync(sessionPath("yesterday"), yest, yest);
+    backdateSession("yesterday", yest);
 
     expect(pruneStaleSessions(90)).toEqual([]);
-    expect(existsSync(sessionPath("yesterday"))).toBe(true);
+    expect(loadSessionMessages("yesterday")).toEqual([{ role: "user", content: "x" }]);
     expect(pruneStaleSessions(1)).toEqual(["yesterday"]);
-    expect(existsSync(sessionPath("yesterday"))).toBe(false);
+    expect(loadSessionMessages("yesterday")).toEqual([]);
   });
 
   describe("archiveSession", () => {
-    it("returns null when the session file does not exist", () => {
+    it("returns null when the session has no messages", () => {
       expect(archiveSession("ghost")).toBeNull();
     });
 
-    it("returns null when the session file is empty", () => {
-      appendSessionMessage("empty", { role: "user", content: "x" });
-      writeFileSync(sessionPath("empty"), "");
-      expect(archiveSession("empty")).toBeNull();
-      expect(existsSync(sessionPath("empty"))).toBe(true);
-    });
-
-    it("renames jsonl + sidecars to a timestamped archive name", () => {
+    it("renames the live log to a timestamped archive name, source goes empty", () => {
       appendSessionMessage("live", { role: "user", content: "hi" });
-      const events = sessionPath("live").replace(/\.jsonl$/, ".events.jsonl");
-      const meta = sessionPath("live").replace(/\.jsonl$/, ".meta.json");
-      const backup = `${sessionPath("live")}.bak`;
-      writeFileSync(events, '{"id":1}\n');
-      writeFileSync(meta, "{}");
-      writeFileSync(backup, `${JSON.stringify({ role: "user", content: "backup" })}\n`);
+      patchSessionMeta("live", { branch: "main" });
 
       const archived = archiveSession("live");
       expect(archived).toMatch(/^live__archive_\d{12}/);
-      expect(existsSync(sessionPath("live"))).toBe(false);
-      expect(existsSync(sessionPath(archived!))).toBe(true);
-      expect(existsSync(events)).toBe(false);
-      expect(existsSync(meta)).toBe(false);
-      expect(existsSync(backup)).toBe(false);
-      expect(existsSync(sessionPath(archived!).replace(/\.jsonl$/, ".events.jsonl"))).toBe(true);
-      expect(existsSync(sessionPath(archived!).replace(/\.jsonl$/, ".meta.json"))).toBe(true);
-      expect(existsSync(`${sessionPath(archived!)}.bak`)).toBe(true);
+      expect(loadSessionMessages("live")).toEqual([]);
       expect(loadSessionMessages(archived!)).toEqual([{ role: "user", content: "hi" }]);
+      expect(listSessions().find((s) => s.name === archived)?.meta.branch).toBe("main");
     });
 
     it("disambiguates when called twice in the same minute", () => {
@@ -351,7 +225,7 @@ describe("session persistence", () => {
   });
 
   describe("clearLog archive integration", () => {
-    it("CacheFirstLoop.clearLog archives the live transcript and starts an empty file", () => {
+    it("CacheFirstLoop.clearLog archives the live transcript and starts an empty log", () => {
       const client = new DeepSeekClient({
         apiKey: "sk-test",
         fetch: (async () => new Response()) as any,
@@ -373,7 +247,7 @@ describe("session persistence", () => {
       expect(loop.log.length).toBe(0);
     });
 
-    it("clearLog returns archived: null when the session has nothing on disk", () => {
+    it("clearLog returns archived: null when the session has nothing to archive", () => {
       const client = new DeepSeekClient({
         apiKey: "sk-test",
         fetch: (async () => new Response()) as any,
@@ -389,13 +263,14 @@ describe("session persistence", () => {
     });
   });
 
-  it("sessionsDir exists after first append", () => {
-    appendSessionMessage("s", { role: "user", content: "x" });
-    expect(existsSync(sessionsDir())).toBe(true);
-    expect(existsSync(dirname(sessionPath("s")))).toBe(true);
+  it("deleteSession purges the conversation log", () => {
+    appendSessionMessage("gone", { role: "user", content: "x" });
+    expect(loadSessionMessages("gone")).toHaveLength(1);
+    expect(deleteSession("gone")).toBe(true);
+    expect(loadSessionMessages("gone")).toEqual([]);
   });
 
-  it("loop.appendAndPersist writes bang-style messages to the session file", () => {
+  it("loop.appendAndPersist writes bang-style messages to the session log", () => {
     // Regression: before 0.5.14 the bang handler called loop.log.append which
     // only touched memory, so `!cmd` output was lost on session resume.
     const client = new DeepSeekClient({
@@ -408,7 +283,10 @@ describe("session persistence", () => {
       stream: false,
       session: "bang-persist",
     });
-    loop.appendAndPersist({ role: "user", content: "[!ls]\n$ ls\n[exit 0]\nfile1 file2" });
+    loop.appendAndPersist({
+      role: "user",
+      content: "[!ls]\n$ ls\n[exit 0]\nfile1 file2",
+    });
     const reloaded = loadSessionMessages("bang-persist");
     expect(reloaded).toEqual([{ role: "user", content: "[!ls]\n$ ls\n[exit 0]\nfile1 file2" }]);
   });
@@ -481,13 +359,13 @@ describe("session persistence", () => {
       expect(preview!.messageCount).toBe(1);
     });
 
-    it("ignores timestamped sessions that have only .events.jsonl (no messages file)", () => {
-      appendSessionMessage("myproject", { role: "user", content: "real messages" });
-      const eventsPath = sessionPath("myproject-20260430T200000").replace(
-        /\.jsonl$/,
-        ".events.jsonl",
-      );
-      writeFileSync(eventsPath, "{}");
+    it("ignores timestamped names that have no conversation-log rows", () => {
+      appendSessionMessage("myproject", {
+        role: "user",
+        content: "real messages",
+      });
+      // A meta-only sibling (no messages) must not be picked over the base.
+      patchSessionMeta("myproject-20260430T200000", { branch: "x" });
 
       const { resolved, preview } = resolveSession("myproject");
       expect(resolved).toBe("myproject");
@@ -497,21 +375,28 @@ describe("session persistence", () => {
 
     it("picks the latest prefixed session over the base name", () => {
       appendSessionMessage("project", { role: "user", content: "old" });
-      appendSessionMessage("project-20260430T091500", { role: "user", content: "newer" });
-      // Create a later timestamp so it sorts first
-      const evenLater = new Date(Date.now() + 5000);
-      appendSessionMessage("project-20260430T154500", { role: "user", content: "newest" });
-      utimesSync(sessionPath("project-20260430T154500"), evenLater, evenLater);
+      appendSessionMessage("project-20260430T091500", {
+        role: "user",
+        content: "newer",
+      });
+      appendSessionMessage("project-20260430T154500", {
+        role: "user",
+        content: "newest",
+      });
 
       const { resolved, preview } = resolveSession("project");
-      // Bare "project" is excluded — prefix lookup uses "project-" (with dash).
+      // Bare "project" is excluded — prefix lookup uses "project-" (with dash),
+      // newest-first by name sort.
       expect(resolved).toBe("project-20260430T154500");
       expect(preview).toBeDefined();
     });
 
     it("forceResume resolves to the latest prefixed session", () => {
       appendSessionMessage("app", { role: "user", content: "a" });
-      appendSessionMessage("app-20260430T091500", { role: "user", content: "b" });
+      appendSessionMessage("app-20260430T091500", {
+        role: "user",
+        content: "b",
+      });
       const { resolved, preview } = resolveSession("app", false, true);
       expect(resolved).toBe("app-20260430T091500");
       expect(preview).toBeUndefined();
@@ -525,18 +410,22 @@ describe("session persistence", () => {
   });
 
   describe("findSessionsByPrefix", () => {
-    it("returns [] when the sessions directory does not exist", () => {
-      const dir = sessionsDir();
-      if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+    it("returns [] when no sessions exist", () => {
       expect(findSessionsByPrefix("anything")).toEqual([]);
     });
 
     it("returns session names matching the prefix, sorted alpha-reverse", () => {
-      // Filename sort — zero-padded YYYYMMDDHHmm sorts newest-first after reverse.
+      // Name sort — zero-padded YYYYMMDDHHmm sorts newest-first after reverse.
       // Non-digit suffixes (letters > digits in ASCII) sort above timestamps.
       appendSessionMessage("code-reasonix-old", { role: "user", content: "x" });
-      appendSessionMessage("code-reasonix-20260430T143200", { role: "user", content: "y" });
-      appendSessionMessage("code-reasonix-20260430T154500", { role: "user", content: "z" });
+      appendSessionMessage("code-reasonix-20260430T143200", {
+        role: "user",
+        content: "y",
+      });
+      appendSessionMessage("code-reasonix-20260430T154500", {
+        role: "user",
+        content: "z",
+      });
 
       const result = findSessionsByPrefix("code-reasonix-");
       expect(result).toEqual([
@@ -554,23 +443,17 @@ describe("session persistence", () => {
       expect(findSessionsByPrefix("foo-")).toEqual(["foo-baz", "foo-bar"]);
     });
 
-    it("only matches .jsonl files, not sidecar files", () => {
-      appendSessionMessage("alpha-001", { role: "user", content: "x" });
-      writeFileSync(sessionPath("alpha-001").replace(/\.jsonl$/, ".plan.json"), "{}");
-      writeFileSync(sessionPath("alpha-001").replace(/\.jsonl$/, ".pending.json"), "{}");
-      writeFileSync(sessionPath("alpha-001").replace(/\.jsonl$/, ".events.jsonl"), "{}");
-
-      const result = findSessionsByPrefix("alpha-");
-      expect(result).toEqual(["alpha-001"]);
-    });
-
     it("prefix with trailing dash excludes the bare base session name", () => {
       appendSessionMessage("project", { role: "user", content: "a" });
-      appendSessionMessage("project-20260430T143200", { role: "user", content: "b" });
+      appendSessionMessage("project-20260430T143200", {
+        role: "user",
+        content: "b",
+      });
 
       expect(findSessionsByPrefix("project-")).toEqual(["project-20260430T143200"]);
-      // No-dash prefix matches both; reverse-sort puts the bare name first ('.' > '-' in ASCII).
-      expect(findSessionsByPrefix("project")).toEqual(["project", "project-20260430T143200"]);
+      // No-dash prefix matches both; name reverse-sort puts the longer name first
+      // ("project" < "project-..." so reverse yields the timestamped name first).
+      expect(findSessionsByPrefix("project")).toEqual(["project-20260430T143200", "project"]);
     });
   });
 

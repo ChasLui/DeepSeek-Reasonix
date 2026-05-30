@@ -46,6 +46,57 @@ export function replaceLog(db: Db, session: string, messages: ChatMessage[]): vo
   );
 }
 
+// Rename a session's identity across all four tables in one tx. This UPDATEs the
+// `session` identity column of the append-only log tables (session_messages /
+// _bak) — the SOLE permitted UPDATE on them: it renames the row's owner, never
+// mutates message CONTENT (C-004). `events` carries a BEFORE-UPDATE abort trigger,
+// so its rows are re-keyed via DELETE+INSERT (preserving event_id/turn/type/payload)
+// rather than UPDATE. Returns false on collision (newName already owns rows / a meta
+// row) so the caller can disambiguate.
+export function renameSessionDb(db: Db, oldName: string, newName: string): boolean {
+  if (oldName === newName) return false;
+  return db.withBusyRetry(() =>
+    db.tx(() => {
+      const has = (sql: string) => Number((db.prepare(sql).get(newName) as { c: number }).c) > 0;
+      if (
+        has("SELECT count(*) c FROM session_messages WHERE session = ?") ||
+        has("SELECT count(*) c FROM sessions WHERE name = ?")
+      ) {
+        return false;
+      }
+      db.prepare("UPDATE session_messages SET session = ? WHERE session = ?").run(newName, oldName);
+      db.prepare("UPDATE session_messages_bak SET session = ? WHERE session = ?").run(
+        newName,
+        oldName,
+      );
+      // events is append-only (events_no_update trigger) — re-key via DELETE+INSERT.
+      db.prepare(
+        "INSERT INTO events (session, event_id, ts, turn, type, payload) SELECT ?, event_id, ts, turn, type, payload FROM events WHERE session = ?",
+      ).run(newName, oldName);
+      db.prepare("DELETE FROM events WHERE session = ?").run(oldName);
+      db.prepare("UPDATE sessions SET name = ? WHERE name = ?").run(newName, oldName);
+      return true;
+    }),
+  );
+}
+
+// Archive = rename live→archiveName, mirroring the file backend's renameSession-based
+// archiveSession: after this returns, every row lives under archiveName and `name` is
+// empty, so the caller's subsequent fresh session starts clean. Returns false when the
+// source has no messages (nothing to archive).
+export function archiveSessionDb(db: Db, name: string, archiveName: string): boolean {
+  const hasMessages =
+    Number(
+      (
+        db.prepare("SELECT count(*) c FROM session_messages WHERE session = ?").get(name) as {
+          c: number;
+        }
+      ).c,
+    ) > 0;
+  if (!hasMessages) return false;
+  return renameSessionDb(db, name, archiveName);
+}
+
 export function deleteSessionDb(db: Db, session: string): void {
   db.withBusyRetry(() =>
     db.tx(() => {

@@ -1,44 +1,23 @@
-/** JSONL append-only message log under `~/.reasonix/sessions/`; concurrent-write safe. */
+/** Append-only conversation log backed by SQLite (`~/.reasonix/reasonix.db`). */
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
-  appendFileSync,
-  chmodSync,
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  statSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, join, posix as posixPath, win32 as win32Path } from "node:path";
+import { basename, join, posix as posixPath, win32 as win32Path } from "node:path";
 import { getDb } from "../storage/db.js";
-import { storeBackend } from "../storage/select.js";
 import {
   appendSessionMessageDb,
+  archiveSessionDb,
   deleteSessionDb,
   listSessionMetaDb,
   loadSessionMessagesDb,
   loadSessionMetaDb,
+  renameSessionDb,
   replaceLog,
   upsertSessionMeta,
 } from "../storage/sessions-repo.js";
 import type { ChatMessage } from "../types.js";
-
-const SESSION_SIDECAR_EXTS = [
-  ".events.jsonl",
-  ".meta.json",
-  ".pending.json",
-  ".pending.toon",
-  ".plan.json",
-  ".plan.toon",
-  ".jsonl.bak",
-] as const;
 
 /** Best-effort git branch sniff; returns undefined if not a git repo or git missing. */
 export function detectGitBranch(cwd: string): string | undefined {
@@ -118,19 +97,15 @@ export function freshSessionName(currentName: string | undefined): string {
   return `${base || "default"}-${stamp}`;
 }
 
-/** Names of `.jsonl` sessions starting with `prefix`, newest-first by filename. */
+/** Names of message-bearing sessions starting with `prefix`, newest-first (name
+ * sort+reverse → zero-padded timestamps newest-first). Meta-only sessions (no
+ * conversation-log rows) are excluded, mirroring the old `.jsonl`-file semantics. */
 export function findSessionsByPrefix(prefix: string): string[] {
-  const dir = sessionsDir();
-  if (!existsSync(dir)) return [];
-  try {
-    const files = readdirSync(dir)
-      .filter((f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && f.startsWith(prefix))
-      .sort()
-      .reverse();
-    return files.map((f) => f.replace(/\.jsonl$/, ""));
-  } catch {
-    return [];
-  }
+  return listSessionMetaDb(getDb())
+    .filter((row) => row.messageCount > 0 && row.name.startsWith(prefix))
+    .map((row) => row.name)
+    .sort()
+    .reverse();
 }
 
 export interface SessionPreview {
@@ -158,9 +133,9 @@ export function resolveSession(
     const prior = loadSessionMessages(sessionToCheck);
     if (prior.length > 0) {
       resolved = sessionToCheck;
-      const p = sessionPath(sessionToCheck);
-      const mtime = existsSync(p) ? statSync(p).mtime : new Date();
-      preview = { messageCount: prior.length, lastActive: mtime };
+      const meta = listSessionMetaDb(getDb()).find((r) => r.name === sanitizeName(sessionToCheck));
+      const lastActive = meta?.updatedAt ? new Date(meta.updatedAt) : new Date();
+      preview = { messageCount: prior.length, lastActive };
     }
   } else if (sessionName && forceResume) {
     const prefixed = findSessionsByPrefix(`${sessionName}-`);
@@ -173,14 +148,7 @@ export function resolveSession(
 }
 
 export function loadSessionMessages(name: string): ChatMessage[] {
-  if (storeBackend() === "sqlite") return loadSessionMessagesDb(getDb(), sanitizeName(name));
-  const path = sessionPath(name);
-  if (!existsSync(path)) return [];
-  const live = readSessionMessages(path);
-  if (live && (live.messages.length > 0 || !live.hadContent)) return live.messages;
-
-  const backup = readSessionMessages(sessionBackupPath(path));
-  return backup?.messages ?? live?.messages ?? [];
+  return loadSessionMessagesDb(getDb(), sanitizeName(name));
 }
 
 export function importClaudeCodeSession(file: string): ImportClaudeCodeSessionResult {
@@ -216,8 +184,10 @@ export function importClaudeCodeSession(file: string): ImportClaudeCodeSessionRe
   }
 
   const safeSessionId = sanitizeName(sessionId ?? fallbackImportedSessionId(file));
+  // Display-identity path only — there is no reasonix jsonl under SQLite.
   const path = sessionPath(safeSessionId);
-  if (existsSync(path)) {
+  // Dedup against SQLite: the destination session already has messages.
+  if (loadSessionMessagesDb(getDb(), safeSessionId).length > 0) {
     return {
       sessionId: safeSessionId,
       path,
@@ -250,109 +220,35 @@ export function importClaudeCodeSession(file: string): ImportClaudeCodeSessionRe
   };
 }
 
-function readSessionMessages(
-  path: string,
-): { messages: ChatMessage[]; hadContent: boolean } | null {
-  let raw: string;
-  try {
-    raw = readFileSync(path, "utf8");
-  } catch {
-    return null;
-  }
-  const out: ChatMessage[] = [];
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    try {
-      const msg = JSON.parse(trimmed) as ChatMessage;
-      if (msg && typeof msg === "object" && "role" in msg) out.push(msg);
-    } catch {
-      /* skip malformed line */
-    }
-  }
-  return { messages: out, hadContent: raw.trim().length > 0 };
-}
-
 export function appendSessionMessage(name: string, message: ChatMessage): void {
-  if (storeBackend() === "sqlite") {
-    appendSessionMessageDb(getDb(), sanitizeName(name), message);
-    return;
-  }
-  const path = sessionPath(name);
-  mkdirSync(dirname(path), { recursive: true });
-  appendFileSync(path, `${JSON.stringify(message)}\n`, "utf8");
-  try {
-    chmodSync(path, 0o600);
-  } catch {
-    /* chmod not supported on this platform */
-  }
+  appendSessionMessageDb(getDb(), sanitizeName(name), message);
 }
 
 export function listSessions(opts?: {
   workspaceFilter?: string;
   sourceFilter?: string;
 }): SessionInfo[] {
-  if (storeBackend() === "sqlite") {
-    const want = opts?.workspaceFilter ? normalizeWorkspace(opts.workspaceFilter) : null;
-    return listSessionMetaDb(getDb())
-      .filter((row) => {
-        if (opts?.sourceFilter && row.meta.source !== opts.sourceFilter) return false;
-        if (want !== null) {
-          if (typeof row.meta.workspace !== "string") return false;
-          if (normalizeWorkspace(row.meta.workspace) !== want) return false;
-        }
-        return true;
-      })
-      .map((row) => ({
-        name: row.name,
-        // No file under SQLite — synthesize the canonical jsonl path so callers
-        // that key on `.path` for identity/display keep working.
-        path: sessionPath(row.name),
-        size: 0,
-        messageCount: row.messageCount,
-        mtime: row.updatedAt ? new Date(row.updatedAt) : new Date(0),
-        meta: row.meta,
-      }))
-      .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
-  }
-  const dir = sessionsDir();
-  if (!existsSync(dir)) return [];
   const want = opts?.workspaceFilter ? normalizeWorkspace(opts.workspaceFilter) : null;
-  try {
-    // Exclude `.events.jsonl` sidecars — they share the .jsonl suffix.
-    const files = readdirSync(dir).filter(
-      (f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl"),
-    );
-    return files
-      .flatMap((file) => {
-        const path = join(dir, file);
-        const name = file.replace(/\.jsonl$/, "");
-        const meta = loadSessionMeta(name);
-        if (opts?.sourceFilter && meta.source !== opts.sourceFilter) return [];
-        // Workspace pre-filter: cheap meta read first, skip the
-        // (potentially multi-MB) jsonl read for sessions that don't
-        // belong to the current workspace. Issue #1179.
-        if (want !== null) {
-          if (typeof meta.workspace !== "string") return [];
-          if (normalizeWorkspace(meta.workspace) !== want) return [];
-        }
-        const stat = statSync(path);
-        const messageCount = countLines(path);
-        return [
-          {
-            name,
-            path,
-            size: stat.size,
-            messageCount,
-            mtime: stat.mtime,
-            meta,
-          },
-        ];
-      })
-      .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
-  } catch {
-    return [];
-  }
+  return listSessionMetaDb(getDb())
+    .filter((row) => {
+      if (opts?.sourceFilter && row.meta.source !== opts.sourceFilter) return false;
+      if (want !== null) {
+        if (typeof row.meta.workspace !== "string") return false;
+        if (normalizeWorkspace(row.meta.workspace) !== want) return false;
+      }
+      return true;
+    })
+    .map((row) => ({
+      name: row.name,
+      // No file under SQLite — synthesize the canonical jsonl path so callers
+      // that key on `.path` for identity/display keep working.
+      path: sessionPath(row.name),
+      size: 0,
+      messageCount: row.messageCount,
+      mtime: row.updatedAt ? new Date(row.updatedAt) : new Date(0),
+      meta: row.meta,
+    }))
+    .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
 }
 
 /** Canonical form for workspace path comparisons — Windows drive-case + separator drift between session writes (yesterday) and reads (today) used to hide sessions from the sidebar. Issue #878. */
@@ -375,61 +271,20 @@ export function listSessionsForWorkspace(workspace: string): SessionInfo[] {
   return listSessions({ workspaceFilter: workspace });
 }
 
-function metaPath(name: string): string {
-  return join(sessionsDir(), `${sanitizeName(name)}.meta.json`);
-}
-
 export function loadSessionMeta(name: string): SessionMeta {
-  if (storeBackend() === "sqlite") return loadSessionMetaDb(getDb(), sanitizeName(name));
-  const p = metaPath(name);
-  if (!existsSync(p)) return {};
-  try {
-    const raw = JSON.parse(readFileSync(p, "utf8")) as SessionMeta;
-    return raw && typeof raw === "object" ? raw : {};
-  } catch {
-    return {};
-  }
+  return loadSessionMetaDb(getDb(), sanitizeName(name));
 }
 
 export function patchSessionMeta(name: string, patch: Partial<SessionMeta>): SessionMeta {
   const cur = loadSessionMeta(name);
   const next: SessionMeta = { ...cur, ...patch };
-  if (storeBackend() === "sqlite") {
-    upsertSessionMeta(getDb(), sanitizeName(name), next, new Date().toISOString());
-    return next;
-  }
-  const p = metaPath(name);
-  mkdirSync(dirname(p), { recursive: true });
-  writeFileSync(p, JSON.stringify(next), "utf8");
-  try {
-    chmodSync(p, 0o600);
-  } catch {
-    /* chmod not supported */
-  }
+  upsertSessionMeta(getDb(), sanitizeName(name), next, new Date().toISOString());
   return next;
 }
 
-/** Renames the JSONL plus all known sidecars together; returns false if target already exists. */
+/** Renames a session's identity across all SQLite tables atomically; returns false on collision. */
 export function renameSession(oldName: string, newName: string): boolean {
-  const safeOld = sanitizeName(oldName);
-  const safeNew = sanitizeName(newName);
-  if (safeOld === safeNew) return false;
-  const oldJsonl = sessionPath(oldName);
-  const newJsonl = sessionPath(newName);
-  if (!existsSync(oldJsonl) || existsSync(newJsonl)) return false;
-  renameSync(oldJsonl, newJsonl);
-  for (const ext of SESSION_SIDECAR_EXTS) {
-    const oldP = oldJsonl.replace(/\.jsonl$/, ext);
-    const newP = newJsonl.replace(/\.jsonl$/, ext);
-    if (existsSync(oldP)) {
-      try {
-        renameSync(oldP, newP);
-      } catch {
-        /* sidecar rename failed — leave the jsonl rename in place */
-      }
-    }
-  }
-  return true;
+  return renameSessionDb(getDb(), sanitizeName(oldName), sanitizeName(newName));
 }
 
 /** Best-effort: per-file delete errors are swallowed so partial pruning still finishes. */
@@ -445,88 +300,24 @@ export function pruneStaleSessions(daysOld = 90): string[] {
 }
 
 export function deleteSession(name: string): boolean {
-  if (storeBackend() === "sqlite") {
-    deleteSessionDb(getDb(), sanitizeName(name));
-    return true;
-  }
-  const path = sessionPath(name);
-  try {
-    unlinkSync(path);
-    for (const ext of SESSION_SIDECAR_EXTS) {
-      const sidecar = path.replace(/\.jsonl$/, ext);
-      try {
-        unlinkSync(sidecar);
-      } catch {
-        /* expected when the sidecar doesn't exist */
-      }
-    }
-    return true;
-  } catch {
-    return false;
-  }
+  deleteSessionDb(getDb(), sanitizeName(name));
+  return true;
 }
 
-/** Crash-safe rewrite: snapshot the previous live log, write a sibling tmp file, then atomically swap it in. */
+/** Atomic replace of the live log (snapshots the prior generation into _bak). */
 export function rewriteSession(name: string, messages: ChatMessage[]): void {
-  if (storeBackend() === "sqlite") {
-    replaceLog(getDb(), sanitizeName(name), messages);
-    return;
-  }
-  const path = sessionPath(name);
-  mkdirSync(dirname(path), { recursive: true });
-  const body = messages.map((m) => JSON.stringify(m)).join("\n");
-  const tmp = `${path}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
-  try {
-    writeFileSync(tmp, body ? `${body}\n` : "", "utf8");
-    chmodPrivate(tmp);
-    if (existsSync(path) && statSync(path).size > 0) {
-      const backup = sessionBackupPath(path);
-      copyFileSync(path, backup);
-      chmodPrivate(backup);
-    }
-    renameSync(tmp, path);
-    chmodPrivate(path);
-  } catch (err) {
-    try {
-      unlinkSync(tmp);
-    } catch {
-      /* tmp may not exist */
-    }
-    throw err;
-  }
+  replaceLog(getDb(), sanitizeName(name), messages);
 }
 
-/** Rotate the live jsonl + sidecars to `<name>__archive_<ts>` so /new doesn't destroy history. Returns the archive name, or null if there was nothing to archive. */
+/** Rename the live log to `<name>__archive_<ts>` so /new doesn't destroy history. Returns the archive name, or null if there was nothing to archive. */
 export function archiveSession(name: string): string | null {
-  const path = sessionPath(name);
-  if (!existsSync(path)) return null;
-  try {
-    if (statSync(path).size === 0) return null;
-  } catch {
-    return null;
-  }
   for (let attempt = 0; attempt < 5; attempt++) {
     const target = `${name}__archive_${timestampSuffix()}${attempt > 0 ? `_${attempt}` : ""}`;
-    if (renameSession(name, target)) return target;
+    if (archiveSessionDb(getDb(), sanitizeName(name), sanitizeName(target))) {
+      return target;
+    }
   }
   return null;
-}
-
-/** Byte-scan for `\n` — avoids the UTF-8 decode + regex split + per-line filter the previous implementation paid on every list. ~10× faster on multi-MB jsonls. */
-function countLines(path: string): number {
-  try {
-    const buf = readFileSync(path);
-    let count = 0;
-    for (let i = 0; i < buf.length; i++) {
-      if (buf[i] === 0x0a) count++;
-    }
-    // appendSessionMessage always writes a trailing newline, but a
-    // hand-edited file may end without one — account for the dangling line.
-    if (buf.length > 0 && buf[buf.length - 1] !== 0x0a) count++;
-    return count;
-  } catch {
-    return 0;
-  }
 }
 
 type NormalizeMessageResult =
@@ -673,16 +464,4 @@ function fallbackImportedSessionId(file: string): string {
 
 function bump(reasons: Record<string, number>, key: string): void {
   reasons[key] = (reasons[key] ?? 0) + 1;
-}
-
-function sessionBackupPath(path: string): string {
-  return `${path}.bak`;
-}
-
-function chmodPrivate(path: string): void {
-  try {
-    chmodSync(path, 0o600);
-  } catch {
-    /* chmod not supported */
-  }
 }

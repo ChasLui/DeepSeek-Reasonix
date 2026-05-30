@@ -1,12 +1,4 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  truncateSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,7 +7,9 @@ import {
   importClaudeCodeSession,
   listSessions,
   loadSessionMessages,
+  loadSessionMeta,
 } from "../../src/memory/session.js";
+import { resetDb } from "../../src/storage/db.js";
 
 describe("Claude Code session import", () => {
   let home: string;
@@ -27,9 +21,11 @@ describe("Claude Code session import", () => {
     vi.stubEnv("USERPROFILE", home);
     vi.stubEnv("HOME", home);
     vi.spyOn(require("node:os"), "homedir").mockReturnValue(home);
+    resetDb();
   });
 
   afterEach(() => {
+    resetDb();
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     rmSync(home, { recursive: true, force: true });
@@ -52,20 +48,22 @@ describe("Claude Code session import", () => {
     const result = importClaudeCodeSession(file);
 
     expect(result.added).toBe(2);
-    expect(existsSync(result.path)).toBe(true);
     expect(loadSessionMessages("session-one")).toEqual([
       { role: "user", content: "hello" },
       {
         role: "assistant",
         content: "hi",
         tool_calls: [
-          { id: "call_1", type: "function", function: { name: "read_file", arguments: "{}" } },
+          {
+            id: "call_1",
+            type: "function",
+            function: { name: "read_file", arguments: "{}" },
+          },
         ],
       },
     ]);
-    expect(
-      readFileSync(join(home, ".reasonix", "sessions", "session-one.meta.json"), "utf8"),
-    ).toContain("claude-code");
+    // Provenance lands on the SQLite meta row, not a .meta.json sidecar.
+    expect(loadSessionMeta("session-one").source).toBe("claude-code");
   });
 
   it("is idempotent for duplicate session ids", () => {
@@ -86,8 +84,14 @@ describe("Claude Code session import", () => {
     writeFileSync(
       file,
       [
-        JSON.stringify({ sessionId: "mixed", message: { role: "user", content: "hello" } }),
-        JSON.stringify({ sessionId: "mixed", message: { content: "missing role" } }),
+        JSON.stringify({
+          sessionId: "mixed",
+          message: { role: "user", content: "hello" },
+        }),
+        JSON.stringify({
+          sessionId: "mixed",
+          message: { content: "missing role" },
+        }),
         "not-json",
       ].join("\n"),
       "utf8",
@@ -109,7 +113,12 @@ describe("Claude Code session import", () => {
           role: "assistant",
           content: [
             { type: "text", text: "reading" },
-            { type: "tool_use", id: "call_1", name: "read_file", input: { path: "a.ts" } },
+            {
+              type: "tool_use",
+              id: "call_1",
+              name: "read_file",
+              input: { path: "a.ts" },
+            },
           ],
         },
       },
@@ -126,7 +135,10 @@ describe("Claude Code session import", () => {
 
   it("skips rows with malformed declared tool calls", () => {
     const file = writeClaudeJsonl("bad-declared-tool.jsonl", [
-      { sessionId: "bad-declared-tool", message: { role: "user", content: "keep me" } },
+      {
+        sessionId: "bad-declared-tool",
+        message: { role: "user", content: "keep me" },
+      },
       {
         sessionId: "bad-declared-tool",
         message: {
@@ -166,18 +178,24 @@ describe("Claude Code session import", () => {
     expect(result.added).toBe(0);
     expect(result.skipped).toBe(1);
     expect(result.reasons.invalid_tool_call).toBe(1);
-    expect(existsSync(result.path)).toBe(false);
+    expect(loadSessionMessages("bad-tool-use")).toEqual([]);
   });
 
   it("indexes imported Claude Code sessions only when explicitly requested", async () => {
     const file = writeClaudeJsonl("indexed.jsonl", [
       {
         sessionId: "indexed-session",
-        message: { role: "user", content: "How do we handle prompt cache drift?" },
+        message: {
+          role: "user",
+          content: "How do we handle prompt cache drift?",
+        },
       },
       {
         sessionId: "indexed-session",
-        message: { role: "assistant", content: "Check prefix fingerprint drift." },
+        message: {
+          role: "assistant",
+          content: "Check prefix fingerprint drift.",
+        },
       },
     ]);
     importClaudeCodeSession(file);
@@ -189,7 +207,9 @@ describe("Claude Code session import", () => {
       homeDir: reasonixHome,
       embedText: async () => new Float32Array([1, 0]),
     });
-    const result = await searchMemory("prompt cache", { homeDir: reasonixHome });
+    const result = await searchMemory("prompt cache", {
+      homeDir: reasonixHome,
+    });
 
     expect(indexed.indexed).toBe(1);
     expect(result.hits[0]?.entry.description).toContain("indexed-session");

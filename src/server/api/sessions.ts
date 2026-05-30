@@ -1,5 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
-import { deleteSession, listSessions, sessionPath } from "../../memory/session.js";
+import { deleteSession, listSessions, sanitizeName, sessionPath } from "../../memory/session.js";
+import { getDb } from "../../storage/db.js";
+import { loadSessionMessagesDb } from "../../storage/sessions-repo.js";
+import type { ChatMessage } from "../../types.js";
 import type { DashboardContext } from "../context.js";
 import type { ApiResult } from "../router.js";
 
@@ -11,34 +13,23 @@ interface SessionMessage {
   raw?: unknown;
 }
 
-function parseTranscript(path: string, maxBytes = 4 * 1024 * 1024): SessionMessage[] {
-  // Cap reads at 4 MB so a runaway session file (rare but possible)
-  // doesn't tie up the server. The `head` of a long session is the
-  // useful part; we surface a `truncated` flag in the response.
-  let raw: string;
-  try {
-    raw = readFileSync(path, "utf8");
-  } catch {
-    return [];
-  }
-  if (raw.length > maxBytes) raw = raw.slice(0, maxBytes);
-  const out: SessionMessage[] = [];
-  for (const line of raw.split(/\r?\n/)) {
-    if (!line.trim()) continue;
-    try {
-      const rec = JSON.parse(line) as Record<string, unknown>;
-      const role = typeof rec.role === "string" ? rec.role : "unknown";
-      const msg: SessionMessage = { role };
-      if (typeof rec.content === "string") msg.content = rec.content;
-      else if (rec.content !== undefined) msg.content = JSON.stringify(rec.content);
-      if (typeof rec.tool_name === "string") msg.toolName = rec.tool_name;
-      if (typeof rec.toolName === "string") msg.toolName = rec.toolName;
-      out.push(msg);
-    } catch {
-      /* skip malformed line — same rule as the rest of Reasonix's JSONL readers */
-    }
-  }
-  return out;
+/** True when the session has a conversation-log row under SQLite. */
+function sessionExists(name: string): boolean {
+  return loadSessionMessagesDb(getDb(), sanitizeName(name)).length > 0;
+}
+
+/** Project the SQLite conversation-log into the SPA's flat message shape. */
+function loadTranscript(name: string): SessionMessage[] {
+  const rows = loadSessionMessagesDb(getDb(), sanitizeName(name)) as ChatMessage[];
+  return rows.map((rec) => {
+    const msg: SessionMessage = {
+      role: typeof rec.role === "string" ? rec.role : "unknown",
+    };
+    if (typeof rec.content === "string") msg.content = rec.content;
+    else if (rec.content != null) msg.content = JSON.stringify(rec.content);
+    if (typeof rec.name === "string") msg.toolName = rec.name;
+    return msg;
+  });
 }
 
 export async function handleSessions(
@@ -82,7 +73,10 @@ export async function handleSessions(
   }
 
   if (rest.length === 0) {
-    return { status: 405, body: { error: `method ${method} not supported on /sessions` } };
+    return {
+      status: 405,
+      body: { error: `method ${method} not supported on /sessions` },
+    };
   }
 
   // Single-session detail / switch / delete. URL-decode in case the name
@@ -98,7 +92,7 @@ export async function handleSessions(
         body: { error: "live session swap requires an attached CLI session." },
       };
     }
-    if (!existsSync(path)) return { status: 404, body: { error: `no such session: ${name}` } };
+    if (!sessionExists(name)) return { status: 404, body: { error: `no such session: ${name}` } };
     const result = ctx.switchSession(name);
     if (!result.ok) return { status: 500, body: { error: result.reason } };
     return { status: 200, body: { ok: true } };
@@ -106,7 +100,10 @@ export async function handleSessions(
 
   if (method === "DELETE") {
     if (rest.length !== 1) {
-      return { status: 405, body: { error: `method ${method} not supported on this path` } };
+      return {
+        status: 405,
+        body: { error: `method ${method} not supported on this path` },
+      };
     }
     // Refuse to delete the currently-attached session — the live process
     // still has the file open for append, and deleting it would resurrect
@@ -114,27 +111,39 @@ export async function handleSessions(
     if (currentName && name === currentName) {
       return {
         status: 409,
-        body: { error: "cannot delete the currently-active session — switch away first." },
+        body: {
+          error: "cannot delete the currently-active session — switch away first.",
+        },
       };
     }
-    if (!existsSync(path)) return { status: 404, body: { error: `no such session: ${name}` } };
+    if (!sessionExists(name)) return { status: 404, body: { error: `no such session: ${name}` } };
     const removed = deleteSession(name);
     if (!removed) return { status: 500, body: { error: `failed to delete ${name}` } };
-    ctx.audit?.({ ts: Date.now(), action: "delete-session", payload: { name } });
+    ctx.audit?.({
+      ts: Date.now(),
+      action: "delete-session",
+      payload: { name },
+    });
     return { status: 200, body: { ok: true, deleted: name } };
   }
 
   if (method === "GET") {
     if (rest.length !== 1) {
-      return { status: 405, body: { error: `method ${method} not supported on this path` } };
+      return {
+        status: 405,
+        body: { error: `method ${method} not supported on this path` },
+      };
     }
-    if (!existsSync(path)) return { status: 404, body: { error: `no such session: ${name}` } };
-    const messages = parseTranscript(path);
+    if (!sessionExists(name)) return { status: 404, body: { error: `no such session: ${name}` } };
+    const messages = loadTranscript(name);
     return {
       status: 200,
       body: { name, path, messages, messageCount: messages.length },
     };
   }
 
-  return { status: 405, body: { error: `method ${method} not supported on this path` } };
+  return {
+    status: 405,
+    body: { error: `method ${method} not supported on this path` },
+  };
 }

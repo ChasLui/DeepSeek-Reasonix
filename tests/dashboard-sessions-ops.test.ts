@@ -4,8 +4,13 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { appendSessionMessage, patchSessionMeta, sessionPath } from "../src/memory/session.js";
+import {
+  appendSessionMessage,
+  loadSessionMessages,
+  patchSessionMeta,
+} from "../src/memory/session.js";
 import { type DashboardServerHandle, startDashboardServer } from "../src/server/index.js";
+import { resetDb } from "../src/storage/db.js";
 
 const TOKEN = "e".repeat(64);
 
@@ -52,6 +57,7 @@ describe("dashboard /sessions: new / switch / delete (attached)", () => {
     vi.stubEnv("USERPROFILE", dir);
     vi.stubEnv("HOME", dir);
     vi.spyOn(require("node:os"), "homedir").mockReturnValue(dir);
+    resetDb();
 
     // Seed two sessions: alpha (active) + beta.
     appendSessionMessage("alpha", { role: "user", content: "hi" });
@@ -79,6 +85,7 @@ describe("dashboard /sessions: new / switch / delete (attached)", () => {
 
   afterEach(async () => {
     await handle?.close();
+    resetDb();
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
@@ -110,24 +117,26 @@ describe("dashboard /sessions: new / switch / delete (attached)", () => {
 
   it("POST /api/sessions/<missing>/switch returns 404 without calling switchSession", async () => {
     const base = handle!.url.split("?")[0]!;
-    const r = await call(`${base}api/sessions/ghost/switch`, { method: "POST" });
+    const r = await call(`${base}api/sessions/ghost/switch`, {
+      method: "POST",
+    });
     expect(r.status).toBe(404);
     expect(switchCalls).toEqual([]);
   });
 
-  it("DELETE /api/sessions/<active> returns 409 and leaves the file intact", async () => {
+  it("DELETE /api/sessions/<active> returns 409 and leaves the log intact", async () => {
     const base = handle!.url.split("?")[0]!;
     const r = await call(`${base}api/sessions/alpha`, { method: "DELETE" });
     expect(r.status).toBe(409);
-    expect(existsSync(sessionPath("alpha"))).toBe(true);
+    expect(loadSessionMessages("alpha")).toHaveLength(1);
   });
 
-  it("DELETE /api/sessions/<non-active> unlinks the jsonl", async () => {
+  it("DELETE /api/sessions/<non-active> purges the conversation log", async () => {
     const base = handle!.url.split("?")[0]!;
-    expect(existsSync(sessionPath("beta"))).toBe(true);
+    expect(loadSessionMessages("beta")).toHaveLength(1);
     const r = await call(`${base}api/sessions/beta`, { method: "DELETE" });
     expect(r.status).toBe(200);
     expect(r.body.deleted).toBe("beta");
-    expect(existsSync(sessionPath("beta"))).toBe(false);
+    expect(loadSessionMessages("beta")).toEqual([]);
   });
 });

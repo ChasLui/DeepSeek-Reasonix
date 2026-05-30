@@ -9,7 +9,6 @@ import {
   pendingEditsPath,
   savePendingEdits,
 } from "../src/code/pending-edits.js";
-import { appendSessionMessage, deleteSession, sessionPath } from "../src/memory/session.js";
 
 function block(overrides: Partial<EditBlock> = {}): EditBlock {
   return {
@@ -109,15 +108,5 @@ describe("pending-edits checkpoint", () => {
     expect(() => savePendingEdits(null, [block()])).not.toThrow();
     expect(loadPendingEdits(null)).toBeNull();
     expect(() => clearPendingEdits(null)).not.toThrow();
-  });
-
-  it("deleteSession removes the pending-edits sidecar too", () => {
-    appendSessionMessage("combo", { role: "user", content: "hi" });
-    savePendingEdits("combo", [block()]);
-    expect(existsSync(pendingEditsPath("combo"))).toBe(true);
-    expect(existsSync(sessionPath("combo"))).toBe(true);
-    deleteSession("combo");
-    expect(existsSync(sessionPath("combo"))).toBe(false);
-    expect(existsSync(pendingEditsPath("combo"))).toBe(false);
   });
 });
