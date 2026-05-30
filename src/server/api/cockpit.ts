@@ -61,7 +61,7 @@ export function computeCockpit(ctx: DashboardContext, now: number = Date.now()):
   return {
     balance: extractBalance(ctx.getStats?.() ?? null),
     currentSession: extractCurrentSession(ctx),
-    ...readWarmCached(ctx.usageLogPath, now, ctx.sessionsDir),
+    ...readWarmCached(now, ctx.sessionsDir),
   };
 }
 
@@ -87,18 +87,18 @@ function extractCurrentSession(ctx: DashboardContext): CockpitData["currentSessi
   };
 }
 
-function readWarmCached(usageLogPath: string, now: number, sessionsDir?: string): WarmFields {
-  const cacheKey = `${usageLogPath}::${sessionsDir ?? ""}`;
+function readWarmCached(now: number, sessionsDir?: string): WarmFields {
+  const cacheKey = sessionsDir ?? "";
   const hit = cache.get(cacheKey);
   if (hit && now - hit.ts < TTL_MS) return hit.data;
-  const data = computeWarm(usageLogPath, now, sessionsDir);
+  const data = computeWarm(now, sessionsDir);
   cache.set(cacheKey, { ts: now, data });
   return data;
 }
 
-export function computeWarm(usageLogPath: string, now: number, sessionsDir?: string): WarmFields {
+export function computeWarm(now: number, sessionsDir?: string): WarmFields {
   const events = computeEventsCockpit(now, sessionsDir);
-  const records = readUsageLog(usageLogPath);
+  const records = readUsageLog();
   if (records.length === 0) {
     return { tokens7d: null, cacheHit7d: null, costTrend14d: null, ...events };
   }

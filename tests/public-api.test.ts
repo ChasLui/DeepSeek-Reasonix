@@ -254,7 +254,6 @@ const PUBLIC_API: readonly string[] = [
   "countSpawnStorms",
   "decideOutcome",
   "defaultConfigPath",
-  "defaultUsageLogPath",
   "deleteSession",
   "detectAtPicker",
   "detectInstallSource",

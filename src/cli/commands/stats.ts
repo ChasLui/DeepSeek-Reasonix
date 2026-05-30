@@ -6,13 +6,13 @@ import { resolveBudgetWindows } from "../../config.js";
 import { t } from "../../i18n/index.js";
 import { countRecentObservationEvents } from "../../memory/observation.js";
 import type { PromptCacheStats } from "../../observability/prompt-cache-monitor.js";
+import { reasonixDbPath } from "../../storage/path.js";
 import {
   type UsageAggregate,
   type UsageBucket,
   aggregateUsage,
   bucketCacheHitRatio,
   bucketSavingsFraction,
-  defaultUsageLogPath,
   formatLogSize,
   readUsageLog,
 } from "../../telemetry/usage.js";
@@ -20,8 +20,6 @@ import {
 export interface StatsOptions {
   /** Optional transcript path. Absent → dashboard mode. */
   transcript?: string;
-  /** Override usage log location (tests). */
-  logPath?: string;
   /** Inject a fixed timestamp (tests) so rolling windows are deterministic. */
   now?: number;
 }
@@ -88,8 +86,8 @@ function transcriptSummary(path: string): void {
 }
 
 function dashboard(opts: StatsOptions): void {
-  const path = opts.logPath ?? defaultUsageLogPath();
-  const records = readUsageLog(path);
+  const path = reasonixDbPath();
+  const records = readUsageLog();
   const memoryStats = {
     observations24h: countRecentObservationEvents(),
     hybridLlmTokens: 0,

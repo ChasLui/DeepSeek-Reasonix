@@ -25,7 +25,7 @@ import {
   type MemoryScope,
   type MemoryType,
 } from "../memory/user.js";
-import { readUsageLog } from "../telemetry/usage.js";
+import type { UsageRecord } from "../telemetry/usage.js";
 import type { ChatMessage } from "../types.js";
 import { nullPrototype } from "../utils/safe-object.js";
 import type { Db } from "./db.js";
@@ -112,12 +112,33 @@ function fileMtimeIso(path: string): string | null {
 }
 
 function migrateUsage(db: Db, home: string, dryRun: boolean): number {
-  // `home` is the `.reasonix` dir itself, so the usage log sits directly under it
-  // (NOT defaultUsageLogPath, which appends a second `.reasonix`). Passing an explicit
-  // path forces the jsonl read regardless of the current backend.
-  const records = readUsageLog(join(home, "usage.jsonl"));
-  if (!dryRun) for (const record of records) appendUsageRow(db, record);
-  return records.length;
+  // `home` is the `.reasonix` dir itself, so the legacy usage log sits directly
+  // under it. Parse the jsonl in-place (the runtime usage reader is SQLite-only
+  // now and no longer accepts a path) and copy each row into the `usage` table.
+  const path = join(home, "usage.jsonl");
+  if (!existsSync(path)) return 0;
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch {
+    return 0;
+  }
+  let count = 0;
+  for (const line of raw.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    let record: UsageRecord;
+    try {
+      record = JSON.parse(line) as UsageRecord;
+    } catch {
+      continue;
+    }
+    if (typeof record.ts !== "number" || typeof record.model !== "string") {
+      continue;
+    }
+    if (!dryRun) appendUsageRow(db, record);
+    count++;
+  }
+  return count;
 }
 
 function migrateSessions(db: Db, home: string, dryRun: boolean): number {

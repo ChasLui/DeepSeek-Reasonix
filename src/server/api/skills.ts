@@ -154,10 +154,10 @@ function listSkills(dir: string, scope: "project" | "custom" | "global"): SkillL
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function countSubagentRuns(usageLogPath: string): Map<string, number> {
+function countSubagentRuns(): Map<string, number> {
   const cutoff = Date.now() - 7 * 86_400_000;
   const counts = new Map<string, number>();
-  for (const r of readUsageLog(usageLogPath)) {
+  for (const r of readUsageLog()) {
     if (r.kind !== "subagent" || r.ts < cutoff) continue;
     const skill = r.subagent?.skillName?.trim();
     if (!skill) continue;
@@ -175,7 +175,7 @@ export async function handleSkills(
   const cwd = ctx.getCurrentCwd?.();
 
   if (method === "GET" && rest.length === 0) {
-    const runs7d = countSubagentRuns(ctx.usageLogPath);
+    const runs7d = countSubagentRuns();
     const tag = (rows: SkillListEntry[]) =>
       rows.map((r) => ({ ...r, runs7d: runs7d.get(r.name) ?? 0 }));
     const store = new SkillStore({
@@ -216,7 +216,10 @@ export async function handleSkills(
   const name = nameParts.join("/");
 
   if (!scope || !name || !SAFE_NAME.test(name)) {
-    return { status: 400, body: { error: "expected /api/skills/<scope>/<name>" } };
+    return {
+      status: 400,
+      body: { error: "expected /api/skills/<scope>/<name>" },
+    };
   }
   if (scope !== "project" && scope !== "global") {
     return {
@@ -229,7 +232,9 @@ export async function handleSkills(
     if (!cwd) {
       return {
         status: 503,
-        body: { error: "no active project — open `/dashboard` from `reasonix code`" },
+        body: {
+          error: "no active project — open `/dashboard` from `reasonix code`",
+        },
       };
     }
     dir = projectSkillsDir(cwd);
@@ -273,7 +278,11 @@ export async function handleSkills(
       recursive: true,
       force: true,
     });
-    ctx.audit?.({ ts: Date.now(), action: "delete-skill", payload: { scope, name } });
+    ctx.audit?.({
+      ts: Date.now(),
+      action: "delete-skill",
+      payload: { scope, name },
+    });
     return { status: 200, body: { deleted: true } };
   }
 

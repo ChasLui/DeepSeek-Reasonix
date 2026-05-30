@@ -98,7 +98,6 @@ import {
   DEFAULT_CONTEXT_TOKENS,
   type SessionSummary,
 } from "../../telemetry/stats.js";
-import { defaultUsageLogPath } from "../../telemetry/usage.js";
 import type { ToolRegistry } from "../../tools.js";
 import type { ChoiceOption } from "../../tools/choice.js";
 import { looksLikeAbsoluteSystemPath, pathIsUnder } from "../../tools/filesystem.js";
@@ -2272,7 +2271,6 @@ function AppInner({
         {
           mode: "attached",
           configPath: defaultConfigPath(),
-          usageLogPath: defaultUsageLogPath(),
           loop,
           tools,
           getMcpServers: () => liveMcpServersRef.current,

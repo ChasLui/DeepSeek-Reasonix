@@ -66,7 +66,6 @@ describe("dashboard /sessions: new / switch / delete (attached)", () => {
       {
         mode: "attached",
         configPath: join(dir, "config.json"),
-        usageLogPath: join(dir, "usage.jsonl"),
         getSessionName: () => currentName,
         switchSession: (name) => {
           switchCalls.push(name);

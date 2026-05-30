@@ -11,7 +11,6 @@ import type { DashboardContext } from "../src/server/context.js";
 function makeCtx(configPath: string): DashboardContext {
   return {
     configPath,
-    usageLogPath: configPath.replace(/config\.json$/, "usage.jsonl"),
     mode: "standalone",
   };
 }

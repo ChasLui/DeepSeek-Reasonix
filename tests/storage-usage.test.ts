@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -76,18 +76,16 @@ const WRITER_SCRIPT = [
 afterEach(() => resetDb());
 
 describe("storage/usage-repo", () => {
-  it("aggregateUsage over SQLite rows equals over JSONL (SC-005)", () => {
-    const dir = tmpDir();
-    const jsonlPath = join(dir, "usage.jsonl");
-    writeFileSync(jsonlPath, `${FIXTURE.map((r) => JSON.stringify(r)).join("\n")}\n`, "utf8");
-
-    const db = getDb(join(dir, "reasonix.db"));
+  it("readUsageLog() wrapper returns the same rows as readAllUsage(db) (SC-005)", () => {
+    // getDb() singleton is opened against this path on first call, so the
+    // path-less readUsageLog() wrapper reads the same db the test writes to.
+    const db = getDb(join(tmpDir(), "reasonix.db"));
     for (const r of FIXTURE) appendUsageRow(db, r);
 
-    expect(aggregateUsage(readAllUsage(db), { now: 4000 })).toEqual(
-      aggregateUsage(readUsageLog(jsonlPath), { now: 4000 }),
+    expect(readUsageLog()).toEqual(readAllUsage(db));
+    expect(aggregateUsage(readUsageLog(), { now: 4000 })).toEqual(
+      aggregateUsage(readAllUsage(db), { now: 4000 }),
     );
-    expect(readAllUsage(db)).toEqual(readUsageLog(jsonlPath));
   });
 
   it("readUsageSince windows by ts; SQL counts match aggregateUsage (FR-007)", () => {

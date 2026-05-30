@@ -2,6 +2,7 @@ import { existsSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { listSessions } from "../../memory/session.js";
+import { reasonixDbPath } from "../../storage/path.js";
 import { VERSION } from "../../version.js";
 import type { DashboardContext } from "../context.js";
 import type { ApiResult } from "../router.js";
@@ -72,10 +73,11 @@ export async function handleHealth(
   const memoryStat = dirSize(join(reasonixHome, "memory"));
   const semanticStat = dirSize(join(reasonixHome, "semantic"));
 
+  const usageDbPath = reasonixDbPath();
   let usageBytes = 0;
-  if (existsSync(ctx.usageLogPath)) {
+  if (existsSync(usageDbPath)) {
     try {
-      usageBytes = statSync(ctx.usageLogPath).size;
+      usageBytes = statSync(usageDbPath).size;
     } catch {
       /* ignore */
     }
@@ -106,7 +108,7 @@ export async function handleHealth(
         totalBytes: semanticStat.totalBytes,
       },
       usageLog: {
-        path: ctx.usageLogPath,
+        path: usageDbPath,
         bytes: usageBytes,
       },
       jobs: ctx.jobs ? ctx.jobs.list().length : null,

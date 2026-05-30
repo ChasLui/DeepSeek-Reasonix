@@ -1,11 +1,12 @@
-/** Usage log + aggregator — append round-trip, malformed-tail tolerance, rolling-window rollups, dashboard render. */
+/** Usage store (SQLite) + aggregator — append round-trip, rolling-window rollups, dashboard render. */
 
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { renderDashboard } from "../src/cli/commands/stats.js";
 import { Usage } from "../src/client.js";
+import { getDb, resetDb } from "../src/storage/db.js";
 import {
   type UsageRecord,
   aggregateUsage,
@@ -26,15 +27,17 @@ function usage(overrides: Partial<Usage> = {}): Usage {
   );
 }
 
-describe("appendUsage + readUsageLog", () => {
+describe("appendUsage + readUsageLog (SQLite)", () => {
   let dir: string;
-  let path: string;
 
+  // Open the getDb() singleton against a fresh tmp db per test so the
+  // path-less appendUsage/readUsageLog wrappers stay isolated.
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "reasonix-usage-"));
-    path = join(dir, "usage.jsonl");
+    getDb(join(dir, "reasonix.db"));
   });
   afterEach(() => {
+    resetDb();
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -44,14 +47,13 @@ describe("appendUsage + readUsageLog", () => {
       model: "deepseek-reasoner",
       usage: usage(),
       now: 1_700_000_000_000,
-      path,
     });
     expect(record.session).toBe("default");
     expect(record.reasoningTokens).toBe(0);
     expect(record.costUsd).toBeGreaterThan(0);
     expect(record.claudeEquivUsd).toBeGreaterThan(record.costUsd);
 
-    const loaded = readUsageLog(path);
+    const loaded = readUsageLog();
     expect(loaded).toHaveLength(1);
     expect(loaded[0]?.ts).toBe(1_700_000_000_000);
     expect(loaded[0]?.session).toBe("default");
@@ -64,95 +66,24 @@ describe("appendUsage + readUsageLog", () => {
       model: "deepseek-v4-pro",
       usage: usage({ reasoningTokens: 42 }),
       now,
-      path,
     });
 
-    const [record] = readUsageLog(path);
+    const [record] = readUsageLog();
     expect(record?.reasoningTokens).toBe(42);
     expect(aggregateUsage(record ? [record] : [], { now }).buckets[0]?.reasoningTokens).toBe(42);
   });
 
-  it("returns [] when the log does not exist", () => {
-    expect(readUsageLog(path)).toEqual([]);
+  it("returns [] when the store is empty", () => {
+    expect(readUsageLog()).toEqual([]);
   });
 
-  it("tolerates a malformed trailing line (skips it)", () => {
-    appendUsage({ session: null, model: "deepseek-chat", usage: usage(), path });
-    mkdirSync(dirname(path), { recursive: true });
-    appendFileSync(path, "{ not valid json\n", "utf8");
-    const loaded = readUsageLog(path);
-    expect(loaded).toHaveLength(1);
-  });
-
-  it("creates the parent directory if missing", () => {
-    const deep = join(dir, "a", "b", "usage.jsonl");
-    appendUsage({ session: null, model: "deepseek-chat", usage: usage(), path: deep });
-    expect(readUsageLog(deep)).toHaveLength(1);
-  });
-
-  it("compacts the log when it crosses the size threshold, dropping records older than the retention window", () => {
-    // Synthesize an oversized log: 60K records is plenty to cross the
-    // 5MB compaction threshold (record size ~ 250B). Half are 2 years
-    // old (must be dropped), half are recent (must be kept). The
-    // bucketing matters because compaction triggers on the NEXT
-    // append after the file grows past the threshold.
-    const TWO_YEARS_AGO = Date.now() - 730 * 24 * 60 * 60 * 1000;
-    const RECENT = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const lines: string[] = [];
-    for (let i = 0; i < 30_000; i++) {
-      lines.push(
-        JSON.stringify({
-          ts: TWO_YEARS_AGO + i,
-          session: "old",
-          model: "deepseek-v4-flash",
-          promptTokens: 100,
-          completionTokens: 20,
-          cacheHitTokens: 80,
-          cacheMissTokens: 20,
-          costUsd: 0.0001,
-          claudeEquivUsd: 0.001,
-        }),
-      );
-      lines.push(
-        JSON.stringify({
-          ts: RECENT + i,
-          session: "new",
-          model: "deepseek-v4-flash",
-          promptTokens: 100,
-          completionTokens: 20,
-          cacheHitTokens: 80,
-          cacheMissTokens: 20,
-          costUsd: 0.0001,
-          claudeEquivUsd: 0.001,
-        }),
-      );
-    }
-    appendFileSync(path, `${lines.join("\n")}\n`, "utf8");
-    // Trigger compaction by appending one fresh record — appendUsage
-    // checks size after writing.
-    appendUsage({ session: "trigger", model: "deepseek-v4-flash", usage: usage(), path });
-    const records = readUsageLog(path);
-    // Old records must be gone, recent records preserved, plus the
-    // fresh trigger record.
-    expect(records.every((r) => r.ts >= TWO_YEARS_AGO + 30_000)).toBe(true);
-    expect(records.some((r) => r.session === "new")).toBe(true);
-    expect(records.some((r) => r.session === "trigger")).toBe(true);
-    expect(records.some((r) => r.session === "old")).toBe(false);
-  });
-
-  it("swallows write failure silently (best-effort contract)", () => {
-    // Point at a path under a FILE, not a directory — mkdirSync will
-    // blow up and appendUsage should absorb it without throwing.
-    const blocker = join(dir, "blocker");
-    appendFileSync(blocker, "not a dir");
+  it("never throws out of appendUsage (best-effort contract)", () => {
+    // appendUsageRow wraps the write in try/catch so a disk/db failure can
+    // never break the turn — appendUsage always returns the record.
     expect(() =>
-      appendUsage({
-        session: null,
-        model: "deepseek-chat",
-        usage: usage(),
-        path: join(blocker, "usage.jsonl"),
-      }),
+      appendUsage({ session: null, model: "deepseek-chat", usage: usage() }),
     ).not.toThrow();
+    expect(readUsageLog()).toHaveLength(1);
   });
 });
 
@@ -543,7 +474,12 @@ describe("renderDashboard", () => {
           costUsd: 0.5,
           claudeEquivUsd: 5,
           kind: "subagent",
-          subagent: { skillName: "explore", taskPreview: "x", toolIters: 1, durationMs: 100 },
+          subagent: {
+            skillName: "explore",
+            taskPreview: "x",
+            toolIters: 1,
+            durationMs: 100,
+          },
         },
       ],
       { now: 1_700_000_000_000 },

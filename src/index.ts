@@ -53,7 +53,11 @@ export type {
   ReconfigurableOptions,
 } from "./loop.js";
 
-export { ImmutablePrefix, AppendOnlyLog, VolatileScratch } from "./memory/runtime.js";
+export {
+  ImmutablePrefix,
+  AppendOnlyLog,
+  VolatileScratch,
+} from "./memory/runtime.js";
 export type { ImmutablePrefixOptions } from "./memory/runtime.js";
 
 export {
@@ -99,10 +103,18 @@ export {
   PlanRevisionProposedError,
   registerPlanTool,
 } from "./tools/plan.js";
-export type { PlanStep, PlanStepRisk, PlanToolOptions, StepCompletion } from "./tools/plan.js";
+export type {
+  PlanStep,
+  PlanStepRisk,
+  PlanToolOptions,
+  StepCompletion,
+} from "./tools/plan.js";
 export { registerTodoTool } from "./tools/todo.js";
 export type { TodoItem, TodoStatus, TodoToolOptions } from "./tools/todo.js";
-export { forkRegistryExcluding, registerSubagentTool } from "./tools/subagent.js";
+export {
+  forkRegistryExcluding,
+  registerSubagentTool,
+} from "./tools/subagent.js";
 export type {
   SubagentEvent,
   SubagentResult,
@@ -201,7 +213,11 @@ export {
   writeMeta,
   writeRecord,
 } from "./transcript/log.js";
-export type { TranscriptRecord, TranscriptMeta, ReadTranscriptResult } from "./transcript/log.js";
+export type {
+  TranscriptRecord,
+  TranscriptMeta,
+  ReadTranscriptResult,
+} from "./transcript/log.js";
 
 export { computeReplayStats, replayFromFile } from "./transcript/replay.js";
 export type { ReplayStats } from "./transcript/replay.js";
@@ -235,7 +251,11 @@ export {
   truncateForModel,
   truncateForModelByTokens,
 } from "./mcp/registry.js";
-export type { BridgeOptions, BridgeResult, FlattenOptions } from "./mcp/registry.js";
+export type {
+  BridgeOptions,
+  BridgeResult,
+  FlattenOptions,
+} from "./mcp/registry.js";
 export { parseMcpSpec } from "./mcp/spec.js";
 export type {
   McpSpec,
@@ -261,10 +281,7 @@ export type {
 } from "./code/edit-blocks.js";
 export { CODE_SYSTEM_PROMPT, codeSystemPrompt } from "./code/prompt.js";
 export type { CodeSystemPromptOptions } from "./code/prompt.js";
-export {
-  MCP_PROTOCOL_VERSION,
-  isJsonRpcError,
-} from "./mcp/types.js";
+export { MCP_PROTOCOL_VERSION, isJsonRpcError } from "./mcp/types.js";
 export type {
   McpTool,
   McpToolSchema,
@@ -358,7 +375,6 @@ export {
   appendUsage,
   bucketCacheHitRatio,
   bucketSavingsFraction,
-  defaultUsageLogPath,
   formatLogSize,
   readUsageLog,
 } from "./telemetry/usage.js";

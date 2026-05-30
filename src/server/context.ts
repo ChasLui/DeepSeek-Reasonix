@@ -9,7 +9,6 @@ import type { JobRegistry } from "../tools/jobs.js";
 export interface DashboardContext {
   /** Caller resolves via `defaultConfigPath()`; module deliberately avoids `homedir()` so tests can redirect. */
   configPath: string;
-  usageLogPath: string;
   /** Override the sessions dir (events.jsonl readers); production reads `~/.reasonix/sessions`. */
   sessionsDir?: string;
   mode: "standalone" | "attached";
@@ -18,7 +17,12 @@ export interface DashboardContext {
   tools?: ToolRegistry;
   getMcpServers?: () => McpServerSummary[];
   /** Per-spec bridge failures — drives the "未桥接" reason shown in the dashboard. */
-  getMcpFailures?: () => Array<{ spec: string; name: string; reason: string; at: number }>;
+  getMcpFailures?: () => Array<{
+    spec: string;
+    name: string;
+    reason: string;
+    at: number;
+  }>;
   jobs?: JobRegistry;
 
   /** Current code-mode root, if any. Drives the project-scoped allowlist. */
@@ -239,7 +243,13 @@ export type DashboardEvent =
     }
   | { kind: "assistant_final"; id: string; text: string; reasoning?: string }
   | { kind: "tool_start"; id: string; toolName: string; args?: string }
-  | { kind: "tool"; id: string; toolName: string; content: string; args?: string }
+  | {
+      kind: "tool";
+      id: string;
+      toolName: string;
+      content: string;
+      args?: string;
+    }
   | { kind: "warning"; id: string; text: string }
   | { kind: "error"; id: string; text: string }
   | { kind: "info"; id: string; text: string }

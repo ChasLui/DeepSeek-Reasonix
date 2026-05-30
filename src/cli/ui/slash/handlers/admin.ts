@@ -6,7 +6,8 @@ import {
   projectSettingsPath,
 } from "@/hooks.js";
 import { t } from "@/i18n/index.js";
-import { aggregateUsage, defaultUsageLogPath, readUsageLog } from "@/telemetry/usage.js";
+import { reasonixDbPath } from "@/storage/path.js";
+import { aggregateUsage, readUsageLog } from "@/telemetry/usage.js";
 import {
   VERSION,
   compareVersions,
@@ -22,9 +23,15 @@ const doctor: SlashHandler = (_args, loop, ctx) => {
   const root = ctx.codeRoot ?? process.cwd();
   if (!ctx.postDoctor) return { info: t("handlers.admin.doctorNeedsTui") };
   void (async () => {
-    const checks = await runDoctorChecks(root, { promptCacheStats: loop.cacheMonitor.stats() });
+    const checks = await runDoctorChecks(root, {
+      promptCacheStats: loop.cacheMonitor.stats(),
+    });
     ctx.postDoctor!(
-      checks.map((c) => ({ label: c.label.trim(), level: c.level, detail: c.detail })),
+      checks.map((c) => ({
+        label: c.label.trim(),
+        level: c.level,
+        detail: c.detail,
+      })),
     );
   })();
   return { info: t("handlers.admin.doctorRunning") };
@@ -109,14 +116,23 @@ const update: SlashHandler = (_args, _loop, ctx) => {
   }
   const installSource = detectInstallSource();
   const npmPrefix = installSource === "npm" ? detectNpmInstallPrefix() : null;
-  const plan = planUpdate({ current: VERSION, latest, installSource, npmPrefix });
+  const plan = planUpdate({
+    current: VERSION,
+    latest,
+    installSource,
+    npmPrefix,
+  });
   if (plan.action === "npx-hint") {
     lines.push("", t("handlers.admin.updateNpxHint"), t("handlers.admin.updateNpxForce"));
     return { info: lines.join("\n") };
   }
   lines.push("", t("handlers.admin.updateUpgradeHint"), t("handlers.admin.updateUpgradeCmd1"));
   if (plan.action === "run-install" && plan.command) {
-    lines.push(t("handlers.admin.updateUpgradeCmd2", { command: plan.command.join(" ") }));
+    lines.push(
+      t("handlers.admin.updateUpgradeCmd2", {
+        command: plan.command.join(" "),
+      }),
+    );
   } else {
     lines.push(...MANUAL_UPDATE_COMMANDS.map((c) => `  ${c}`));
   }
@@ -129,8 +145,8 @@ const update: SlashHandler = (_args, _loop, ctx) => {
 };
 
 const stats: SlashHandler = (_args, loop) => {
-  const path = defaultUsageLogPath();
-  const records = readUsageLog(path);
+  const path = reasonixDbPath();
+  const records = readUsageLog();
   if (records.length === 0) {
     return {
       info: [
@@ -144,7 +160,9 @@ const stats: SlashHandler = (_args, loop) => {
     };
   }
   const agg = aggregateUsage(records);
-  return { info: renderDashboard(agg, path, loop.getCacheStats(), loop.cacheMonitor.stats()) };
+  return {
+    info: renderDashboard(agg, path, loop.getCacheStats(), loop.cacheMonitor.stats()),
+  };
 };
 
 export const handlers: Record<string, SlashHandler> = {
