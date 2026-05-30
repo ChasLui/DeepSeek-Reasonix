@@ -1,16 +1,17 @@
 /** User-defined memory types — config-driven priority + expires (#709). */
 
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type CustomMemoryTypeConfig,
   type ReasonixConfig,
   loadMemoryTypeRegistry,
   memoryTypeDefaults,
 } from "../src/config.js";
-import { MemoryStore, applyUserMemory, effectivePriority } from "../src/memory/user.js";
+import { applyUserMemory, effectivePriority, openMemoryStore } from "../src/memory/user.js";
+import { resetDb } from "../src/storage/db.js";
 
 function cfgWith(types: CustomMemoryTypeConfig[]): ReasonixConfig {
   return { memory: { customTypes: types } };
@@ -24,11 +25,15 @@ describe("custom memory types (#709)", () => {
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), "reasonix-memtype-home-"));
     projectRoot = mkdtempSync(join(tmpdir(), "reasonix-memtype-proj-"));
+    // SQLite-only: openMemoryStore + applyUserMemory resolve getDb() from $HOME.
+    vi.stubEnv("HOME", home);
     // biome-ignore lint/performance/noDelete: avoid leaking "undefined" into env
     delete process.env.REASONIX_MEMORY;
   });
 
   afterEach(() => {
+    resetDb();
+    vi.unstubAllEnvs();
     rmSync(home, { recursive: true, force: true });
     rmSync(projectRoot, { recursive: true, force: true });
     if (originalEnv === undefined) {
@@ -51,7 +56,11 @@ describe("custom memory types (#709)", () => {
         cfgWith([
           { name: "security", priority: "high" },
           { name: "design_system", priority: "medium" },
-          { name: "deploy_checklist", priority: "medium", expires: "project_end" },
+          {
+            name: "deploy_checklist",
+            priority: "medium",
+            expires: "project_end",
+          },
         ]),
       );
       const security = reg.find((r) => r.name === "security");
@@ -76,7 +85,7 @@ describe("custom memory types (#709)", () => {
 
   describe("MemoryStore round-trip with priority + expires", () => {
     it("persists and reads priority + expires fields", () => {
-      const store = new MemoryStore({ homeDir: home, projectRoot });
+      const store = openMemoryStore({ homeDir: home, projectRoot });
       store.write({
         name: "no-secrets",
         type: "security",
@@ -85,8 +94,8 @@ describe("custom memory types (#709)", () => {
         body: "API keys live in env files only. Reject any diff that inlines a secret.",
         priority: "high",
       });
-      const file = store.pathFor("global", "no-secrets");
-      const raw = readFileSync(file, "utf8");
+      // No on-disk file under SQLite — exportMarkdown materializes the same frontmatter.
+      const raw = store.exportMarkdown("global", "no-secrets") ?? "";
       expect(raw).toContain("type: security");
       expect(raw).toContain("priority: high");
 
@@ -97,7 +106,7 @@ describe("custom memory types (#709)", () => {
     });
 
     it("round-trips `expires: project_end`", () => {
-      const store = new MemoryStore({ homeDir: home, projectRoot });
+      const store = openMemoryStore({ homeDir: home, projectRoot });
       store.write({
         name: "release-freeze",
         type: "deploy_checklist",
@@ -160,7 +169,11 @@ describe("custom memory types (#709)", () => {
   describe("memoryTypeDefaults", () => {
     it("returns config-declared priority + expires for a known custom type", () => {
       const cfg = cfgWith([
-        { name: "deploy_checklist", priority: "medium", expires: "project_end" },
+        {
+          name: "deploy_checklist",
+          priority: "medium",
+          expires: "project_end",
+        },
       ]);
       expect(memoryTypeDefaults("deploy_checklist", cfg)).toEqual({
         priority: "medium",
@@ -179,7 +192,7 @@ describe("custom memory types (#709)", () => {
 
   describe("applyUserMemory injects HIGH PRIORITY block", () => {
     it("prepends a HIGH PRIORITY section when any entry resolves to priority: high", () => {
-      const store = new MemoryStore({ homeDir: home, projectRoot });
+      const store = openMemoryStore({ homeDir: home, projectRoot });
       store.write({
         name: "no-prod-writes",
         type: "security",
@@ -209,7 +222,7 @@ describe("custom memory types (#709)", () => {
     });
 
     it("does not produce a HIGH PRIORITY block when no entry is high-priority", () => {
-      const store = new MemoryStore({ homeDir: home, projectRoot });
+      const store = openMemoryStore({ homeDir: home, projectRoot });
       store.write({
         name: "naming-style",
         type: "user",
@@ -222,7 +235,7 @@ describe("custom memory types (#709)", () => {
     });
 
     it("treats config-driven priority for a custom type as high priority", () => {
-      const store = new MemoryStore({ homeDir: home, projectRoot });
+      const store = openMemoryStore({ homeDir: home, projectRoot });
       store.write({
         name: "modal-component",
         type: "design_system",
@@ -240,7 +253,7 @@ describe("custom memory types (#709)", () => {
 
   describe("unknown types fall through verbatim", () => {
     it("accepts any string for `type` and preserves it on read", () => {
-      const store = new MemoryStore({ homeDir: home, projectRoot });
+      const store = openMemoryStore({ homeDir: home, projectRoot });
       store.write({
         name: "experimental",
         type: "performance_budget",

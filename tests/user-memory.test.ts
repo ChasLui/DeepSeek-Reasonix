@@ -1,20 +1,20 @@
-/** `~/.reasonix/memory/` store + prefix-loading composer — temp homeDir per test. */
+/** SQLite memory store + prefix-loading composer — temp homeDir + isolated db per test. */
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { applyProjectMemory } from "../src/memory/project.js";
 import {
-  MEMORY_INDEX_FILE,
   MEMORY_INDEX_MAX_CHARS,
-  MemoryStore,
   applyGlobalReasonixMemory,
   applyMemoryStack,
   applyUserMemory,
+  openMemoryStore,
   projectHash,
   sanitizeMemoryName,
 } from "../src/memory/user.js";
+import { resetDb } from "../src/storage/db.js";
 
 const BASE = "You are a test assistant.";
 
@@ -28,6 +28,7 @@ describe("user-memory", () => {
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), "reasonix-umem-home-"));
     projectRoot = mkdtempSync(join(tmpdir(), "reasonix-umem-proj-"));
+    // SQLite-only: openMemoryStore + applyUserMemory resolve getDb() from $HOME.
     process.env.HOME = home;
     process.env.USERPROFILE = home;
     // biome-ignore lint/performance/noDelete: avoid leaking "undefined" into env
@@ -35,6 +36,7 @@ describe("user-memory", () => {
   });
 
   afterEach(() => {
+    resetDb();
     rmSync(home, { recursive: true, force: true });
     rmSync(projectRoot, { recursive: true, force: true });
     if (originalEnv === undefined) {
@@ -87,9 +89,9 @@ describe("user-memory", () => {
     });
   });
 
-  describe("MemoryStore basic I/O", () => {
-    it("writes a global memory and regenerates MEMORY.md", () => {
-      const store = new MemoryStore({ homeDir: home });
+  describe("SqliteMemoryStore basic I/O", () => {
+    it("writes a global memory and surfaces it in the index", () => {
+      const store = openMemoryStore({ homeDir: home });
       store.write({
         name: "snake_case",
         type: "feedback",
@@ -97,20 +99,17 @@ describe("user-memory", () => {
         description: "User prefers snake_case for new Python modules",
         body: "Rule.\n\n**Why:** PEP 8.\n\n**How to apply:** new .py files default to snake_case.",
       });
-      const file = join(home, "memory", "global", "snake_case.md");
-      expect(existsSync(file)).toBe(true);
-      const raw = readFileSync(file, "utf8");
-      expect(raw).toMatch(/^---\nname: snake_case\n/);
-      expect(raw).toContain("Rule.");
-      const indexPath = join(home, "memory", "global", MEMORY_INDEX_FILE);
-      expect(existsSync(indexPath)).toBe(true);
-      const index = readFileSync(indexPath, "utf8");
-      expect(index).toContain("[snake_case](snake_case.md)");
-      expect(index).toContain("User prefers snake_case");
+      // No markdown file on disk — exportMarkdown materializes the same frontmatter + body.
+      const md = store.exportMarkdown("global", "snake_case") ?? "";
+      expect(md).toMatch(/^---\nname: snake_case\n/);
+      expect(md).toContain("Rule.");
+      const idx = store.loadIndex("global");
+      expect(idx?.content).toContain("[snake_case](snake_case.md)");
+      expect(idx?.content).toContain("User prefers snake_case");
     });
 
     it("round-trips write → read → list → delete for global scope", () => {
-      const store = new MemoryStore({ homeDir: home });
+      const store = openMemoryStore({ homeDir: home });
       store.write({
         name: "one",
         type: "user",
@@ -138,19 +137,19 @@ describe("user-memory", () => {
       expect(removed).toBe(true);
       expect(store.list().map((e) => e.name)).toEqual(["two"]);
 
-      // MEMORY.md should no longer reference "one".
-      const index = readFileSync(join(home, "memory", "global", MEMORY_INDEX_FILE), "utf8");
-      expect(index).not.toContain("one.md");
-      expect(index).toContain("two.md");
+      // The index should no longer reference "one".
+      const idx = store.loadIndex("global");
+      expect(idx?.content).not.toContain("one.md");
+      expect(idx?.content).toContain("two.md");
     });
 
     it("returns false when deleting a nonexistent memory", () => {
-      const store = new MemoryStore({ homeDir: home });
+      const store = openMemoryStore({ homeDir: home });
       expect(store.delete("global", "ghost")).toBe(false);
     });
 
-    it("removes MEMORY.md entirely when the last memory is deleted", () => {
-      const store = new MemoryStore({ homeDir: home });
+    it("loadIndex returns null after the last memory is deleted", () => {
+      const store = openMemoryStore({ homeDir: home });
       store.write({
         name: "only",
         type: "project",
@@ -159,12 +158,11 @@ describe("user-memory", () => {
         body: "b",
       });
       store.delete("global", "only");
-      const indexPath = join(home, "memory", "global", MEMORY_INDEX_FILE);
-      expect(existsSync(indexPath)).toBe(false);
+      expect(store.loadIndex("global")).toBeNull();
     });
 
     it("refuses project scope without a projectRoot", () => {
-      const store = new MemoryStore({ homeDir: home });
+      const store = openMemoryStore({ homeDir: home });
       expect(store.hasProjectScope()).toBe(false);
       expect(() =>
         store.write({
@@ -177,8 +175,8 @@ describe("user-memory", () => {
       ).toThrow(/projectRoot/);
     });
 
-    it("routes project scope into the hashed subdir", () => {
-      const store = new MemoryStore({ homeDir: home, projectRoot });
+    it("isolates project scope from global scope via the PK", () => {
+      const store = openMemoryStore({ homeDir: home, projectRoot });
       expect(store.hasProjectScope()).toBe(true);
       store.write({
         name: "bun_build",
@@ -187,17 +185,21 @@ describe("user-memory", () => {
         description: "Build command is `bun run build` on this machine",
         body: "Body here.",
       });
-      const hashDir = join(home, "memory", projectHash(projectRoot));
-      const file = join(hashDir, "bun_build.md");
-      expect(existsSync(file)).toBe(true);
-      // Global scope dir should NOT contain the project file.
-      expect(existsSync(join(home, "memory", "global", "bun_build.md"))).toBe(false);
+      expect(store.query("project", "bun_build")?.body).toBe("Body here.");
+      // Global scope must NOT see the project-scoped row.
+      expect(store.query("global", "bun_build")).toBeNull();
     });
 
     it("validates description / body non-empty", () => {
-      const store = new MemoryStore({ homeDir: home });
+      const store = openMemoryStore({ homeDir: home });
       expect(() =>
-        store.write({ name: "x_y_z", type: "user", scope: "global", description: "", body: "b" }),
+        store.write({
+          name: "x_y_z",
+          type: "user",
+          scope: "global",
+          description: "",
+          body: "b",
+        }),
       ).toThrow(/description/);
       expect(() =>
         store.write({
@@ -211,7 +213,7 @@ describe("user-memory", () => {
     });
 
     it("loadIndex returns null for absent scope, content + flag for present", () => {
-      const store = new MemoryStore({ homeDir: home });
+      const store = openMemoryStore({ homeDir: home });
       expect(store.loadIndex("global")).toBeNull();
       store.write({
         name: "x_y_z",
@@ -227,8 +229,8 @@ describe("user-memory", () => {
     });
 
     it("loadIndex truncates with a visible marker past the cap", () => {
-      const store = new MemoryStore({ homeDir: home });
-      // Write many entries so MEMORY.md crosses the cap.
+      const store = openMemoryStore({ homeDir: home });
+      // Write many entries so the index crosses the cap.
       for (let i = 0; i < 80; i++) {
         store.write({
           name: `entry_${String(i).padStart(3, "0")}`,
@@ -241,36 +243,44 @@ describe("user-memory", () => {
       const idx = store.loadIndex("global");
       expect(idx?.truncated).toBe(true);
       expect(idx?.content).toMatch(/truncated \d+ chars/);
-      expect(idx?.content.length).toBeLessThan(MEMORY_INDEX_MAX_CHARS + 64);
+      expect((idx?.content.length ?? 0) < MEMORY_INDEX_MAX_CHARS + 64).toBe(true);
     });
 
-    it("list() skips malformed frontmatter gracefully", () => {
-      const store = new MemoryStore({ homeDir: home });
-      const dir = store.dir("global");
-      writeFileSync(join(dir, "broken.md"), "no frontmatter here, just text\n", "utf8");
+    it("index is byte-stable for identical row sets regardless of insert order (cache-prefix safety)", () => {
+      const store = openMemoryStore({ homeDir: home });
       store.write({
-        name: "sane",
+        name: "a_one",
         type: "user",
         scope: "global",
-        description: "ok",
-        body: "b",
+        description: "d1",
+        body: "b1",
       });
-      const entries = store.list();
-      expect(entries.map((e) => e.name).sort()).toContain("sane");
-    });
-
-    it("regenerated MEMORY.md is byte-stable for identical file sets (cache-prefix safety)", () => {
-      const storeA = new MemoryStore({ homeDir: home });
-      storeA.write({ name: "a_one", type: "user", scope: "global", description: "d1", body: "b1" });
-      storeA.write({ name: "b_two", type: "user", scope: "global", description: "d2", body: "b2" });
-      const first = readFileSync(join(home, "memory", "global", MEMORY_INDEX_FILE), "utf8");
+      store.write({
+        name: "b_two",
+        type: "user",
+        scope: "global",
+        description: "d2",
+        body: "b2",
+      });
+      const first = store.loadIndex("global");
       // Delete + re-write in reverse order — sorted index should match.
-      storeA.delete("global", "a_one");
-      storeA.delete("global", "b_two");
-      storeA.write({ name: "b_two", type: "user", scope: "global", description: "d2", body: "b2" });
-      storeA.write({ name: "a_one", type: "user", scope: "global", description: "d1", body: "b1" });
-      const second = readFileSync(join(home, "memory", "global", MEMORY_INDEX_FILE), "utf8");
-      expect(second).toBe(first);
+      store.delete("global", "a_one");
+      store.delete("global", "b_two");
+      store.write({
+        name: "b_two",
+        type: "user",
+        scope: "global",
+        description: "d2",
+        body: "b2",
+      });
+      store.write({
+        name: "a_one",
+        type: "user",
+        scope: "global",
+        description: "d1",
+        body: "b1",
+      });
+      expect(store.loadIndex("global")).toEqual(first);
     });
   });
 
@@ -280,7 +290,7 @@ describe("user-memory", () => {
     });
 
     it("appends only global summaries when no project memory exists", () => {
-      const store = new MemoryStore({ homeDir: home, projectRoot });
+      const store = openMemoryStore({ homeDir: home, projectRoot });
       store.write({
         name: "pref_one",
         type: "user",
@@ -296,7 +306,7 @@ describe("user-memory", () => {
     });
 
     it("appends both blocks when both scopes populated", () => {
-      const store = new MemoryStore({ homeDir: home, projectRoot });
+      const store = openMemoryStore({ homeDir: home, projectRoot });
       store.write({
         name: "global_one",
         type: "user",
@@ -320,7 +330,7 @@ describe("user-memory", () => {
     });
 
     it("is deterministic — identical state ⇒ identical output (cache-safe)", () => {
-      const store = new MemoryStore({ homeDir: home, projectRoot });
+      const store = openMemoryStore({ homeDir: home, projectRoot });
       store.write({
         name: "stable",
         type: "user",
@@ -334,7 +344,7 @@ describe("user-memory", () => {
     });
 
     it("respects REASONIX_MEMORY=off", () => {
-      const store = new MemoryStore({ homeDir: home, projectRoot });
+      const store = openMemoryStore({ homeDir: home, projectRoot });
       store.write({
         name: "pref_one",
         type: "user",
@@ -347,7 +357,7 @@ describe("user-memory", () => {
     });
 
     it("skips the project block when no projectRoot is configured", () => {
-      const store = new MemoryStore({ homeDir: home });
+      const store = openMemoryStore({ homeDir: home });
       store.write({
         name: "global_only",
         type: "user",
@@ -365,12 +375,8 @@ describe("user-memory", () => {
   describe("applyMemoryStack", () => {
     it("composes REASONIX.md → global memory → project memory", () => {
       writeFileSync(join(projectRoot, "REASONIX.md"), "Pinned by REASONIX.md\n", "utf8");
-      // applyMemoryStack uses ~/.reasonix by default — redirect via HOME
-      // isn't portable across Windows; use the public applyUserMemory
-      // directly for the global/project part and compose manually to
-      // check ordering is what the helper produces.
       const withProj = applyProjectMemory(BASE, projectRoot);
-      const store = new MemoryStore({ homeDir: home, projectRoot });
+      const store = openMemoryStore({ homeDir: home, projectRoot });
       store.write({
         name: "g_pref",
         type: "user",
@@ -386,8 +392,6 @@ describe("user-memory", () => {
         body: "b",
       });
       const out = applyUserMemory(withProj, { homeDir: home, projectRoot });
-      // Order: REASONIX.md content → global → project. Each unique
-      // string should appear, and in that order.
       const iReasonix = out.indexOf("Pinned by REASONIX.md");
       const iGlobal = out.indexOf("g_pref");
       const iProject = out.indexOf("p_fact");
@@ -397,8 +401,6 @@ describe("user-memory", () => {
     });
 
     it("applyMemoryStack injects no memory blocks when no memory is set", () => {
-      // homeDir override required — otherwise the helper falls back to the
-      // dev's real ~/.reasonix and bleeds in whatever memory they have.
       const out = applyMemoryStack(BASE, projectRoot, { homeDir: home });
       expect(out).toContain(BASE);
       expect(out).not.toMatch(/# Project memory/);

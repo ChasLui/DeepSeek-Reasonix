@@ -20,7 +20,7 @@ import {
 } from "../../memory/access.js";
 import { countRecentObservationEvents } from "../../memory/observation.js";
 import { listSessions, loadSessionMessages } from "../../memory/session.js";
-import { type MemoryEntry, type MemoryScope, MemoryStore } from "../../memory/user.js";
+import { type MemoryEntry, type MemoryScope, openMemoryStore } from "../../memory/user.js";
 
 export interface MemoryCommandOptions {
   homeDir?: string;
@@ -96,7 +96,10 @@ export async function memoryCommand(
   }
   if (subcommand === "forget") {
     const parsed = parseForgetArgs(rest);
-    const store = new MemoryStore({ homeDir: opts.homeDir, projectRoot: opts.projectRoot });
+    const store = openMemoryStore({
+      homeDir: opts.homeDir,
+      projectRoot: opts.projectRoot,
+    });
     if (parsed.purge) {
       const result = purge(store);
       console.log(`purged ${result.hardDeleted} memories from trash`);
@@ -121,10 +124,16 @@ export async function memoryCommand(
   console.log("Usage: reasonix memory <search|rebuild-index|stats|forget> ...");
 }
 
-export async function rebuildMemoryIndex(
-  opts: MemoryCommandOptions = {},
-): Promise<{ entries: number; lexicalDocs: number; semanticDocs: number; semanticError?: string }> {
-  const store = new MemoryStore({ homeDir: opts.homeDir, projectRoot: opts.projectRoot });
+export async function rebuildMemoryIndex(opts: MemoryCommandOptions = {}): Promise<{
+  entries: number;
+  lexicalDocs: number;
+  semanticDocs: number;
+  semanticError?: string;
+}> {
+  const store = openMemoryStore({
+    homeDir: opts.homeDir,
+    projectRoot: opts.projectRoot,
+  });
   const paths = indexPaths(opts.homeDir);
   const entries = [...store.list(), ...loadIndexedSessionDocs(paths.sessionDocs)];
   const index = new Bm25Index();
@@ -141,7 +150,10 @@ export async function rebuildMemoryIndex(
   const semantic = new MemorySemanticStore(paths.semanticDir);
   try {
     await semantic.rebuild(
-      entries.map((entry) => ({ docId: memoryDocId(entry), text: memoryText(entry) })),
+      entries.map((entry) => ({
+        docId: memoryDocId(entry),
+        text: memoryText(entry),
+      })),
       opts.embedText ? { embedText: opts.embedText } : {},
     );
     semanticDocs = semantic.size;
@@ -149,7 +161,12 @@ export async function rebuildMemoryIndex(
     semanticError = err instanceof Error ? err.message : String(err);
   }
 
-  return { entries: entries.length, lexicalDocs: index.size, semanticDocs, semanticError };
+  return {
+    entries: entries.length,
+    lexicalDocs: index.size,
+    semanticDocs,
+    semanticError,
+  };
 }
 
 export async function indexImportedClaudeSessions(
@@ -172,7 +189,10 @@ export async function searchMemory(
   opts: MemorySearchOptions = {},
 ): Promise<MemorySearchResult> {
   const topK = opts.topK ?? DEFAULT_TOP_K;
-  const store = new MemoryStore({ homeDir: opts.homeDir, projectRoot: opts.projectRoot });
+  const store = openMemoryStore({
+    homeDir: opts.homeDir,
+    projectRoot: opts.projectRoot,
+  });
   const paths = indexPaths(opts.homeDir);
   const entriesById = new Map(
     [...store.list(), ...loadIndexedSessionDocs(paths.sessionDocs)].map((entry) => [
@@ -215,7 +235,9 @@ export async function searchMemory(
     const entry = entriesById.get(hit.docId);
     if (!entry) continue;
     hits.push({ entry, score: hit.score });
-    appendAccess(entry.scope, entry.name, Date.now(), { homeDir: opts.homeDir });
+    appendAccess(entry.scope, entry.name, Date.now(), {
+      homeDir: opts.homeDir,
+    });
   }
 
   return { mode, hits, stale, ...(semanticError ? { semanticError } : {}) };
@@ -232,7 +254,10 @@ export function memoryStats(opts: MemoryCommandOptions = {}): {
   accessBytes: number;
   decay: { p50: number; p90: number };
 } {
-  const store = new MemoryStore({ homeDir: opts.homeDir, projectRoot: opts.projectRoot });
+  const store = openMemoryStore({
+    homeDir: opts.homeDir,
+    projectRoot: opts.projectRoot,
+  });
   const entries = store.list();
   const stats = loadAccessStats({ homeDir: opts.homeDir });
   const paths = indexPaths(opts.homeDir);
@@ -277,7 +302,12 @@ function parseSearchArgs(args: readonly string[]): {
   }
   const query = queryParts.join(" ").trim();
   if (!query) throw new Error("memory search requires a query");
-  return { query, hybrid, topK: Number.isFinite(topK) ? topK : DEFAULT_TOP_K, json };
+  return {
+    query,
+    hybrid,
+    topK: Number.isFinite(topK) ? topK : DEFAULT_TOP_K,
+    json,
+  };
 }
 
 function parseForgetArgs(args: readonly string[]): {

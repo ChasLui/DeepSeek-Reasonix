@@ -1,10 +1,11 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expandAtMentions } from "../src/at-mentions.js";
 import { codeSystemPrompt } from "../src/code/prompt.js";
-import { MemoryStore, applyUserMemory } from "../src/memory/user.js";
+import { applyUserMemory, openMemoryStore } from "../src/memory/user.js";
+import { resetDb } from "../src/storage/db.js";
 import { getToonStats, resetToonStats } from "../src/toon/stats.js";
 
 describe("TOON prefix payloads", () => {
@@ -16,16 +17,22 @@ describe("TOON prefix payloads", () => {
     home = mkdtempSync(join(tmpdir(), "reasonix-toon-prefix-home-"));
     mkdirSync(join(root, "src"), { recursive: true });
     writeFileSync(join(root, "src", "loop.ts"), "export const x = 1;\n");
+    // SQLite-only: applyUserMemory + openMemoryStore resolve getDb() from $HOME.
+    vi.stubEnv("HOME", home);
     resetToonStats();
   });
 
   afterEach(() => {
+    resetDb();
+    vi.unstubAllEnvs();
     rmSync(root, { recursive: true, force: true });
     rmSync(home, { recursive: true, force: true });
   });
 
   it("keeps @mention XML payloads unchanged when prefix TOON is off", () => {
-    const out = expandAtMentions("look at @src/loop.ts", root, { toonMode: "off" }).text;
+    const out = expandAtMentions("look at @src/loop.ts", root, {
+      toonMode: "off",
+    }).text;
 
     expect(out).toContain('<file path="src/loop.ts">');
     expect(out).not.toContain("```toon");
@@ -49,7 +56,7 @@ describe("TOON prefix payloads", () => {
   });
 
   it("encodes memory summaries as TOON while preserving high-priority text separately", () => {
-    const store = new MemoryStore({ homeDir: home, projectRoot: root });
+    const store = openMemoryStore({ homeDir: home, projectRoot: root });
     store.write({
       name: "pref_one",
       type: "user",
@@ -58,7 +65,11 @@ describe("TOON prefix payloads", () => {
       body: "body stays in the recallable detail file",
     });
 
-    const out = applyUserMemory("BASE", { homeDir: home, projectRoot: root, toonMode: "prefix" });
+    const out = applyUserMemory("BASE", {
+      homeDir: home,
+      projectRoot: root,
+      toonMode: "prefix",
+    });
 
     expect(out).toContain("# User memory index");
     expect(out).toContain("```toon");

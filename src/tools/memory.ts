@@ -5,8 +5,8 @@ import {
   type MemoryExpires,
   type MemoryPriority,
   type MemoryScope,
-  MemoryStore,
   type MemoryType,
+  openMemoryStore,
   sanitizeMemoryName,
 } from "../memory/user.js";
 import type { ToolRegistry } from "../tools.js";
@@ -22,7 +22,10 @@ export function registerMemoryTools(
   registry: ToolRegistry,
   opts: MemoryToolsOptions = {},
 ): ToolRegistry {
-  const store = new MemoryStore({ homeDir: opts.homeDir, projectRoot: opts.projectRoot });
+  const store = openMemoryStore({
+    homeDir: opts.homeDir,
+    projectRoot: opts.projectRoot,
+  });
   const hasProject = store.hasProjectScope();
 
   const registry_types = loadMemoryTypeRegistry();
@@ -119,7 +122,9 @@ export function registerMemoryTools(
           `(Saved to ${path}; pins into the system prompt on next /new or launch.)`,
         ].join("\n");
       } catch (err) {
-        return JSON.stringify({ error: `remember failed: ${(err as Error).message}` });
+        return JSON.stringify({
+          error: `remember failed: ${(err as Error).message}`,
+        });
       }
     },
   });
@@ -131,7 +136,10 @@ export function registerMemoryTools(
     parameters: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Memory name (the identifier used in `remember`)." },
+        name: {
+          type: "string",
+          description: "Memory name (the identifier used in `remember`).",
+        },
         scope: { type: "string", enum: ["global", "project"] },
       },
       required: ["name", "scope"],
@@ -148,7 +156,9 @@ export function registerMemoryTools(
           ? `forgot (${args.scope}/${sanitizeMemoryName(args.name)}). Re-load on next /new or launch.`
           : `no such memory: ${args.scope}/${args.name} (nothing to forget).`;
       } catch (err) {
-        return JSON.stringify({ error: `forget failed: ${(err as Error).message}` });
+        return JSON.stringify({
+          error: `forget failed: ${(err as Error).message}`,
+        });
       }
     },
   });
@@ -184,7 +194,9 @@ export function registerMemoryTools(
           .filter(Boolean)
           .join("\n");
       } catch (err) {
-        return JSON.stringify({ error: `recall failed: ${(err as Error).message}` });
+        return JSON.stringify({
+          error: `recall failed: ${(err as Error).message}`,
+        });
       }
     },
   });

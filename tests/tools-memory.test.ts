@@ -3,12 +3,15 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { MemoryStore } from "../src/memory/user.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { applyUserMemory, openMemoryStore } from "../src/memory/user.js";
+import { resetDb } from "../src/storage/db.js";
 import { ToolRegistry } from "../src/tools.js";
 import { registerMemoryTools } from "../src/tools/memory.js";
 import { parseToolResult } from "./helpers/tool-result.js";
 
+// SQLite-only: openMemoryStore (used by registerMemoryTools) resolves getDb() from $HOME,
+// so isolate by stubbing HOME to a tmpdir and resetting the db singleton each test.
 describe("memory tools", () => {
   let home: string;
   let projectRoot: string;
@@ -16,9 +19,12 @@ describe("memory tools", () => {
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), "reasonix-memtools-home-"));
     projectRoot = mkdtempSync(join(tmpdir(), "reasonix-memtools-proj-"));
+    vi.stubEnv("HOME", home);
   });
 
   afterEach(() => {
+    resetDb();
+    vi.unstubAllEnvs();
     rmSync(home, { recursive: true, force: true });
     rmSync(projectRoot, { recursive: true, force: true });
   });
@@ -37,7 +43,7 @@ describe("memory tools", () => {
       expect(out).toMatch(/REMEMBERED \(global\/pref_one\)/);
       expect(out).toMatch(/User prefers tabs/);
       // Verify the store actually has it.
-      const store = new MemoryStore({ homeDir: home });
+      const store = openMemoryStore({ homeDir: home });
       const listed = store.list();
       expect(listed.map((e) => e.name)).toContain("pref_one");
     });
@@ -109,16 +115,22 @@ describe("memory tools", () => {
         description: "d",
         content: "c",
       });
-      const out = await reg.dispatch("forget", { scope: "global", name: "delete_me" });
+      const out = await reg.dispatch("forget", {
+        scope: "global",
+        name: "delete_me",
+      });
       expect(out).toMatch(/forgot \(global\/delete_me\)/);
-      const store = new MemoryStore({ homeDir: home });
+      const store = openMemoryStore({ homeDir: home });
       expect(store.list().map((e) => e.name)).not.toContain("delete_me");
     });
 
     it("is idempotent on a missing memory (reports 'no such memory')", async () => {
       const reg = new ToolRegistry();
       registerMemoryTools(reg, { homeDir: home });
-      const out = await reg.dispatch("forget", { scope: "global", name: "ghost_one" });
+      const out = await reg.dispatch("forget", {
+        scope: "global",
+        name: "ghost_one",
+      });
       expect(out).toMatch(/no such memory/);
     });
   });
@@ -146,7 +158,10 @@ describe("memory tools", () => {
     it("returns an error (not a throw) on missing name", async () => {
       const reg = new ToolRegistry();
       registerMemoryTools(reg, { homeDir: home });
-      const out = await reg.dispatch("recall_memory", { scope: "global", name: "ghost_one" });
+      const out = await reg.dispatch("recall_memory", {
+        scope: "global",
+        name: "ghost_one",
+      });
       const parsed = parseToolResult(out);
       expect(parsed.error).toMatch(/recall failed/);
     });
@@ -173,6 +188,58 @@ describe("memory tools", () => {
       registerMemoryTools(reg, { homeDir: home });
       expect(reg.get("remember")?.readOnly).not.toBe(true);
       expect(reg.get("forget")?.readOnly).not.toBe(true);
+    });
+  });
+
+  // SC-003: the audit flagged that the old SC-003 only compared two isolated stores,
+  // missing the file/SQLite write-path split-brain. This exercises the PRODUCTION wiring:
+  // the `remember` tool WRITE → applyUserMemory READ must share one backend, so the prefix
+  // reflects the write, stays byte-stable, and is independent of insertion order.
+  describe("SC-003 production wiring (tool write → prefix read)", () => {
+    it("the prefix reflects a remembered fact and is insertion-order-independent + byte-stable", async () => {
+      const a = new ToolRegistry();
+      registerMemoryTools(a, { homeDir: home });
+      await a.dispatch("remember", {
+        type: "feedback",
+        scope: "global",
+        name: "alpha_rule",
+        description: "prefer tabs",
+        content: "Always tabs.",
+      });
+      await a.dispatch("remember", {
+        type: "user",
+        scope: "global",
+        name: "beta_rule",
+        description: "kebab filenames",
+        content: "Use kebab-case.",
+      });
+      const forward = applyUserMemory("BASE", { homeDir: home });
+      // The write is visible in the prefix (split-brain would lose it).
+      expect(forward).toContain("alpha_rule");
+      expect(forward).toContain("prefer tabs");
+      // Re-reading the same state is byte-identical (prefix-cache stability).
+      expect(applyUserMemory("BASE", { homeDir: home })).toBe(forward);
+
+      // Reseed the SAME entries in the OPPOSITE order in a fresh db → identical prefix.
+      resetDb();
+      rmSync(home, { recursive: true, force: true });
+      const b = new ToolRegistry();
+      registerMemoryTools(b, { homeDir: home });
+      await b.dispatch("remember", {
+        type: "user",
+        scope: "global",
+        name: "beta_rule",
+        description: "kebab filenames",
+        content: "Use kebab-case.",
+      });
+      await b.dispatch("remember", {
+        type: "feedback",
+        scope: "global",
+        name: "alpha_rule",
+        description: "prefer tabs",
+        content: "Always tabs.",
+      });
+      expect(applyUserMemory("BASE", { homeDir: home })).toBe(forward);
     });
   });
 });

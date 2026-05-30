@@ -1,7 +1,7 @@
 import { basename } from "node:path";
 import { t } from "@/i18n/index.js";
 import { PROJECT_MEMORY_FILE, memoryEnabled, readProjectMemory } from "@/memory/project.js";
-import { type MemoryScope, MemoryStore, effectivePriority } from "@/memory/user.js";
+import { type MemoryScope, effectivePriority, openMemoryStore } from "@/memory/user.js";
 import type { SlashHandler } from "../dispatch.js";
 import { resolveMemoryTarget } from "../helpers.js";
 
@@ -36,7 +36,10 @@ const memory: SlashHandler = (args, _loop, ctx) => {
   if (!ctx.memoryRoot) {
     return { info: t("handlers.memory.noRoot") };
   }
-  const store = new MemoryStore({ projectRoot: ctx.codeRoot, homeDir: ctx.homeDir });
+  const store = openMemoryStore({
+    projectRoot: ctx.codeRoot,
+    homeDir: ctx.homeDir,
+  });
   const { type: typeFilter, rest: filteredArgs } = pickTypeFlag(args);
   const sub = (filteredArgs[0] ?? args[0] ?? "").toLowerCase();
 
@@ -86,7 +89,11 @@ const memory: SlashHandler = (args, _loop, ctx) => {
           .join("\n"),
       };
     } catch (err) {
-      return { info: t("handlers.memory.showFailed", { reason: (err as Error).message }) };
+      return {
+        info: t("handlers.memory.showFailed", {
+          reason: (err as Error).message,
+        }),
+      };
     }
   }
 
@@ -99,11 +106,21 @@ const memory: SlashHandler = (args, _loop, ctx) => {
       const ok = store.delete(resolved.scope, resolved.name);
       return {
         info: ok
-          ? t("handlers.memory.forgetInfo", { scope: resolved.scope, name: resolved.name })
-          : t("handlers.memory.forgetFailed", { scope: resolved.scope, name: resolved.name }),
+          ? t("handlers.memory.forgetInfo", {
+              scope: resolved.scope,
+              name: resolved.name,
+            })
+          : t("handlers.memory.forgetFailed", {
+              scope: resolved.scope,
+              name: resolved.name,
+            }),
       };
     } catch (err) {
-      return { info: t("handlers.memory.forgetError", { reason: (err as Error).message }) };
+      return {
+        info: t("handlers.memory.forgetError", {
+          reason: (err as Error).message,
+        }),
+      };
     }
   }
 
@@ -140,7 +157,9 @@ const memory: SlashHandler = (args, _loop, ctx) => {
       }
     }
     const extra = expiring.length > 0 ? ` (+${expiring.length} global expires=project_end)` : "";
-    return { info: `${t("handlers.memory.cleared", { scope, count: deleted })}${extra}` };
+    return {
+      info: `${t("handlers.memory.cleared", { scope, count: deleted })}${extra}`,
+    };
   }
 
   const parts: string[] = [];

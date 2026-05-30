@@ -1,9 +1,8 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { SqliteMemoryStore } from "../src/adapters/memory-store-sqlite.js";
-import { MemoryStore } from "../src/memory/user.js";
 import { getDb, resetDb } from "../src/storage/db.js";
 
 function tmp(): { home: string; db: string } {
@@ -38,59 +37,108 @@ const ENTRIES = [
 afterEach(() => resetDb());
 
 describe("storage/memory-store-sqlite", () => {
-  it("loadIndexContent is byte-identical to the file backend's loadIndex (SC-003)", async () => {
-    const { home, db: dbPath } = tmp();
-    const fileStore = new MemoryStore({ homeDir: home });
-    const sqlStore = new SqliteMemoryStore(getDb(dbPath));
-    for (const e of ENTRIES) {
-      fileStore.write(e);
-      await sqlStore.write(e);
-    }
-    expect(sqlStore.loadIndexContent("global")).toEqual(fileStore.loadIndex("global"));
+  it("loadIndexContent single-lines descriptions and sorts by `${name}.md` (SC-003)", () => {
+    const store = new SqliteMemoryStore(getDb(tmp().db));
+    for (const e of ENTRIES) store.write(e);
+    const idx = store.loadIndexContent("global");
+    // Sorted by `${name}.md` localeCompare: abc, auth-flow, build-paths.
+    // Newlines in `description` collapse to spaces (prefix byte-stability).
+    expect(idx?.content).toBe(
+      [
+        "- [abc](abc.md) — short",
+        "- [auth-flow](auth-flow.md) — OAuth2 token refresh cycle",
+        "- [build-paths](build-paths.md) — where artifacts live",
+      ].join("\n"),
+    );
+    expect(idx?.truncated).toBe(false);
   });
 
-  it("round-trips through the MemoryStore port", async () => {
+  it("loadIndexContent is insertion-order-independent", () => {
+    const a = new SqliteMemoryStore(getDb(tmp().db));
+    for (const e of ENTRIES) a.write(e);
+    const forward = a.loadIndexContent("global");
+    resetDb();
+    const b = new SqliteMemoryStore(getDb(tmp().db));
+    for (const e of [...ENTRIES].reverse()) b.write(e);
+    expect(b.loadIndexContent("global")).toEqual(forward);
+  });
+
+  it("round-trips a memory and removes it", () => {
     const store = new SqliteMemoryStore(getDb(tmp().db));
-    await store.write(ENTRIES[0]);
-    expect(await store.query("global", "auth-flow")).toMatchObject({
+    store.write(ENTRIES[0]);
+    expect(store.query("global", "auth-flow")).toMatchObject({
       name: "auth-flow",
       description: "OAuth2 token\nrefresh cycle",
       body: "step 1\nstep 2",
     });
-    expect((await store.list("global")).length).toBe(1);
-    expect(await store.remove("global", "auth-flow")).toBe(true);
-    expect(await store.query("global", "auth-flow")).toBeNull();
+    expect(store.list().length).toBe(1);
+    expect(store.remove("global", "auth-flow")).toBe(true);
+    expect(store.query("global", "auth-flow")).toBeNull();
   });
 
-  it("isolates same-named memory across projects (FR-019 PK)", async () => {
+  it("write preserves priority and expires (HIGH PRIORITY block depends on it)", () => {
+    const store = new SqliteMemoryStore(getDb(tmp().db));
+    store.write({
+      name: "hard-rule",
+      type: "feedback",
+      scope: "global",
+      description: "always tabs",
+      body: "no spaces",
+      priority: "high",
+      expires: "project_end",
+    });
+    expect(store.query("global", "hard-rule")).toMatchObject({
+      priority: "high",
+      expires: "project_end",
+    });
+  });
+
+  it("isolates same-named memory across projects (FR-019 PK)", () => {
     const db = getDb(tmp().db);
     const projA = new SqliteMemoryStore(db, "/tmp/projA");
     const projB = new SqliteMemoryStore(db, "/tmp/projB");
-    await projA.write({
+    projA.write({
       name: "shared",
       type: "project",
       scope: "project",
       description: "A",
       body: "a",
     });
-    await projB.write({
+    projB.write({
       name: "shared",
       type: "project",
       scope: "project",
       description: "B",
       body: "b",
     });
-    expect((await projA.query("project", "shared"))?.description).toBe("A");
-    expect((await projB.query("project", "shared"))?.description).toBe("B");
+    expect(projA.query("project", "shared")?.description).toBe("A");
+    expect(projB.query("project", "shared")?.description).toBe("B");
   });
 
-  it("exportMarkdown reproduces the file backend's Markdown (FR-021)", async () => {
-    const { home, db: dbPath } = tmp();
-    const fileStore = new MemoryStore({ homeDir: home });
-    const sqlStore = new SqliteMemoryStore(getDb(dbPath));
-    fileStore.write(ENTRIES[0]);
-    await sqlStore.write(ENTRIES[0]);
-    const fileMd = readFileSync(fileStore.pathFor("global", "auth-flow"), "utf8");
-    expect(sqlStore.exportMarkdown("global", "auth-flow")).toBe(fileMd);
+  it("exportMarkdown single-lines the frontmatter description + keeps priority (FR-021)", () => {
+    const store = new SqliteMemoryStore(getDb(tmp().db));
+    store.write({
+      name: "auth-flow",
+      type: "user",
+      scope: "global",
+      description: "OAuth2 token\nrefresh cycle",
+      body: "step 1\nstep 2",
+      priority: "high",
+    });
+    const today = new Date().toISOString().slice(0, 10);
+    expect(store.exportMarkdown("global", "auth-flow")).toBe(
+      [
+        "---",
+        "name: auth-flow",
+        "description: OAuth2 token refresh cycle",
+        "type: user",
+        "scope: global",
+        `created: ${today}`,
+        "priority: high",
+        "---",
+        "step 1\nstep 2",
+        "",
+      ].join("\n"),
+    );
   });
 });

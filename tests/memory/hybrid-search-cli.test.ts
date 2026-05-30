@@ -2,9 +2,13 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { SqliteMemoryStore } from "../../src/adapters/memory-store-sqlite.js";
 import { memoryStats, rebuildMemoryIndex, searchMemory } from "../../src/cli/commands/memory.js";
-import { MemoryStore } from "../../src/memory/user.js";
+import { openMemoryStore } from "../../src/memory/user.js";
+import { resetDb } from "../../src/storage/db.js";
 
+// SQLite-only: the CLI helpers + the seed store share getDb(), resolved from $HOME — so
+// stub HOME to the tmp home and reset the db singleton each test for isolation.
 describe("memory hybrid search CLI helpers", () => {
   let home: string;
   let projectRoot: string;
@@ -12,9 +16,11 @@ describe("memory hybrid search CLI helpers", () => {
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), "reasonix-memory-cli-home-"));
     projectRoot = mkdtempSync(join(tmpdir(), "reasonix-memory-cli-project-"));
+    vi.stubEnv("HOME", home);
   });
 
   afterEach(() => {
+    resetDb();
     vi.unstubAllEnvs();
     rmSync(home, { recursive: true, force: true });
     rmSync(projectRoot, { recursive: true, force: true });
@@ -36,7 +42,11 @@ describe("memory hybrid search CLI helpers", () => {
 
   it("marks the rebuilt index stale after memory writes and deletes", async () => {
     const store = seedMemory(home, projectRoot);
-    await rebuildMemoryIndex({ homeDir: home, projectRoot, embedText: vectorForText });
+    await rebuildMemoryIndex({
+      homeDir: home,
+      projectRoot,
+      embedText: vectorForText,
+    });
     expect(memoryStats({ homeDir: home, projectRoot }).lexicalStale).toBe(false);
 
     store.write({
@@ -48,7 +58,11 @@ describe("memory hybrid search CLI helpers", () => {
     });
     expect(memoryStats({ homeDir: home, projectRoot }).lexicalStale).toBe(true);
 
-    await rebuildMemoryIndex({ homeDir: home, projectRoot, embedText: vectorForText });
+    await rebuildMemoryIndex({
+      homeDir: home,
+      projectRoot,
+      embedText: vectorForText,
+    });
     expect(memoryStats({ homeDir: home, projectRoot }).lexicalStale).toBe(false);
     store.delete("global", "new_fact");
     expect(memoryStats({ homeDir: home, projectRoot }).lexicalStale).toBe(true);
@@ -56,9 +70,16 @@ describe("memory hybrid search CLI helpers", () => {
 
   it("searches lexical-only by default", async () => {
     seedMemory(home, projectRoot);
-    await rebuildMemoryIndex({ homeDir: home, projectRoot, embedText: vectorForText });
+    await rebuildMemoryIndex({
+      homeDir: home,
+      projectRoot,
+      embedText: vectorForText,
+    });
 
-    const result = await searchMemory("prompt cache 漂移", { homeDir: home, projectRoot });
+    const result = await searchMemory("prompt cache 漂移", {
+      homeDir: home,
+      projectRoot,
+    });
 
     expect(result.mode).toBe("lexical-only");
     expect(result.hits[0]?.entry.name).toBe("prompt_cache");
@@ -66,7 +87,11 @@ describe("memory hybrid search CLI helpers", () => {
 
   it("uses RRF when hybrid is explicitly enabled", async () => {
     seedMemory(home, projectRoot);
-    await rebuildMemoryIndex({ homeDir: home, projectRoot, embedText: vectorForText });
+    await rebuildMemoryIndex({
+      homeDir: home,
+      projectRoot,
+      embedText: vectorForText,
+    });
 
     const result = await searchMemory("unrelated vector should find semantic", {
       homeDir: home,
@@ -81,7 +106,11 @@ describe("memory hybrid search CLI helpers", () => {
 
   it("REASONIX_HYBRID_SEARCH=0 forces lexical-only", async () => {
     seedMemory(home, projectRoot);
-    await rebuildMemoryIndex({ homeDir: home, projectRoot, embedText: vectorForText });
+    await rebuildMemoryIndex({
+      homeDir: home,
+      projectRoot,
+      embedText: vectorForText,
+    });
     vi.stubEnv("REASONIX_HYBRID_SEARCH", "0");
 
     const result = await searchMemory("semantic", {
@@ -96,7 +125,11 @@ describe("memory hybrid search CLI helpers", () => {
 
   it("records access sidecar events for search hits", async () => {
     seedMemory(home, projectRoot);
-    await rebuildMemoryIndex({ homeDir: home, projectRoot, embedText: vectorForText });
+    await rebuildMemoryIndex({
+      homeDir: home,
+      projectRoot,
+      embedText: vectorForText,
+    });
 
     await searchMemory("prompt cache", { homeDir: home, projectRoot, topK: 1 });
 
@@ -107,7 +140,11 @@ describe("memory hybrid search CLI helpers", () => {
 
   it("reports stats without loading code semantic index", async () => {
     seedMemory(home, projectRoot);
-    await rebuildMemoryIndex({ homeDir: home, projectRoot, embedText: vectorForText });
+    await rebuildMemoryIndex({
+      homeDir: home,
+      projectRoot,
+      embedText: vectorForText,
+    });
 
     const stats = memoryStats({ homeDir: home, projectRoot });
 
@@ -118,8 +155,8 @@ describe("memory hybrid search CLI helpers", () => {
   });
 });
 
-function seedMemory(home: string, projectRoot: string): MemoryStore {
-  const store = new MemoryStore({ homeDir: home, projectRoot });
+function seedMemory(home: string, projectRoot: string): SqliteMemoryStore {
+  const store = openMemoryStore({ homeDir: home, projectRoot });
   store.write({
     name: "prompt_cache",
     type: "project",

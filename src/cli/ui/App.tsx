@@ -72,7 +72,7 @@ import {
   renameSession,
   sanitizeName,
 } from "../../memory/session.js";
-import { MemoryStore } from "../../memory/user.js";
+import { openMemoryStore } from "../../memory/user.js";
 import type { EventSink } from "../../ports/event-sink.js";
 import type { QQChannel } from "../../qq/channel.js";
 import { useQQChannel } from "../../qq/use-qq-channel.js";
@@ -3519,7 +3519,7 @@ function AppInner({
             try {
               const cfg = readConfig();
               if (!cfg.memory?.autoCapture || process.env.REASONIX_MEMORY_AUTO === "0") return;
-              const store = new MemoryStore({ projectRoot: currentRootDir });
+              const store = openMemoryStore({ projectRoot: currentRootDir });
               for (const outcome of stopReport.outcomes) {
                 await extractObservationFromHook(
                   stopPayload,

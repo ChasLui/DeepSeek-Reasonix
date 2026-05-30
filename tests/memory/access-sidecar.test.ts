@@ -5,7 +5,6 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,8 +17,11 @@ import {
   loadAccessStats,
   purge,
 } from "../../src/memory/access.js";
-import { MemoryStore } from "../../src/memory/user.js";
+import { openMemoryStore } from "../../src/memory/user.js";
+import { resetDb } from "../../src/storage/db.js";
 
+// SQLite-only: forget/purge run against a SqliteMemoryStore; trash + access sidecars stay
+// on disk under $HOME/memory, so stub HOME and reset the db singleton each test.
 describe("memory access sidecar", () => {
   let home: string;
   let projectRoot: string;
@@ -27,38 +29,46 @@ describe("memory access sidecar", () => {
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), "reasonix-access-home-"));
     projectRoot = mkdtempSync(join(tmpdir(), "reasonix-access-project-"));
+    vi.stubEnv("HOME", home);
   });
 
   afterEach(() => {
+    resetDb();
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     rmSync(home, { recursive: true, force: true });
     rmSync(projectRoot, { recursive: true, force: true });
   });
 
-  it("appends access events without touching markdown files", () => {
-    const store = new MemoryStore({ homeDir: home });
-    const file = store.write({
+  it("appends access events without touching the stored memory row", () => {
+    const store = openMemoryStore({ homeDir: home });
+    store.write({
       name: "cache_rule",
       type: "project",
       scope: "global",
       description: "Cache rule",
       body: "Keep the prefix append-only.",
     });
-    const before = statSync(file).mtimeMs;
+    const before = store.query("global", "cache_rule");
 
-    appendAccess("global", "cache_rule", new Date("2026-05-01T00:00:00Z"), { homeDir: home });
+    appendAccess("global", "cache_rule", new Date("2026-05-01T00:00:00Z"), {
+      homeDir: home,
+    });
 
-    expect(readFileSync(file, "utf8")).toContain("Keep the prefix append-only.");
-    expect(statSync(file).mtimeMs).toBe(before);
+    // Access tracking is a sidecar — the memory row stays byte-identical.
+    expect(store.query("global", "cache_rule")).toEqual(before);
     expect(readFileSync(join(home, "memory", ".access.jsonl"), "utf8")).toContain(
       '"name":"cache_rule"',
     );
   });
 
   it("loads access stats from append-only jsonl", () => {
-    appendAccess("global", "cache_rule", new Date("2026-05-01T00:00:00Z"), { homeDir: home });
-    appendAccess("global", "cache_rule", new Date("2026-05-03T00:00:00Z"), { homeDir: home });
+    appendAccess("global", "cache_rule", new Date("2026-05-01T00:00:00Z"), {
+      homeDir: home,
+    });
+    appendAccess("global", "cache_rule", new Date("2026-05-03T00:00:00Z"), {
+      homeDir: home,
+    });
 
     const stats = loadAccessStats({ homeDir: home });
 
@@ -136,7 +146,7 @@ describe("memory access sidecar", () => {
   });
 
   it("previews forget candidates by default", () => {
-    const store = new MemoryStore({ homeDir: home });
+    const store = openMemoryStore({ homeDir: home });
     store.write({
       name: "old_low",
       type: "project",
@@ -157,7 +167,7 @@ describe("memory access sidecar", () => {
   });
 
   it("soft-deletes forget candidates into trash when apply is set", () => {
-    const store = new MemoryStore({ homeDir: home });
+    const store = openMemoryStore({ homeDir: home });
     store.write({
       name: "old_low",
       type: "project",
@@ -181,7 +191,7 @@ describe("memory access sidecar", () => {
   });
 
   it("purges trash unless CI guard is active", () => {
-    const store = new MemoryStore({ homeDir: home });
+    const store = openMemoryStore({ homeDir: home });
     const trash = join(home, "memory", ".trash");
     mkdirSync(trash, { recursive: true });
     writeFileSync(join(trash, "20260501000000-old_low.md"), "body", {
@@ -202,7 +212,9 @@ describe("memory access sidecar", () => {
     await Promise.all(
       Array.from({ length: 20 }, (_, i) =>
         Promise.resolve().then(() =>
-          appendAccess("global", "cache_rule", new Date(2026, 4, 1, 0, 0, i), { homeDir: home }),
+          appendAccess("global", "cache_rule", new Date(2026, 4, 1, 0, 0, i), {
+            homeDir: home,
+          }),
         ),
       ),
     );

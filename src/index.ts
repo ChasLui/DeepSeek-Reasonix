@@ -75,10 +75,10 @@ export type { ProjectMemory } from "./memory/project.js";
 export {
   MEMORY_INDEX_FILE,
   MEMORY_INDEX_MAX_CHARS,
-  MemoryStore,
   USER_MEMORY_DIR,
   applyMemoryStack,
   applyUserMemory,
+  openMemoryStore,
   projectHash,
   sanitizeMemoryName,
 } from "./memory/user.js";

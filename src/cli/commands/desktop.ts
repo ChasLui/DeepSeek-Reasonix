@@ -73,7 +73,7 @@ import {
   sessionPath,
   timestampSuffix,
 } from "../../memory/session.js";
-import { MemoryStore } from "../../memory/user.js";
+import { openMemoryStore } from "../../memory/user.js";
 import { QQChannel } from "../../qq/channel.js";
 import { SkillStore } from "../../skills.js";
 import { countTokensBounded } from "../../tokenizer.js";
@@ -660,7 +660,7 @@ function emitMcpSpecs(tab: Tab): void {
 
 function emitMemory(tab: Tab): void {
   try {
-    const store = new MemoryStore({ projectRoot: tab.rootDir });
+    const store = openMemoryStore({ projectRoot: tab.rootDir });
     const entries: MemoryEntryInfo[] = store.list().map((e) => ({
       name: e.name,
       scope: e.scope,
