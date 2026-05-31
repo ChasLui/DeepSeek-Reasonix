@@ -13,10 +13,25 @@ export interface IndexCommandOptions {
   dir?: string;
   ollamaUrl?: string;
   yes?: boolean;
+  lexicalOnly?: boolean;
 }
 
 export async function indexCommand(opts: IndexCommandOptions = {}): Promise<void> {
   const root = resolve(opts.dir ?? process.cwd());
+
+  // --lexical-only builds the code-text BM25 index without an embedder,
+  // bypassing the ollama preflight gate (Pillar 5 always-on layer).
+  if (opts.lexicalOnly) {
+    const { buildCodeLexicalIndex } = await import("../../index/lexical/code.js");
+    const t0 = Date.now();
+    const chunks = await buildCodeLexicalIndex(root, {
+      config: loadIndexConfig(),
+    });
+    const seconds = ((Date.now() - t0) / 1000).toFixed(1);
+    process.stderr.write(`✓ lexical index built: ${chunks} chunks in ${seconds}s (no embedder)\n`);
+    return;
+  }
+
   const tty = process.stderr.isTTY === true && process.stdin.isTTY === true;
   const resolved = resolveSemanticEmbeddingConfig();
   const embedding =

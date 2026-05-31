@@ -299,6 +299,8 @@ export interface ReasonixConfig {
   codeRelations?: boolean | CodeRelationsConfig;
   /** Persistent code graph index. REASONIX_CODE_GRAPH=0 bypasses it; body fields are opt-in. */
   codeGraph?: boolean | CodeGraphConfig;
+  /** Pillar 5 opt-in pre-turn retrieval. OFF by default; REASONIX_ACTIVE_RETRIEVAL=1 enables. */
+  activeRetrieval?: boolean | { enabled?: boolean; topK?: number; minScore?: number };
   /** MCP response shielding (shape-aware reduction before head+tail truncation). REASONIX_SHIELD=0 disables. */
   mcpShield?: { enabled?: boolean };
   /** QQ Bot configuration */
@@ -597,6 +599,27 @@ export function resolveCodeGraphEnabled(
 
 export function loadCodeGraphEnabled(path: string = defaultConfigPath()): boolean {
   return resolveCodeGraphEnabled(readConfig(path).codeGraph);
+}
+
+export interface ActiveRetrievalResolved {
+  enabled: boolean;
+  topK: number;
+  minScore: number;
+}
+
+export function resolveActiveRetrieval(
+  cfg?: boolean | { enabled?: boolean; topK?: number; minScore?: number },
+  env: string | undefined = process.env.REASONIX_ACTIVE_RETRIEVAL,
+): ActiveRetrievalResolved {
+  const fromEnv = parseBooleanEnv(env);
+  const obj = typeof cfg === "object" && cfg !== null ? cfg : undefined;
+  const enabled =
+    fromEnv !== null ? fromEnv : typeof cfg === "boolean" ? cfg : (obj?.enabled ?? false);
+  return { enabled, topK: obj?.topK ?? 5, minScore: obj?.minScore ?? 0 };
+}
+
+export function loadActiveRetrieval(path: string = defaultConfigPath()): ActiveRetrievalResolved {
+  return resolveActiveRetrieval(readConfig(path).activeRetrieval);
 }
 
 export function resolveCodeGraphIncludeBody(

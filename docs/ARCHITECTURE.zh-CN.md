@@ -8,7 +8,7 @@ Reasonix **有主见，不追求通用**。每一处抽象都由 DeepSeek 特有
 产品的北极星指标：**便宜到可以一直开着的编码 agent**。一个在后台项目上
 悄悄每月烧掉 $200 的工具，没人会用。下面每个子系统都对这个目标负责。
 
-## 四大支柱
+## 五大支柱
 
 ### 支柱 1 —— Cache-First Loop
 
@@ -366,6 +366,48 @@ registry 很重要。
 `Map<filterId, { hits, savedBytes }>`，在每次成功的 compact 调用时填充。
 `fallback` 有自己的 id，因此行为异常的过滤器可观测而不会让循环崩溃。
 
+### 支柱 5 —— 上下文检索
+
+**问题。** 在大仓库里找代码是 5~20 轮的苦活：模型串联 `search_content` →
+`read_file` → `find_references`，在脑子里融合结果。四套检索索引已存在（BM25、
+语义嵌入、代码关系图、文件名），但各自形态不同，需模型手动编排。
+
+**为何是支柱而非通用功能。** 通用 agent 把检索结果硬塞进 context。支柱 5 是
+**缓存感知检索**——每个设计决策都由支柱 1 的 KV 缓存计费驱动：
+
+- 检索输出**绝不进入不可变前缀**（否则破坏已缓存的字节前缀）；
+- **BM25 永远可用，embedder 可选**——多数用户没有 ollama，默认强制 embedder 是错的；
+- 可选的 turn 前注入只落入**追加日志**，其每轮 cache-miss 成本被**度量并展示**，绝不隐藏。
+
+所以代码关系图 / 语义 / BM25 是支柱 5 的*零件*（如 repair pass 之于支柱 2）；支柱
+本身是喂给模型的那层缓存感知融合。
+
+**方案。** `src/index/retrieval/engine.ts` 的 `retrieveCode()` 把每个来源投影到
+统一的 chunk id（`path:起行-止行`），使 RRF（`src/index/hybrid/fuse.ts`）成为真正的
+融合而非拼接：
+
+```
+query
+ ├─► BM25 over code chunks   （永远可用；不需 embedder）
+ ├─► 语义 cosine              （有 embedder + 索引时）
+ └─► 图扩展                    （标识符样 query → 调用图）
+        │ 统一 docId 投影（relation file:line → 所属 chunk）
+        ▼ fuseRrf(k=60)  →  排序后的 RetrievalHit[]
+```
+
+`find_code` 工具（Tier 0）是模型调用的单一意图入口，取代手动 grep/read 链。它
+**绝不硬错**：无 embedder 时降级为 BM25(+图)；索引未构建时返回
+`reasonix index --lexical-only` 提示。`search_content`（精确串/正则）与
+`find_references`（已知 symbol 的精确关系）保持原样——`find_code` 是附加的模糊意图层。
+
+**P1 边界（不可妥协）。** 检索输出绝不进入不可变前缀。可选的 turn 前主动检索模式
+（默认关闭）把 `role:"user"` 块追加到追加日志，位置在当轮 user 消息**之后**——每次
+触发是一次 cache-miss，成本随对话深度增长，故被度量并展示给用户，不当作免费。
+
+词法索引以文件形式存于 `.reasonix/index/lexical/code.json`，与 embedder 构建解耦，
+故 `reasonix index --lexical-only` 无 ollama 也能用。按 C-002 索引保持文件式（可重建
+的派生状态），不进统一 SQLite 存储。
+
 ### 结构化载荷编码 —— TOON
 
 TOON 紧邻支柱 4，作为载荷的结构化数据路径。协议信封保持 JSON（OpenAI
@@ -405,9 +447,9 @@ function calling；默认的载荷编码器不改变那条协议边界。
 
 ## 持久化代码图索引（lexical+symbol+edge）
 
-`src/index/code-graph/` 是代码关系工具的 JSON 支撑的快速路径，不是第五支柱，
-也不替代 `src/code-query/` 中基于 tree-sitter 的即时路径。设计追踪见
-`docs/plans/2026-05-24-codegraph-borrow-ral.md`。
+`src/index/code-graph/` 是代码关系工具的 JSON 支撑的快速路径，也是支柱 5 的结构化
+来源之一（见支柱 5 —— 上下文检索）；它不替代 `src/code-query/` 中基于 tree-sitter
+的即时路径。设计追踪见 `docs/plans/2026-05-24-codegraph-borrow-ral.md`。
 
 `reasonix code-index rebuild` 在 `.reasonix/index/code-graph/` 下写入确定性
 工件：`nodes.json`、`edges.json`、`bm25.json`、`files-stamps.json`。四个文件
@@ -424,6 +466,28 @@ function calling；默认的载荷编码器不改变那条协议边界。
 `REASONIX_CODE_GRAPH=0` 绕过整层；`REASONIX_CODE_GRAPH_BODY=1` 是写入节点
 `signature` / `docstring` 字段的前置条件。遥测和 doctor 输出只报告计数、
 大小、耗时和 stale 比例。
+
+## 持久化 —— 统一 SQLite 存储
+
+位于 `~/.reasonix/reasonix.db` 的单个 SQLite 数据库（WAL 模式，
+`auto_vacuum=INCREMENTAL`）是用量记账、事件日志、会话元数据/消息，以及
+用户/项目记忆的**唯一**后端。没有文件/JSONL 后端，没有 `.store-version`
+开关，也没有 `migrate-store` 命令——这些过渡件在发布前已移除。`node:sqlite`
+被隔离在 `src/storage/db.ts`（单个 `DatabaseSync` 单例）；连接在进程退出时
+checkpoint WAL，使 `quitProcess` 的 `process.exit(0)` 永不丢掉最后一轮的帧。
+Schema 迁移是只进的（`src/storage/schema.ts`）。
+
+仍保持文件支撑（有意 OUT of DB）：语义索引、code-graph、BM25 工件、内存
+工具缓存，以及配置（`.toon`/`.json`）。这是既定决策
+（`2026-05-30-sqlite-unified-storage-ral.md` C-002），不是待办迁移。它们是
+**按项目（per-project）、可重建的派生索引**，而非权威关系型 state，且从 SQL
+得不到 query/latency 收益（4.9MB 的图 <50ms 载入，impact 封顶 depth-2）。
+code-graph 的一等 `?:` 未解析引用 sentinel target（`loader.ts`
+`assertEdgesReferenceNodes`）还与 SQL 外键不兼容——而外键正是关系型后端唯一
+能新增的完整性特性。注意作用域差异：DB 是 per-user（`~/.reasonix/reasonix.db`），
+而 code-graph 是 per-project（`<root>/.reasonix/index/`），因此未来若要搬，
+也必须搬进 per-repo 的表，绝不是共享的用户级 DB。BM25→FTS5 是独立 plan，
+仅在出现真实全文需求时重开。
 
 ## 模块布局
 
@@ -522,7 +586,8 @@ src/
 ## 明确的非目标
 
 - 把多 agent 编排作为一等概念（子 agent 是成本削减机制，而非协调原语）。
-- RAG / 向量检索。
+- 针对任意文档或网页的通用 RAG / 向量检索。（仓库内代码检索是一等公民——见支柱 5
+  —— 上下文检索——但它保持缓存感知且仅限代码，不是通用 RAG 栈。）
 - 支持非 DeepSeek 后端（一个 OpenAI 兼容的 shim 今天可通过 `--model`
   覆盖工作，但未经测试）。
 - Web UI / SaaS。

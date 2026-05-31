@@ -10,7 +10,7 @@ The product north star: **coding agent that stays cheap enough to leave on**.
 A tool that quietly burns $200/month on a background project is one nobody
 uses. Every subsystem below is answerable to that goal.
 
-## The four pillars
+## The five pillars
 
 ### Pillar 1 — Cache-First Loop
 
@@ -452,6 +452,59 @@ misbehaving filter is observable without crashing the loop.
 
 **MCP response shielding.** `flattenMcpResult` applies a shape-aware pre-pass (`src/mcp/shield.ts`) before head+tail truncation: (1) array cap ≤ 50 items, (2) heavy-field strip on array-of-objects keeping 20 signal fields, (3) string cap ≤ 8 KB, (4) total cap ≤ 64 KB with iterative shrink and image-only fail-close stub. Pure function, stateless — no stats accumulation. Kill switch: `REASONIX_SHIELD=0` or `config.mcpShield.enabled = false`. Borrowed from harshal-mcp-proxy (MIT); see `THIRD_PARTY_NOTICES.md`.
 
+### Pillar 5 — Context Retrieval
+
+**Problem.** Finding code in a large repo is a 5–20 turn grind: the model
+chains `search_content` → `read_file` → `find_references` and fuses the results
+in its head. Four retrieval indexes already exist (BM25, semantic embeddings,
+the code-graph, filename) but each returns a different shape and the agent
+orchestrates them by hand.
+
+**Why this is a pillar, not a generic feature.** A generic agent bolts
+retrieval on by stuffing results into context. Pillar 5 is **cache-aware
+retrieval** — every design decision is forced by Pillar 1's KV-cache billing:
+
+- retrieval output **never enters the immutable prefix** (that would break the
+  cached byte-prefix);
+- **BM25 is always-on, the embedder is optional** — most users have no ollama,
+  so paying for an embedder on every repo is the wrong default;
+- the opt-in pre-turn injection lands only in the **append-only log** and its
+  per-turn cache-miss cost is **measured and surfaced**, never hidden.
+
+So code-graph / semantic / BM25 are *parts* of Pillar 5 (as repair passes are
+parts of Pillar 2); the pillar is the cache-aware fusion that feeds the model.
+
+**Solution.** `src/index/retrieval/engine.ts` `retrieveCode()` projects every
+source onto a canonical chunk id (`path:startLine-endLine`) so RRF
+(`src/index/hybrid/fuse.ts`) is a real fusion, not a concat:
+
+```
+query
+ ├─► BM25 over code chunks   (always-on; no embedder needed)
+ ├─► semantic cosine          (if an embedder + index exist)
+ └─► graph expansion          (identifier-like queries → call graph)
+        │ canonical docId projection (relation file:line → owning chunk)
+        ▼ fuseRrf(k=60)  →  ranked RetrievalHit[]
+```
+
+The `find_code` tool (Tier 0) is the single intent-driven entry the model calls
+instead of the manual grep/read chain. It **never hard-fails**: with no embedder
+it degrades to BM25 (+graph); with no index built it returns a
+`reasonix index --lexical-only` hint. `search_content` (exact string/regex) and
+`find_references` (precise relations of a known symbol) stay as-is — `find_code`
+is the additive fuzzy-intent layer.
+
+**P1 boundary (non-negotiable).** Retrieval output never enters the immutable
+prefix. The optional pre-turn active-retrieval mode (off by default) appends a
+`role:"user"` block to the append-only log *after* the turn's user message —
+each firing is one cache-miss whose cost grows with conversation depth, so it is
+metered and shown to the user, not treated as free.
+
+The lexical index is file-backed under `.reasonix/index/lexical/code.json`,
+decoupled from the embedder build so `reasonix index --lexical-only` works with
+no ollama. Per C-002 the indexes stay file-backed (rebuildable derived state),
+not in the unified SQLite store.
+
 ### Structured Payload Encoding — TOON
 
 TOON sits beside Pillar 4 as the structured-data path for payloads. Protocol
@@ -498,10 +551,10 @@ protocol boundary.
 
 ## Persistent code-graph index (lexical+symbol+edge)
 
-`src/index/code-graph/` is a JSON-backed fast path for code relation tools, not
-a fifth pillar and not a replacement for the tree-sitter immediate path in
-`src/code-query/`. The design is tracked in
-`docs/plans/2026-05-24-codegraph-borrow-ral.md`.
+`src/index/code-graph/` is a JSON-backed fast path for code relation tools and
+one of Pillar 5's structural sources (see Pillar 5 — Context Retrieval); it does
+not replace the tree-sitter immediate path in `src/code-query/`. The design is
+tracked in `docs/plans/2026-05-24-codegraph-borrow-ral.md`.
 
 `reasonix code-index rebuild` writes deterministic artifacts under
 `.reasonix/index/code-graph/`: `nodes.json`, `edges.json`, `bm25.json`, and
@@ -547,6 +600,16 @@ drops the last turn's frames. Schema migrations are forward-only
 
 Still file-backed (intentionally OUT of the DB): the semantic index, the
 code-graph, BM25 artifacts, in-memory tool caches, and config (`.toon`/`.json`).
+This is a standing decision (`2026-05-30-sqlite-unified-storage-ral.md` C-002),
+not a pending migration. They are per-project, rebuildable derived indexes — not
+authoritative relational state — and gain no query/latency win from SQL (a 4.9 MB
+graph loads in <50 ms; impact is depth-2 bounded). The code-graph's first-class
+`?:` unresolved-ref sentinel targets (`loader.ts` `assertEdgesReferenceNodes`) are
+also incompatible with SQL foreign keys, the one integrity feature a relational
+backend would add. Note the scope split: the DB is per-user
+(`~/.reasonix/reasonix.db`) while the code-graph is per-project
+(`<root>/.reasonix/index/`), so any future move must target a per-repo table, never
+the shared user DB. BM25→FTS5 is a separate plan, gated on a real full-text need.
 
 ## Module layout
 
@@ -648,7 +711,9 @@ means editing one handler file and one registry line.
 
 - Multi-agent orchestration as a first-class concept (subagents are a
   cost-reduction mechanism, not a coordination primitive).
-- RAG / vector retrieval.
+- Generic RAG / vector retrieval over arbitrary docs or the web. (In-repo code
+  retrieval is first-class — see Pillar 5 — Context Retrieval — but it stays
+  cache-aware and code-only, not a general RAG stack.)
 - Support for non-DeepSeek backends (an OpenAI-compatible shim would
   work today via `--model` override, but is not tested).
 - Web UI / SaaS.

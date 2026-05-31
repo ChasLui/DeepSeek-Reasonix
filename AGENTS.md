@@ -1,6 +1,6 @@
 # Repository Guidelines
 
-> Also read [`REASONIX.md`](./REASONIX.md) (working knowledge), [`CONTRIBUTING.md`](./CONTRIBUTING.md) (code rules — strictly enforced), [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) (four pillars), [`.wolf/OPENWOLF.md`](./.wolf/OPENWOLF.md) (OpenWolf agent harness protocol — cerebrum / anatomy / buglog / memory.md mandate), and [`bin/plan-lint.sh`](./bin/plan-lint.sh) (RAL plan structure enforcement). This file is the index; those are the source of truth.
+> Also read [`REASONIX.md`](./REASONIX.md) (working knowledge), [`CONTRIBUTING.md`](./CONTRIBUTING.md) (code rules — strictly enforced), [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) (five pillars), [`.wolf/OPENWOLF.md`](./.wolf/OPENWOLF.md) (OpenWolf agent harness protocol — cerebrum / anatomy / buglog / memory.md mandate), and [`bin/plan-lint.sh`](./bin/plan-lint.sh) (RAL plan structure enforcement). This file is the index; those are the source of truth.
 
 ## What this is
 
@@ -74,14 +74,15 @@ Run a single test file: `npx vitest run tests/loop.test.ts`. Filter by name: `np
 
 Desktop (separate workspace, not part of root build): `cd desktop && npm install && npm run tauri dev` (or `npm run dev` / `npm run build`).
 
-## Architecture — the four pillars
+## Architecture — the five pillars
 
-Edits to `src/loop.ts`, `src/repair/`, `src/tools/`, `src/mcp/` affect every session. Test before touching. Authoritative definitions live in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md#the-four-pillars); the list below is index-level only.
+Edits to `src/loop.ts`, `src/repair/`, `src/tools/`, `src/mcp/` affect every session. Test before touching. Authoritative definitions live in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md#the-five-pillars); the list below is index-level only.
 
 1. **Cache-first loop** (`src/loop.ts`, `src/memory.ts`) — immutable prefix + append-only log + volatile scratch; any rewrite of earlier turns is a cache-correctness bug.
 2. **Tool-call repair** (`src/repair/`) — four passes: `flatten` / `scavenge` / `truncation` / `storm`; DeepSeek-specific failure modes, not generic safety nets.
 3. **Cost control** (`src/loop.ts` + `src/cli/ui/slash/handlers/`) — tiered `flash`/`auto`/`pro`, `TURN_END_RESULT_CAP_TOKENS=3000`, `/pro` one-shot, failure auto-escalation thr 3; auxiliary calls hard-coded `v4-flash + effort=high`.
 4. **Output compaction** (`src/compact/`) — `rtk`-inspired per-command filter for `run_command` + `read_file level: "aggressive"`; kill-switch `REASONIX_COMPACT=0` / `REASONIX_TEE=0`.
+5. **Context retrieval** (`src/index/retrieval/`, `src/index/lexical/`) — cache-aware hybrid (BM25 always-on + optional semantic + graph) fused behind `find_code` (Tier 0); retrieval output never enters the immutable prefix (Pillar 1).
 
 Non-pillar but mandatory: **Parallel tool dispatch** — `parallelSafe?: boolean` (default false), `REASONIX_PARALLEL_MAX=3` (cap 16), `REASONIX_TOOL_DISPATCH=serial` escape; details in `docs/ARCHITECTURE.md`.
 
@@ -89,7 +90,7 @@ Non-pillar but mandatory: **Parallel tool dispatch** — `parallelSafe?: boolean
 
 Three triggers — any one applies, draft a RAL plan under `docs/plans/YYYY-MM-DD-<name>-ral.md` before coding:
 
-1. **Touches the four-pillar core** (`src/loop.ts`, `src/repair/`, `src/tools/`, `src/mcp/`) with > trivial single-line scope.
+1. **Touches the pillar core** (`src/loop.ts`, `src/repair/`, `src/tools/`, `src/mcp/`, `src/index/retrieval/`) with > trivial single-line scope.
 2. **Borrows from another repo** — plan must attest authoritative source via `git rev-parse HEAD` + specific `file:line` anchors (cerebrum `plan-borrow-authoritative-grep-first`).
 3. **Multi-step refactor or feature** with ≥ 2 vertical slices, or any work whose verification needs >2 tool calls.
 
