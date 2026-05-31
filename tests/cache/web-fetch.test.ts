@@ -275,6 +275,7 @@ describe("WebFetchCache", () => {
         sizeBytes: 0,
         entries: 0,
         skipped: 0,
+        revalidations: 0,
       });
     } finally {
       globalThis.fetch = originalFetch;
@@ -303,6 +304,108 @@ describe("WebFetchCache", () => {
 
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);
       expect(cache.stats()).toMatchObject({ hits: 1, misses: 1 });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("revalidates a stale entry via If-None-Match and reuses the body on 304", async () => {
+    const originalFetch = globalThis.fetch;
+    const cache = new WebFetchCache({ ttlMs: 1, staleTtlMs: 60_000 });
+    let call = 0;
+    globalThis.fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+      call++;
+      if (call === 1) {
+        return new Response("<html><body><p>v1 body</p></body></html>", {
+          status: 200,
+          headers: { "Content-Type": "text/html", ETag: '"abc"' },
+        });
+      }
+      expect(new Headers(init?.headers).get("If-None-Match")).toBe('"abc"');
+      return new Response(null, { status: 304 });
+    }) as unknown as typeof fetch;
+    try {
+      const first = await webFetch("https://example.com/etag", {
+        cache,
+        maxChars: 500,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const second = await webFetch("https://example.com/etag", {
+        cache,
+        maxChars: 500,
+      });
+
+      expect(first.text).toContain("v1 body");
+      expect(second.text).toContain("v1 body");
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+      expect(cache.stats()).toMatchObject({ revalidations: 1 });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("replaces a stale entry when revalidation returns 200 with fresh content", async () => {
+    const originalFetch = globalThis.fetch;
+    const cache = new WebFetchCache({ ttlMs: 1, staleTtlMs: 60_000 });
+    let call = 0;
+    globalThis.fetch = vi.fn(async () => {
+      call++;
+      return new Response(`<html><body><p>v${call} body</p></body></html>`, {
+        status: 200,
+        headers: { "Content-Type": "text/html", ETag: `"v${call}"` },
+      });
+    }) as unknown as typeof fetch;
+    try {
+      const first = await webFetch("https://example.com/changed", {
+        cache,
+        maxChars: 500,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const second = await webFetch("https://example.com/changed", {
+        cache,
+        maxChars: 500,
+      });
+
+      expect(first.text).toContain("v1 body");
+      expect(second.text).toContain("v2 body");
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+      expect(cache.stats()).toMatchObject({ revalidations: 0 });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("sends Last-Modified as If-Modified-Since when no ETag is present", async () => {
+    const originalFetch = globalThis.fetch;
+    const cache = new WebFetchCache({ ttlMs: 1, staleTtlMs: 60_000 });
+    let call = 0;
+    globalThis.fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+      call++;
+      if (call === 1) {
+        return new Response("<html><body><p>lm body</p></body></html>", {
+          status: 200,
+          headers: {
+            "Content-Type": "text/html",
+            "Last-Modified": "Wed, 21 Oct 2025 07:28:00 GMT",
+          },
+        });
+      }
+      expect(new Headers(init?.headers).get("If-Modified-Since")).toBe(
+        "Wed, 21 Oct 2025 07:28:00 GMT",
+      );
+      return new Response(null, { status: 304 });
+    }) as unknown as typeof fetch;
+    try {
+      await webFetch("https://example.com/lastmod", { cache, maxChars: 500 });
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const second = await webFetch("https://example.com/lastmod", {
+        cache,
+        maxChars: 500,
+      });
+
+      expect(second.text).toContain("lm body");
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+      expect(cache.stats()).toMatchObject({ revalidations: 1 });
     } finally {
       globalThis.fetch = originalFetch;
     }

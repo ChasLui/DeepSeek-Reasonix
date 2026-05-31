@@ -660,6 +660,16 @@ export async function webFetch(
   if (opts.signal?.aborted) throw opts.signal.reason ?? new Error("aborted");
   const cached = opts.cache?.get(url, maxChars);
   if (cached) return cached;
+  // Stale-but-revalidatable entry: send a conditional GET so an unchanged page
+  // comes back as a cheap 304 instead of a full re-download.
+  const revalidation = opts.cache?.getRevalidation(url, maxChars) ?? null;
+  const condHeaders: Record<string, string> = {};
+  if (revalidation?.validators.etag) {
+    condHeaders["If-None-Match"] = revalidation.validators.etag;
+  }
+  if (revalidation?.validators.lastModified) {
+    condHeaders["If-Modified-Since"] = revalidation.validators.lastModified;
+  }
   const ctl = new AbortController();
   // Track whether the abort came from our internal timer vs the caller's
   // signal — only the timer-driven abort should produce a "timed out" hint.
@@ -674,7 +684,11 @@ export async function webFetch(
   let resp: Response;
   try {
     resp = await fetch(url, {
-      headers: { "User-Agent": USER_AGENT, Accept: "text/html,text/plain,*/*" },
+      headers: {
+        "User-Agent": USER_AGENT,
+        Accept: "text/html,text/plain,*/*",
+        ...condHeaders,
+      },
       signal: ctl.signal,
       redirect: "follow",
     });
@@ -686,6 +700,10 @@ export async function webFetch(
   } finally {
     clearTimeout(timer);
     opts.signal?.removeEventListener("abort", cancel);
+  }
+  if (resp.status === 304 && revalidation) {
+    opts.cache?.markRevalidated(url, maxChars);
+    return revalidation.page;
   }
   if (!resp.ok) throw new Error(fetchStatusError(resp.status, url));
   const cacheable = shouldCacheWebFetchResponse(resp);
@@ -710,7 +728,12 @@ export async function webFetch(
     ? `${text.slice(0, maxChars)}\n\n[… truncated ${text.length - maxChars} chars …]`
     : text;
   const page = { url, title, text: finalText, truncated };
-  if (cacheable) opts.cache?.set(url, maxChars, page);
+  if (cacheable) {
+    opts.cache?.set(url, maxChars, page, {
+      etag: resp.headers.get("etag") ?? undefined,
+      lastModified: resp.headers.get("last-modified") ?? undefined,
+    });
+  }
   return page;
 }
 

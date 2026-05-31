@@ -8,21 +8,35 @@ export interface WebFetchCacheStats {
   sizeBytes: number;
   entries: number;
   skipped: number;
+  revalidations: number;
 }
 
 export interface WebFetchCacheOptions {
   ttlMs?: number;
+  staleTtlMs?: number;
   maxEntries?: number;
   maxSizeBytes?: number;
   entrySizeLimitBytes?: number;
 }
 
+/** Validators stored with the body so a stale entry can be revalidated cheaply. */
+export interface WebFetchValidators {
+  etag?: string;
+  lastModified?: string;
+}
+
 interface StoredWebFetchEntry {
   page: PageContent;
   sizeBytes: number;
+  storedAt: number;
+  etag?: string;
+  lastModified?: string;
 }
 
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
+// Stale-but-revalidatable window: entries past the fresh TTL are kept this long
+// so a conditional request (If-None-Match) can refresh them with a cheap 304.
+const DEFAULT_STALE_TTL_MS = 60 * 60 * 1000;
 const DEFAULT_MAX_ENTRIES = 50;
 const DEFAULT_MAX_SIZE_BYTES = 5 * 1024 * 1024;
 const DEFAULT_ENTRY_SIZE_LIMIT_BYTES = 512 * 1024;
@@ -58,16 +72,26 @@ const SENSITIVE_QUERY_RE =
 
 export class WebFetchCache {
   private readonly cache: LRUCache<string, StoredWebFetchEntry>;
+  private readonly freshTtlMs: number;
   private hits = 0;
   private misses = 0;
   private evictions = 0;
   private skipped = 0;
+  private revalidations = 0;
   private readonly disabled: boolean;
   private readonly entrySizeLimitBytes: number;
 
   constructor(opts: WebFetchCacheOptions = {}) {
     const ttlMs =
       readPositiveIntEnv("REASONIX_WEB_FETCH_CACHE_TTL_MS") ?? opts.ttlMs ?? DEFAULT_TTL_MS;
+    // Hard TTL keeps validators alive past freshness for conditional revalidation.
+    const staleTtlMs = Math.max(
+      ttlMs,
+      readPositiveIntEnv("REASONIX_WEB_FETCH_CACHE_STALE_MS") ??
+        opts.staleTtlMs ??
+        DEFAULT_STALE_TTL_MS,
+    );
+    this.freshTtlMs = ttlMs;
     const maxSizeBytes =
       readPositiveIntEnv("REASONIX_WEB_FETCH_CACHE_BYTES") ??
       opts.maxSizeBytes ??
@@ -77,7 +101,9 @@ export class WebFetchCache {
     this.cache = new LRUCache<string, StoredWebFetchEntry>({
       max: opts.maxEntries ?? DEFAULT_MAX_ENTRIES,
       maxSize: maxSizeBytes,
-      ttl: ttlMs,
+      ttl: staleTtlMs,
+      allowStale: true,
+      noDeleteOnStaleGet: true,
       sizeCalculation: (entry) => entry.sizeBytes,
       dispose: (_entry, _key, reason) => {
         if (reason === "evict" || reason === "expire") this.evictions++;
@@ -96,7 +122,9 @@ export class WebFetchCache {
       return null;
     }
     const hit = this.cache.get(key);
-    if (!hit) {
+    // Only a still-fresh entry is a direct hit; a stale-but-kept entry falls
+    // through to a miss so the caller can revalidate it conditionally.
+    if (!hit || Date.now() - hit.storedAt >= this.freshTtlMs) {
       this.misses++;
       return null;
     }
@@ -104,7 +132,34 @@ export class WebFetchCache {
     return copyPage(hit.page);
   }
 
-  set(url: string, maxChars: number, page: PageContent): void {
+  /** A stale entry that still carries a validator, for a conditional GET. */
+  getRevalidation(
+    url: string,
+    maxChars: number,
+  ): { page: PageContent; validators: WebFetchValidators } | null {
+    if (this.disabled) return null;
+    const key = webFetchCacheKey(url, maxChars);
+    if (!key) return null;
+    const entry = this.cache.get(key);
+    if (!entry || (!entry.etag && !entry.lastModified)) return null;
+    return {
+      page: copyPage(entry.page),
+      validators: { etag: entry.etag, lastModified: entry.lastModified },
+    };
+  }
+
+  /** Mark a stale entry fresh again after a 304 Not Modified. */
+  markRevalidated(url: string, maxChars: number): void {
+    if (this.disabled) return;
+    const key = webFetchCacheKey(url, maxChars);
+    if (!key) return;
+    const entry = this.cache.get(key);
+    if (!entry) return;
+    this.cache.set(key, { ...entry, storedAt: Date.now() });
+    this.revalidations++;
+  }
+
+  set(url: string, maxChars: number, page: PageContent, validators?: WebFetchValidators): void {
     if (this.disabled) return;
     const key = webFetchCacheKey(url, maxChars);
     if (!key) {
@@ -116,7 +171,13 @@ export class WebFetchCache {
       this.skipped++;
       return;
     }
-    this.cache.set(key, { page: copyPage(page), sizeBytes });
+    this.cache.set(key, {
+      page: copyPage(page),
+      sizeBytes,
+      storedAt: Date.now(),
+      etag: validators?.etag,
+      lastModified: validators?.lastModified,
+    });
   }
 
   invalidateAll(): void {
@@ -132,6 +193,7 @@ export class WebFetchCache {
         sizeBytes: 0,
         entries: 0,
         skipped: 0,
+        revalidations: 0,
       };
     }
     return {
@@ -141,6 +203,7 @@ export class WebFetchCache {
       sizeBytes: this.cache.calculatedSize ?? 0,
       entries: this.cache.size,
       skipped: this.skipped,
+      revalidations: this.revalidations,
     };
   }
 
