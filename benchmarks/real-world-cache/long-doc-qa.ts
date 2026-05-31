@@ -16,7 +16,7 @@ const BENCH_NAME = "long-doc-qa";
 const MODEL = "deepseek-v4-flash";
 const DOC_BYTES = 8192;
 const QUESTIONS = [
-  "Summarize the four Reasonix architecture pillars in three bullets.",
+  "Summarize the five Reasonix architecture pillars in three bullets.",
   "Which cache-first invariants matter most for prompt cache stability?",
   "What operational checks would you inspect before changing the loop?",
 ] as const;
@@ -30,7 +30,10 @@ async function main(): Promise<void> {
     return;
   }
   const turns = parseTurns(3);
-  const doc = readFileSync(join(repoRoot, "docs", "ARCHITECTURE.md"), "utf8").slice(0, DOC_BYTES);
+  const doc = readFileSync(
+    join(repoRoot, "docs", "ARCHITECTURE.md"),
+    "utf8",
+  ).slice(0, DOC_BYTES);
   const client = new DeepSeekClient({ timeoutMs: 660_000 });
   const rows: BenchRow[] = [];
   await warmPrefix(client, doc);
@@ -40,7 +43,8 @@ async function main(): Promise<void> {
     const messages: ChatMessage[] = [
       {
         role: "system",
-        content: "You answer questions about the supplied architecture document concisely.",
+        content:
+          "You answer questions about the supplied architecture document concisely.",
       },
       {
         role: "user",
@@ -75,7 +79,9 @@ function parseTurns(defaultTurns: number): number {
 }
 
 function assertHitAfterFirstTurn(rows: readonly BenchRow[]): void {
-  const misses = rows.slice(1).filter((row) => row.prompt_cache_hit_tokens <= 0);
+  const misses = rows
+    .slice(1)
+    .filter((row) => row.prompt_cache_hit_tokens <= 0);
   if (misses.length > 0) {
     throw new Error("expected prompt_cache_hit_tokens > 0 from turn 2 onward");
   }
@@ -87,7 +93,8 @@ async function warmPrefix(client: DeepSeekClient, doc: string): Promise<void> {
     messages: [
       {
         role: "system",
-        content: "You answer questions about the supplied architecture document concisely.",
+        content:
+          "You answer questions about the supplied architecture document concisely.",
       },
       {
         role: "user",
