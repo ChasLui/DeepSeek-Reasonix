@@ -40,12 +40,19 @@ import { pauseGate } from "../../core/pause-gate.js";
 import { autoResolveVerdict } from "../../core/pause-policy.js";
 import { loadDotenv } from "../../env.js";
 import { t } from "../../i18n/index.js";
-import { CacheFirstLoop, ImmutablePrefix } from "../../index.js";
+import { CacheFirstLoop, ImmutablePrefix, PREFIX_MAX_TIER } from "../../index.js";
 import { McpClient } from "../../mcp/client.js";
 import { preflightStdioSpec } from "../../mcp/preflight.js";
 import { bridgeMcpTools } from "../../mcp/registry.js";
 import { buildTransportFromSpec } from "../../mcp/transport-from-spec.js";
 import { timestampSuffix } from "../../memory/session.js";
+import { resolveCatalogSkills } from "../../skills.js";
+import { getDb } from "../../storage/db.js";
+import {
+  activateToolTiering,
+  applyMcpServerTier,
+  resolveMcpDefaultTier,
+} from "../../tools/tiering.js";
 import { applySessionToolset } from "../../tools/toolset.js";
 import { openTranscriptFile, recordFromLoopEvent, writeRecord } from "../../transcript/log.js";
 import { VERSION } from "../../version.js";
@@ -117,11 +124,13 @@ export async function loadMcpServers(
         registry: tools,
         namePrefix: prefix,
         serverName: label,
+        mcpDefaultTier: resolveMcpDefaultTier(cfg),
         onSlow: (info) =>
           process.stderr.write(
             `${formatMcpSlowToast({ name: info.serverName, p95Ms: info.p95Ms, sampleSize: info.sampleSize })}\n`,
           ),
       });
+      applyMcpServerTier(tools, bridge.registeredNames, cfg);
       process.stderr.write(
         `${formatMcpLifecycleEvent({
           state: "connected",
@@ -169,9 +178,18 @@ async function buildSession(opts: {
     modelId: model,
   });
   const client = getOrCreateDeepSeekClient({ baseUrl: loadBaseUrl() });
+  // Tiered exposure (FR-005): defer bloated tool sets to the searchable catalog
+  // and append the capability-hint. No-op without `toolTiers` config (FR-010).
+  const tieringCfg = readConfig();
+  const tiering = activateToolTiering(
+    toolset.tools,
+    tieringCfg,
+    getDb(),
+    resolveCatalogSkills({ projectRoot: opts.rootDir, cfg: tieringCfg }),
+  );
   const prefix = new ImmutablePrefix({
-    system,
-    toolSpecs: toolset.tools.specs(),
+    system: system + tiering.capabilityHint,
+    toolSpecs: toolset.tools.filteredSpecs(PREFIX_MAX_TIER),
   });
   const loop = new CacheFirstLoop({
     client,

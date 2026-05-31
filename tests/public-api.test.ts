@@ -147,6 +147,7 @@ const PUBLIC_API: readonly string[] = [
   "MemoryWriteInput",
   "MessagesWithPrefix",
   "NeedsConfirmationError",
+  "PREFIX_MAX_TIER",
   "PROJECT_MEMORY_FILE",
   "PROJECT_MEMORY_FILES",
   "PROJECT_MEMORY_MAX_CHARS",

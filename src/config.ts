@@ -179,6 +179,15 @@ export interface ReasonixConfig {
   toolsets?: Record<string, string[]>;
   /** Session-start tool selection: a group name, a tool name, or a list of either. Absent ⟹ all tools load (current behavior); essential tools are always kept. Env `REASONIX_TOOLSET` overrides; `REASONIX_TOOLGATE=0` disables gating. */
   defaultToolset?: string | string[];
+  /** Tiered tool exposure (FR-005) — keeps bloated MCP/tool sets out of the prefix until search_tools unlocks them, fighting lost-in-the-middle without breaking the prefix cache. ABSENT ⟹ every tool stays in the prefix (byte-identical to today, FR-010). */
+  toolTiers?: {
+    /** Per-tool-name tier override: 0/1 = always in prefix, 2 = deferred (catalog-only, reachable via search_tools). */
+    tiers?: Record<string, number>;
+    /** Default tier for every bridged MCP tool. Absent/0 ⟹ MCP tools enter the prefix as today; set 2 to defer all of them. */
+    mcpDefaultTier?: number;
+    /** Auto-defer a server's tools to Tier 2 once it bridges ≥ this many (fights single-server bloat, e.g. GitHub MCP's ~50 tools). Absent ⟹ no count-based auto-defer. */
+    mcpDeferThreshold?: number;
+  };
   session?: string | null;
   setupCompleted?: boolean;
   search?: boolean;

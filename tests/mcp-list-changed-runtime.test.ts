@@ -47,7 +47,9 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("../src/mcp/client.js", () => ({ McpClient: mocks.FakeMcpClient }));
 vi.mock("../src/mcp/preflight.js", () => ({ preflightStdioSpec: vi.fn() }));
-vi.mock("../src/mcp/transport-from-spec.js", () => ({ buildTransportFromSpec: vi.fn(() => ({})) }));
+vi.mock("../src/mcp/transport-from-spec.js", () => ({
+  buildTransportFromSpec: vi.fn(() => ({})),
+}));
 vi.mock("../src/mcp/inspect.js", () => ({
   inspectMcpServer: vi.fn(async () => ({
     protocolVersion: "2024-11-05",
@@ -86,6 +88,10 @@ describe("createMcpRuntime listChanged handling", () => {
       prefix: {
         addTool: (spec: { function: { name: string } }) => added.push(spec.function.name),
         removeTool: vi.fn(),
+      },
+      reconcilePrefixTool: (spec: { function: { name: string } }) => {
+        added.push(spec.function.name);
+        return true;
       },
     };
     const runtime = createMcpRuntime({
@@ -131,6 +137,10 @@ describe("createMcpRuntime listChanged handling", () => {
         addTool: (spec: { function: { name: string } }) => added.push(spec.function.name),
         removeTool: (name: string) => removed.push(name),
       },
+      reconcilePrefixTool: (spec: { function: { name: string } }) => {
+        added.push(spec.function.name);
+        return true;
+      },
     };
     const runtime = createMcpRuntime({
       getTools: () => registry,
@@ -143,9 +153,15 @@ describe("createMcpRuntime listChanged handling", () => {
 
     await runtime.addSpec("srv=cmd", loop as never);
     selection = new Set();
-    expect(await runtime.refilter(loop as never)).toEqual({ added: [], removed: ["srv_a"] });
+    expect(await runtime.refilter(loop as never)).toEqual({
+      added: [],
+      removed: ["srv_a"],
+    });
     selection = new Set(["srv_a"]);
-    expect(await runtime.refilter(loop as never)).toEqual({ added: ["srv_a"], removed: [] });
+    expect(await runtime.refilter(loop as never)).toEqual({
+      added: ["srv_a"],
+      removed: [],
+    });
 
     expect(added).toEqual(["srv_a", "srv_a"]);
     expect(removed).toEqual(["srv_a"]);
@@ -157,7 +173,10 @@ describe("createMcpRuntime listChanged handling", () => {
       import("../src/tools.js"),
     ]);
     const registry = new ToolRegistry();
-    const loop = { prefix: { addTool: vi.fn(), removeTool: vi.fn() } };
+    const loop = {
+      prefix: { addTool: vi.fn(), removeTool: vi.fn() },
+      reconcilePrefixTool: vi.fn(() => true),
+    };
     const runtime = createMcpRuntime({
       getTools: () => registry,
       getMcpPrefix: () => undefined,

@@ -140,6 +140,14 @@ npx reasonix code --dir /path/to/project
 
 **MCP 响应屏蔽**默认开启 —— 形状感知大小压缩（数组上限 / 重字段剥离 / 字符串上限 / 64 KB 总上限），在 head+tail 截断之前生效。通过环境变量 `REASONIX_SHIELD=0` 或 `config.json` 关闭：`{ "mcpShield": { "enabled": false } }`
 
+**分层工具暴露**把膨胀的工具集移出 prefix。通过 `toolTiers` 选择开启 —— 不配置则所有工具仍在 prefix（与之前逐字节一致）。被推迟（Tier-2）的工具进入可检索的 catalog，模型用 `search_tools` 元工具按意图找回，`/tools` 查看活跃 vs 推迟工具及本会话已解锁项：
+```json
+{ "toolTiers": { "mcpDefaultTier": 2, "mcpDeferThreshold": 15, "tiers": { "github_create_issue": 0 } } }
+```
+- `mcpDefaultTier`：所有桥接 MCP 工具的默认 tier（`2` = 全部推迟）。
+- `mcpDeferThreshold`：某 server 桥接工具数 ≥ N 时自动推迟（对抗单 server 膨胀）。
+- `tiers`：按工具名覆盖（例如把某个常用工具钉回 `0`）。
+
 <br/>
 
 ## Reasonix 的不同之处

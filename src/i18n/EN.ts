@@ -329,7 +329,9 @@ export const EN: TranslationSchema = {
   },
   slash: {
     help: { description: "show the full command reference" },
-    copy: { description: "open copy mode — mouse drag/double/triple click or j/k/v/y yank" },
+    copy: {
+      description: "open copy mode — mouse drag/double/triple click or j/k/v/y yank",
+    },
     status: { description: "current model, flags, context, session" },
     preset: {
       description: "model bundle — auto escalates flash → pro, flash/pro lock",
@@ -359,6 +361,9 @@ export const EN: TranslationSchema = {
       argsHint: "[usd|off]",
     },
     mcp: { description: "list MCP servers + tools attached to this session" },
+    tools: {
+      description: "show active vs deferred tools + unlocks; search the deferred catalog",
+    },
     resource: {
       description: "browse + read MCP resources (no arg → list URIs; <uri> → fetch contents)",
       argsHint: "[uri]",

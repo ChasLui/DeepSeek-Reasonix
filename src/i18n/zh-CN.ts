@@ -188,8 +188,14 @@ export const zhCN: TranslationSchema = {
               key: "拖动",
               text: "默认走终端原生拖选；mouse:on 可能捕获普通拖动",
             },
-            { key: "右键", text: "mouse tracking 关闭或终端绕过捕获时走原生菜单" },
-            { key: "/mouse", text: "运行时切换：/mouse on、/mouse off、/mouse toggle" },
+            {
+              key: "右键",
+              text: "mouse tracking 关闭或终端绕过捕获时走原生菜单",
+            },
+            {
+              key: "/mouse",
+              text: "运行时切换：/mouse on、/mouse off、/mouse toggle",
+            },
           ],
         },
         {
@@ -327,6 +333,9 @@ export const zhCN: TranslationSchema = {
       argsHint: "[usd|off]",
     },
     mcp: { description: "列出附加到此会话的 MCP 服务器 + 工具" },
+    tools: {
+      description: "查看活跃 vs 推迟工具及已解锁项；检索推迟工具 catalog",
+    },
     resource: {
       description: "浏览 + 读取 MCP 资源（无参数 → 列出 URI；<uri> → 获取内容）",
       argsHint: "[uri]",

@@ -59,6 +59,24 @@ therefore treats unchanged-prompt misses as `recent-miss`, `older-miss`, or
 `best-effort-miss`; it does not encode a deterministic 5-minute or 1-hour
 DeepSeek TTL as a product fact.
 
+#### Tiered tool exposure / deferred catalog
+
+A bloated tool list (one large MCP server ≈ 30–50 specs ≈ tens of thousands of
+tokens) poisons recall ("lost in the middle") and inflates every cached prefix.
+Tools carry a `tier` (0/1 = always in the prefix, 2 = deferred). The five
+prefix-construction entry points build from `filteredSpecs(PREFIX_MAX_TIER)`, so
+Tier-2 tools stay out of the prefix and live only in a searchable SQLite catalog
+(`tool_catalog`). A Tier-0 `search_tools` meta-tool + a stable capability-hint
+line let the model find a deferred tool by intent; the first time it dispatches
+one, the loop `addTool`s it (the single mid-session prefix mutation — one cache
+miss, then stable) and records it in `session_unlocked_tools` so resume and
+reconnect re-apply unlocks in order (byte-identical prefix).
+
+**Trade-off (not free):** each unlock is one cache-miss turn whose cost grows
+with conversation depth, so deferral wins only when the deferred set is large and
+rarely needed. It is **opt-in** — with no `toolTiers` config every tool stays in
+the prefix and the prefix is byte-identical to the pre-feature build.
+
 #### Parallel tool dispatch
 
 Each tool declares `parallelSafe?: boolean` (default `false`). The loop

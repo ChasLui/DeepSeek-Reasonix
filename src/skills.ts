@@ -12,7 +12,7 @@ import {
 import { accessSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import type { ToonMode } from "./config.js";
+import { type ToonMode, loadResolvedSkillPaths, resolveSkillPaths } from "./config.js";
 import { parseFrontmatter } from "./frontmatter.js";
 import { NEGATIVE_CLAIM_RULE, TUI_FORMATTING_RULES } from "./prompt-fragments.js";
 import { encodeToonPayload } from "./toon/encode-result.js";
@@ -136,10 +136,23 @@ export class SkillStore {
       });
     }
     for (const dir of this.customSkillPaths) out.push({ dir, scope: "custom" });
-    out.push({ dir: join(this.homeDir, ".reasonix", SKILLS_DIRNAME), scope: "global" });
-    out.push({ dir: join(this.homeDir, ".agents", SKILLS_DIRNAME), scope: "global" });
-    out.push({ dir: join(this.homeDir, ".claude", SKILLS_DIRNAME), scope: "global" });
-    return out.map((root, priority) => ({ ...root, priority, status: skillPathStatus(root.dir) }));
+    out.push({
+      dir: join(this.homeDir, ".reasonix", SKILLS_DIRNAME),
+      scope: "global",
+    });
+    out.push({
+      dir: join(this.homeDir, ".agents", SKILLS_DIRNAME),
+      scope: "global",
+    });
+    out.push({
+      dir: join(this.homeDir, ".claude", SKILLS_DIRNAME),
+      scope: "global",
+    });
+    return out.map((root, priority) => ({
+      ...root,
+      priority,
+      status: skillPathStatus(root.dir),
+    }));
   }
 
   customRoots(): SkillRoot[] {
@@ -184,10 +197,14 @@ export class SkillStore {
     content: string,
   ): { path: string } | { error: string } {
     if (!isValidSkillName(name)) {
-      return { error: `invalid skill name: "${name}" — use letters, digits, _, -, .` };
+      return {
+        error: `invalid skill name: "${name}" — use letters, digits, _, -, .`,
+      };
     }
     if (scope === "project" && !this.projectRoot) {
-      return { error: "project scope requires a workspace — run from `reasonix code`" };
+      return {
+        error: "project scope requires a workspace — run from `reasonix code`",
+      };
     }
     const root =
       scope === "project"
@@ -382,6 +399,42 @@ export function applySkillsIndex(basePrompt: string, opts: SkillStoreOptions = {
   ].join("\n");
 }
 
+export interface CatalogSkill {
+  name: string;
+  description: string;
+  runAs: SkillRunAs;
+}
+
+/** True when the rendered skills index would overflow the prefix cap — the Slice-5 trigger to spill the long tail into the searchable catalog. */
+export function skillsIndexExceedsCap(
+  skills: ReadonlyArray<Pick<Skill, "name" | "description" | "runAs">>,
+): boolean {
+  if (skills.length === 0) return false;
+  return skills.map(skillIndexLine).join("\n").length > SKILLS_INDEX_MAX_CHARS;
+}
+
+/** Skills as catalog entries, resolved the same way applySkillsIndex resolves them so the catalog set matches the rendered index (Slice 5). */
+export function resolveCatalogSkills(opts: {
+  projectRoot?: string;
+  homeDir?: string;
+  cfg?: { skills?: { paths?: readonly unknown[] } };
+  toonMode?: ToonMode;
+}): CatalogSkill[] {
+  const customSkillPaths = opts.cfg?.skills?.paths
+    ? resolveSkillPaths(opts.cfg.skills.paths, opts.projectRoot ?? process.cwd())
+    : opts.projectRoot
+      ? loadResolvedSkillPaths(opts.projectRoot)
+      : undefined;
+  return new SkillStore({
+    projectRoot: opts.projectRoot,
+    homeDir: opts.homeDir,
+    customSkillPaths,
+    toonMode: opts.toonMode,
+  })
+    .list()
+    .map((s) => ({ name: s.name, description: s.description, runAs: s.runAs }));
+}
+
 function formatSkillsMarkdown(
   skills: Array<Pick<Skill, "name" | "description" | "runAs">>,
 ): string {
@@ -409,7 +462,10 @@ function formatSkillsToon(
     const payload =
       take === entries.length
         ? { skills: entries }
-        : { skills: entries.slice(0, take), omittedSkillCount: entries.length - take };
+        : {
+            skills: entries.slice(0, take),
+            omittedSkillCount: entries.length - take,
+          };
     if (take === 0 || encodeToonPayload(payload).length <= SKILLS_INDEX_MAX_CHARS) {
       return formatPromptPayloadBlock(payload, { mode });
     }

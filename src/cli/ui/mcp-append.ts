@@ -16,6 +16,7 @@ export function applyMcpAppend(
     if (!mcpTool.name) continue;
     const registeredName = registerSingleMcpTool(mcpTool, target.bridgeEnv);
     if (!registeredName) continue;
+    accepted.push(mcpTool);
     const spec: ToolSpec = {
       type: "function",
       function: {
@@ -24,8 +25,9 @@ export function applyMcpAppend(
         parameters: mcpTool.inputSchema as unknown as JSONSchema,
       },
     };
-    loop.prefix.addTool(spec);
-    accepted.push(mcpTool);
+    // reconcilePrefixTool defers Tier-2 tools (catalog-only via FR-005) unless
+    // this session already unlocked them (FR-012); Tier 0/1 always enter.
+    loop.reconcilePrefixTool(spec);
   }
   if (accepted.length === 0 || !target.report.tools.supported) return target;
 

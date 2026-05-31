@@ -42,6 +42,8 @@ export interface BridgeOptions {
   onSlow?: (ev: SlowEvent) => void;
   /** Fired once when latency or error samples cross the unhealthy threshold. */
   onUnhealthy?: (ev: UnhealthyEvent) => void;
+  /** Tier assigned to every bridged tool (FR-005). 0/undefined keeps current behavior — tools enter the prefix. Set 2 to make a server's tools deferred (catalog-only). */
+  mcpDefaultTier?: number;
   /** Indirection so reconnect can swap the underlying client without re-registering tools. */
   host?: McpClientHost;
   /** Awaited before each `callTool` — resolves on `connected`, rejects on `failed`, caps via `readyTimeoutMs`. */
@@ -87,6 +89,8 @@ export interface BridgeEnv {
   readyTimeoutMs?: number;
   /** Server name surfaced in timeout errors. Defaults to the prefix or "anon". */
   serverName?: string;
+  /** Tier stamped on bridged tools (FR-005); 0/undefined = enters prefix as today. */
+  mcpDefaultTier?: number;
 }
 
 /** Register one MCP tool's bridged closure into the registry. Returns the registered name (or "" if skipped). */
@@ -100,6 +104,7 @@ export function registerSingleMcpTool(
     name: registeredName,
     description: mcpTool.description ?? "",
     parameters: mcpTool.inputSchema as JSONSchema,
+    tier: env.mcpDefaultTier,
     fn: async (args: Record<string, unknown>, ctx) => {
       if (env.ready) {
         await waitForReady(
@@ -234,6 +239,7 @@ export async function bridgeMcpTools(
     ready: opts.ready,
     readyTimeoutMs: opts.readyTimeoutMs ?? DEFAULT_READY_TIMEOUT_MS,
     serverName,
+    mcpDefaultTier: opts.mcpDefaultTier,
   };
   const listed = opts.mcpToolsOverride
     ? { tools: opts.mcpToolsOverride }

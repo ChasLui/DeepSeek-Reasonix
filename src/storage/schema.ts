@@ -79,6 +79,40 @@ const MIGRATIONS: Migration[] = [
       );
     },
   },
+  {
+    // version 5 retired (file-backend era) — skip to 6.
+    version: 6,
+    name: "tool_catalog",
+    up: (db) => {
+      // Derived index for semantic-tool-discovery (FR-001): the deferred tool
+      // catalog. Pure projection — rebuildable from the live ToolRegistry, so a
+      // wiped/corrupt table loses nothing (NF-005). params_json stores the SAME
+      // shape specs() exposes (flatSchema ?? parameters) so catalogSpecOf can
+      // rebuild a model-faithful ToolSpec (FR-004). embedding is NULL until the
+      // first search_tools hit fills it lazily (NF-003); BLOB = packed Float32.
+      // PK (source, name): source in {builtin, mcp:<server>, skill}.
+      db.exec(
+        "CREATE TABLE tool_catalog (source TEXT NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL, params_json TEXT NOT NULL, tier INTEGER NOT NULL, embedding BLOB, updated_at TEXT NOT NULL, PRIMARY KEY (source, name))",
+      );
+      db.exec("CREATE INDEX idx_tool_catalog_tier ON tool_catalog(tier)");
+    },
+  },
+  {
+    version: 7,
+    name: "session_unlocked_tools",
+    up: (db) => {
+      // Ordered record of which deferred (Tier-2) tools a session unlocked via
+      // search_tools (FR-006). seq is monotonic per session so resume replays
+      // addTool in the SAME order the live session did → byte-identical prefix
+      // (SC-006). PK (session, name) makes a re-unlock idempotent. Source in
+      // {mcp:<server>, ...} is audit metadata for /tools (FR-008); the spec is
+      // rebuilt from the live registry at replay, not from here (NF-005).
+      db.exec(
+        "CREATE TABLE session_unlocked_tools (session TEXT NOT NULL, seq INTEGER NOT NULL, source TEXT NOT NULL DEFAULT '', name TEXT NOT NULL, unlocked_at TEXT NOT NULL, PRIMARY KEY (session, name))",
+      );
+      db.exec("CREATE INDEX idx_session_unlocked_seq ON session_unlocked_tools(session, seq)");
+    },
+  },
 ];
 
 export function migrate(db: Db): void {
