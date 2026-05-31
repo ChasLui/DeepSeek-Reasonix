@@ -7,6 +7,7 @@ import type { StdioMcpSpec } from "./spec.js";
 import type { McpTool } from "./types.js";
 
 const TTL_MS = 24 * 60 * 60 * 1000;
+const EAGER_DRIFT_TIMEOUT_MS = 3000;
 export interface CacheEntry {
   savedAt: number;
   specHash: string;
@@ -16,11 +17,18 @@ export interface CacheEntry {
   capabilityDigest: string;
 }
 
-export function loadMcpToolCache(
+interface ValidEntry {
+  entry: CacheEntry;
+  path: string;
+}
+
+// Shared sync validation: existence, TTL, spec hash, sync drift. Returns the
+// entry + path, or null on any miss.
+function readValidEntry(
   serverName: string,
   spec: StdioMcpSpec & { env?: Record<string, string> },
   client: McpClient,
-): McpTool[] | null {
+): ValidEntry | null {
   ensureCachePermissions();
   const path = cachePath(serverName);
   if (!existsSync(path)) return null;
@@ -29,11 +37,55 @@ export function loadMcpToolCache(
     if (Date.now() - entry.savedAt > TTL_MS) return null;
     if (entry.specHash !== specHash(spec)) return null;
     if (!verifyDriftSync(client, entry)) return null;
-    void verifyDriftAsync(client, entry).then((ok) => !ok && rmSync(path, { force: true }));
-    return entry.tools;
+    return { entry, path };
   } catch {
     return null;
   }
+}
+
+export function loadMcpToolCache(
+  serverName: string,
+  spec: StdioMcpSpec & { env?: Record<string, string> },
+  client: McpClient,
+): McpTool[] | null {
+  const valid = readValidEntry(serverName, spec, client);
+  if (!valid) return null;
+  // Fire-and-forget: a tools/list change only reflects on the NEXT startup.
+  void verifyDriftAsync(client, valid.entry).then(
+    (ok) => !ok && rmSync(valid.path, { force: true }),
+  );
+  return valid.entry.tools;
+}
+
+// Eager drift gate (Slice 2 / scheme 10): await the async tools/list check
+// BEFORE the prefix is built. Drift -> delete cache + return null so the caller
+// rebuilds from a live tools/list. Per-server timeout falls back to fire-and-forget (FR-004).
+export async function loadMcpToolCacheEager(
+  serverName: string,
+  spec: StdioMcpSpec & { env?: Record<string, string> },
+  client: McpClient,
+  timeoutMs = EAGER_DRIFT_TIMEOUT_MS,
+): Promise<McpTool[] | null> {
+  const valid = readValidEntry(serverName, spec, client);
+  if (!valid) return null;
+  const ms = Number(process.env.REASONIX_MCP_EAGER_DRIFT_TIMEOUT_MS) || timeoutMs;
+  const driftP = verifyDriftAsync(client, valid.entry);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutP = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), ms);
+  });
+  const verdict = await Promise.race([driftP, timeoutP]);
+  if (timer) clearTimeout(timer);
+  if (verdict === "timeout") {
+    // Eager budget exhausted — preserve the fire-and-forget rmSync for next start.
+    void driftP.then((ok) => !ok && rmSync(valid.path, { force: true }));
+    return valid.entry.tools;
+  }
+  if (!verdict) {
+    rmSync(valid.path, { force: true });
+    return null;
+  }
+  return valid.entry.tools;
 }
 
 export function saveMcpToolCache(

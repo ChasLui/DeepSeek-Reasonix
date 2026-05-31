@@ -1,8 +1,15 @@
-import { mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadMcpToolCache, saveMcpToolCache } from "../src/mcp/cache.js";
+import { loadMcpToolCache, loadMcpToolCacheEager, saveMcpToolCache } from "../src/mcp/cache.js";
 import type { McpClient } from "../src/mcp/client.js";
 import type { StdioMcpSpec } from "../src/mcp/spec.js";
 
@@ -20,7 +27,13 @@ function client(overrides: Partial<McpClient> = {}): McpClient {
 function spec(env: Record<string, string> = { TOKEN: "secret" }): StdioMcpSpec & {
   env: Record<string, string>;
 } {
-  return { transport: "stdio", name: "serena", command: "serena", args: ["mcp"], env };
+  return {
+    transport: "stdio",
+    name: "serena",
+    command: "serena",
+    args: ["mcp"],
+    env,
+  };
 }
 
 describe("MCP tools/list schema cache", () => {
@@ -73,8 +86,94 @@ describe("MCP tools/list schema cache", () => {
     saveMcpToolCache("serena", spec(), client(), [tool]);
     const path = join(home, "mcp-cache", "serena.json");
     const entry = JSON.parse(readFileSync(path, "utf8")) as { savedAt: number };
-    writeFileSync(path, `${JSON.stringify({ ...entry, savedAt: 0 })}\n`, { mode: 0o600 });
+    writeFileSync(path, `${JSON.stringify({ ...entry, savedAt: 0 })}\n`, {
+      mode: 0o600,
+    });
 
     expect(loadMcpToolCache("serena", spec(), client())).toBeNull();
+  });
+});
+
+describe("MCP eager drift gate (scheme 10)", () => {
+  let previousHome: string | undefined;
+  let home: string;
+  const newTool = {
+    name: "b",
+    description: "B",
+    inputSchema: { type: "object" },
+  };
+
+  beforeEach(() => {
+    previousHome = process.env.REASONIX_HOME;
+    home = mkdtempSync(join(tmpdir(), "reasonix-eager-test-"));
+    process.env.REASONIX_HOME = home;
+  });
+
+  afterEach(() => {
+    if (previousHome === undefined) Reflect.deleteProperty(process.env, "REASONIX_HOME");
+    else process.env.REASONIX_HOME = previousHome;
+  });
+
+  // Drift -> null is the contract that makes mcp-runtime rebuild the prefix from a
+  // live tools/list (bridgeMcpTools calls listTools when mcpToolsOverride is undefined).
+  it("drift deletes the cache and returns null so the prefix rebuilds live", async () => {
+    saveMcpToolCache("serena", spec(), client(), [tool]);
+    const result = await loadMcpToolCacheEager(
+      "serena",
+      spec(),
+      client({
+        listTools: async () => ({ tools: [newTool] }),
+      } as Partial<McpClient>),
+    );
+    expect(result).toBeNull();
+    expect(existsSync(join(home, "mcp-cache", "serena.json"))).toBe(false);
+  });
+
+  it("no drift returns the cached tools and keeps the file", async () => {
+    saveMcpToolCache("serena", spec(), client(), [tool]);
+    const result = await loadMcpToolCacheEager(
+      "serena",
+      spec(),
+      client({
+        listTools: async () => ({ tools: [tool] }),
+      } as Partial<McpClient>),
+    );
+    expect(result).toEqual([tool]);
+    expect(existsSync(join(home, "mcp-cache", "serena.json"))).toBe(true);
+  });
+
+  it("per-server timeout falls back to fire-and-forget cached tools", async () => {
+    saveMcpToolCache("serena", spec(), client(), [tool]);
+    const slow = client({
+      listTools: () => new Promise(() => {}),
+    } as Partial<McpClient>);
+    const result = await loadMcpToolCacheEager("serena", spec(), slow, 5);
+    expect(result).toEqual([tool]);
+  });
+
+  it("listTools failure is treated as no-drift (returns cached, keeps file)", async () => {
+    saveMcpToolCache("serena", spec(), client(), [tool]);
+    const result = await loadMcpToolCacheEager(
+      "serena",
+      spec(),
+      client({
+        listTools: async () => {
+          throw new Error("server down");
+        },
+      } as Partial<McpClient>),
+    );
+    expect(result).toEqual([tool]);
+    expect(existsSync(join(home, "mcp-cache", "serena.json"))).toBe(true);
+  });
+
+  it("returns null when no cache entry exists", async () => {
+    const result = await loadMcpToolCacheEager(
+      "serena",
+      spec(),
+      client({
+        listTools: async () => ({ tools: [tool] }),
+      } as Partial<McpClient>),
+    );
+    expect(result).toBeNull();
   });
 });

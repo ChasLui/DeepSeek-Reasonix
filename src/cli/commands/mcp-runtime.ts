@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { normalizeMcpConfig, readConfig } from "../../config.js";
 import { t } from "../../i18n/index.js";
 import type { CacheFirstLoop } from "../../loop.js";
-import { loadMcpToolCache, saveMcpToolCache } from "../../mcp/cache.js";
+import { loadMcpToolCache, loadMcpToolCacheEager, saveMcpToolCache } from "../../mcp/cache.js";
 import { McpClient } from "../../mcp/client.js";
 import { loadDotMcpJson } from "../../mcp/dot-mcp-json.js";
 import { classifyToolListDrift } from "../../mcp/drift.js";
@@ -245,7 +245,16 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
       await mcp.initialize({ signal });
       const host: McpClientHost = { client: mcp };
       const selection = ctx.getToolSelection?.() ?? null;
-      const cachedTools = spec.transport === "stdio" ? loadMcpToolCache(label, spec, mcp) : null;
+      // Scheme 10 (Slice 2): eager tools/list drift check before building the
+      // prefix, so a changed server's latest tools land in this session instead
+      // of the next. Default ON; set REASONIX_MCP_EAGER_DRIFT=0 to opt out.
+      const eagerDrift = process.env.REASONIX_MCP_EAGER_DRIFT !== "0";
+      let cachedTools: McpTool[] | null = null;
+      if (spec.transport === "stdio") {
+        cachedTools = eagerDrift
+          ? await loadMcpToolCacheEager(label, spec, mcp)
+          : loadMcpToolCache(label, spec, mcp);
+      }
       const bridge = await bridgeMcpTools(mcp, {
         registry: tools,
         toolFilter: selection === null ? undefined : (name) => isToolSelected(name, selection),
