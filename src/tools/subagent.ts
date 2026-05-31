@@ -11,7 +11,7 @@ import {
   TUI_FORMATTING_RULES,
   escalationContract,
 } from "../prompt-fragments.js";
-import { ToolRegistry } from "../tools.js";
+import { PREFIX_MAX_TIER, ToolRegistry } from "../tools.js";
 import { SUBAGENT_TYPE_NAMES, getSubagentType } from "./subagent-types.js";
 
 /** Side-channel — subagents run inside a tool-dispatch frame, can't go through parent's `LoopEvent` stream. */
@@ -204,7 +204,9 @@ export async function spawnSubagent(opts: SpawnSubagentOptions): Promise<Subagen
     : forkRegistryExcluding(opts.parentRegistry, NEVER_INHERITED_TOOLS);
   const childPrefix = new ImmutablePrefix({
     system: opts.system,
-    toolSpecs: childTools.specs(),
+    // filteredSpecs (not specs) so deferred Tier-2 tools forked into the child
+    // registry don't leak into the child's prefix (Slice 3 防泄漏).
+    toolSpecs: childTools.filteredSpecs(PREFIX_MAX_TIER),
   });
   const childLoop = new CacheFirstLoop({
     client: opts.client,

@@ -62,12 +62,14 @@ import {
 } from "./memory/session.js";
 import { PromptCacheMonitor } from "./observability/prompt-cache-monitor.js";
 import { type RepairReport, ToolCallRepair } from "./repair/index.js";
+import { getDb } from "./storage/db.js";
+import { listUnlockedTools, nextUnlockSeq, recordUnlock } from "./storage/unlocked-tools-repo.js";
 import { SessionStats, type TurnStats } from "./telemetry/stats.js";
 import { readUsageSince } from "./telemetry/usage.js";
-import { ToolRegistry } from "./tools.js";
+import { PREFIX_MAX_TIER, ToolRegistry } from "./tools.js";
 import { ReadDedupState } from "./tools/fs/read-dedup.js";
 import { serializeToolResult } from "./toon/encode-result.js";
-import type { ChatMessage, ToolCall } from "./types.js";
+import type { ChatMessage, ToolCall, ToolSpec } from "./types.js";
 
 const ESCALATION_MODEL = "deepseek-v4-pro";
 
@@ -169,6 +171,10 @@ export class CacheFirstLoop {
   private readonly _rebuildSystem: (() => string) | null;
 
   private _turn = 0;
+  /** Monotonic unlock counter for this session; null until first unlock seeds it from the DB (FR-006 ordered replay). */
+  private _unlockSeq: number | null = null;
+  /** Deferred tools this session has unlocked (intent, survives removeTool) — drives FR-012 reconnect re-alignment. */
+  private readonly _unlockedNames = new Set<string>();
   private _streamPreference: boolean;
   /** Threaded through HTTP + every tool dispatch so Esc cancels in-flight work, not after. */
   private _turnAbort: AbortController = new AbortController();
@@ -310,6 +316,9 @@ export class CacheFirstLoop {
           `▸ session "${this.sessionName}": healed ${healedCount} entr${healedCount === 1 ? "y" : "ies"}${tokensSaved > 0 ? ` (shrunk ${tokensSaved.toLocaleString()} tokens of oversized tool output)` : " (dropped dangling tool_calls tail)"}. Rewrote session file.\n`,
         );
       }
+      // Resume replay (FR-006/SC-006): re-unlock the deferred tools this session
+      // unlocked before, in seq order, so the prefix matches the live run's.
+      this.replayUnlocks();
     } else {
       this.resumedMessageCount = 0;
     }
@@ -568,6 +577,12 @@ export class CacheFirstLoop {
         webFetchCache: this.webFetchCache,
       });
 
+      // Unlock-on-use: the model just called a deferred (Tier-2) tool it learned
+      // about via search_tools. Promote it into the prefix so subsequent turns
+      // see it directly. addTool is idempotent + emits an epoch event, which the
+      // onEpoch listener uses to extend allowedNames (the scavenge whitelist, R-9).
+      this.unlockDeferredTool(name);
+
       const postReport = await runHooks({
         hooks: this.hooks,
         payload: {
@@ -583,6 +598,61 @@ export class CacheFirstLoop {
       return { preWarnings, postWarnings, result };
     } finally {
       this._inflight.delete(this.inflightIdFor(call));
+    }
+  }
+
+  /** Re-apply this session's prior unlocks in seq order on resume (FR-006) so the
+   *  resumed prefix is byte-identical to the live one (SC-006). Empty for old
+   *  sessions; an unregistered tool is skipped (reconnect re-adds it). No re-record. */
+  private replayUnlocks(): void {
+    if (!this.sessionName) return;
+    try {
+      const db = getDb();
+      for (const row of listUnlockedTools(db, this.sessionName)) {
+        this._unlockedNames.add(row.name);
+        const spec = this.tools.specOf(row.name);
+        if (spec) this.prefix.addTool(spec);
+      }
+      this._unlockSeq = nextUnlockSeq(db, this.sessionName);
+    } catch {
+      /* replay is best-effort; a missing tool is re-added when next used */
+    }
+  }
+
+  /** FR-012: re-add a (re)bridged tool to the prefix iff it belongs there — a
+   *  prefix-resident tier, or a deferred tool this session already unlocked.
+   *  Deferred-but-never-unlocked tools stay catalog-only. Idempotent. */
+  reconcilePrefixTool(spec: ToolSpec): boolean {
+    const name = spec.function?.name;
+    if (!name) return false;
+    if (this.tools.tierOf(name) > PREFIX_MAX_TIER && !this._unlockedNames.has(name)) {
+      return false;
+    }
+    return this.prefix.addTool(spec);
+  }
+
+  /** Promote a just-dispatched deferred tool into the prefix (the single new
+   *  addTool point, Slice 3). No-op for tier ≤ ceiling, idempotent otherwise;
+   *  the SQLite record is a best-effort ordered replay trail (FR-006). */
+  private unlockDeferredTool(name: string): void {
+    if (this.tools.tierOf(name) <= PREFIX_MAX_TIER) return;
+    const spec = this.tools.specOf(name);
+    if (!spec) return;
+    this._unlockedNames.add(name); // FR-012: remember the unlock intent
+    const added = this.prefix.addTool(spec);
+    if (!added) return; // already unlocked this session — no churn, no re-record
+    if (!this.sessionName) return; // ephemeral session: in-memory unlock only
+    try {
+      const db = getDb();
+      if (this._unlockSeq === null) {
+        this._unlockSeq = nextUnlockSeq(db, this.sessionName);
+      }
+      // v1: only MCP-bridged tools are Tier-2 deferred (builtins are Tier 0,
+      // skills are Slice 5). Precise mcp:<server> source is recoverable by
+      // joining tool_catalog on name for the /tools audit (FR-008).
+      recordUnlock(db, this.sessionName, "mcp", name, this._unlockSeq++, new Date().toISOString());
+    } catch {
+      /* persistence is best-effort; the prefix is already mutated */
     }
   }
 

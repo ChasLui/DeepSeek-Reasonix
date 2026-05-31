@@ -62,7 +62,7 @@ import {
   setDesktopQQEnabled,
 } from "../../desktop/qq-settings.js";
 import { loadDotenv } from "../../env.js";
-import { CacheFirstLoop, ImmutablePrefix } from "../../index.js";
+import { CacheFirstLoop, ImmutablePrefix, PREFIX_MAX_TIER } from "../../index.js";
 import { parseMcpSpec } from "../../mcp/spec.js";
 import {
   deleteSession,
@@ -76,8 +76,11 @@ import {
 import { openMemoryStore } from "../../memory/user.js";
 import { QQChannel } from "../../qq/channel.js";
 import { SkillStore } from "../../skills.js";
+import { resolveCatalogSkills } from "../../skills.js";
+import { getDb } from "../../storage/db.js";
 import { countTokensBounded } from "../../tokenizer.js";
 import type { ChoiceOption } from "../../tools/choice.js";
+import { activateToolTiering } from "../../tools/tiering.js";
 import { applySessionToolset } from "../../tools/toolset.js";
 import type { ChatMessage } from "../../types.js";
 import { VERSION } from "../../version.js";
@@ -777,9 +780,19 @@ function buildRuntimeFor(tab: Tab): RuntimeState {
   const toolset = tab.toolset;
   const client = getOrCreateDeepSeekClient({ baseUrl: loadBaseUrl() });
   applySessionToolset(toolset.tools, resolveSessionToolset());
+  // Tiered exposure (FR-005): apply config tier overrides + capability-hint.
+  // No-op without `toolTiers` config (FR-010). Desktop's MCP tools arrive later
+  // via the runtime; their default-tier deferral threads through createMcpRuntime.
+  const tieringCfg = readConfig();
+  const tiering = activateToolTiering(
+    toolset.tools,
+    tieringCfg,
+    getDb(),
+    resolveCatalogSkills({ projectRoot: tab.rootDir, cfg: tieringCfg }),
+  );
   const prefix = new ImmutablePrefix({
-    system: tab.system,
-    toolSpecs: toolset.tools.specs(),
+    system: tab.system + tiering.capabilityHint,
+    toolSpecs: toolset.tools.filteredSpecs(PREFIX_MAX_TIER),
   });
   const reasoningEffort = loadReasoningEffort();
   const { autoEscalate } = resolvePreset(tab.currentPreset);

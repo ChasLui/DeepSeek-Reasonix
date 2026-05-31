@@ -90,7 +90,7 @@ export type {
   WriteInput as MemoryWriteInput,
 } from "./memory/user.js";
 
-export { ToolRegistry } from "./tools.js";
+export { ToolRegistry, PREFIX_MAX_TIER } from "./tools.js";
 export type { ToolDefinition, ToolCallContext } from "./tools.js";
 export { registerFilesystemTools } from "./tools/filesystem.js";
 export type { FilesystemToolsOptions } from "./tools/filesystem.js";

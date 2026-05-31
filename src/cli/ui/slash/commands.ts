@@ -191,6 +191,12 @@ export const SLASH_COMMANDS: readonly SlashCommandSpec[] = [
     summary: "list MCP servers + tools attached to this session",
   },
   {
+    cmd: "tools",
+    group: "extend",
+    argsHint: "[search <capability>]",
+    summary: "show active vs deferred tools + unlocks; search the deferred catalog",
+  },
+  {
     cmd: "resource",
     group: "extend",
     argsHint: "[uri]",

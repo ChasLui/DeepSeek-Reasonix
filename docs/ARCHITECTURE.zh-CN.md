@@ -39,6 +39,22 @@ Reasonix **有主见，不追求通用**。每一处抽象都由 DeepSeek 特有
 **指标。** `prompt_cache_hit_tokens / (hit + miss)` 按轮次暴露并按会话聚合。
 在 TUI 顶栏的 cache cell 中可见。
 
+#### 分层工具暴露 / deferred catalog
+
+膨胀的工具列表（单个大型 MCP server ≈ 30–50 个 spec ≈ 数万 token）会毒化召回
+（"lost in the middle"）并撑大每一次的缓存前缀。工具带有 `tier`（0/1 = 始终在
+prefix 中，2 = 推迟）。五个构建 prefix 的入口都从 `filteredSpecs(PREFIX_MAX_TIER)`
+构建，因此 Tier-2 工具不进 prefix，只存在于一个可检索的 SQLite catalog
+（`tool_catalog`）中。一个 Tier-0 的 `search_tools` 元工具 + 一行稳定的
+capability-hint 让模型按意图找到被推迟的工具；模型第一次 dispatch 某个工具时，
+循环就 `addTool` 把它装入 prefix（唯一的会话中途 prefix 变更——一次 cache miss，
+之后保持稳定），并记入 `session_unlocked_tools`，使 resume 和 reconnect 能按顺序
+重放解锁（逐字节一致的 prefix）。
+
+**Trade-off（非免费）：** 每次解锁都是一个 cache-miss 轮，其代价随对话深度增长，
+所以只有当推迟集合大且很少用到时分层才划算。它是**可选开启**的——不配置
+`toolTiers` 时所有工具都留在 prefix 中，prefix 与启用本特性前逐字节一致。
+
 #### 并行工具分发
 
 每个工具声明 `parallelSafe?: boolean`（默认 `false`）。循环分发器把连续的

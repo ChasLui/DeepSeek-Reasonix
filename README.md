@@ -178,6 +178,14 @@ One JSON file at `~/.reasonix/config.json` plus per-project overrides under `<pr
 { "mcpShield": { "enabled": false } }
 ```
 
+**Tiered tool exposure** keeps bloated tool sets out of the prefix. Opt-in via `toolTiers` — without it every tool stays in the prefix (byte-identical to before). Deferred (Tier-2) tools live in a searchable catalog; the model finds them with the `search_tools` meta-tool, and `/tools` shows what's active vs deferred plus this session's unlocks:
+```json
+{ "toolTiers": { "mcpDefaultTier": 2, "mcpDeferThreshold": 15, "tiers": { "github_create_issue": 0 } } }
+```
+- `mcpDefaultTier`: default tier for every bridged MCP tool (`2` defers them all).
+- `mcpDeferThreshold`: auto-defer a server's tools once it bridges ≥ N (fights single-server bloat).
+- `tiers`: per-tool override by name (e.g. pin one frequently-used tool back to `0`).
+
 <br/>
 
 ## What makes Reasonix different

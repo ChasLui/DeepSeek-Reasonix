@@ -15,13 +15,20 @@ import {
 } from "../../config.js";
 import { loadDotenv } from "../../env.js";
 import { t } from "../../i18n/index.js";
-import { CacheFirstLoop, DeepSeekClient, ImmutablePrefix } from "../../index.js";
+import { CacheFirstLoop, DeepSeekClient, ImmutablePrefix, PREFIX_MAX_TIER } from "../../index.js";
 import { McpClient } from "../../mcp/client.js";
 import { preflightStdioSpec } from "../../mcp/preflight.js";
 import { bridgeMcpTools } from "../../mcp/registry.js";
 import { buildTransportFromSpec } from "../../mcp/transport-from-spec.js";
+import { resolveCatalogSkills } from "../../skills.js";
+import { getDb } from "../../storage/db.js";
 import { appendUsage } from "../../telemetry/usage.js";
 import { ToolRegistry } from "../../tools.js";
+import {
+  activateToolTiering,
+  applyMcpServerTier,
+  resolveMcpDefaultTier,
+} from "../../tools/tiering.js";
 import { applySessionToolset } from "../../tools/toolset.js";
 import { openTranscriptFile, recordFromLoopEvent, writeRecord } from "../../transcript/log.js";
 import { formatMcpLifecycleEvent } from "../ui/mcp-lifecycle.js";
@@ -111,11 +118,13 @@ export async function runCommand(opts: RunOptions): Promise<void> {
           registry: tools,
           namePrefix: prefix,
           serverName: label,
+          mcpDefaultTier: resolveMcpDefaultTier(cfg),
           onSlow: (info) =>
             process.stderr.write(
               `${formatMcpSlowToast({ name: info.serverName, p95Ms: info.p95Ms, sampleSize: info.sampleSize })}\n`,
             ),
         });
+        applyMcpServerTier(tools, bridge.registeredNames, cfg);
         process.stderr.write(
           `${formatMcpLifecycleEvent({
             state: "connected",
@@ -142,9 +151,20 @@ export async function runCommand(opts: RunOptions): Promise<void> {
 
   const client = new DeepSeekClient({ baseUrl: loadBaseUrl() });
   applySessionToolset(tools, resolveSessionToolset());
+  // Tiered exposure (FR-005): defer bloated tool sets to a searchable catalog
+  // and append the capability-hint. No-op without `toolTiers` config → system +
+  // tool list stay byte-identical (FR-010).
+  const tiering = tools
+    ? activateToolTiering(
+        tools,
+        cfg,
+        getDb(),
+        resolveCatalogSkills({ projectRoot: process.cwd(), cfg }),
+      )
+    : { capabilityHint: "" };
   const prefix = new ImmutablePrefix({
-    system: opts.system,
-    toolSpecs: tools?.specs(),
+    system: opts.system + tiering.capabilityHint,
+    toolSpecs: tools?.filteredSpecs(PREFIX_MAX_TIER),
   });
   const loop = new CacheFirstLoop({
     client,

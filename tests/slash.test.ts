@@ -134,7 +134,10 @@ describe("handleSlash", () => {
     const origWrite = process.stdout.write.bind(process.stdout);
     const origIsTTY = process.stdout.isTTY;
     process.stdout.write = (() => true) as typeof process.stdout.write;
-    Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
+    Object.defineProperty(process.stdout, "isTTY", {
+      value: true,
+      configurable: true,
+    });
 
     try {
       const on = handleSlash("mouse", ["on"], makeLoop());
@@ -150,7 +153,10 @@ describe("handleSlash", () => {
     } finally {
       disableMouseMode();
       process.stdout.write = origWrite;
-      Object.defineProperty(process.stdout, "isTTY", { value: origIsTTY, configurable: true });
+      Object.defineProperty(process.stdout, "isTTY", {
+        value: origIsTTY,
+        configurable: true,
+      });
     }
   });
 
@@ -323,7 +329,9 @@ describe("handleSlash", () => {
   });
 
   it("/restore <name> in code mode still resolves directly (skips picker)", () => {
-    const r = handleSlash("restore", ["nonexistent"], makeLoop(), { codeRoot: "/tmp" });
+    const r = handleSlash("restore", ["nonexistent"], makeLoop(), {
+      codeRoot: "/tmp",
+    });
     expect(r.openCheckpointPicker).toBeUndefined();
     expect(r.info).toMatch(/no.*match|not found/i);
   });
@@ -601,7 +609,7 @@ describe("handleSlash", () => {
     // Case-insensitive.
     expect(suggestSlashCommands("HE").map((s) => s.cmd)).toEqual(["help"]);
     // Empty prefix returns the full non-advanced release list, including code commands.
-    expect(suggestSlashCommands("", true)).toHaveLength(44);
+    expect(suggestSlashCommands("", true)).toHaveLength(45);
     expect(suggestSlashCommands("", true).map((s) => s.cmd)).toContain("logs");
     expect(suggestSlashCommands("", true).map((s) => s.cmd)).toContain("language");
     expect(suggestSlashCommands("lan").map((s) => s.cmd)).toContain("language");
@@ -637,13 +645,17 @@ describe("handleSlash", () => {
     });
 
     it("reports up-to-date when current matches latest", () => {
-      const r = handleSlash("update", [], makeLoop(), { latestVersion: VERSION });
+      const r = handleSlash("update", [], makeLoop(), {
+        latestVersion: VERSION,
+      });
       expect(r.info).toMatch(/on the latest/);
       expect(r.info).not.toMatch(/npm install/);
     });
 
     it("prints shell command when latest is newer than current", () => {
-      const r = handleSlash("update", [], makeLoop(), { latestVersion: "99.99.99" });
+      const r = handleSlash("update", [], makeLoop(), {
+        latestVersion: "99.99.99",
+      });
       expect(r.info).toMatch(/99\.99\.99/);
       expect(r.info).toMatch(/reasonix update/);
       expect(r.info).toMatch(/npm install -g reasonix@latest/);
@@ -1013,7 +1025,9 @@ describe("handleSlash", () => {
     // failure output should reveal the stripped message in the
     // arguments we passed. We mirror this by just confirming usage
     // ISN'T printed — meaning the parser accepted a non-empty message.
-    const r = handleSlash("commit", ['"fix: tests"'], makeLoop(), { codeRoot: "/nonexistent" });
+    const r = handleSlash("commit", ['"fix: tests"'], makeLoop(), {
+      codeRoot: "/nonexistent",
+    });
     expect(r.info).not.toMatch(/usage: \/commit/);
     // It WILL say git failed since /nonexistent isn't a git repo, but
     // we don't assert the exact message — it varies by platform.

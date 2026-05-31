@@ -30,6 +30,7 @@ import { buildMcpServerSummary } from "../../mcp/summary.js";
 import { buildTransportFromSpec } from "../../mcp/transport-from-spec.js";
 import type { McpTool } from "../../mcp/types.js";
 import type { ToolRegistry } from "../../tools.js";
+import { applyMcpServerTier, resolveMcpDefaultTier } from "../../tools/tiering.js";
 import { isToolSelected } from "../../tools/toolset.js";
 import type { ToolSpec } from "../../types.js";
 import { type McpLifecycleEvent, formatMcpLifecycleEvent } from "../ui/mcp-lifecycle.js";
@@ -251,6 +252,7 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
         mcpToolsOverride: cachedTools ?? undefined,
         namePrefix,
         serverName: label,
+        mcpDefaultTier: resolveMcpDefaultTier(cfg),
         host,
         ready,
         onProgress: (info) => ctx.progressSink.current?.(info),
@@ -280,6 +282,10 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
       const promptsBridge = slice4Enabled
         ? await bridgeMcpPrompts(mcp, { registry: tools, serverName: label })
         : { registry: tools, registeredNames: [], mcpTools: [], skipped: [] };
+      // Count-based auto-defer (FR-005): a server over the threshold has all its
+      // tools pushed to Tier 2 here (before the registeredSpecs snapshot below),
+      // so reconcilePrefixTool keeps them catalog-only.
+      applyMcpServerTier(tools, bridge.registeredNames, cfg);
       let registeredNames = [
         ...bridge.registeredNames,
         ...resourcesBridge.registeredNames,
@@ -383,12 +389,13 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
         registeredSpecs,
         notificationDisposers: records.get(raw)?.notificationDisposers ?? [],
       });
-      // Hot-add: shift the prefix so the live loop sees the new tools
-      // on the very next turn. Each addTool is one cache-miss turn.
+      // Hot-add: shift the prefix so the live loop sees the new tools on the
+      // next turn. reconcilePrefixTool defers Tier-2 tools (catalog-only) unless
+      // this session already unlocked them (FR-012). Each add is one cache miss.
       if (loop)
         for (const s of registeredSpecs)
           try {
-            loop.prefix.addTool(s);
+            loop.reconcilePrefixTool(s);
           } catch (err) {
             sink({
               kind: "warn",
@@ -655,7 +662,8 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
     record.registeredNames.push(registeredName);
     record.registeredSpecs.push(spec);
     try {
-      loop?.prefix.addTool(spec);
+      // FR-012: a deferred tool re-enters the prefix only if already unlocked.
+      loop?.reconcilePrefixTool(spec);
     } catch (err) {
       sink({
         kind: "warn",

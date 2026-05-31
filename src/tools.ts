@@ -20,6 +20,9 @@ import type { JSONSchema, ToolSpec } from "./types.js";
 
 const TOOL_ALIAS_MAP = new Map<string, string>([["Task", "spawn_subagent"]]);
 
+/** Tools at this tier or below enter the immutable prefix; higher tiers are deferred (catalog-only, reachable via search_tools). The 5 prefix-construction entry points all build from filteredSpecs(PREFIX_MAX_TIER). */
+export const PREFIX_MAX_TIER = 1;
+
 export interface ToolCallContext {
   signal?: AbortSignal;
   /** Inject a mock PauseGate for tests. When absent, tools use the singleton. */
@@ -50,6 +53,8 @@ export interface ToolDefinition<A = any, R = any> {
   stormExempt?: boolean;
   /** Skip the dispatch-time validate→repair gate; the tool's own runtime sanitizer is authoritative. Used by tools that intentionally accept mixed-shape arrays and drop bad entries themselves (plan, choice, todo). */
   lenientArgs?: boolean;
+  /** Tiered exposure (FR-005): 0/undefined = always in prefix, 1 = warm, 2 = deferred (catalog-only). filteredSpecs(maxTier) drops anything above maxTier. */
+  tier?: number;
   fn: (args: A, ctx?: ToolCallContext) => R | Promise<R>;
 }
 
@@ -198,15 +203,46 @@ export class ToolRegistry {
     return this._tools.get(name)?.parallelSafe === true;
   }
 
-  specs(): ToolSpec[] {
-    return [...this._tools.values()].map((t) => ({
+  private _toSpec(t: InternalTool): ToolSpec {
+    return {
       type: "function",
       function: {
         name: t.name,
         description: t.description ?? "",
         parameters: t.flatSchema ?? t.parameters ?? { type: "object", properties: {} },
       },
-    }));
+    };
+  }
+
+  specs(): ToolSpec[] {
+    return [...this._tools.values()].map((t) => this._toSpec(t));
+  }
+
+  /** Single tool's spec, identical in shape to its entry in specs() (FR-004 同构). Undefined for unknown names. Used by the unlock path to addTool a deferred tool with the exact prefix shape. */
+  specOf(name: string): ToolSpec | undefined {
+    const t = this._tools.get(name);
+    return t ? this._toSpec(t) : undefined;
+  }
+
+  /** Specs with tier ≤ maxTier, in registration order. Untiered tools default
+   *  to tier 0, so filteredSpecs(n≥0) === specs() until tiers exist (FR-010). */
+  filteredSpecs(maxTier = 0): ToolSpec[] {
+    return [...this._tools.values()]
+      .filter((t) => (t.tier ?? 0) <= maxTier)
+      .map((t) => this._toSpec(t));
+  }
+
+  /** Tier of a registered tool; 0 for untiered or unknown names. */
+  tierOf(name: string): number {
+    return this._tools.get(name)?.tier ?? 0;
+  }
+
+  /** Reassign a tool's tier after registration (config/catalog-driven). Returns true if the name was present. */
+  setTier(name: string, tier: number): boolean {
+    const t = this._tools.get(name);
+    if (!t) return false;
+    t.tier = tier;
+    return true;
   }
 
   async dispatch(
@@ -241,7 +277,16 @@ export class ToolRegistry {
       }
       if (!tool) {
         this._bumpRepair(originalName, "unknown-tool-unaliased");
-        return this._serializeResult({ error: `unknown tool: ${originalName}` });
+        // FR-011: when a deferred catalog is active (search_tools registered),
+        // a miss is more likely a not-yet-unlocked tool than a true typo — point
+        // the model at search_tools instead of a dead end. Gated on registration
+        // so zero-MCP users get the byte-identical legacy error (FR-010).
+        const hint = this._tools.has("search_tools")
+          ? ` — if you need a capability that isn't in your tool list, call search_tools with a description of it, then use the tool it returns.`
+          : "";
+        return this._serializeResult({
+          error: `unknown tool: ${originalName}${hint}`,
+        });
       }
     }
     const repairStatsName = aliasOriginalName ?? dispatchName;
@@ -403,10 +448,14 @@ export class ToolRegistry {
         try {
           finalResult = this._serializeResult(e.toToolResult());
         } catch {
-          finalResult = this._serializeResult({ error: `${e.name}: ${e.message}` });
+          finalResult = this._serializeResult({
+            error: `${e.name}: ${e.message}`,
+          });
         }
       } else {
-        finalResult = this._serializeResult({ error: `${e.name}: ${e.message}` });
+        finalResult = this._serializeResult({
+          error: `${e.name}: ${e.message}`,
+        });
       }
     }
 
