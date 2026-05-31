@@ -13,6 +13,7 @@ import {
   readConfig,
   searchEnabled,
 } from "../config.js";
+import { registerFindCodeTool } from "../index/retrieval/tool.js";
 import { bootstrapSemanticSearchInCodeMode } from "../index/semantic/tool.js";
 import { ToolRegistry } from "../tools.js";
 import { registerChoiceTool } from "../tools/choice.js";
@@ -71,6 +72,7 @@ export async function buildCodeToolset(opts: CodeToolsetOpts): Promise<CodeTools
       rootDir: root,
       codeRelationsEnabled: loadCodeRelationsEnabled(),
     });
+    registerFindCodeTool(tools, root);
   };
 
   const reBootstrapSemantic = async (root: string): Promise<{ enabled: boolean }> => {

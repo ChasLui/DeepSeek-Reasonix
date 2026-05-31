@@ -112,6 +112,17 @@ export interface CacheFirstLoopOptions {
   confirmationGate?: PauseGate;
   /** Re-runs the prompt builder (applyMemoryStack / codeSystemPrompt) on /new so REASONIX.md edits take effect without a restart. Accepting a cache miss is the price. */
   rebuildSystem?: () => string;
+  /** Pillar 5 opt-in pre-turn retrieval (off by default / undefined). Returns a
+   * block to append to the append-only log AFTER the user message (never the
+   * prefix — P1/C-003), or null to inject nothing. */
+  preTurnRetrieval?: (userInput: string) => Promise<PreTurnInjection | null>;
+}
+
+export interface PreTurnInjection {
+  /** Becomes a role:"user" log entry appended after the user message. */
+  content: string;
+  /** Optional one-line cost/visibility note surfaced to the user. */
+  note?: string;
 }
 
 export interface ReconfigurableOptions {
@@ -169,6 +180,10 @@ export class CacheFirstLoop {
   readonly resumedMessageCount: number;
 
   private readonly _rebuildSystem: (() => string) | null;
+  /** Pillar 5 pre-turn retrieval callback (Slice 5); null = disabled (default). */
+  private readonly _preTurnRetrieval:
+    | ((userInput: string) => Promise<PreTurnInjection | null>)
+    | null;
 
   private _turn = 0;
   /** Monotonic unlock counter for this session; null until first unlock seeds it from the DB (FR-006 ordered replay). */
@@ -242,6 +257,7 @@ export class CacheFirstLoop {
     this.hookCwd = opts.hookCwd ?? process.cwd();
     this.confirmationGate = opts.confirmationGate ?? defaultPauseGate;
     this._rebuildSystem = opts.rebuildSystem ?? null;
+    this._preTurnRetrieval = opts.preTurnRetrieval ?? null;
 
     this._streamPreference = opts.stream ?? true;
     this.stream = this._streamPreference;
@@ -866,6 +882,18 @@ export class CacheFirstLoop {
     // first round-trip still leaves the message in the log; the user can
     // /retry without re-typing.
     this.appendAndPersist({ role: "user", content: userInput });
+    // Pillar 5 opt-in pre-turn retrieval (C-003/C-006): inject AFTER the user
+    // message as a role:"user" log entry — never the prefix, so P1 holds and
+    // each firing is one append-only cache-miss whose note is surfaced.
+    if (this._preTurnRetrieval) {
+      const injection = await this._preTurnRetrieval(userInput);
+      if (injection) {
+        this.appendAndPersist({ role: "user", content: injection.content });
+        if (injection.note) {
+          yield { turn: this._turn, role: "warning", content: injection.note };
+        }
+      }
+    }
     let pendingUser: string | null = null;
     const toolSpecs = this.prefix.tools();
 

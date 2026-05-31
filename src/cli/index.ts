@@ -642,6 +642,10 @@ program
   .option("--dir <path>", t("ui.projectDirHint"))
   .option("--ollama-url <url>", t("ui.ollamaUrlHint"))
   .option("-y, --yes", t("ui.skipPromptsHint"))
+  .option(
+    "--lexical-only",
+    "Build only the code-text lexical (BM25) index — no embedder/ollama required",
+  )
   .action(
     async (opts: {
       rebuild?: boolean;
@@ -649,6 +653,7 @@ program
       dir?: string;
       ollamaUrl?: string;
       yes?: boolean;
+      lexicalOnly?: boolean;
     }) => {
       const { indexCommand } = await import("./commands/index.js");
       await indexCommand(opts);
