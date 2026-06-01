@@ -184,6 +184,36 @@ describe("DeepSeekClient chat API surface", () => {
     expect(requestBody(fetchFn)).not.toHaveProperty("reasoning_effort");
   });
 
+  it("sends top-level thinking alongside extra_body for the native DeepSeek API", async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(okChat));
+    const client = clientFor(fetchFn);
+
+    await client.chat({
+      model: "deepseek-v4-flash",
+      messages: [{ role: "user", content: "hi" }],
+      thinking: "disabled",
+    });
+
+    const body = requestBody(fetchFn);
+    expect(body).toMatchObject({ thinking: { type: "disabled" } });
+    expect(body.extra_body).toMatchObject({ thinking: { type: "disabled" } });
+  });
+
+  it("omits top-level thinking for non-native OpenAI-compatible endpoints", async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(okChat));
+    const client = clientFor(fetchFn, "https://my-vllm.example.com/v1");
+
+    await client.chat({
+      model: "deepseek-v4-flash",
+      messages: [{ role: "user", content: "hi" }],
+      thinking: "enabled",
+    });
+
+    const body = requestBody(fetchFn);
+    expect(body).not.toHaveProperty("thinking");
+    expect(body.extra_body).toMatchObject({ thinking: { type: "enabled" } });
+  });
+
   it("uses the same prefix request shape for doctor prefix ping", async () => {
     const fetchFn = vi.fn(async () => jsonResponse(okChat));
     const client = clientFor(fetchFn);
