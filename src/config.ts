@@ -191,8 +191,8 @@ export interface ReasonixConfig {
   session?: string | null;
   setupCompleted?: boolean;
   search?: boolean;
-  /** Web search engine backend: "mojeek" (default, scrapes Mojeek), "searxng" (self-hosted SearXNG), "metaso" (Metaso API), "tavily" (LLM-friendly API, free tier), "perplexity" (Perplexity AI), or "exa" (Exa API). */
-  webSearchEngine?: "mojeek" | "searxng" | "metaso" | "tavily" | "perplexity" | "exa";
+  /** Web search engine backend: "mojeek" (default, scrapes Mojeek), "searxng" (self-hosted SearXNG), "metaso" (Metaso API), "tavily" (LLM-friendly API, free tier), "perplexity" (Perplexity AI), "exa" (Exa API), or "anysearch" (AnySearch remote MCP server, anonymous access with optional key). */
+  webSearchEngine?: "mojeek" | "searxng" | "metaso" | "tavily" | "perplexity" | "exa" | "anysearch";
   /** Base URL for SearXNG instance (default http://localhost:8080). */
   webSearchEndpoint?: string;
   /** Metaso API key. Falls back to METASO_API_KEY env var, then a built-in default. */
@@ -203,6 +203,8 @@ export interface ReasonixConfig {
   perplexityApiKey?: string;
   /** Exa API key. Falls back to EXA_API_KEY env var. Free 1000/mo signup at https://exa.ai */
   exaApiKey?: string;
+  /** AnySearch API key. Falls back to ANYSEARCH_API_KEY env var. Optional — anonymous access works with lower rate limits; get one at https://anysearch.com/console/api-keys */
+  anysearchApiKey?: string;
 
   /** TUI SGR mouse tracking. Default false so native drag-select stays terminal-owned; set true only if alternate-scroll is insufficient. */
   mouseTracking?: boolean;
@@ -396,6 +398,14 @@ export function loadPerplexityApiKey(path: string = defaultConfigPath()): string
 export function loadExaApiKey(path: string = defaultConfigPath()): string | undefined {
   if (process.env.EXA_API_KEY) return process.env.EXA_API_KEY.trim();
   const cfg = readConfig(path).exaApiKey;
+  if (cfg && typeof cfg === "string" && cfg.trim()) return cfg.trim();
+  return undefined;
+}
+
+/** AnySearch API key — env > config > undefined. Undefined is fine: AnySearch allows anonymous access (lower rate limits), so the caller must NOT treat undefined as an error. Get one at https://anysearch.com/console/api-keys */
+export function loadAnysearchApiKey(path: string = defaultConfigPath()): string | undefined {
+  if (process.env.ANYSEARCH_API_KEY) return process.env.ANYSEARCH_API_KEY.trim();
+  const cfg = readConfig(path).anysearchApiKey;
   if (cfg && typeof cfg === "string" && cfg.trim()) return cfg.trim();
   return undefined;
 }
@@ -1027,13 +1037,14 @@ export function loadJavaSourceEnabled(path: string = defaultConfigPath()): boole
 
 export function webSearchEngine(
   path: string = defaultConfigPath(),
-): "mojeek" | "searxng" | "metaso" | "tavily" | "perplexity" | "exa" {
+): "mojeek" | "searxng" | "metaso" | "tavily" | "perplexity" | "exa" | "anysearch" {
   const cfg = readConfig(path).webSearchEngine;
   if (cfg === "searxng") return "searxng";
   if (cfg === "metaso") return "metaso";
   if (cfg === "tavily") return "tavily";
   if (cfg === "perplexity") return "perplexity";
   if (cfg === "exa") return "exa";
+  if (cfg === "anysearch") return "anysearch";
   return "mojeek";
 }
 

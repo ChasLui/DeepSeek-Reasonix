@@ -3,6 +3,7 @@
 import { parse as parseHtml } from "node-html-parser";
 import { type WebFetchCache, shouldCacheWebFetchResponse } from "../cache/web-fetch.js";
 import {
+  loadAnysearchApiKey,
   loadExaApiKey,
   loadMetasoApiKey,
   loadPerplexityApiKey,
@@ -45,8 +46,8 @@ interface WebFetchRuntimeOptions extends WebFetchOptions {
 export interface WebSearchOptions {
   topK?: number;
   signal?: AbortSignal;
-  /** Backend engine: "mojeek" (scrapes Mojeek HTML), "searxng" (self-hosted SearXNG JSON API), "metaso" (Metaso API), "tavily" (LLM-friendly JSON API), "perplexity" (Perplexity AI), or "exa" (Exa API). */
-  engine?: "mojeek" | "searxng" | "metaso" | "tavily" | "perplexity" | "exa";
+  /** Backend engine: "mojeek" (scrapes Mojeek HTML), "searxng" (self-hosted SearXNG JSON API), "metaso" (Metaso API), "tavily" (LLM-friendly JSON API), "perplexity" (Perplexity AI), "exa" (Exa API), or "anysearch" (AnySearch remote MCP server; anonymous access, optional key). */
+  engine?: "mojeek" | "searxng" | "metaso" | "tavily" | "perplexity" | "exa" | "anysearch";
   /** Base URL for SearXNG. Default http://localhost:8080. */
   endpoint?: string;
   /** Max Mojeek fetch attempts before giving up (default 3). Other engines ignore this. */
@@ -69,6 +70,7 @@ const METASO_ENDPOINT = "https://metaso.cn/api/v1";
 const TAVILY_ENDPOINT = "https://api.tavily.com/search";
 const PERPLEXITY_ENDPOINT = "https://api.perplexity.ai/chat/completions";
 const EXA_ENDPOINT = "https://api.exa.ai/answer";
+const ANYSEARCH_ENDPOINT = "https://api.anysearch.com/mcp";
 
 // Full browser fingerprint. Mojeek gates obvious scrapers; matching a real
 // Chrome's client-hint + fetch-metadata headers avoids the fast-path 403.
@@ -146,6 +148,9 @@ export async function webSearch(
   }
   if (opts.engine === "exa") {
     return searchExa(query, opts);
+  }
+  if (opts.engine === "anysearch") {
+    return searchAnysearch(query, opts);
   }
   return searchMojeek(query, opts);
 }
@@ -565,6 +570,89 @@ async function searchExa(query: string, opts: WebSearchOptions = {}): Promise<Se
   }
 
   return results;
+}
+
+interface AnysearchContentItem {
+  type?: string;
+  text?: string;
+}
+
+interface AnysearchRpcResponse {
+  result?: { content?: AnysearchContentItem[]; isError?: boolean };
+  error?: { code?: number; message?: string };
+}
+
+// AnySearch is a remote MCP server (JSON-RPC tools/call), not REST: call its `search`
+// tool and pass the MCP text content through as an answer (like Perplexity/Exa). Anonymous
+// works keyless; vertical-domain/batch/extract stay out of the web_search engine surface.
+async function searchAnysearch(
+  query: string,
+  opts: WebSearchOptions = {},
+): Promise<SearchResult[]> {
+  const maxResults = Math.max(1, Math.min(100, opts.topK ?? DEFAULT_TOPK));
+  const apiKey = loadAnysearchApiKey();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
+  let resp: Response;
+  try {
+    resp = await fetch(ANYSEARCH_ENDPOINT, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "search",
+          arguments: { query, max_results: maxResults },
+        },
+      }),
+      signal: opts.signal,
+    });
+  } catch (err) {
+    if (err instanceof TypeError && (err as Error).message.includes("fetch")) {
+      throw new Error(t("webErrors.cannotReach", { endpoint: ANYSEARCH_ENDPOINT }));
+    }
+    throw err;
+  }
+
+  if (!resp.ok) {
+    if (resp.status === 401 || resp.status === 403) {
+      throw new Error(t("webErrors.anysearchUnauthorized"));
+    }
+    if (resp.status === 429) throw new Error(t("webErrors.anysearchRateLimit"));
+    throw new Error(t("webErrors.anysearchServerError", { status: resp.status }));
+  }
+
+  const raw = await resp.text();
+  let data: AnysearchRpcResponse;
+  try {
+    data = JSON.parse(raw) as AnysearchRpcResponse;
+  } catch {
+    throw new Error(t("webErrors.anysearchParseError", { status: resp.status }));
+  }
+
+  if (data.error) {
+    throw new Error(t("webErrors.anysearchApiError", { message: data.error.message ?? "" }));
+  }
+
+  const content = data.result?.content ?? [];
+  const text = content
+    .filter((c) => c.type === "text" && typeof c.text === "string")
+    .map((c) => c.text)
+    .join("\n")
+    .trim();
+
+  // MCP signals tool-level failures via result.isError (not the JSON-RPC error channel).
+  if (data.result?.isError) {
+    throw new Error(t("webErrors.anysearchApiError", { message: text || "tool error" }));
+  }
+  if (!text) return [];
+  return [{ title: text, url: "", snippet: "", answer: text }];
 }
 
 /** Parse SearXNG HTML search results using node-html-parser. */

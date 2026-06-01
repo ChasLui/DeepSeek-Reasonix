@@ -477,8 +477,8 @@ export const zhCN: TranslationSchema = {
     },
     "search-engine": {
       description:
-        "切换网络搜索后端 — mojeek（默认，无依赖）、searxng（自托管）、metaso（每日 100 次）、tavily（每月 1000 次免费）、perplexity（AI 直接回答）或 exa（AI 直接回答）",
-      argsHint: "<mojeek|searxng|metaso|tavily|perplexity|exa> [<key>]",
+        "切换网络搜索后端 — mojeek（默认，无依赖）、searxng（自托管）、metaso（每日 100 次）、tavily（每月 1000 次免费）、perplexity（AI 直接回答）、exa（AI 直接回答）或 anysearch（远程 MCP，匿名可用）",
+      argsHint: "<mojeek|searxng|metaso|tavily|perplexity|exa|anysearch> [<key>]",
     },
   },
   wizard: {
@@ -1195,6 +1195,8 @@ export const zhCN: TranslationSchema = {
         "  /search-engine perplexity          使用 Perplexity AI（AI 直接回答 + 引用 — 设置 PERPLEXITY_API_KEY 或 config 的 perplexityApiKey；在 https://perplexity.ai/settings/api 获取密钥）",
       usageExa:
         "  /search-engine exa                 使用 Exa API（AI 直接回答 + 引用，每月 1000 次免费 — 设置 EXA_API_KEY 或 config 的 exaApiKey；注册 https://exa.ai）",
+      usageAnysearch:
+        "  /search-engine anysearch [key]     使用 AnySearch 远程 MCP（匿名可用；可选密钥提升限额；在 https://anysearch.com/console/api-keys 获取）",
       alias: "别名：/se",
       searxngInfo: "SearXNG 是一个自托管的元搜索引擎（https://github.com/searxng/searxng）。",
       searxngInstall: "安装命令：  docker run -d -p 8080:8080 searxng/searxng",
@@ -1207,6 +1209,8 @@ export const zhCN: TranslationSchema = {
         " 请设置环境变量 PERPLEXITY_API_KEY 或 config 中的 `perplexityApiKey`；在 https://perplexity.ai/settings/api 获取密钥。",
       switchedExaNote:
         " 请设置环境变量 EXA_API_KEY 或 config 中的 `exaApiKey`；注册 https://exa.ai。",
+      switchedAnysearchNote:
+        " 匿名访问即可使用；设置环境变量 ANYSEARCH_API_KEY 或 config 中的 `anysearchApiKey` 可提升限额（https://anysearch.com/console/api-keys）。",
       keyNeeded:
         '未配置 "{engine}" 的 API 密钥。\n\n  1. 设置环境变量 {envVar}\n  2. 或内联提供：/search-engine {engine} <your-key>\n  3. 或在 ~/.reasonix/config.json 中添加 "{engine}ApiKey"\n\n完成后重新执行 /search-engine {engine}。',
       keySaved: " API 密钥已保存到配置。",
@@ -1534,6 +1538,15 @@ export const zhCN: TranslationSchema = {
     exaServerError:
       "web_search: Exa 服务器错误（{status}）— 稍后重试，或使用 /search-engine mojeek|searxng|metaso|tavily|perplexity|exa 切换引擎",
     exaParseError: "web_search: Exa 返回无法解析的响应（HTTP {status}）— 稍后重试",
+    anysearchUnauthorized:
+      "web_search: AnySearch API 密钥被拒绝 — 检查 ANYSEARCH_API_KEY 或 config 的 `anysearchApiKey`；匿名访问也可用（限额更低）。在 https://anysearch.com/console/api-keys 获取密钥",
+    anysearchRateLimit:
+      "web_search: AnySearch 请求频率限制或配额用尽 — 等待重试，或配置 ANYSEARCH_API_KEY 提升限额（https://anysearch.com/console/api-keys）",
+    anysearchServerError:
+      "web_search: AnySearch 服务器错误（{status}）— 稍后重试，或使用 /search-engine mojeek|searxng|metaso|tavily|perplexity|exa|anysearch 切换引擎",
+    anysearchParseError: "web_search: AnySearch 返回无法解析的响应（HTTP {status}）— 稍后重试",
+    anysearchApiError:
+      "web_search: AnySearch API 错误（{message}）— 稍后重试，或使用 /search-engine mojeek|searxng|metaso|tavily|perplexity|exa|anysearch 切换引擎",
     fetchStatus:
       "web_fetch {status} for {url} — try: 在浏览器中确认该 URL 能否访问；该状态码表明目标主机返回了错误页面",
     fetchRateLimit429:
