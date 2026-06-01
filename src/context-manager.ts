@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { LRUCache } from "lru-cache";
 import type { DeepSeekClient } from "./client.js";
 import { Usage } from "./client.js";
 import { healLoadedMessages } from "./loop.js";
@@ -100,7 +102,13 @@ function extractPinnedSkills(head: ChatMessage[]): {
   return { stubbedHead, pinnedBodies: [...pinned.values()] };
 }
 
+type FoldSummary = { content: string; reasoningContent: string };
+
 export class ContextManager {
+  // Opt-in in-memory fold-summary cache (Q-2 / scheme 7): content-addressed by
+  // head role+content so a same-process repeat fold reuses the flash summary.
+  // Memory-only (C-001), default off — REASONIX_FOLD_CACHE=1.
+  private readonly foldCache = new LRUCache<string, FoldSummary>({ max: 32 });
   constructor(private deps: ContextManagerDeps) {}
 
   /** Real-time token count of the current log — used by Desktop to refresh the
@@ -198,7 +206,7 @@ export class ContextManager {
     if (headTokens < totalTokens * HISTORY_FOLD_MIN_SAVINGS_FRACTION) return noop;
 
     const { stubbedHead, pinnedBodies } = extractPinnedSkills(head);
-    const summary = await this.summarizeForFold(stubbedHead);
+    const summary = await this.summarizeForFoldCached(stubbedHead);
     if (!summary.content) return noop;
 
     const memoTail =
@@ -297,6 +305,22 @@ export class ContextManager {
     this.deps.log.compactInPlace([...kept]);
     this.persistRewrite([...kept]);
     return true;
+  }
+
+  // Opt-in content-addressed cache around summarizeForFold (Q-2 / scheme 7): a
+  // same-process repeat fold of identical head turns reuses the flash summary.
+  // Off by default — fold is single-directional, so repeats are rare.
+  private async summarizeForFoldCached(messagesToSummarize: ChatMessage[]): Promise<FoldSummary> {
+    if (process.env.REASONIX_FOLD_CACHE !== "1") {
+      return this.summarizeForFold(messagesToSummarize);
+    }
+    const basis = JSON.stringify(messagesToSummarize.map((m) => [m.role, m.content ?? ""]));
+    const key = createHash("sha256").update(basis).digest("hex");
+    const cached = this.foldCache.get(key);
+    if (cached) return cached;
+    const summary = await this.summarizeForFold(messagesToSummarize);
+    if (summary.content) this.foldCache.set(key, summary);
+    return summary;
   }
 
   private async summarizeForFold(
