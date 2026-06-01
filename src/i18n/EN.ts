@@ -532,8 +532,8 @@ export const EN: TranslationSchema = {
     },
     "search-engine": {
       description:
-        "switch web search backend — mojeek (default, no deps), searxng (self-hosted), metaso (free 100/d), tavily (free 1000/mo), perplexity (AI-native), or exa (AI-native)",
-      argsHint: "<mojeek|searxng|metaso|tavily|perplexity|exa> [<key>]",
+        "switch web search backend — mojeek (default, no deps), searxng (self-hosted), metaso (free 100/d), tavily (free 1000/mo), perplexity (AI-native), exa (AI-native), or anysearch (remote MCP, anonymous)",
+      argsHint: "<mojeek|searxng|metaso|tavily|perplexity|exa|anysearch> [<key>]",
     },
   },
   wizard: {
@@ -1301,6 +1301,8 @@ export const EN: TranslationSchema = {
         "  /search-engine perplexity          use Perplexity AI (AI-native answer + citations — set PERPLEXITY_API_KEY or perplexityApiKey in config; get one at https://perplexity.ai/settings/api)",
       usageExa:
         "  /search-engine exa                 use Exa API (AI-native answer + citations, free 1000/mo — set EXA_API_KEY or exaApiKey in config; sign up at https://exa.ai)",
+      usageAnysearch:
+        "  /search-engine anysearch [key]     use AnySearch remote MCP (anonymous OK; optional key for higher limits; get one at https://anysearch.com/console/api-keys)",
       alias: "Alias: /se",
       searxngInfo:
         "SearXNG is a self-hosted metasearch engine (https://github.com/searxng/searxng).",
@@ -1314,6 +1316,8 @@ export const EN: TranslationSchema = {
       switchedPerplexityNote:
         " Set PERPLEXITY_API_KEY or `perplexityApiKey` in config; get one at https://perplexity.ai/settings/api.",
       switchedExaNote: " Set EXA_API_KEY or `exaApiKey` in config; sign up at https://exa.ai.",
+      switchedAnysearchNote:
+        " Anonymous access works; set ANYSEARCH_API_KEY or `anysearchApiKey` for higher rate limits (https://anysearch.com/console/api-keys).",
       keyNeeded:
         'No API key configured for "{engine}".\n\n  1. Set the {envVar} environment variable\n  2. Or provide one inline:  /search-engine {engine} <your-key>\n  3. Or add "{engine}ApiKey" to ~/.reasonix/config.json\n\nThen retry /search-engine {engine}.',
       keySaved: " API key saved to config.",
@@ -1658,6 +1662,16 @@ export const EN: TranslationSchema = {
       "web_search: Exa server error ({status}) \u2014 try again later, or switch engine with /search-engine mojeek|searxng|metaso|tavily|perplexity|exa",
     exaParseError:
       "web_search: Exa returned unparseable response (HTTP {status}) \u2014 try again later",
+    anysearchUnauthorized:
+      "web_search: AnySearch API key rejected \u2014 check ANYSEARCH_API_KEY or `anysearchApiKey` in config; anonymous access also works (lower limits). Get a key at https://anysearch.com/console/api-keys",
+    anysearchRateLimit:
+      "web_search: AnySearch rate-limited or quota exhausted \u2014 wait and retry, or configure ANYSEARCH_API_KEY for higher limits (https://anysearch.com/console/api-keys)",
+    anysearchServerError:
+      "web_search: AnySearch server error ({status}) \u2014 try again later, or switch engine with /search-engine mojeek|searxng|metaso|tavily|perplexity|exa|anysearch",
+    anysearchParseError:
+      "web_search: AnySearch returned unparseable response (HTTP {status}) \u2014 try again later",
+    anysearchApiError:
+      "web_search: AnySearch API error ({message}) \u2014 try again later, or switch engine with /search-engine mojeek|searxng|metaso|tavily|perplexity|exa|anysearch",
     fetchStatus:
       "web_fetch {status} for {url} \u2014 try: confirm the URL resolves in a browser; status suggests the host returned an error page",
     fetchRateLimit429:

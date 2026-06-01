@@ -946,6 +946,159 @@ describe("searchExa", () => {
   });
 });
 
+describe("searchAnysearch", () => {
+  // A successful MCP tools/call wraps the model-ready text in result.content[].
+  const okResponse = {
+    jsonrpc: "2.0",
+    id: 1,
+    result: {
+      content: [{ type: "text", text: "1. Quantum result\n   https://example.com/q" }],
+    },
+  };
+
+  it("POSTs a JSON-RPC tools/call to the AnySearch MCP endpoint and passes text through as an answer", async () => {
+    const captured: {
+      url: string;
+      method: string;
+      headers: Record<string, string>;
+      body: string;
+    } = { url: "", method: "", headers: {}, body: "" };
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      captured.url = String(url);
+      captured.method = init?.method ?? "GET";
+      captured.headers = (init?.headers ?? {}) as Record<string, string>;
+      captured.body = String(init?.body ?? "");
+      return new Response(JSON.stringify(okResponse), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+    try {
+      const out = await webSearch("quantum computing", {
+        engine: "anysearch",
+        topK: 7,
+      });
+      expect(captured.url).toBe("https://api.anysearch.com/mcp");
+      expect(captured.method).toBe("POST");
+      expect(captured.headers["Content-Type"]).toBe("application/json");
+      const body = JSON.parse(captured.body);
+      expect(body.method).toBe("tools/call");
+      expect(body.params.name).toBe("search");
+      expect(body.params.arguments.query).toBe("quantum computing");
+      expect(body.params.arguments.max_results).toBe(7);
+      expect(out).toHaveLength(1);
+      expect(out[0]?.url).toBe("");
+      expect(out[0]?.answer).toContain("Quantum result");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("omits the Authorization header when no key is configured (anonymous access)", async () => {
+    const origKey = process.env.ANYSEARCH_API_KEY;
+    // biome-ignore lint/performance/noDelete: ensure anonymous path
+    delete process.env.ANYSEARCH_API_KEY;
+    let sawAuth = true;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+      sawAuth = "Authorization" in ((init?.headers ?? {}) as Record<string, string>);
+      return new Response(JSON.stringify(okResponse), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+    try {
+      await webSearch("q", { engine: "anysearch" });
+      expect(sawAuth).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (origKey === undefined) {
+        // biome-ignore lint/performance/noDelete: restore
+        delete process.env.ANYSEARCH_API_KEY;
+      } else {
+        process.env.ANYSEARCH_API_KEY = origKey;
+      }
+    }
+  });
+
+  it("returns [] when the MCP text content is empty", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: { content: [] } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    ) as unknown as typeof fetch;
+    try {
+      const out = await webSearch("q", { engine: "anysearch" });
+      expect(out).toEqual([]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("throws on a JSON-RPC error response", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            error: { code: -32000, message: "bad query" },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+    ) as unknown as typeof fetch;
+    try {
+      await expect(webSearch("q", { engine: "anysearch" })).rejects.toThrow(/bad query/);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("throws on result.isError (MCP tool-level failure)", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            result: {
+              content: [{ type: "text", text: "quota exhausted" }],
+              isError: true,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+    ) as unknown as typeof fetch;
+    try {
+      await expect(webSearch("q", { engine: "anysearch" })).rejects.toThrow(/quota exhausted/);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("maps a 429 to the rate-limit hint", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: "rate limited" }), {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        }),
+    ) as unknown as typeof fetch;
+    try {
+      await expect(webSearch("q", { engine: "anysearch" })).rejects.toThrow(/rate-limited|quota/);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
 describe("formatSearchResults", () => {
   it("renders a query header + numbered list", () => {
     const out = formatSearchResults("hello", [

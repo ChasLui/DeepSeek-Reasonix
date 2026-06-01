@@ -663,6 +663,11 @@ export interface TranslationSchema {
     exaRateLimit: string;
     exaServerError: string;
     exaParseError: string;
+    anysearchUnauthorized: string;
+    anysearchRateLimit: string;
+    anysearchServerError: string;
+    anysearchParseError: string;
+    anysearchApiError: string;
     fetchStatus: string;
     fetchRateLimit429: string;
     fetchForbidden403: string;
