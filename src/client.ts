@@ -273,7 +273,12 @@ export class DeepSeekClient {
     if (opts.topLogprobs !== undefined) payload.top_logprobs = opts.topLogprobs;
     // see ARCHITECTURE.md#api-surface
     if (opts.thinking && !this._isAzureEndpoint()) {
+      // OpenAI-compatible / self-hosted (vLLM, SGLang) read the toggle here.
       payload.extra_body = { thinking: { type: opts.thinking } };
+      // Native DeepSeek ignores extra_body.thinking, honoring only top-level.
+      if (this._isNativeDeepSeekEndpoint()) {
+        payload.thinking = { type: opts.thinking };
+      }
     }
     if (opts.reasoningEffort) {
       payload.reasoning_effort = opts.reasoningEffort;
@@ -364,6 +369,17 @@ export class DeepSeekClient {
     try {
       const host = new URL(this.baseUrl).hostname;
       return host === "azure.com" || host.endsWith(".azure.com");
+    } catch {
+      return false;
+    }
+  }
+
+  /** Native DeepSeek reads the thinking toggle only from the top-level
+   *  `thinking` field; extra_body.thinking is silently ignored there. */
+  private _isNativeDeepSeekEndpoint(): boolean {
+    try {
+      const host = new URL(this.baseUrl).hostname;
+      return host === "api.deepseek.com" || host.endsWith(".deepseek.com");
     } catch {
       return false;
     }
