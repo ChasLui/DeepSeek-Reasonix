@@ -3,7 +3,7 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AcpServer } from "../src/acp/server.js";
 import type { Session } from "../src/cli/commands/acp.js";
 import { Eventizer } from "../src/core/eventize.js";
@@ -308,5 +308,47 @@ describe("DaemonHost — real socket transport", () => {
       client.close();
       await new Promise<void>((r) => server.close(() => r()));
     }
+  });
+});
+
+describe("DaemonHost — idle shutdown (Slice 5)", () => {
+  it("fires onIdle after the idle window when no session ever connects", async () => {
+    const onIdle = vi.fn();
+    const host = new DaemonHost({ defaultDir: "/tmp", idleMs: 25, onIdle });
+    host.start();
+    await wait(60);
+    expect(onIdle).toHaveBeenCalledTimes(1);
+    await host.closeAll();
+  });
+
+  it("disarms while a session is active and re-arms after it detaches", async () => {
+    const onIdle = vi.fn();
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const server = new AcpServer({ input, output });
+    const host = new DaemonHost({
+      defaultDir: "/tmp",
+      idleMs: 25,
+      onIdle,
+      createSession: async (rootDir): Promise<Session> =>
+        ({
+          id: "s1",
+          rootDir,
+          mcpClients: [],
+          aborter: null,
+        }) as unknown as Session,
+    });
+    host.attach(server);
+    host.start(); // armed (0 sessions)
+    input.write(
+      `${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "session/new", params: { cwd: "/tmp" } })}\n`,
+    );
+    await wait(40); // session active → idle disarmed, must NOT fire
+    expect(onIdle).not.toHaveBeenCalled();
+
+    await host.detach(server); // last session gone → re-arm
+    await wait(40);
+    expect(onIdle).toHaveBeenCalledTimes(1);
+    await host.closeAll();
   });
 });

@@ -34,6 +34,10 @@ export interface DaemonHostOptions {
   yolo?: boolean;
   /** Override session construction — the seam Slice 3's per-workspace pool plugs into; tests inject a loop stub. */
   createSession?: (rootDir: string) => Promise<Session>;
+  /** Shut down after this many ms with zero sessions. 0/undefined disables (stay up forever). */
+  idleMs?: number;
+  /** Fired when the idle window elapses with no sessions — the run command triggers graceful shutdown. */
+  onIdle?: () => void;
 }
 
 /** Daemon-side bookkeeping the ACP `Session` doesn't carry: owning connection + per-session HITL gate. */
@@ -68,6 +72,7 @@ export class DaemonHost {
   // Warm MCP children shared across sessions in the same workspace (FR-005).
   private readonly mcpPool = new McpPool();
   private gateUnsub: (() => void) | null = null;
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly opts: DaemonHostOptions) {}
 
@@ -77,6 +82,23 @@ export class DaemonHost {
 
   private editMode(): EditMode {
     return this.opts.yolo ? "yolo" : loadEditMode();
+  }
+
+  /** Arm idle-shutdown iff configured and no sessions remain (Slice 5). */
+  private armIdle(): void {
+    if (!this.opts.idleMs || this.sessions.size > 0 || this.idleTimer) return;
+    this.idleTimer = setTimeout(() => {
+      this.idleTimer = null;
+      if (this.sessions.size === 0) this.opts.onIdle?.();
+    }, this.opts.idleMs);
+    this.idleTimer.unref?.();
+  }
+
+  private disarmIdle(): void {
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
   }
 
   private async createSession(
@@ -115,6 +137,8 @@ export class DaemonHost {
       if (auto !== null) pauseGate.resolve(req.id, auto);
       else pauseGate.cancel(req.id);
     });
+    // A daemon that boots and is never connected to should still idle out.
+    this.armIdle();
   }
 
   /** Wire the JSON-RPC method handlers onto one client connection. */
@@ -153,6 +177,7 @@ export class DaemonHost {
       const { session, gate } = await this.createSession(rootDir, server);
       this.sessions.set(session.id, session);
       this.meta.set(session.id, { owner: server, gate });
+      this.disarmIdle();
       return { sessionId: session.id };
     });
 
@@ -245,10 +270,13 @@ export class DaemonHost {
       this.sessions.delete(sid);
       this.meta.delete(sid);
     }
+    // Last session for this connection gone → start the idle countdown.
+    this.armIdle();
     await Promise.all(closes);
   }
 
   async closeAll(): Promise<void> {
+    this.disarmIdle();
     const closes: Promise<unknown>[] = [];
     for (const meta of this.meta.values()) meta.gate?.cancelAll();
     for (const session of this.sessions.values()) {

@@ -650,6 +650,11 @@ daemon
     [] as string[],
   )
   .option("--mcp-prefix <str>", t("ui.mcpPrefixHintShort"))
+  .option(
+    "--idle-ms <ms>",
+    "shut down after this many ms with no sessions (best paired with socket activation)",
+    (v) => Number.parseInt(v, 10),
+  )
   .action(async (opts) => {
     const { daemonRunCommand } = await import("./commands/daemon.js");
     await daemonRunCommand({
@@ -659,6 +664,7 @@ daemon
       yolo: !!opts.yolo,
       mcpSpecs: opts.mcp as string[],
       mcpPrefix: opts.mcpPrefix,
+      idleMs: typeof opts.idleMs === "number" ? opts.idleMs : undefined,
     });
   });
 

@@ -39,6 +39,14 @@ export interface DaemonRunOptions {
   mcpSpecs?: string[];
   mcpPrefix?: string;
   socketPath?: string;
+  /** Idle-shutdown window in ms. Flag wins over REASONIX_DAEMON_IDLE_MS; 0/absent stays up forever. */
+  idleMs?: number;
+}
+
+/** Flag > env > disabled. Non-positive / malformed → disabled (stay up). */
+function resolveIdleMs(flag: number | undefined): number | undefined {
+  const raw = flag ?? Number.parseInt(process.env.REASONIX_DAEMON_IDLE_MS ?? "", 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : undefined;
 }
 
 function clearStaleSocket(socketPath: string): void {
@@ -62,6 +70,7 @@ export async function daemonRunCommand(opts: DaemonRunOptions): Promise<void> {
   clearStaleSocket(socketPath);
   const defaultDir = resolveDir(opts.dir, process.cwd());
 
+  const idleMs = resolveIdleMs(opts.idleMs);
   const host = new DaemonHost({
     defaultDir,
     model: opts.model,
@@ -69,6 +78,12 @@ export async function daemonRunCommand(opts: DaemonRunOptions): Promise<void> {
     yolo: opts.yolo,
     mcpSpecs: opts.mcpSpecs,
     mcpPrefix: opts.mcpPrefix,
+    idleMs,
+    // Reuse the SIGTERM path so idle shutdown drains MCP + checkpoints SQLite.
+    onIdle: () => {
+      process.stderr.write(`reasonix daemon idle for ${idleMs}ms — shutting down\n`);
+      process.kill(process.pid, "SIGTERM");
+    },
   });
   host.start();
   const server = await listenDaemon(host, socketPath);
