@@ -1,5 +1,6 @@
 /** Daemon session host — owns CacheFirstLoop sessions over a local socket, generalizing the ACP stdio host to many client connections. */
 
+import { dispatchKernelEvent } from "../acp/dispatch.js";
 import { requestPermissionForGate } from "../acp/gates.js";
 import {
   ACP_PROTOCOL_VERSION,
@@ -183,12 +184,18 @@ export class DaemonHost {
             stopReason = "cancelled";
             break;
           }
-          // Carries the raw LoopEvent so the headless client reuses run.ts's
-          // renderer verbatim; richer (TUI) clients converge on kernel events in Slice 4.
+          // Two streams: raw LoopEvent reuses run.ts's headless renderer verbatim;
+          // the kernel-event session/update stream is what rich (TUI / desktop)
+          // clients already know how to render (same shape ACP emits).
           server.sendNotification("session/loopEvent", {
             sessionId: session.id,
             event: ev,
           });
+          if (session.eventizer) {
+            for (const kev of session.eventizer.consume(ev, session.ctx)) {
+              dispatchKernelEvent(server, session.id, kev);
+            }
+          }
           if (ev.role === "error") stopReason = "error";
           if (ev.role === "assistant_final" && ev.stats?.usage) {
             appendUsage({

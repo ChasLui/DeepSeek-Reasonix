@@ -6,6 +6,7 @@ import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { AcpServer } from "../src/acp/server.js";
 import type { Session } from "../src/cli/commands/acp.js";
+import { Eventizer } from "../src/core/eventize.js";
 import { connectDaemon } from "../src/daemon/client.js";
 import { DaemonHost } from "../src/daemon/host.js";
 import { listenDaemon } from "../src/daemon/server-listen.js";
@@ -223,6 +224,71 @@ describe("DaemonHost — concurrent sessions", () => {
     // Each session's delta carries its own id as content — no cross-talk.
     for (const d of deltas) expect(d.event.content).toBe(d.sessionId);
     expect(new Set(deltas.map((d) => d.sessionId))).toEqual(new Set(ids));
+    server.close();
+  });
+});
+
+describe("DaemonHost — kernel-event convergence", () => {
+  it("emits session/update kernel events alongside raw loopEvents", async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const collected: unknown[] = [];
+    output.on("data", (chunk: Buffer) => {
+      for (const line of chunk.toString("utf8").split("\n")) {
+        if (line.trim()) collected.push(JSON.parse(line.trim()));
+      }
+    });
+    const server = new AcpServer({ input, output });
+    const host = new DaemonHost({
+      defaultDir: "/tmp",
+      createSession: async (rootDir): Promise<Session> =>
+        ({
+          id: "sess_k",
+          rootDir,
+          mcpClients: [],
+          aborter: null,
+          eventizer: new Eventizer(),
+          ctx: { model: "m", prefixHash: "h", reasoningEffort: "high" },
+          loop: {
+            async *step(): AsyncGenerator<LoopEvent> {
+              yield { turn: 1, role: "assistant_delta", content: "hi there" };
+              yield { turn: 1, role: "done", content: "" };
+            },
+          },
+        }) as unknown as Session,
+    });
+    host.attach(server);
+    const send = (msg: unknown) => input.write(`${JSON.stringify(msg)}\n`);
+
+    send({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "session/new",
+      params: { cwd: "/tmp" },
+    });
+    await wait();
+    send({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "session/prompt",
+      params: { sessionId: "sess_k", prompt: [{ type: "text", text: "x" }] },
+    });
+    await wait();
+
+    const updates = collected
+      .filter((l) => (l as { method?: string }).method === "session/update")
+      .map(
+        (l) =>
+          (
+            l as {
+              params: {
+                update: { sessionUpdate: string; content?: { text?: string } };
+              };
+            }
+          ).params.update,
+      );
+    const chunk = updates.find((u) => u.sessionUpdate === "agent_message_chunk");
+    expect(chunk?.content?.text).toBe("hi there");
     server.close();
   });
 });

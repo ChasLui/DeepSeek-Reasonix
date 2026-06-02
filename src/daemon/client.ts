@@ -1,13 +1,19 @@
 /** Daemon client — connects to the control socket and drives a remote session over NDJSON JSON-RPC. */
 
 import { type Socket, createConnection } from "node:net";
-import type { PermissionRequestParams, PermissionRequestResult } from "../acp/protocol.js";
+import type {
+  PermissionRequestParams,
+  PermissionRequestResult,
+  SessionUpdateParams,
+} from "../acp/protocol.js";
 import { AcpServer } from "../acp/server.js";
 import type { LoopEvent } from "../loop/types.js";
 
 export interface DaemonClientOptions {
   /** Handle a daemon-forwarded confirmation. Omit → fail closed (cancelled/deny). */
   onPermission?: (params: PermissionRequestParams) => Promise<PermissionRequestResult>;
+  /** Subscribe to the kernel-event session/update stream (what a rich/TUI client renders). */
+  onUpdate?: (params: SessionUpdateParams) => void;
 }
 
 export interface DaemonClient {
@@ -31,6 +37,9 @@ export function connectDaemon(
       let onLoopEvent: ((ev: LoopEvent) => void) | null = null;
       rpc.onNotification<{ sessionId: string; event: LoopEvent }>("session/loopEvent", (p) => {
         if (p?.event && onLoopEvent) onLoopEvent(p.event);
+      });
+      rpc.onNotification<SessionUpdateParams>("session/update", (p) => {
+        if (p && opts.onUpdate) opts.onUpdate(p);
       });
       rpc.onRequest<PermissionRequestParams, PermissionRequestResult>(
         "session/request_permission",
