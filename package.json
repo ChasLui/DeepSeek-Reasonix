@@ -3,7 +3,6 @@
   "version": "0.47.2",
   "description": "DeepSeek-native coding agent: cache-first loop, flash-first cost control, tool-call repair.",
   "type": "module",
-  "packageManager": "pnpm@10.33.0",
   "bin": {
     "reasonix": "dist/cli/index.js"
   },
@@ -25,43 +24,29 @@
     "README.md",
     "LICENSE"
   ],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "build": "rolldown -c rolldown.config.mjs && node scripts/copy-dashboard-vendor-css.mjs && node scripts/copy-tree-sitter-grammars.mjs",
+    "build": "tsup && node scripts/copy-dashboard-vendor-css.mjs && node scripts/copy-tree-sitter-grammars.mjs",
     "dev": "tsx src/cli/index.ts",
     "chat": "tsx src/cli/index.ts chat",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:mutation": "stryker run",
-    "lint": "oxlint src tests dashboard/src desktop/src packages/core-utils/src --deny-warnings",
-    "lint:fix": "oxlint src tests dashboard/src desktop/src packages/core-utils/src --fix",
-    "format": "oxfmt src tests dashboard/src desktop/src packages/core-utils/src",
-    "format:check": "oxfmt --check src tests dashboard/src desktop/src packages/core-utils/src",
-    "typecheck": "tsgo --noEmit && tsgo --noEmit -p tsconfig.tests.json && tsgo --noEmit -p dashboard && tsgo --noEmit -p packages/core-utils && tsgo --noEmit -p desktop && pnpm run typecheck:declarations",
-    "typecheck:declarations": "tsgo --noEmit -p dashboard/tsconfig.declaration.json && tsgo --noEmit -p desktop/tsconfig.declaration.json",
-    "verify": "pnpm run build && pnpm run lint && pnpm run format:check && pnpm run typecheck && pnpm run transform:check && pnpm run test --silent",
-    "transform:check": "node scripts/probe-oxc-transform.mjs",
-    "prepare": "simple-git-hooks || true",
-    "prepublishOnly": "pnpm run lint && pnpm run format:check && pnpm run typecheck && pnpm run transform:check && pnpm run test && pnpm run build",
-    "bench-shield": "tsx scripts/bench-mcp-shield.mts",
-    "bench-daemon-warm": "tsx scripts/bench-daemon-warm.mts",
-    "bench-daemon-cache": "tsx scripts/bench-daemon-token-cache.mts"
+    "lint": "biome check src tests",
+    "lint:fix": "biome check --write src tests",
+    "format": "biome format --write src tests",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p dashboard",
+    "verify": "npm run build && npm run lint && npm run typecheck && npm run test --silent",
+    "prepare": "node scripts/prepare-git-hooks.mjs",
+    "prepublishOnly": "npm run lint && npm run typecheck && npm run test && npm run build",
+    "bench-shield": "tsx scripts/bench-mcp-shield.mts"
   },
   "simple-git-hooks": {
-    "pre-commit": "pnpm run lint",
-    "pre-push": "pnpm run verify"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "simple-git-hooks",
-      "tree-sitter-go",
-      "tree-sitter-java",
-      "tree-sitter-javascript",
-      "tree-sitter-python",
-      "tree-sitter-rust",
-      "tree-sitter-typescript"
-    ]
+    "pre-commit": "npm run lint",
+    "pre-push": "npm run verify"
   },
   "keywords": [
     "agent",
@@ -106,27 +91,21 @@
     "zod": "^4.4.1"
   },
   "devDependencies": {
-    "@typescript/native-preview": "^7.0.0-dev.20260621.1",
+    "@biomejs/biome": "^1.9.4",
     "@reasonix/core-utils": "workspace:*",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
-    "@types/node": "^26.0.0",
+    "@types/node": "^22.9.0",
     "@types/picomatch": "^4.0.3",
-    "@types/react": "^19.2.17",
+    "@types/react": "^19.2.14",
     "@types/ws": "^8.18.1",
-    "@vitest/coverage-v8": "^4.1.9",
-    "esbuild": "^0.28.0",
+    "@vitest/coverage-v8": "^2.1.5",
+    "esbuild": "^0.21.5",
     "highlight.js": "^11.10.0",
     "htm": "^3.1.1",
     "ink-testing-library": "^4.0.0",
     "marked": "^15.0.12",
-    "oxfmt": "^0.55.0",
-    "oxlint": "^1.70.0",
-    "oxlint-tsgolint": "^0.23.0",
-    "oxc-transform": "^0.137.0",
     "preact": "^10.22.0",
-    "rolldown": "^1.1.2",
-    "rolldown-plugin-dts": "^0.26.0",
     "simple-git-hooks": "^2.13.1",
     "strip-ansi": "^7.1.0",
     "tree-sitter-go": "^0.25.0",
@@ -135,12 +114,16 @@
     "tree-sitter-python": "^0.25.0",
     "tree-sitter-rust": "^0.24.0",
     "tree-sitter-typescript": "^0.23.2",
-    "tsx": "^4.22.4",
-    "typescript": "^6.0.3",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
     "uplot": "^1.6.31",
-    "vitest": "^4.1.9"
+    "vitest": "^2.1.5"
   },
   "optionalDependencies": {
     "@node-rs/jieba": "^2.0.1"
+  },
+  "overrides": {
+    "glob": "^11.0.3"
   }
 }
