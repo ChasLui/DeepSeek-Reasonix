@@ -1,6 +1,5 @@
 /** Daemon session host — owns CacheFirstLoop sessions over a local socket, generalizing the ACP stdio host to many client connections. */
 
-import { AsyncLocalStorage } from "node:async_hooks";
 import { requestPermissionForGate } from "../acp/gates.js";
 import {
   ACP_PROTOCOL_VERSION,
@@ -19,8 +18,7 @@ import {
 import type { AcpServer } from "../acp/server.js";
 import { type Session, buildSession, resolveDir } from "../cli/commands/acp.js";
 import { type EditMode, loadEditMode } from "../config.js";
-import type { PauseRequest } from "../core/pause-gate.js";
-import { pauseGate } from "../core/pause-gate.js";
+import { PauseGate, type PauseRequest, pauseGate } from "../core/pause-gate.js";
 import { autoResolveVerdict } from "../core/pause-policy.js";
 import { appendUsage } from "../telemetry/usage.js";
 import { VERSION } from "../version.js";
@@ -37,16 +35,35 @@ export interface DaemonHostOptions {
   createSession?: (rootDir: string) => Promise<Session>;
 }
 
-/** Daemon-side bookkeeping the ACP `Session` doesn't carry: which connection owns it and its auto-resolve policy. */
+/** Daemon-side bookkeeping the ACP `Session` doesn't carry: owning connection + per-session HITL gate. */
 interface SessionMeta {
   owner: AcpServer;
-  editMode: EditMode;
+  /** Per-session PauseGate — its identity IS the session binding, so confirmations route to `owner` with no AsyncLocalStorage attribution (Slice 4). Absent for injected (test stub) sessions. */
+  gate?: PauseGate;
+}
+
+/** Register the routing listener for one session's gate: auto-resolve by policy, else round-trip a permission request to the owning connection. Resolves on the same gate, so per-session ids never collide. */
+export function attachSessionGate(
+  gate: PauseGate,
+  server: AcpServer,
+  sessionId: string,
+  editMode: EditMode,
+): void {
+  gate.on((req: PauseRequest) => {
+    const auto = autoResolveVerdict(req, editMode);
+    if (auto !== null) {
+      gate.resolve(req.id, auto);
+      return;
+    }
+    void requestPermissionForGate(server, sessionId, req).then((verdict) =>
+      gate.resolve(req.id, verdict),
+    );
+  });
 }
 
 export class DaemonHost {
   private readonly sessions = new Map<string, Session>();
   private readonly meta = new Map<string, SessionMeta>();
-  private readonly sessionContext = new AsyncLocalStorage<string>();
   // Warm MCP children shared across sessions in the same workspace (FR-005).
   private readonly mcpPool = new McpPool();
   private gateUnsub: (() => void) | null = null;
@@ -57,15 +74,25 @@ export class DaemonHost {
     return this.sessions.size;
   }
 
-  private createSession(rootDir: string): Promise<Session> {
-    if (this.opts.createSession) return this.opts.createSession(rootDir);
+  private editMode(): EditMode {
+    return this.opts.yolo ? "yolo" : loadEditMode();
+  }
+
+  private async createSession(
+    rootDir: string,
+    server: AcpServer,
+  ): Promise<{ session: Session; gate?: PauseGate }> {
+    if (this.opts.createSession) return { session: await this.opts.createSession(rootDir) };
     const specs = this.opts.mcpSpecs ?? [];
-    return buildSession({
+    const gate = new PauseGate();
+    const session = await buildSession({
       rootDir,
       modelOverride: this.opts.model,
       budgetUsd: this.opts.budgetUsd,
       mcpSpecs: specs,
       mcpPrefix: this.opts.mcpPrefix,
+      // The session's own gate routes confirmations to its owning connection.
+      confirmationGate: gate,
       // Bridge the workspace's warm pool into this session's own registry; the
       // pool owns the children, so the session's mcpClients stays empty and
       // detach()/closeAll() never tear shared children down per-session.
@@ -74,32 +101,19 @@ export class DaemonHost {
         return [];
       },
     });
+    attachSessionGate(gate, server, session.id, this.editMode());
+    return { session, gate };
   }
 
-  /** Register the single process-wide gate listener. Idempotent. */
+  /** Register a fail-closed fallback on the GLOBAL gate for confirmations raised outside a session's own gate — e.g. subagents, which construct child loops on the default singleton. Idempotent. */
   start(): void {
     if (this.gateUnsub) return;
-    this.gateUnsub = pauseGate.on((req) => this.routeGate(req));
-  }
-
-  private routeGate(req: PauseRequest): void {
-    // Source of truth for attribution is the ALS scope the loop step runs in.
-    // Fail closed: no/unknown session → cancel (safe deny verdict).
-    const sid = this.sessionContext.getStore();
-    const meta = sid ? this.meta.get(sid) : undefined;
-    if (!sid || !meta || !this.sessions.has(sid)) {
-      pauseGate.cancel(req.id);
-      return;
-    }
-    const auto = autoResolveVerdict(req, meta.editMode);
-    if (auto !== null) {
-      pauseGate.resolve(req.id, auto);
-      return;
-    }
-    void (async () => {
-      const verdict = await requestPermissionForGate(meta.owner, sid, req);
-      pauseGate.resolve(req.id, verdict);
-    })();
+    const editMode = this.editMode();
+    this.gateUnsub = pauseGate.on((req) => {
+      const auto = autoResolveVerdict(req, editMode);
+      if (auto !== null) pauseGate.resolve(req.id, auto);
+      else pauseGate.cancel(req.id);
+    });
   }
 
   /** Wire the JSON-RPC method handlers onto one client connection. */
@@ -135,12 +149,9 @@ export class DaemonHost {
 
     server.onRequest<SessionNewParams, SessionNewResult>("session/new", async (params) => {
       const rootDir = resolveDir(params?.cwd, this.opts.defaultDir);
-      const session = await this.createSession(rootDir);
+      const { session, gate } = await this.createSession(rootDir, server);
       this.sessions.set(session.id, session);
-      this.meta.set(session.id, {
-        owner: server,
-        editMode: this.opts.yolo ? "yolo" : loadEditMode(),
-      });
+      this.meta.set(session.id, { owner: server, gate });
       return { sessionId: session.id };
     });
 
@@ -167,29 +178,27 @@ export class DaemonHost {
       session.aborter = aborter;
       let stopReason: StopReason = "end_turn";
       try {
-        await this.sessionContext.run(session.id, async () => {
-          for await (const ev of session.loop.step(text)) {
-            if (aborter.signal.aborted) {
-              stopReason = "cancelled";
-              break;
-            }
-            // Carries the raw LoopEvent so the headless client reuses run.ts's
-            // renderer verbatim; richer (TUI) clients converge on kernel events in Slice 4.
-            server.sendNotification("session/loopEvent", {
-              sessionId: session.id,
-              event: ev,
-            });
-            if (ev.role === "error") stopReason = "error";
-            if (ev.role === "assistant_final" && ev.stats?.usage) {
-              appendUsage({
-                session: null,
-                model: ev.stats.model,
-                usage: ev.stats.usage,
-                workspace: session.rootDir,
-              });
-            }
+        for await (const ev of session.loop.step(text)) {
+          if (aborter.signal.aborted) {
+            stopReason = "cancelled";
+            break;
           }
-        });
+          // Carries the raw LoopEvent so the headless client reuses run.ts's
+          // renderer verbatim; richer (TUI) clients converge on kernel events in Slice 4.
+          server.sendNotification("session/loopEvent", {
+            sessionId: session.id,
+            event: ev,
+          });
+          if (ev.role === "error") stopReason = "error";
+          if (ev.role === "assistant_final" && ev.stats?.usage) {
+            appendUsage({
+              session: null,
+              model: ev.stats.model,
+              usage: ev.stats.usage,
+              workspace: session.rootDir,
+            });
+          }
+        }
       } catch (err) {
         server.sendNotification("session/loopEvent", {
           sessionId: session.id,
@@ -210,15 +219,18 @@ export class DaemonHost {
     server.onNotification<SessionCancelParams>("session/cancel", (params) => {
       const session = params?.sessionId ? this.sessions.get(params.sessionId) : undefined;
       session?.aborter?.abort();
+      // Free any tool stranded awaiting a confirmation on this session's gate.
+      this.meta.get(params?.sessionId ?? "")?.gate?.cancelAll();
     });
   }
 
-  /** Drop every session owned by a disconnected connection, tearing down its MCP children. */
+  /** Drop every session owned by a disconnected connection, freeing stranded gates + tearing down per-session MCP children. */
   async detach(server: AcpServer): Promise<void> {
     const closes: Promise<unknown>[] = [];
     for (const [sid, meta] of this.meta) {
       if (meta.owner !== server) continue;
       const session = this.sessions.get(sid);
+      meta.gate?.cancelAll();
       session?.aborter?.abort();
       if (session) {
         for (const mcp of session.mcpClients) closes.push(mcp.close().catch(() => undefined));
@@ -231,6 +243,7 @@ export class DaemonHost {
 
   async closeAll(): Promise<void> {
     const closes: Promise<unknown>[] = [];
+    for (const meta of this.meta.values()) meta.gate?.cancelAll();
     for (const session of this.sessions.values()) {
       session.aborter?.abort();
       for (const mcp of session.mcpClients) closes.push(mcp.close().catch(() => undefined));

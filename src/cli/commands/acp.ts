@@ -36,7 +36,7 @@ import {
 } from "../../config.js";
 import { loadEditMode } from "../../config.js";
 import { Eventizer } from "../../core/eventize.js";
-import { pauseGate } from "../../core/pause-gate.js";
+import { type PauseGate, pauseGate } from "../../core/pause-gate.js";
 import { autoResolveVerdict } from "../../core/pause-policy.js";
 import { loadDotenv } from "../../env.js";
 import { t } from "../../i18n/index.js";
@@ -167,6 +167,8 @@ export async function buildSession(opts: {
   mcpPrefix?: string;
   /** Override MCP setup — the daemon injects a per-workspace warm pool. Default per-session init. Bridges into `tools` BEFORE the prefix is built either way (Pillar 1). */
   bridgeMcp?: (tools: import("../../tools.js").ToolRegistry) => Promise<McpClient[]>;
+  /** Per-session HITL gate — the daemon passes a fresh PauseGate so confirmations route to its connection. Defaults to the global singleton (ACP/in-process behavior). */
+  confirmationGate?: PauseGate;
 }): Promise<Session> {
   const preset = canonicalPresetName(loadPreset());
   const resolved = resolvePreset(preset);
@@ -204,6 +206,7 @@ export async function buildSession(opts: {
     budgetWindows: resolveBudgetWindows(),
     workspace: opts.rootDir,
     session: `acp-${timestampSuffix()}`,
+    confirmationGate: opts.confirmationGate,
   });
   return {
     id: `sess_${timestampSuffix()}-${Math.random().toString(36).slice(2, 8)}`,
