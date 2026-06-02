@@ -1,7 +1,8 @@
-/** Background index maintenance for Pillar 5 (Slices 1–2): watch each active workspace, debounce changes, then maintain its retrieval indexes (code-graph incremental every flush; lexical/semantic full rebuilds throttled per root; idle prebuild). Writes only file-backed derived state under .reasonix/index, never a session prefix/log — zero Pillar-1 risk (INV-P1). */
+/** Background index maintenance for Pillar 5 (Slices 1–3): recursively watch each active workspace, debounce changes, then maintain its retrieval indexes (code-graph incremental every flush; lexical/semantic full rebuilds throttled per root; idle prebuild). Writes only file-backed derived state under .reasonix/index, never a session prefix/log — zero Pillar-1 risk (INV-P1). */
 
-import { type FSWatcher, watch as fsWatch } from "node:fs";
-import { incrementalUpdate } from "../index/code-graph/builder.js";
+import { type Dirent, watch as fsWatch, readdirSync } from "node:fs";
+import { join, relative } from "node:path";
+import { SKIP_DIR_NAMES, incrementalUpdate } from "../index/code-graph/builder.js";
 import { loadCodeGraph } from "../index/code-graph/loader.js";
 import { buildCodeLexicalIndex } from "../index/lexical/code.js";
 import { buildIndex as buildSemanticIndex, indexExists } from "../index/semantic/builder.js";
@@ -18,11 +19,19 @@ function resolveMs(envVar: string, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-/** Pluggable watcher — defaults to recursive fs.watch; tests inject a fake, and Slice 3 swaps in a Linux-recursive implementation that also applies SKIP_DIR_NAMES. Returns a closer. */
+/** Pluggable watcher — defaults to a cross-platform recursive watch; tests inject a fake. Returns a closer. */
 export type WatchFactory = (
   root: string,
   onChange: (file: string) => void,
 ) => { close: () => void };
+
+/** Low-level per-directory watch primitives — injected so the recursive walk is testable without real fs events. */
+export interface WatchPrimitives {
+  /** Immediate non-skipped, non-symlink child directories of `dir`. */
+  listDirs: (dir: string) => string[];
+  /** Watch a single directory (non-recursive); the callback gets the changed entry name (or null). */
+  watchDir: (dir: string, onEvent: (name: string | null) => void) => { close: () => void };
+}
 
 /** Pluggable incremental code-graph updater — defaults to loadCodeGraph + incrementalUpdate. */
 export type GraphUpdater = (root: string, staleFiles: string[]) => Promise<void>;
@@ -49,13 +58,56 @@ interface WorkspaceWatch {
   debounceTimer: ReturnType<typeof setTimeout> | null;
 }
 
-const defaultWatch: WatchFactory = (root, onChange) => {
-  // recursive is supported on macOS/Windows; Linux falls back in Slice 3.
-  const w: FSWatcher = fsWatch(root, { recursive: true }, (_event, filename) => {
-    if (filename) onChange(String(filename));
-  });
-  return { close: () => w.close() };
+/** Immediate child directories of `dir`, excluding SKIP_DIR_NAMES + symlinks so node_modules/.git are never watched (P1-I / NF-106). Exported for testing. */
+export function listWatchableDirs(dir: string): string[] {
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((e) => e.isDirectory() && !e.isSymbolicLink() && !SKIP_DIR_NAMES.has(e.name))
+    .map((e) => join(dir, e.name));
+}
+
+const realPrims: WatchPrimitives = {
+  listDirs: listWatchableDirs,
+  watchDir: (dir, onEvent) => {
+    const w = fsWatch(dir, (_event, name) => onEvent(name ? String(name) : null));
+    return { close: () => w.close() };
+  },
 };
+
+/** Recursively watch `root` + every non-skipped subdirectory, picking up newly-created dirs. Unifies platforms (fs.watch `recursive` is macOS/Windows-only) and excludes SKIP_DIR_NAMES + symlinks so node_modules/.git never blow up CPU (P1-I). */
+export function recursiveWatch(
+  root: string,
+  onChange: (file: string) => void,
+  prims: WatchPrimitives = realPrims,
+): { close: () => void } {
+  const watched = new Map<string, { close: () => void }>();
+  const watch = (dir: string): void => {
+    if (watched.has(dir)) return;
+    watched.set(
+      dir,
+      prims.watchDir(dir, (name) => {
+        if (name) onChange(relative(root, join(dir, name)) || name);
+        // A change may have created a new subdir — rescan this dir's children.
+        for (const sub of prims.listDirs(dir)) watch(sub);
+      }),
+    );
+    for (const sub of prims.listDirs(dir)) watch(sub);
+  };
+  watch(root);
+  return {
+    close: () => {
+      for (const w of watched.values()) w.close();
+      watched.clear();
+    },
+  };
+}
+
+const defaultWatch: WatchFactory = (root, onChange) => recursiveWatch(root, onChange);
 
 const defaultUpdateGraph: GraphUpdater = async (root, staleFiles) => {
   const graph = await loadCodeGraph(root);
@@ -106,6 +158,19 @@ export class IndexMaintainer {
     this.unsubs.push(lifecycle.onIdle((root) => this.prebuild(root)));
   }
 
+  /** Per-workspace maintenance status for the daemon status endpoint (Slice 3). */
+  status(): Array<{
+    root: string;
+    pendingStale: number;
+    lastHeavyMs: number | null;
+  }> {
+    return [...this.watches.entries()].map(([root, ws]) => ({
+      root,
+      pendingStale: ws.staleSet.size,
+      lastHeavyMs: this.lastHeavy.get(root) ?? null,
+    }));
+  }
+
   /** Roots currently watched (tests/status). */
   watchedRoots(): string[] {
     return [...this.watches.keys()];
@@ -121,7 +186,7 @@ export class IndexMaintainer {
     try {
       ws.watcher = this.watchFn(root, (file) => this.onChange(root, ws, file));
     } catch (err) {
-      // recursive watch unsupported (Linux, Slice 3) or path gone — degrade silently.
+      // watch start failed (path gone, fd limit) — degrade silently.
       this.onError(root, err);
       return;
     }

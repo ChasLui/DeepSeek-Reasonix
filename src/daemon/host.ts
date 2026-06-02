@@ -111,6 +111,15 @@ export class DaemonHost {
     return this.lifecycle;
   }
 
+  /** Per-workspace background index maintenance status (empty when disabled). */
+  indexStatus(): Array<{
+    root: string;
+    pendingStale: number;
+    lastHeavyMs: number | null;
+  }> {
+    return this.indexMaintainer?.status() ?? [];
+  }
+
   /** Read-only snapshot for the status endpoint — no loop internals leak. */
   sessionSummaries(): Array<{ id: string; workspace: string; busy: boolean }> {
     return [...this.sessions.values()].map((s) => ({

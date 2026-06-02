@@ -14,6 +14,11 @@ describe("daemonStatusPayload", () => {
     expect(payload.uptimeMs).toBe(3000);
     expect(payload.sessions).toEqual([]);
   });
+
+  it("includes per-workspace index status (empty when background indexing is disabled)", () => {
+    const host = new DaemonHost({ defaultDir: "/tmp" });
+    expect(daemonStatusPayload(host, 1000, 4000).index).toEqual([]);
+  });
 });
 
 describe("startStatusServer", () => {

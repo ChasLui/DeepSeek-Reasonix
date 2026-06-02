@@ -10,6 +10,11 @@ export interface DaemonStatus {
   version: string;
   uptimeMs: number;
   sessions: Array<{ id: string; workspace: string; busy: boolean }>;
+  index: Array<{
+    root: string;
+    pendingStale: number;
+    lastHeavyMs: number | null;
+  }>;
 }
 
 export function daemonStatusPayload(
@@ -23,6 +28,7 @@ export function daemonStatusPayload(
     version: VERSION,
     uptimeMs: Math.max(0, nowMs - startedAtMs),
     sessions: host.sessionSummaries(),
+    index: host.indexStatus(),
   };
 }
 

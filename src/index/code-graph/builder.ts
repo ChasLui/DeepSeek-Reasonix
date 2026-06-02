@@ -23,7 +23,7 @@ import { type CodeGraphPaths, writeCodeGraph } from "./writer.js";
 
 const execFileAsync = promisify(execFile);
 
-const SKIP_DIR_NAMES = new Set([
+export const SKIP_DIR_NAMES = new Set([
   ".git",
   ".gitnexus",
   ".maos",

@@ -1,10 +1,16 @@
 /** IndexMaintainer (Slices 1–2) — fs-watch → debounce → code-graph incremental (every flush) + throttled lexical/semantic full rebuilds + idle prebuild, driven by WorkspaceLifecycle. Fake watch + spy updaters + injected clock isolate the logic from the platform/filesystem and real time. */
 
+import { mkdirSync, mkdtempSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type GraphUpdater,
   IndexMaintainer,
   type WatchFactory,
+  type WatchPrimitives,
+  listWatchableDirs,
+  recursiveWatch,
 } from "../src/daemon/index-maintainer.js";
 import { WorkspaceLifecycle } from "../src/daemon/workspace-lifecycle.js";
 
@@ -314,5 +320,88 @@ describe("IndexMaintainer — throttled heavy rebuilds + idle prebuild", () => {
     vi.advanceTimersByTime(50); // idle fires → prebuild → maybeHeavy
     expect(lex).toEqual(["/a"]);
     m.dispose();
+  });
+
+  it("status() reports each watched root's pending stale + lastHeavy", () => {
+    vi.useFakeTimers();
+    const lc = new WorkspaceLifecycle();
+    const fw = fakeWatch();
+    const m = new IndexMaintainer(lc, {
+      watch: fw.factory,
+      debounceMs: 100,
+      bgCooldownMs: 1000,
+      updateGraph: noop,
+      updateLexical: noop,
+      updateSemantic: noop,
+      now: () => 5000,
+    });
+    lc.onSessionOpen("/a");
+    fw.fire("/a", "x.ts"); // queues a stale path
+    expect(m.status()).toEqual([{ root: "/a", pendingStale: 1, lastHeavyMs: null }]);
+    vi.advanceTimersByTime(100); // flush → heavy runs (lastHeavy=5000), stale cleared
+    expect(m.status()).toEqual([{ root: "/a", pendingStale: 0, lastHeavyMs: 5000 }]);
+    m.dispose();
+  });
+});
+
+describe("recursiveWatch — cross-platform recursive directory watch", () => {
+  /** Fake per-dir watch primitives backed by an in-memory dir tree. */
+  function fakePrims(tree: Record<string, string[]>) {
+    const watchers = new Map<string, (name: string | null) => void>();
+    const prims: WatchPrimitives = {
+      listDirs: (dir) => tree[dir] ?? [],
+      watchDir: (dir, onEvent) => {
+        watchers.set(dir, onEvent);
+        return { close: () => watchers.delete(dir) };
+      },
+    };
+    return {
+      prims,
+      watchers,
+      fire: (dir: string, name: string | null) => watchers.get(dir)?.(name),
+    };
+  }
+
+  it("watches the root and every subdirectory, closing all on close", () => {
+    const f = fakePrims({
+      "/r": ["/r/a", "/r/b"],
+      "/r/a": ["/r/a/x"],
+      "/r/b": [],
+      "/r/a/x": [],
+    });
+    const w = recursiveWatch("/r", () => {}, f.prims);
+    expect([...f.watchers.keys()].sort()).toEqual(["/r", "/r/a", "/r/a/x", "/r/b"]);
+    w.close();
+    expect(f.watchers.size).toBe(0);
+  });
+
+  it("picks up a newly-created subdirectory on the next event", () => {
+    const tree: Record<string, string[]> = { "/r": [] };
+    const f = fakePrims(tree);
+    const changes: string[] = [];
+    recursiveWatch("/r", (file) => changes.push(file), f.prims);
+    expect([...f.watchers.keys()]).toEqual(["/r"]);
+    tree["/r"] = ["/r/new"]; // a new subdir appears...
+    tree["/r/new"] = [];
+    f.fire("/r", "new"); // ...and an event fires in /r
+    expect([...f.watchers.keys()].sort()).toEqual(["/r", "/r/new"]);
+    expect(changes).toEqual(["new"]); // relative(/r, /r/new) === "new"
+  });
+
+  it("listWatchableDirs excludes SKIP_DIR_NAMES and symlinks (NF-106)", () => {
+    const root = mkdtempSync(join(tmpdir(), "reasonix-watch-"));
+    mkdirSync(join(root, "src"));
+    mkdirSync(join(root, "node_modules"));
+    mkdirSync(join(root, ".git"));
+    try {
+      symlinkSync(join(root, "src"), join(root, "link"));
+    } catch {
+      // symlink may be unsupported (Windows w/o privilege) — src/skip assertions still hold.
+    }
+    const names = listWatchableDirs(root).map((d) => d.slice(root.length + 1));
+    expect(names).toContain("src");
+    expect(names).not.toContain("node_modules");
+    expect(names).not.toContain(".git");
+    expect(names).not.toContain("link");
   });
 });
