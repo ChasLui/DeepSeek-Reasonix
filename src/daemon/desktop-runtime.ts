@@ -21,9 +21,33 @@ export interface OpenDesktopSessionOpts {
   socketPath?: string;
 }
 
-export async function openDesktopDaemonSession(
+/** Overall ceiling so a wedged daemon/handshake never leaves a desktop tab without `$ready`. */
+const OPEN_TIMEOUT_MS = 15_000;
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    timer.unref?.();
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
+export function openDesktopDaemonSession(
   opts: OpenDesktopSessionOpts,
 ): Promise<DesktopDaemonSession> {
+  return withTimeout(openInner(opts), OPEN_TIMEOUT_MS, "daemon session open");
+}
+
+async function openInner(opts: OpenDesktopSessionOpts): Promise<DesktopDaemonSession> {
   const socketPath = opts.socketPath ?? daemonSocketPath();
   await ensureDaemon(socketPath);
   const client = await connectDaemon(socketPath, {

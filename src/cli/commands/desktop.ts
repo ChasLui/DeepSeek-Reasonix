@@ -1303,15 +1303,26 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
     });
     if (loadApiKey()) {
       process.env.DEEPSEEK_API_KEY = loadApiKey();
-      // Daemon-only: open the tab's loop session in the daemon; confirmations
-      // re-raise on this process's local PauseGate so the existing confirm UI works.
-      tab.daemonSession = await openDesktopDaemonSession({
-        rootDir: tab.rootDir,
-        model: tab.currentModel,
-        ask: (req) => pauseGate.ask(req),
-      });
-      tab.runtime = buildRuntimeFor(tab);
-      void bridgeTabMcp(tab);
+      try {
+        // Daemon-only: open the tab's loop session in the daemon; confirmations
+        // re-raise on this process's local PauseGate so the existing confirm UI works.
+        tab.daemonSession = await openDesktopDaemonSession({
+          rootDir: tab.rootDir,
+          model: tab.currentModel,
+          ask: (req) => pauseGate.ask(req),
+        });
+        tab.runtime = buildRuntimeFor(tab);
+        void bridgeTabMcp(tab);
+      } catch (err) {
+        // Don't leave the tab wedged with no $ready — surface the daemon failure.
+        emit(
+          {
+            type: "$error",
+            message: `could not start the daemon: ${(err as Error).message}. Try \`reasonix daemon run\`.`,
+          },
+          tab.id,
+        );
+      }
     }
   }
 

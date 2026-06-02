@@ -13,9 +13,13 @@ export interface EnsureDaemonDeps {
 }
 
 function defaultSpawn(): void {
-  // Detached + unref so the daemon outlives this client process; stdio ignored
-  // so it doesn't tie up our pipes. The log goes to the daemon's own file.
-  const child = spawn(process.execPath, [process.argv[1] ?? "", "daemon", "run"], {
+  // Reconstruct THIS process's launch so the daemon runs under the same runtime:
+  // process.execArgv carries dev loaders (e.g. tsx's --import), without which
+  // `node entry.ts daemon run` would fail on a TypeScript entrypoint.
+  const args = [...process.execArgv, process.argv[1] ?? "", "daemon", "run"];
+  // Detached + unref so the daemon outlives this client; stdio ignored so it
+  // doesn't tie up our pipes. The log goes to the daemon's own file.
+  const child = spawn(process.execPath, args, {
     detached: true,
     stdio: "ignore",
   });
