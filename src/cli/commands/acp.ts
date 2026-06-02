@@ -165,13 +165,17 @@ export async function buildSession(opts: {
   budgetUsd?: number;
   mcpSpecs?: string[];
   mcpPrefix?: string;
+  /** Override MCP setup — the daemon injects a per-workspace warm pool. Default per-session init. Bridges into `tools` BEFORE the prefix is built either way (Pillar 1). */
+  bridgeMcp?: (tools: import("../../tools.js").ToolRegistry) => Promise<McpClient[]>;
 }): Promise<Session> {
   const preset = canonicalPresetName(loadPreset());
   const resolved = resolvePreset(preset);
   const model = opts.modelOverride || resolved.model;
   const toolset = await buildCodeToolset({ rootDir: opts.rootDir });
   // Bridge MCP tools BEFORE building the prefix so their specs make it into the cache key.
-  const mcpClients = await loadMcpServers(toolset.tools, opts.mcpSpecs ?? [], opts.mcpPrefix);
+  const mcpClients = opts.bridgeMcp
+    ? await opts.bridgeMcp(toolset.tools)
+    : await loadMcpServers(toolset.tools, opts.mcpSpecs ?? [], opts.mcpPrefix);
   applySessionToolset(toolset.tools, resolveSessionToolset());
   const system = codeSystemPrompt(opts.rootDir, {
     hasSemanticSearch: toolset.semantic.enabled,

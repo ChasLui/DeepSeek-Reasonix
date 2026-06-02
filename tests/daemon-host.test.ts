@@ -148,6 +148,85 @@ describe("DaemonHost — session protocol", () => {
   });
 });
 
+describe("DaemonHost — concurrent sessions", () => {
+  it("routes each session's events to its own sessionId", async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const collected: unknown[] = [];
+    output.on("data", (chunk: Buffer) => {
+      for (const line of chunk.toString("utf8").split("\n")) {
+        if (line.trim()) collected.push(JSON.parse(line.trim()));
+      }
+    });
+    const server = new AcpServer({ input, output });
+    let n = 0;
+    const host = new DaemonHost({
+      defaultDir: "/tmp",
+      createSession: async (rootDir): Promise<Session> => {
+        const id = `sess_${++n}`;
+        return {
+          id,
+          rootDir,
+          mcpClients: [],
+          aborter: null,
+          loop: {
+            async *step(): AsyncGenerator<LoopEvent> {
+              yield { turn: 1, role: "assistant_delta", content: id };
+              yield { turn: 1, role: "done", content: "" };
+            },
+          },
+        } as unknown as Session;
+      },
+    });
+    host.attach(server);
+    const send = (msg: unknown) => input.write(`${JSON.stringify(msg)}\n`);
+
+    send({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "session/new",
+      params: { cwd: "/tmp" },
+    });
+    send({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "session/new",
+      params: { cwd: "/tmp" },
+    });
+    await wait();
+    const ids = [1, 2]
+      .map((i) => responseFor(collected, i) as { result?: { sessionId?: string } })
+      .map((r) => r?.result?.sessionId);
+    expect(new Set(ids).size).toBe(2);
+
+    send({
+      jsonrpc: "2.0",
+      id: 3,
+      method: "session/prompt",
+      params: { sessionId: ids[0], prompt: [{ type: "text", text: "a" }] },
+    });
+    send({
+      jsonrpc: "2.0",
+      id: 4,
+      method: "session/prompt",
+      params: { sessionId: ids[1], prompt: [{ type: "text", text: "b" }] },
+    });
+    await wait(40);
+
+    const deltas = collected
+      .filter(
+        (l) =>
+          (l as { method?: string }).method === "session/loopEvent" &&
+          (l as { params: { event: LoopEvent } }).params.event.role === "assistant_delta",
+      )
+      .map((l) => (l as { params: { sessionId: string; event: LoopEvent } }).params);
+    // Each session's delta carries its own id as content — no cross-talk.
+    for (const d of deltas) expect(d.event.content).toBe(d.sessionId);
+    expect(new Set(deltas.map((d) => d.sessionId))).toEqual(new Set(ids));
+    server.close();
+  });
+});
+
 describe("DaemonHost — real socket transport", () => {
   it.skipIf(process.platform === "win32")("serves ping over a unix domain socket", async () => {
     const sock = join(tmpdir(), `reasonix-daemon-test-${process.pid}-${Date.now()}.sock`);

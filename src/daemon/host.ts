@@ -24,6 +24,7 @@ import { pauseGate } from "../core/pause-gate.js";
 import { autoResolveVerdict } from "../core/pause-policy.js";
 import { appendUsage } from "../telemetry/usage.js";
 import { VERSION } from "../version.js";
+import { McpPool } from "./mcp-pool.js";
 
 export interface DaemonHostOptions {
   defaultDir: string;
@@ -46,6 +47,8 @@ export class DaemonHost {
   private readonly sessions = new Map<string, Session>();
   private readonly meta = new Map<string, SessionMeta>();
   private readonly sessionContext = new AsyncLocalStorage<string>();
+  // Warm MCP children shared across sessions in the same workspace (FR-005).
+  private readonly mcpPool = new McpPool();
   private gateUnsub: (() => void) | null = null;
 
   constructor(private readonly opts: DaemonHostOptions) {}
@@ -56,12 +59,20 @@ export class DaemonHost {
 
   private createSession(rootDir: string): Promise<Session> {
     if (this.opts.createSession) return this.opts.createSession(rootDir);
+    const specs = this.opts.mcpSpecs ?? [];
     return buildSession({
       rootDir,
       modelOverride: this.opts.model,
       budgetUsd: this.opts.budgetUsd,
-      mcpSpecs: this.opts.mcpSpecs,
+      mcpSpecs: specs,
       mcpPrefix: this.opts.mcpPrefix,
+      // Bridge the workspace's warm pool into this session's own registry; the
+      // pool owns the children, so the session's mcpClients stays empty and
+      // detach()/closeAll() never tear shared children down per-session.
+      bridgeMcp: async (tools) => {
+        await this.mcpPool.bridgeInto(rootDir, specs, this.opts.mcpPrefix, tools);
+        return [];
+      },
     });
   }
 
@@ -162,8 +173,8 @@ export class DaemonHost {
               stopReason = "cancelled";
               break;
             }
-            // Slice 1 carries the raw LoopEvent so the headless client reuses run.ts's
-            // renderer verbatim; richer clients converge on kernel events in Slice 3.
+            // Carries the raw LoopEvent so the headless client reuses run.ts's
+            // renderer verbatim; richer (TUI) clients converge on kernel events in Slice 4.
             server.sendNotification("session/loopEvent", {
               sessionId: session.id,
               event: ev,
@@ -230,6 +241,7 @@ export class DaemonHost {
       this.gateUnsub();
       this.gateUnsub = null;
     }
+    closes.push(this.mcpPool.closeAll());
     await Promise.all(closes);
   }
 }
