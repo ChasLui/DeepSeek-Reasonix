@@ -1,8 +1,14 @@
 /** Daemon client — connects to the control socket and drives a remote session over NDJSON JSON-RPC. */
 
 import { type Socket, createConnection } from "node:net";
+import type { PermissionRequestParams, PermissionRequestResult } from "../acp/protocol.js";
 import { AcpServer } from "../acp/server.js";
 import type { LoopEvent } from "../loop/types.js";
+
+export interface DaemonClientOptions {
+  /** Handle a daemon-forwarded confirmation. Omit → fail closed (cancelled/deny). */
+  onPermission?: (params: PermissionRequestParams) => Promise<PermissionRequestResult>;
+}
 
 export interface DaemonClient {
   initialize(): Promise<void>;
@@ -12,7 +18,10 @@ export interface DaemonClient {
   close(): void;
 }
 
-export function connectDaemon(socketPath: string): Promise<DaemonClient> {
+export function connectDaemon(
+  socketPath: string,
+  opts: DaemonClientOptions = {},
+): Promise<DaemonClient> {
   return new Promise((resolve, reject) => {
     const socket: Socket = createConnection(socketPath);
     socket.once("error", reject);
@@ -23,6 +32,13 @@ export function connectDaemon(socketPath: string): Promise<DaemonClient> {
       rpc.onNotification<{ sessionId: string; event: LoopEvent }>("session/loopEvent", (p) => {
         if (p?.event && onLoopEvent) onLoopEvent(p.event);
       });
+      rpc.onRequest<PermissionRequestParams, PermissionRequestResult>(
+        "session/request_permission",
+        async (params) => {
+          if (opts.onPermission) return opts.onPermission(params);
+          return { outcome: { outcome: "cancelled" } };
+        },
+      );
       resolve({
         async initialize() {
           await rpc.sendRequest("initialize", {

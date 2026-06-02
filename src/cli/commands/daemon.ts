@@ -3,9 +3,12 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { stdin, stdout } from "node:process";
+import { createInterface } from "node:readline/promises";
 import { loadApiKey } from "../../config.js";
 import { connectDaemon } from "../../daemon/client.js";
 import { DaemonHost } from "../../daemon/host.js";
+import { resolvePermissionInteractively } from "../../daemon/permission-prompt.js";
 import { listenDaemon } from "../../daemon/server-listen.js";
 import {
   LAUNCHD_LABEL,
@@ -107,11 +110,33 @@ function renderRemoteEvent(ev: LoopEvent): void {
   else if (ev.role === "done") process.stdout.write("\n");
 }
 
+/** Interactive confirmation handler — only when both ends are a TTY; otherwise omitted so the daemon fails closed (deny). */
+function interactivePermission():
+  | ((
+      params: import("../../acp/protocol.js").PermissionRequestParams,
+    ) => Promise<import("../../acp/protocol.js").PermissionRequestResult>)
+  | undefined {
+  if (!stdin.isTTY || !stdout.isTTY) return undefined;
+  return async (params) => {
+    const rl = createInterface({ input: stdin, output: stdout });
+    try {
+      return await resolvePermissionInteractively(params, {
+        write: (text) => void stdout.write(text),
+        ask: (query) => rl.question(query),
+      });
+    } finally {
+      rl.close();
+    }
+  };
+}
+
 export async function runRemoteCommand(opts: RunRemoteOptions): Promise<void> {
   const socketPath = opts.socketPath ?? daemonSocketPath();
   let client: Awaited<ReturnType<typeof connectDaemon>>;
   try {
-    client = await connectDaemon(socketPath);
+    client = await connectDaemon(socketPath, {
+      onPermission: interactivePermission(),
+    });
   } catch {
     process.stderr.write(
       `daemon not reachable at ${socketPath}. Start it with:  reasonix daemon start\n`,
