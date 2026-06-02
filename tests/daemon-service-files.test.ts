@@ -4,8 +4,11 @@ import { describe, expect, it } from "vitest";
 import {
   LAUNCHD_LABEL,
   renderLaunchdPlist,
+  renderSystemdSocket,
+  renderSystemdSocketService,
   renderSystemdUnit,
 } from "../src/daemon/service-files.js";
+import { inheritedListenFd } from "../src/daemon/socket-activation.js";
 import { isAlive } from "../src/daemon/state.js";
 
 const TARGET = {
@@ -49,5 +52,31 @@ describe("daemon liveness probe", () => {
   it("reports a non-existent pid as dead", () => {
     // 2^30 is far above any real pid on supported platforms.
     expect(isAlive(2 ** 30)).toBe(false);
+  });
+});
+
+describe("systemd socket activation (Slice 5)", () => {
+  it("renders a .socket unit binding the daemon socket at mode 0600", () => {
+    const sock = renderSystemdSocket("/home/u/.reasonix/daemon.sock");
+    expect(sock).toContain("ListenStream=/home/u/.reasonix/daemon.sock");
+    expect(sock).toContain("SocketMode=0600");
+    expect(sock).toContain("WantedBy=sockets.target");
+  });
+
+  it("renders a socket-activated service with idle-shutdown and no self-bind", () => {
+    const svc = renderSystemdSocketService(TARGET, 1800000);
+    expect(svc).toContain(
+      "ExecStart=/usr/bin/node /opt/reasonix/cli.js daemon run --idle-ms 1800000",
+    );
+    expect(svc).toContain("Requires=reasonix.socket");
+    expect(svc).not.toContain("WantedBy=");
+  });
+
+  it("detects an inherited listen fd only when LISTEN_FDS is set for this pid", () => {
+    expect(inheritedListenFd({})).toBeNull();
+    expect(inheritedListenFd({ LISTEN_FDS: "1", LISTEN_PID: String(process.pid) })).toBe(3);
+    // Leaked to a child: LISTEN_PID points elsewhere → ignore.
+    expect(inheritedListenFd({ LISTEN_FDS: "1", LISTEN_PID: "999999" })).toBeNull();
+    expect(inheritedListenFd({ LISTEN_FDS: "0" })).toBeNull();
   });
 });

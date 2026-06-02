@@ -16,9 +16,12 @@ import {
   daemonLogPath,
   launchdPlistPath,
   renderLaunchdPlist,
-  renderSystemdUnit,
+  renderSystemdSocket,
+  renderSystemdSocketService,
+  systemdSocketPath,
   systemdUnitPath,
 } from "../../daemon/service-files.js";
+import { inheritedListenFd } from "../../daemon/socket-activation.js";
 import {
   isAlive,
   readDaemonState,
@@ -67,7 +70,10 @@ export async function daemonRunCommand(opts: DaemonRunOptions): Promise<void> {
   if (key) process.env.DEEPSEEK_API_KEY = key;
 
   const socketPath = opts.socketPath ?? daemonSocketPath();
-  clearStaleSocket(socketPath);
+  // Under systemd socket activation the socket is created + owned by systemd;
+  // we must neither unlink a "stale" one nor bind our own.
+  const activated = inheritedListenFd() !== null;
+  if (!activated) clearStaleSocket(socketPath);
   const defaultDir = resolveDir(opts.dir, process.cwd());
 
   const idleMs = resolveIdleMs(opts.idleMs);
@@ -102,7 +108,8 @@ export async function daemonRunCommand(opts: DaemonRunOptions): Promise<void> {
     server.close();
     await host.closeAll();
     removeDaemonState();
-    if (process.platform !== "win32") rmSync(socketPath, { force: true });
+    // Don't remove a systemd-owned socket; only our self-bound one.
+    if (!activated && process.platform !== "win32") rmSync(socketPath, { force: true });
     // Let the SQLite exit-checkpoint hook fire on a clean exit.
     process.exit(0);
   };
@@ -261,16 +268,19 @@ export async function daemonInstallCommand(): Promise<void> {
     return;
   }
   if (isLinux()) {
-    const path = systemdUnitPath();
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, renderSystemdUnit(target));
+    // Socket-activated: systemd binds the socket and starts the service on the
+    // first connection; idle-shutdown lets it exit and re-activate on demand.
+    const IDLE_MS = 1_800_000; // 30 min
+    mkdirSync(dirname(systemdUnitPath()), { recursive: true });
+    writeFileSync(systemdSocketPath(), renderSystemdSocket(daemonSocketPath()));
+    writeFileSync(systemdUnitPath(), renderSystemdSocketService(target, IDLE_MS));
     run("systemctl", ["--user", "daemon-reload"]);
-    const res = run("systemctl", ["--user", "enable", "--now", "reasonix.service"]);
+    const res = run("systemctl", ["--user", "enable", "--now", "reasonix.socket"]);
     if (!res.ok) {
       process.stderr.write(`systemctl enable failed: ${res.stderr.trim()}\n`);
       process.exit(1);
     }
-    process.stdout.write(`installed systemd user service → ${path}\n`);
+    process.stdout.write(`installed socket-activated systemd service → ${systemdSocketPath()}\n`);
     return;
   }
   process.stderr.write(
@@ -288,10 +298,12 @@ export async function daemonUninstallCommand(): Promise<void> {
     return;
   }
   if (isLinux()) {
-    run("systemctl", ["--user", "disable", "--now", "reasonix.service"]);
+    run("systemctl", ["--user", "disable", "--now", "reasonix.socket"]);
+    run("systemctl", ["--user", "stop", "reasonix.service"]);
+    rmSync(systemdSocketPath(), { force: true });
     rmSync(systemdUnitPath(), { force: true });
     run("systemctl", ["--user", "daemon-reload"]);
-    process.stdout.write("uninstalled systemd user service\n");
+    process.stdout.write("uninstalled socket-activated systemd service\n");
     return;
   }
   process.stderr.write("daemon uninstall is only supported on macOS and Linux.\n");
@@ -315,7 +327,8 @@ export async function daemonStartCommand(): Promise<void> {
     const uid = process.getuid?.() ?? 0;
     run("launchctl", ["kickstart", `gui/${uid}/${LAUNCHD_LABEL}`]);
   } else {
-    run("systemctl", ["--user", "start", "reasonix.service"]);
+    // Starting the socket arms socket activation; the service spawns on connect.
+    run("systemctl", ["--user", "start", "reasonix.socket"]);
   }
   process.stdout.write("daemon started\n");
 }
@@ -329,7 +342,8 @@ export async function daemonStopCommand(): Promise<void> {
       const uid = process.getuid?.() ?? 0;
       run("launchctl", ["kill", "SIGTERM", `gui/${uid}/${LAUNCHD_LABEL}`]);
     } else {
-      run("systemctl", ["--user", "stop", "reasonix.service"]);
+      // Stop the socket too, else the next connection re-activates the service.
+      run("systemctl", ["--user", "stop", "reasonix.socket", "reasonix.service"]);
     }
     process.stdout.write("daemon stop signalled\n");
     return;

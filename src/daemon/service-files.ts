@@ -6,6 +6,7 @@ import { reasonixDir } from "../storage/path.js";
 
 export const LAUNCHD_LABEL = "com.reasonix.daemon";
 export const SYSTEMD_UNIT = "reasonix.service";
+export const SYSTEMD_SOCKET = "reasonix.socket";
 
 export interface ServiceTarget {
   /** Node binary that runs the CLI (process.execPath). */
@@ -71,6 +72,36 @@ export function launchdPlistPath(): string {
 
 export function systemdUnitPath(): string {
   return join(homedir(), ".config", "systemd", "user", SYSTEMD_UNIT);
+}
+
+export function systemdSocketPath(): string {
+  return join(homedir(), ".config", "systemd", "user", SYSTEMD_SOCKET);
+}
+
+/** A `.socket` unit systemd binds + listens on, then hands the fd to the service on first connect (socket activation). */
+export function renderSystemdSocket(socketPath: string): string {
+  return `[Unit]
+Description=Reasonix daemon socket
+
+[Socket]
+ListenStream=${socketPath}
+SocketMode=0600
+
+[Install]
+WantedBy=sockets.target
+`;
+}
+
+/** Service variant for socket activation: no self-bind, no WantedBy (the socket starts it), idle-shutdown lets it exit and re-activate on the next connection. */
+export function renderSystemdSocketService(target: ServiceTarget, idleMs: number): string {
+  return `[Unit]
+Description=Reasonix daemon
+Requires=${SYSTEMD_SOCKET}
+After=${SYSTEMD_SOCKET}
+
+[Service]
+ExecStart=${target.node} ${target.cli} daemon run --idle-ms ${idleMs}
+`;
 }
 
 export function daemonLogPath(): string {
