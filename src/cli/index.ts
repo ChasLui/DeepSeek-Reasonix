@@ -138,7 +138,7 @@ program
 // `reasonix` with no subcommand → setup wizard on first run, otherwise `code`
 // in the current directory. Filesystem-less chat stays reachable via
 // `reasonix chat`.
-program.action(async (opts: { continue?: boolean; mouse?: boolean }) => {
+program.action(async () => {
   const cfg = readConfig();
   const mode = resolveBareCommandMode(cfg);
   if (mode === "setup") {
@@ -146,12 +146,10 @@ program.action(async (opts: { continue?: boolean; mouse?: boolean }) => {
     await setupCommand({ forceKeyStep: true });
     return;
   }
-  const { codeCommand } = await import("./commands/code.js");
-  await codeCommand({
-    dir: process.cwd(),
-    forceResume: !!opts.continue,
-    noMouse: opts.mouse === false,
-  });
+  // Daemon-first: bare `reasonix` is the daemon thin client. Use
+  // `reasonix code --local` for the rich in-process TUI.
+  const { codeRemoteCommand } = await import("./commands/code-remote.js");
+  await codeRemoteCommand({ cwd: process.cwd() });
 });
 
 program
@@ -186,12 +184,12 @@ program
     "--profile [path]",
     "record a V8 CPU profile; saved on exit. Send the .cpuprofile back if you're reporting a perf bug.",
   )
-  .option(
-    "--remote",
-    "drive a session in the running daemon as a thin client (interactive; full Ink TUI remoting is in progress)",
-  )
+  .option("--local", "use the rich in-process TUI instead of the daemon thin client (escape hatch)")
   .action(async (dir: string | undefined, opts) => {
-    if (opts.remote) {
+    // Daemon-first: the daemon is the single architecture. --local keeps the
+    // rich in-process App.tsx (full dashboard/plan/checkpoint UI) until that UI
+    // is itself daemon-backed.
+    if (!opts.local) {
       const { codeRemoteCommand } = await import("./commands/code-remote.js");
       await codeRemoteCommand({ cwd: dir });
       return;

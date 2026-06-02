@@ -7,10 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { writeConfig } from "../src/config.js";
 
 const codeCommand = vi.fn(async () => {});
+const codeRemoteCommand = vi.fn(async () => {});
 const chatCommand = vi.fn(async () => {});
 const setupCommand = vi.fn(async () => {});
 
 vi.mock("../src/cli/commands/code.js", () => ({ codeCommand }));
+vi.mock("../src/cli/commands/code-remote.js", () => ({ codeRemoteCommand }));
 vi.mock("../src/cli/commands/chat.js", () => ({ chatCommand }));
 vi.mock("../src/cli/commands/setup.js", () => ({ setupCommand }));
 
@@ -40,6 +42,7 @@ describe("bare CLI routing", () => {
     process.env.USERPROFILE = home;
     process.chdir(cwd);
     codeCommand.mockClear();
+    codeRemoteCommand.mockClear();
     chatCommand.mockClear();
     setupCommand.mockClear();
     stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
@@ -65,50 +68,43 @@ describe("bare CLI routing", () => {
     }
   });
 
-  it("routes bare reasonix to code mode rooted at cwd", async () => {
+  it("routes bare reasonix to the daemon thin client rooted at cwd", async () => {
     writeConfig({ setupCompleted: true }, join(home, ".reasonix", "config.json"));
     mkdirSync(join(cwd, ".git"));
 
     await importCli([]);
 
-    await vi.waitFor(() =>
-      expect(codeCommand).toHaveBeenCalledWith({ dir: cwd, forceResume: false, noMouse: false }),
-    );
+    // Daemon-first: bare reasonix is the daemon thin client, not the in-process TUI.
+    await vi.waitFor(() => expect(codeRemoteCommand).toHaveBeenCalledWith({ cwd }));
+    expect(codeCommand).not.toHaveBeenCalled();
     expect(chatCommand).not.toHaveBeenCalled();
   });
 
-  it("routes bare reasonix in a non-project directory to code mode too", async () => {
+  it("routes bare reasonix in a non-project directory to the daemon too", async () => {
     writeConfig({ setupCompleted: true }, join(home, ".reasonix", "config.json"));
 
     await importCli([]);
 
-    await vi.waitFor(() =>
-      expect(codeCommand).toHaveBeenCalledWith({ dir: cwd, forceResume: false, noMouse: false }),
-    );
+    await vi.waitFor(() => expect(codeRemoteCommand).toHaveBeenCalledWith({ cwd }));
     expect(chatCommand).not.toHaveBeenCalled();
-    expect(stderr.mock.calls.map((call) => String(call[0])).join("")).not.toContain(
-      "chat mode (no filesystem tools)",
-    );
   });
 
-  it("forwards -c to code mode as forceResume", async () => {
+  it("routes `code --local` to the rich in-process TUI", async () => {
     writeConfig({ setupCompleted: true }, join(home, ".reasonix", "config.json"));
 
-    await importCli(["-c"]);
+    await importCli(["code", "--local"]);
 
-    await vi.waitFor(() =>
-      expect(codeCommand).toHaveBeenCalledWith({ dir: cwd, forceResume: true, noMouse: false }),
-    );
+    await vi.waitFor(() => expect(codeCommand).toHaveBeenCalled());
+    expect(codeRemoteCommand).not.toHaveBeenCalled();
   });
 
-  it("forwards bare --no-mouse to code mode", async () => {
+  it("routes `code` (no flag) to the daemon thin client", async () => {
     writeConfig({ setupCompleted: true }, join(home, ".reasonix", "config.json"));
 
-    await importCli(["--no-mouse"]);
+    await importCli(["code"]);
 
-    await vi.waitFor(() =>
-      expect(codeCommand).toHaveBeenCalledWith({ dir: cwd, forceResume: false, noMouse: true }),
-    );
+    await vi.waitFor(() => expect(codeRemoteCommand).toHaveBeenCalled());
+    expect(codeCommand).not.toHaveBeenCalled();
   });
 
   it("keeps explicit reasonix chat in chat mode even inside a project", async () => {
