@@ -9,6 +9,7 @@ import { loadApiKey } from "../../config.js";
 import { connectDaemon } from "../../daemon/client.js";
 import { DaemonHost } from "../../daemon/host.js";
 import { resolvePermissionInteractively } from "../../daemon/permission-prompt.js";
+import { renderSessionUpdate } from "../../daemon/render-update.js";
 import { listenDaemon } from "../../daemon/server-listen.js";
 import {
   LAUNCHD_LABEL,
@@ -149,6 +150,59 @@ export async function runRemoteCommand(opts: RunRemoteOptions): Promise<void> {
     const stopReason = await client.prompt(sessionId, opts.task, renderRemoteEvent);
     if (stopReason === "error") process.exitCode = 1;
   } finally {
+    client.close();
+  }
+}
+
+export interface AttachOptions {
+  cwd?: string;
+  socketPath?: string;
+}
+
+/** Interactive multi-turn thin client over the daemon: renders the kernel-event stream and resolves confirmations on the same readline (no stdin contention). */
+export async function attachRemoteCommand(opts: AttachOptions): Promise<void> {
+  const socketPath = opts.socketPath ?? daemonSocketPath();
+  const rl = createInterface({ input: stdin, output: stdout });
+  // One shared readline: the prompt loop only reads between turns, and gate
+  // prompts only fire mid-turn — never concurrently — so they can share it.
+  let client: Awaited<ReturnType<typeof connectDaemon>>;
+  try {
+    client = await connectDaemon(socketPath, {
+      onUpdate: (p) => renderSessionUpdate(p.update, { write: (t) => void stdout.write(t) }),
+      onPermission: async (params) =>
+        resolvePermissionInteractively(params, {
+          write: (t) => void stdout.write(t),
+          ask: (q) => rl.question(q),
+        }),
+    });
+  } catch {
+    rl.close();
+    process.stderr.write(
+      `daemon not reachable at ${socketPath}. Start it with:  reasonix daemon start\n`,
+    );
+    process.exit(1);
+  }
+  try {
+    await client.initialize();
+    const sessionId = await client.newSession(resolve(opts.cwd ?? process.cwd()));
+    process.stdout.write(
+      `attached to daemon session ${sessionId} — type a prompt (Ctrl-D to exit)\n`,
+    );
+    while (true) {
+      let line: string;
+      try {
+        line = (await rl.question("\n› ")).trim();
+      } catch {
+        break; // stream closed (Ctrl-D)
+      }
+      if (!line) continue;
+      if (line === "exit" || line === "quit") break;
+      // Rendering happens via onUpdate; the loopEvent callback is unused here.
+      await client.prompt(sessionId, line, () => undefined);
+      process.stdout.write("\n");
+    }
+  } finally {
+    rl.close();
     client.close();
   }
 }

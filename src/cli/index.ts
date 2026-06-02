@@ -653,6 +653,14 @@ daemon
     });
   });
 
+daemon
+  .command("attach [dir]")
+  .description("interactive multi-turn session against the running daemon (thin client)")
+  .action(async (dir: string | undefined) => {
+    const { attachRemoteCommand } = await import("./commands/daemon.js");
+    await attachRemoteCommand({ cwd: dir });
+  });
+
 for (const [name, desc] of [
   ["install", "install + load the launchd/systemd service"],
   ["uninstall", "stop + remove the launchd/systemd service"],
