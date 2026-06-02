@@ -24,6 +24,14 @@ import { autoResolveVerdict } from "../core/pause-policy.js";
 import { appendUsage } from "../telemetry/usage.js";
 import { VERSION } from "../version.js";
 import { McpPool } from "./mcp-pool.js";
+import { WorkspaceLifecycle } from "./workspace-lifecycle.js";
+
+/** Per-workspace idle window before `WorkspaceLifecycle` emits `idle` (background prebuild trigger, Slice 2). 0 disables. */
+function resolveWorkspaceQuietMs(): number {
+  const raw = process.env.REASONIX_WORKSPACE_QUIET_MS;
+  const n = raw ? Number(raw) : Number.NaN;
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
 
 export interface DaemonHostOptions {
   defaultDir: string;
@@ -79,6 +87,9 @@ export class DaemonHost {
   private readonly meta = new Map<string, SessionMeta>();
   // Warm MCP children shared across sessions in the same workspace (FR-005).
   private readonly mcpPool = new McpPool();
+  // Per-workspace session/RPC bookkeeping — background indexing subscribes to its
+  // closed/idle events to start/stop watchers and trigger idle prebuild (Slice 1+).
+  private readonly lifecycle = new WorkspaceLifecycle(resolveWorkspaceQuietMs());
   private gateUnsub: (() => void) | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -86,6 +97,11 @@ export class DaemonHost {
 
   get sessionCount(): number {
     return this.sessions.size;
+  }
+
+  /** Per-workspace lifecycle events (closed/idle) for background index maintenance. */
+  get workspaceLifecycle(): WorkspaceLifecycle {
+    return this.lifecycle;
   }
 
   /** Read-only snapshot for the status endpoint — no loop internals leak. */
@@ -195,6 +211,7 @@ export class DaemonHost {
       this.sessions.set(session.id, session);
       this.meta.set(session.id, { owner: server, gate });
       this.disarmIdle();
+      this.lifecycle.onSessionOpen(rootDir);
       return { sessionId: session.id };
     });
 
@@ -219,6 +236,7 @@ export class DaemonHost {
       }
       const aborter = new AbortController();
       session.aborter = aborter;
+      this.lifecycle.onRpcStart(session.rootDir);
       let stopReason: StopReason = "end_turn";
       try {
         for await (const ev of session.loop.step(text)) {
@@ -261,6 +279,7 @@ export class DaemonHost {
         stopReason = "error";
       } finally {
         session.aborter = null;
+        this.lifecycle.onRpcEnd(session.rootDir);
       }
       return { stopReason };
     });
@@ -312,8 +331,14 @@ export class DaemonHost {
       text: sessionOf(params).loop.retryLastUser(),
     }));
     server.onRequest<{ sessionId: string }, { ok: true }>("session/compact", async (params) => {
-      await sessionOf(params).loop.compactHistory();
-      return { ok: true };
+      const s = sessionOf(params);
+      this.lifecycle.onRpcStart(s.rootDir);
+      try {
+        await s.loop.compactHistory();
+        return { ok: true };
+      } finally {
+        this.lifecycle.onRpcEnd(s.rootDir);
+      }
     });
     server.onRequest<
       {
@@ -323,19 +348,29 @@ export class DaemonHost {
       },
       { content: string }
     >("session/chat", async (params) => {
-      const reply = await sessionOf(params).loop.client.chat({
-        model: params.model,
-        messages: params.messages as never,
-      });
-      return { content: reply.content ?? "" };
+      const s = sessionOf(params);
+      this.lifecycle.onRpcStart(s.rootDir);
+      try {
+        const reply = await s.loop.client.chat({
+          model: params.model,
+          messages: params.messages as never,
+        });
+        return { content: reply.content ?? "" };
+      } finally {
+        this.lifecycle.onRpcEnd(s.rootDir);
+      }
     });
     server.onRequest<{ sessionId: string }, { balance: unknown } | null>(
       "session/balance",
       async (params) => {
-        const bal = await sessionOf(params)
-          .loop.client.getBalance()
-          .catch(() => null);
-        return bal ? { balance: bal } : null;
+        const s = sessionOf(params);
+        this.lifecycle.onRpcStart(s.rootDir);
+        try {
+          const bal = await s.loop.client.getBalance().catch(() => null);
+          return bal ? { balance: bal } : null;
+        } finally {
+          this.lifecycle.onRpcEnd(s.rootDir);
+        }
       },
     );
   }
@@ -353,6 +388,9 @@ export class DaemonHost {
       }
       this.sessions.delete(sid);
       this.meta.delete(sid);
+      // Per-workspace refcount-- happens ONLY on detach (true session removal),
+      // never on session/cancel which keeps the session alive (B2).
+      if (session) this.lifecycle.onSessionClose(session.rootDir);
     }
     // Last session for this connection gone → start the idle countdown.
     this.armIdle();
@@ -369,6 +407,7 @@ export class DaemonHost {
     }
     this.sessions.clear();
     this.meta.clear();
+    this.lifecycle.dispose();
     if (this.gateUnsub) {
       this.gateUnsub();
       this.gateUnsub = null;
