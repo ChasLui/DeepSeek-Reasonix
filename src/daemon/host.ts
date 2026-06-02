@@ -23,6 +23,7 @@ import { PauseGate, type PauseRequest, pauseGate } from "../core/pause-gate.js";
 import { autoResolveVerdict } from "../core/pause-policy.js";
 import { appendUsage } from "../telemetry/usage.js";
 import { VERSION } from "../version.js";
+import { IndexMaintainer } from "./index-maintainer.js";
 import { McpPool } from "./mcp-pool.js";
 import { WorkspaceLifecycle } from "./workspace-lifecycle.js";
 
@@ -46,6 +47,8 @@ export interface DaemonHostOptions {
   idleMs?: number;
   /** Fired when the idle window elapses with no sessions — the run command triggers graceful shutdown. */
   onIdle?: () => void;
+  /** Enable Pillar 5 background index maintenance (per-workspace fs-watch → incremental). Off by default until cross-platform watch lands (Slice 3). */
+  backgroundIndex?: boolean;
 }
 
 /** Per-session loop snapshot the rich (desktop) client reads for its display panels. */
@@ -90,10 +93,14 @@ export class DaemonHost {
   // Per-workspace session/RPC bookkeeping — background indexing subscribes to its
   // closed/idle events to start/stop watchers and trigger idle prebuild (Slice 1+).
   private readonly lifecycle = new WorkspaceLifecycle(resolveWorkspaceQuietMs());
+  // Pillar 5 background index maintenance, subscribed to `lifecycle`. Null unless enabled.
+  private readonly indexMaintainer: IndexMaintainer | null;
   private gateUnsub: (() => void) | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private readonly opts: DaemonHostOptions) {}
+  constructor(private readonly opts: DaemonHostOptions) {
+    this.indexMaintainer = opts.backgroundIndex ? new IndexMaintainer(this.lifecycle) : null;
+  }
 
   get sessionCount(): number {
     return this.sessions.size;
@@ -408,6 +415,7 @@ export class DaemonHost {
     this.sessions.clear();
     this.meta.clear();
     this.lifecycle.dispose();
+    this.indexMaintainer?.dispose();
     if (this.gateUnsub) {
       this.gateUnsub();
       this.gateUnsub = null;

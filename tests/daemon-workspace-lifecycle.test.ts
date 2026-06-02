@@ -28,6 +28,20 @@ describe("WorkspaceLifecycle — refcount + closed", () => {
     expect(lc.activeRoots()).toEqual([]);
   });
 
+  it("emits opened only on the 0→1 transition, again after re-open", () => {
+    const lc = new WorkspaceLifecycle();
+    const opened: string[] = [];
+    lc.onOpened((r) => opened.push(r));
+    lc.onSessionOpen("/a");
+    lc.onSessionOpen("/a"); // 2nd session — no opened
+    expect(opened).toEqual(["/a"]);
+    lc.onSessionClose("/a");
+    lc.onSessionClose("/a"); // root gone
+    lc.onSessionOpen("/a"); // re-opened → fires again
+    expect(opened).toEqual(["/a", "/a"]);
+    lc.dispose();
+  });
+
   it("keeps roots isolated — closing one doesn't affect another", () => {
     const lc = new WorkspaceLifecycle();
     const closed: string[] = [];

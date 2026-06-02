@@ -1,4 +1,4 @@
-/** Per-workspace session lifecycle for the daemon. The daemon's own idle timer is whole-process (fires only at zero sessions); this adds the per-workspace granularity it otherwise lacks: how many live sessions and in-flight long RPCs each workspace root has. Emits `closed` when a root's last session detaches, and `idle` when a root still has sessions but no in-flight work for a quiet window. Pillar 5 background indexing (IndexMaintainer, Slice 1+) subscribes to drive watcher start/stop and idle prebuild. Pure bookkeeping — no loop/retrieval coupling, zero Pillar risk. */
+/** Per-workspace session lifecycle for the daemon. The daemon's own idle timer is whole-process (fires only at zero sessions); this adds the per-workspace granularity it otherwise lacks: how many live sessions and in-flight long RPCs each workspace root has. Emits `opened` when a root's first session arrives, `closed` when its last session detaches, and `idle` when a root still has sessions but no in-flight work for a quiet window. Pillar 5 background indexing (IndexMaintainer, Slice 1+) subscribes to drive watcher start/stop and idle prebuild. Pure bookkeeping — no loop/retrieval coupling, zero Pillar risk. */
 
 type RootCallback = (root: string) => void;
 
@@ -12,11 +12,18 @@ interface WorkspaceState {
 
 export class WorkspaceLifecycle {
   private readonly byRoot = new Map<string, WorkspaceState>();
+  private readonly openedCbs: RootCallback[] = [];
   private readonly closedCbs: RootCallback[] = [];
   private readonly idleCbs: RootCallback[] = [];
 
   /** @param quietMs idle window in ms; 0 disables `idle` emission entirely. */
   constructor(private readonly quietMs = 0) {}
+
+  /** Subscribe to "a root's first session opened" (refcount 0→1). Returns an unsubscribe. */
+  onOpened(cb: RootCallback): () => void {
+    this.openedCbs.push(cb);
+    return () => this.remove(this.openedCbs, cb);
+  }
 
   /** Subscribe to "a root's last session detached". Returns an unsubscribe. */
   onClosed(cb: RootCallback): () => void {
@@ -30,10 +37,12 @@ export class WorkspaceLifecycle {
     return () => this.remove(this.idleCbs, cb);
   }
 
-  /** A new session opened at `root` (session/new). */
+  /** A new session opened at `root` (session/new). Emits `opened` on the 0→1 transition. */
   onSessionOpen(root: string): void {
     const st = this.ensure(root);
+    const wasIdle = st.refcount === 0;
     st.refcount++;
+    if (wasIdle) this.emit(this.openedCbs, root);
     this.armQuiet(root, st);
   }
 
@@ -77,9 +86,13 @@ export class WorkspaceLifecycle {
   refcountOf(root: string): number {
     return this.byRoot.get(root)?.refcount ?? 0;
   }
+
+  /** In-flight long-RPC count for a root (status endpoint + tests). */
   busyOpsOf(root: string): number {
     return this.byRoot.get(root)?.busyOps ?? 0;
   }
+
+  /** Roots with at least one live session. */
   activeRoots(): string[] {
     return [...this.byRoot.keys()];
   }
