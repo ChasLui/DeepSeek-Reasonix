@@ -72,7 +72,7 @@ export interface AcpOptions {
   mcpPrefix?: string;
 }
 
-interface Session {
+export interface Session {
   id: string;
   rootDir: string;
   model: string;
@@ -150,7 +150,7 @@ export async function loadMcpServers(
   return clients;
 }
 
-function resolveDir(raw: string | undefined, fallback: string): string {
+export function resolveDir(raw: string | undefined, fallback: string): string {
   if (!raw) return fallback;
   const abs = resolve(raw);
   if (!existsSync(abs) || !statSync(abs).isDirectory()) {
@@ -159,7 +159,7 @@ function resolveDir(raw: string | undefined, fallback: string): string {
   return abs;
 }
 
-async function buildSession(opts: {
+export async function buildSession(opts: {
   rootDir: string;
   modelOverride?: string;
   budgetUsd?: number;

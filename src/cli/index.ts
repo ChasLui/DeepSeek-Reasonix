@@ -316,9 +316,15 @@ program
     [] as string[],
   )
   .option("--mcp-prefix <str>", t("ui.mcpPrefixHintShort"))
+  .option("--remote", "run the task against a running daemon instead of an in-process loop")
   .option("--no-config", t("ui.noConfigHint"))
   .option("--no-proxy", t("ui.noProxyHint"))
   .action(async (task: string, opts) => {
+    if (opts.remote) {
+      const { runRemoteCommand } = await import("./commands/daemon.js");
+      await runRemoteCommand({ task });
+      return;
+    }
     const defaults = resolveDefaults({
       model: opts.model,
       mcp: opts.mcp as string[],
@@ -616,6 +622,61 @@ mcp
       process.exit(1);
     }
   });
+
+const daemon = program
+  .command("daemon")
+  .description("long-running OS-managed session host (CLI/TUI/desktop connect as thin clients)");
+
+daemon
+  .command("run")
+  .description("run the daemon in the foreground (the launchd/systemd ExecStart target)")
+  .option("--dir <path>", "default workspace for sessions without an explicit cwd")
+  .option("-m, --model <id>", t("ui.modelIdHint"))
+  .option("--budget <usd>", t("ui.budgetHintShort"), (v) => Number.parseFloat(v))
+  .option("--yolo", t("ui.yoloHint"))
+  .option(
+    "--mcp <spec>",
+    t("ui.mcpSpecHintShort"),
+    (value: string, previous: string[] = []) => [...previous, value],
+    [] as string[],
+  )
+  .option("--mcp-prefix <str>", t("ui.mcpPrefixHintShort"))
+  .action(async (opts) => {
+    const { daemonRunCommand } = await import("./commands/daemon.js");
+    await daemonRunCommand({
+      dir: opts.dir,
+      model: opts.model,
+      budgetUsd: parseBudgetFlag(opts.budget),
+      yolo: !!opts.yolo,
+      mcpSpecs: opts.mcp as string[],
+      mcpPrefix: opts.mcpPrefix,
+    });
+  });
+
+for (const [name, desc] of [
+  ["install", "install + load the launchd/systemd service"],
+  ["uninstall", "stop + remove the launchd/systemd service"],
+  ["start", "start the installed service"],
+  ["stop", "stop the running daemon"],
+  ["status", "report daemon liveness + active session count"],
+  ["logs", "tail the daemon log"],
+] as const) {
+  daemon
+    .command(name)
+    .description(desc)
+    .action(async () => {
+      const mod = await import("./commands/daemon.js");
+      const fn = {
+        install: mod.daemonInstallCommand,
+        uninstall: mod.daemonUninstallCommand,
+        start: mod.daemonStartCommand,
+        stop: mod.daemonStopCommand,
+        status: mod.daemonStatusCommand,
+        logs: mod.daemonLogsCommand,
+      }[name];
+      await fn();
+    });
+}
 
 program
   .command("version")
