@@ -1,0 +1,12 @@
+{
+  "worktree": {
+    "setup": "npm ci"
+  },
+  "scripts": {
+    "build": { "command": "npm run build" },
+    "test": { "command": "npm test" },
+    "typecheck": { "command": "npm run typecheck" },
+    "lint": { "command": "npm run lint" },
+    "verify": { "command": "npm run verify" }
+  }
+}
