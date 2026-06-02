@@ -40,6 +40,14 @@ export interface DaemonHostOptions {
   onIdle?: () => void;
 }
 
+/** Per-session loop snapshot the rich (desktop) client reads for its display panels. */
+export interface DaemonSessionStats {
+  budgetUsd: number | null;
+  logTokens: number;
+  prefixSystem: string;
+  prefixToolSpecs: string;
+}
+
 /** Daemon-side bookkeeping the ACP `Session` doesn't carry: owning connection + per-session HITL gate. */
 interface SessionMeta {
   owner: AcpServer;
@@ -263,6 +271,73 @@ export class DaemonHost {
       // Free any tool stranded awaiting a confirmation on this session's gate.
       this.meta.get(params?.sessionId ?? "")?.gate?.cancelAll();
     });
+
+    // Loop control + read RPCs the rich (desktop) thin client drives over the wire (Slice 5).
+    const sessionOf = (p: { sessionId?: string } | undefined): Session => {
+      const s = p?.sessionId ? this.sessions.get(p.sessionId) : undefined;
+      if (!s) {
+        throw Object.assign(new Error(`unknown session ${p?.sessionId}`), {
+          code: ERR_INVALID_PARAMS,
+        });
+      }
+      return s;
+    };
+    server.onRequest<
+      { sessionId: string; reasoningEffort?: "high" | "max"; model?: string },
+      { ok: true }
+    >("session/configure", (params) => {
+      const cfg: { reasoningEffort?: "high" | "max"; model?: string } = {};
+      if (params?.reasoningEffort) cfg.reasoningEffort = params.reasoningEffort;
+      if (params?.model) cfg.model = params.model;
+      sessionOf(params).loop.configure(cfg);
+      return { ok: true };
+    });
+    server.onRequest<{ sessionId: string; usd: number | null }, { ok: true }>(
+      "session/setBudget",
+      (params) => {
+        sessionOf(params).loop.setBudget(params?.usd ?? null);
+        return { ok: true };
+      },
+    );
+    server.onRequest<{ sessionId: string }, DaemonSessionStats>("session/stats", (params) => {
+      const loop = sessionOf(params).loop;
+      return {
+        budgetUsd: loop.budgetUsd,
+        logTokens: loop.getCurrentLogTokens(),
+        prefixSystem: loop.prefix.system,
+        prefixToolSpecs: JSON.stringify(loop.prefix.toolSpecs),
+      };
+    });
+    server.onRequest<{ sessionId: string }, { text: string | null }>("session/retry", (params) => ({
+      text: sessionOf(params).loop.retryLastUser(),
+    }));
+    server.onRequest<{ sessionId: string }, { ok: true }>("session/compact", async (params) => {
+      await sessionOf(params).loop.compactHistory();
+      return { ok: true };
+    });
+    server.onRequest<
+      {
+        sessionId: string;
+        model: string;
+        messages: Array<{ role: string; content: string }>;
+      },
+      { content: string }
+    >("session/chat", async (params) => {
+      const reply = await sessionOf(params).loop.client.chat({
+        model: params.model,
+        messages: params.messages as never,
+      });
+      return { content: reply.content ?? "" };
+    });
+    server.onRequest<{ sessionId: string }, { balance: unknown } | null>(
+      "session/balance",
+      async (params) => {
+        const bal = await sessionOf(params)
+          .loop.client.getBalance()
+          .catch(() => null);
+        return bal ? { balance: bal } : null;
+      },
+    );
   }
 
   /** Drop every session owned by a disconnected connection, freeing stranded gates + tearing down per-session MCP children. */

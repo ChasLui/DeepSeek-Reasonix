@@ -8,6 +8,7 @@ import type {
 } from "../acp/protocol.js";
 import { AcpServer } from "../acp/server.js";
 import type { LoopEvent } from "../loop/types.js";
+import type { DaemonSessionStats } from "./host.js";
 
 export interface DaemonClientOptions {
   /** Handle a daemon-forwarded confirmation. Omit → fail closed (cancelled/deny). */
@@ -21,6 +22,22 @@ export interface DaemonClient {
   newSession(cwd: string): Promise<string>;
   prompt(sessionId: string, text: string, onEvent: (ev: LoopEvent) => void): Promise<string>;
   ping(): Promise<{ pid: number; version: string; sessions: number }>;
+  // Loop control + reads the rich (desktop) client drives over the wire.
+  configure(
+    sessionId: string,
+    opts: { reasoningEffort?: "high" | "max"; model?: string },
+  ): Promise<void>;
+  setBudget(sessionId: string, usd: number | null): Promise<void>;
+  stats(sessionId: string): Promise<DaemonSessionStats>;
+  retry(sessionId: string): Promise<string | null>;
+  compact(sessionId: string): Promise<void>;
+  chat(
+    sessionId: string,
+    model: string,
+    messages: Array<{ role: string; content: string }>,
+  ): Promise<string>;
+  balance(sessionId: string): Promise<unknown>;
+  cancel(sessionId: string): void;
   close(): void;
 }
 
@@ -73,6 +90,42 @@ export function connectDaemon(
         },
         async ping() {
           return rpc.sendRequest("ping", {});
+        },
+        async configure(sessionId, configureOpts) {
+          await rpc.sendRequest("session/configure", {
+            sessionId,
+            ...configureOpts,
+          });
+        },
+        async setBudget(sessionId, usd) {
+          await rpc.sendRequest("session/setBudget", { sessionId, usd });
+        },
+        async stats(sessionId) {
+          return rpc.sendRequest("session/stats", { sessionId });
+        },
+        async retry(sessionId) {
+          const r = await rpc.sendRequest<{ text: string | null }>("session/retry", { sessionId });
+          return r.text;
+        },
+        async compact(sessionId) {
+          await rpc.sendRequest("session/compact", { sessionId });
+        },
+        async chat(sessionId, model, messages) {
+          const r = await rpc.sendRequest<{ content: string }>("session/chat", {
+            sessionId,
+            model,
+            messages,
+          });
+          return r.content;
+        },
+        async balance(sessionId) {
+          const r = await rpc.sendRequest<{ balance: unknown } | null>("session/balance", {
+            sessionId,
+          });
+          return r?.balance ?? null;
+        },
+        cancel(sessionId) {
+          rpc.sendNotification("session/cancel", { sessionId });
         },
         close() {
           rpc.close();
