@@ -186,7 +186,16 @@ program
     "--profile [path]",
     "record a V8 CPU profile; saved on exit. Send the .cpuprofile back if you're reporting a perf bug.",
   )
+  .option(
+    "--remote",
+    "drive a session in the running daemon as a thin client (interactive; full Ink TUI remoting is in progress)",
+  )
   .action(async (dir: string | undefined, opts) => {
+    if (opts.remote) {
+      const { attachRemoteCommand } = await import("./commands/daemon.js");
+      await attachRemoteCommand({ cwd: dir });
+      return;
+    }
     const profiling = await maybeStartCpuProfile(opts.profile);
     try {
       const { codeCommand } = await import("./commands/code.js");
