@@ -325,11 +325,12 @@ program
     [] as string[],
   )
   .option("--mcp-prefix <str>", t("ui.mcpPrefixHintShort"))
-  .option("--remote", "run the task against a running daemon instead of an in-process loop")
+  .option("--local", "run the task in an in-process loop instead of the daemon (escape hatch)")
   .option("--no-config", t("ui.noConfigHint"))
   .option("--no-proxy", t("ui.noProxyHint"))
   .action(async (task: string, opts) => {
-    if (opts.remote) {
+    // Daemon-first: the daemon is the single architecture; --local is the escape hatch.
+    if (!opts.local) {
       const { runRemoteCommand } = await import("./commands/daemon.js");
       await runRemoteCommand({ task });
       return;

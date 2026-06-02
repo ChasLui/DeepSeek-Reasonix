@@ -7,6 +7,7 @@ import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { loadApiKey } from "../../config.js";
 import { connectDaemon } from "../../daemon/client.js";
+import { ensureDaemon } from "../../daemon/ensure.js";
 import { DaemonHost } from "../../daemon/host.js";
 import { resolvePermissionInteractively } from "../../daemon/permission-prompt.js";
 import { renderSessionUpdate } from "../../daemon/render-update.js";
@@ -176,13 +177,12 @@ export async function runRemoteCommand(opts: RunRemoteOptions): Promise<void> {
   const socketPath = opts.socketPath ?? daemonSocketPath();
   let client: Awaited<ReturnType<typeof connectDaemon>>;
   try {
+    await ensureDaemon(socketPath);
     client = await connectDaemon(socketPath, {
       onPermission: interactivePermission(),
     });
-  } catch {
-    process.stderr.write(
-      `daemon not reachable at ${socketPath}. Start it with:  reasonix daemon start\n`,
-    );
+  } catch (err) {
+    process.stderr.write(`could not reach or start the daemon: ${(err as Error).message}\n`);
     process.exit(1);
   }
   try {
@@ -208,6 +208,7 @@ export async function attachRemoteCommand(opts: AttachOptions): Promise<void> {
   // prompts only fire mid-turn — never concurrently — so they can share it.
   let client: Awaited<ReturnType<typeof connectDaemon>>;
   try {
+    await ensureDaemon(socketPath);
     client = await connectDaemon(socketPath, {
       onUpdate: (p) => renderSessionUpdate(p.update, { write: (t) => void stdout.write(t) }),
       onPermission: async (params) =>
@@ -216,11 +217,9 @@ export async function attachRemoteCommand(opts: AttachOptions): Promise<void> {
           ask: (q) => rl.question(q),
         }),
     });
-  } catch {
+  } catch (err) {
     rl.close();
-    process.stderr.write(
-      `daemon not reachable at ${socketPath}. Start it with:  reasonix daemon start\n`,
-    );
+    process.stderr.write(`could not reach or start the daemon: ${(err as Error).message}\n`);
     process.exit(1);
   }
   try {
