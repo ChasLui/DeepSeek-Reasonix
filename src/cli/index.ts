@@ -192,8 +192,8 @@ program
   )
   .action(async (dir: string | undefined, opts) => {
     if (opts.remote) {
-      const { attachRemoteCommand } = await import("./commands/daemon.js");
-      await attachRemoteCommand({ cwd: dir });
+      const { codeRemoteCommand } = await import("./commands/code-remote.js");
+      await codeRemoteCommand({ cwd: dir });
       return;
     }
     const profiling = await maybeStartCpuProfile(opts.profile);
