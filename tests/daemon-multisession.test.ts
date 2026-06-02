@@ -102,3 +102,49 @@ describe("McpPool — warm per-workspace sharing", () => {
     expect(pool.workspaceCount).toBe(0);
   });
 });
+
+describe("McpPool — prefix parity with the per-session loader (NF-005)", () => {
+  afterEach(() => {
+    mocks.bridgeMock.mockClear();
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+  });
+
+  // The pooled path must register each MCP server's tools with the SAME
+  // (namePrefix, serverName, tier) as the in-process loadMcpServers, so the
+  // session's filteredSpecs — and thus its immutable prefix bytes — are
+  // identical regardless of pooling (Pillar 1 cache-hit accounting).
+  it("bridges each spec with the same prefix/serverName/tier as loadMcpServers", async () => {
+    vi.resetModules();
+    const { loadMcpServers } = await import("../src/cli/commands/acp.js");
+    const { McpPool } = await import("../src/daemon/mcp-pool.js");
+    const { ToolRegistry } = await import("../src/tools.js");
+    const specs = ["fs=cmd a", "db=cmd b"];
+
+    const bridgeArgs = () =>
+      mocks.bridgeMock.mock.calls.map(([, o]) => {
+        const opts = o as {
+          namePrefix?: string;
+          serverName?: string;
+          mcpDefaultTier?: number;
+        };
+        return {
+          namePrefix: opts.namePrefix,
+          serverName: opts.serverName,
+          mcpDefaultTier: opts.mcpDefaultTier,
+        };
+      });
+
+    await loadMcpServers(new ToolRegistry(), specs, undefined);
+    const loaderCalls = bridgeArgs();
+
+    mocks.bridgeMock.mockClear();
+    await new McpPool().bridgeInto("/ws", specs, undefined, new ToolRegistry());
+    const poolCalls = bridgeArgs();
+
+    expect(poolCalls).toEqual(loaderCalls);
+    expect(poolCalls).toEqual([
+      { namePrefix: "fs_", serverName: "fs", mcpDefaultTier: 0 },
+      { namePrefix: "db_", serverName: "db", mcpDefaultTier: 0 },
+    ]);
+  });
+});
