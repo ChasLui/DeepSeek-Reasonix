@@ -1,7 +1,11 @@
-/** IndexMaintainer (Slice 1) — fs-watch → debounce → code-graph incremental, driven by WorkspaceLifecycle. A fake watch + spy updater isolate the logic from the platform/filesystem. */
+/** IndexMaintainer (Slices 1–2) — fs-watch → debounce → code-graph incremental (every flush) + throttled lexical/semantic full rebuilds + idle prebuild, driven by WorkspaceLifecycle. Fake watch + spy updaters + injected clock isolate the logic from the platform/filesystem and real time. */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { IndexMaintainer, type WatchFactory } from "../src/daemon/index-maintainer.js";
+import {
+  type GraphUpdater,
+  IndexMaintainer,
+  type WatchFactory,
+} from "../src/daemon/index-maintainer.js";
 import { WorkspaceLifecycle } from "../src/daemon/workspace-lifecycle.js";
 
 /** A fake watcher whose change events we drive manually. */
@@ -25,7 +29,7 @@ function fakeWatch() {
   };
 }
 
-const noopUpdate = async () => {};
+const noop = async () => {};
 
 describe("IndexMaintainer — watch lifecycle", () => {
   it("starts a watcher when a workspace opens, releases it when it closes", () => {
@@ -33,7 +37,7 @@ describe("IndexMaintainer — watch lifecycle", () => {
     const fw = fakeWatch();
     const im = new IndexMaintainer(lc, {
       watch: fw.factory,
-      updateGraph: noopUpdate,
+      updateGraph: noop,
     });
     lc.onSessionOpen("/a");
     expect(im.watchedRoots()).toEqual(["/a"]);
@@ -49,7 +53,7 @@ describe("IndexMaintainer — watch lifecycle", () => {
     const fw = fakeWatch();
     const im = new IndexMaintainer(lc, {
       watch: fw.factory,
-      updateGraph: noopUpdate,
+      updateGraph: noop,
     });
     lc.onSessionOpen("/a");
     lc.onSessionOpen("/a"); // 2nd session — onOpened only fired on the 0→1 transition
@@ -68,7 +72,7 @@ describe("IndexMaintainer — watch lifecycle", () => {
       watch: () => {
         throw new Error("ENOTSUP");
       },
-      updateGraph: noopUpdate,
+      updateGraph: noop,
       onError: (_r, e) => errors.push(e),
     });
     lc.onSessionOpen("/a");
@@ -82,7 +86,7 @@ describe("IndexMaintainer — watch lifecycle", () => {
     const fw = fakeWatch();
     const im = new IndexMaintainer(lc, {
       watch: fw.factory,
-      updateGraph: noopUpdate,
+      updateGraph: noop,
     });
     im.dispose();
     lc.onSessionOpen("/a");
@@ -91,20 +95,31 @@ describe("IndexMaintainer — watch lifecycle", () => {
   });
 });
 
-describe("IndexMaintainer — debounce + incremental", () => {
+describe("IndexMaintainer — debounce + code-graph incremental", () => {
   afterEach(() => vi.useRealTimers());
+
+  /** Heavy (lexical/semantic) updaters are stubbed so these tests isolate the code-graph + debounce path. */
+  function build(
+    lc: WorkspaceLifecycle,
+    fw: ReturnType<typeof fakeWatch>,
+    updateGraph: GraphUpdater,
+  ) {
+    return new IndexMaintainer(lc, {
+      watch: fw.factory,
+      debounceMs: 100,
+      updateGraph,
+      updateLexical: noop,
+      updateSemantic: noop,
+    });
+  }
 
   it("debounces a burst into one update with the union of changed paths", () => {
     vi.useFakeTimers();
     const lc = new WorkspaceLifecycle();
     const fw = fakeWatch();
     const calls: Array<{ root: string; stale: string[] }> = [];
-    const im = new IndexMaintainer(lc, {
-      watch: fw.factory,
-      debounceMs: 100,
-      updateGraph: async (root, stale) => {
-        calls.push({ root, stale });
-      },
+    const m = build(lc, fw, async (root, stale) => {
+      calls.push({ root, stale });
     });
     lc.onSessionOpen("/a");
     fw.fire("/a", "x.ts");
@@ -116,7 +131,7 @@ describe("IndexMaintainer — debounce + incremental", () => {
     expect(calls.length).toBe(1);
     expect(calls[0].root).toBe("/a");
     expect(calls[0].stale.sort()).toEqual(["x.ts", "y.ts"]);
-    im.dispose();
+    m.dispose();
   });
 
   it("covers a rename's old AND new path — both watch events enter the stale set (P1-F)", () => {
@@ -124,12 +139,8 @@ describe("IndexMaintainer — debounce + incremental", () => {
     const lc = new WorkspaceLifecycle();
     const fw = fakeWatch();
     const calls: string[][] = [];
-    const im = new IndexMaintainer(lc, {
-      watch: fw.factory,
-      debounceMs: 100,
-      updateGraph: async (_root, stale) => {
-        calls.push(stale);
-      },
+    const m = build(lc, fw, async (_root, stale) => {
+      calls.push(stale);
     });
     lc.onSessionOpen("/a");
     fw.fire("/a", "old.ts"); // rename → old path removed
@@ -137,7 +148,7 @@ describe("IndexMaintainer — debounce + incremental", () => {
     vi.advanceTimersByTime(100);
     expect(calls.length).toBe(1);
     expect(calls[0].sort()).toEqual(["new.ts", "old.ts"]);
-    im.dispose();
+    m.dispose();
   });
 
   it("a second burst after a flush starts a fresh stale set", () => {
@@ -145,12 +156,8 @@ describe("IndexMaintainer — debounce + incremental", () => {
     const lc = new WorkspaceLifecycle();
     const fw = fakeWatch();
     const calls: string[][] = [];
-    const im = new IndexMaintainer(lc, {
-      watch: fw.factory,
-      debounceMs: 100,
-      updateGraph: async (_r, stale) => {
-        calls.push(stale);
-      },
+    const m = build(lc, fw, async (_r, stale) => {
+      calls.push(stale);
     });
     lc.onSessionOpen("/a");
     fw.fire("/a", "a.ts");
@@ -158,7 +165,7 @@ describe("IndexMaintainer — debounce + incremental", () => {
     fw.fire("/a", "b.ts");
     vi.advanceTimersByTime(100);
     expect(calls).toEqual([["a.ts"], ["b.ts"]]); // no carryover between flushes
-    im.dispose();
+    m.dispose();
   });
 
   it("clears a pending debounce on release — no flush against a closed workspace (P1-H)", () => {
@@ -166,19 +173,15 @@ describe("IndexMaintainer — debounce + incremental", () => {
     const lc = new WorkspaceLifecycle();
     const fw = fakeWatch();
     const calls: string[][] = [];
-    const im = new IndexMaintainer(lc, {
-      watch: fw.factory,
-      debounceMs: 100,
-      updateGraph: async (_r, stale) => {
-        calls.push(stale);
-      },
+    const m = build(lc, fw, async (_r, stale) => {
+      calls.push(stale);
     });
     lc.onSessionOpen("/a");
     fw.fire("/a", "a.ts"); // arms debounce
     lc.onSessionClose("/a"); // release before it fires
     vi.advanceTimersByTime(200);
     expect(calls).toEqual([]); // pending flush cancelled
-    im.dispose();
+    m.dispose();
   });
 
   it("surfaces updater errors via onError without throwing", async () => {
@@ -186,18 +189,130 @@ describe("IndexMaintainer — debounce + incremental", () => {
     const lc = new WorkspaceLifecycle();
     const fw = fakeWatch();
     const errors: unknown[] = [];
-    const im = new IndexMaintainer(lc, {
+    const m = new IndexMaintainer(lc, {
       watch: fw.factory,
       debounceMs: 50,
       updateGraph: async () => {
         throw new Error("boom");
       },
+      updateLexical: noop,
+      updateSemantic: noop,
       onError: (_r, e) => errors.push(e),
     });
     lc.onSessionOpen("/a");
     fw.fire("/a", "a.ts");
     await vi.advanceTimersByTimeAsync(50); // fire flush + settle the rejected promise
     expect((errors[0] as Error).message).toBe("boom");
-    im.dispose();
+    m.dispose();
+  });
+});
+
+describe("IndexMaintainer — throttled heavy rebuilds + idle prebuild", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("flush triggers a lexical + semantic rebuild alongside the code-graph update", () => {
+    vi.useFakeTimers();
+    const lc = new WorkspaceLifecycle();
+    const fw = fakeWatch();
+    const lex: string[] = [];
+    const sem: string[] = [];
+    const m = new IndexMaintainer(lc, {
+      watch: fw.factory,
+      debounceMs: 100,
+      bgCooldownMs: 1000,
+      updateGraph: noop,
+      updateLexical: async (r) => {
+        lex.push(r);
+      },
+      updateSemantic: async (r) => {
+        sem.push(r);
+      },
+      now: () => 1_000_000,
+    });
+    lc.onSessionOpen("/a");
+    fw.fire("/a", "a.ts");
+    vi.advanceTimersByTime(100);
+    expect(lex).toEqual(["/a"]);
+    expect(sem).toEqual(["/a"]);
+    m.dispose();
+  });
+
+  it("throttles heavy rebuilds within the cooldown — code-graph still runs every flush", () => {
+    vi.useFakeTimers();
+    const lc = new WorkspaceLifecycle();
+    const fw = fakeWatch();
+    const graph: string[][] = [];
+    const lex: string[] = [];
+    let t = 1_000_000;
+    const m = new IndexMaintainer(lc, {
+      watch: fw.factory,
+      debounceMs: 100,
+      bgCooldownMs: 1000,
+      updateGraph: async (_r, stale) => {
+        graph.push(stale);
+      },
+      updateLexical: async (r) => {
+        lex.push(r);
+      },
+      updateSemantic: noop,
+      now: () => t,
+    });
+    lc.onSessionOpen("/a");
+    fw.fire("/a", "a.ts");
+    vi.advanceTimersByTime(100); // flush 1: graph + heavy
+    t += 500; // still inside cooldown
+    fw.fire("/a", "b.ts");
+    vi.advanceTimersByTime(100); // flush 2: graph only
+    expect(graph).toEqual([["a.ts"], ["b.ts"]]); // graph ran both flushes
+    expect(lex).toEqual(["/a"]); // lexical throttled → once
+    m.dispose();
+  });
+
+  it("re-runs heavy rebuilds after the cooldown elapses", () => {
+    vi.useFakeTimers();
+    const lc = new WorkspaceLifecycle();
+    const fw = fakeWatch();
+    const lex: string[] = [];
+    let t = 1_000_000;
+    const m = new IndexMaintainer(lc, {
+      watch: fw.factory,
+      debounceMs: 100,
+      bgCooldownMs: 1000,
+      updateGraph: noop,
+      updateLexical: async (r) => {
+        lex.push(r);
+      },
+      updateSemantic: noop,
+      now: () => t,
+    });
+    lc.onSessionOpen("/a");
+    fw.fire("/a", "a.ts");
+    vi.advanceTimersByTime(100); // heavy run 1
+    t += 1500; // past cooldown
+    fw.fire("/a", "b.ts");
+    vi.advanceTimersByTime(100); // heavy run 2
+    expect(lex).toEqual(["/a", "/a"]);
+    m.dispose();
+  });
+
+  it("idle prebuild triggers a throttled heavy rebuild", () => {
+    vi.useFakeTimers();
+    const lc = new WorkspaceLifecycle(50); // quietMs=50 → emits idle
+    const fw = fakeWatch();
+    const lex: string[] = [];
+    const m = new IndexMaintainer(lc, {
+      watch: fw.factory,
+      bgCooldownMs: 1000,
+      updateGraph: noop,
+      updateLexical: async (r) => {
+        lex.push(r);
+      },
+      updateSemantic: noop,
+      now: () => 1_000_000,
+    });
+    lc.onSessionOpen("/a"); // arms the quiet timer
+    vi.advanceTimersByTime(50); // idle fires → prebuild → maybeHeavy
+    expect(lex).toEqual(["/a"]);
+    m.dispose();
   });
 });
