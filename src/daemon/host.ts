@@ -80,6 +80,15 @@ export class DaemonHost {
     return this.sessions.size;
   }
 
+  /** Read-only snapshot for the status endpoint — no loop internals leak. */
+  sessionSummaries(): Array<{ id: string; workspace: string; busy: boolean }> {
+    return [...this.sessions.values()].map((s) => ({
+      id: s.id,
+      workspace: s.rootDir,
+      busy: s.aborter !== null,
+    }));
+  }
+
   private editMode(): EditMode {
     return this.opts.yolo ? "yolo" : loadEditMode();
   }

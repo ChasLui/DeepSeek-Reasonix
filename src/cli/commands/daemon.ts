@@ -28,6 +28,7 @@ import {
   removeDaemonState,
   writeDaemonState,
 } from "../../daemon/state.js";
+import { startStatusServer } from "../../daemon/status-server.js";
 import { loadDotenv } from "../../env.js";
 import type { LoopEvent } from "../../loop/types.js";
 import { daemonSocketPath } from "../../storage/path.js";
@@ -44,12 +45,20 @@ export interface DaemonRunOptions {
   socketPath?: string;
   /** Idle-shutdown window in ms. Flag wins over REASONIX_DAEMON_IDLE_MS; 0/absent stays up forever. */
   idleMs?: number;
+  /** Loopback HTTP status port (GET /health, /status). Flag > REASONIX_DAEMON_HTTP_PORT; absent disables. */
+  httpPort?: number;
 }
 
 /** Flag > env > disabled. Non-positive / malformed → disabled (stay up). */
 function resolveIdleMs(flag: number | undefined): number | undefined {
   const raw = flag ?? Number.parseInt(process.env.REASONIX_DAEMON_IDLE_MS ?? "", 10);
   return Number.isFinite(raw) && raw > 0 ? raw : undefined;
+}
+
+/** Flag > env > disabled. Out-of-range → disabled. */
+function resolveHttpPort(flag: number | undefined): number | undefined {
+  const raw = flag ?? Number.parseInt(process.env.REASONIX_DAEMON_HTTP_PORT ?? "", 10);
+  return Number.isInteger(raw) && raw >= 0 && raw <= 65535 ? raw : undefined;
 }
 
 function clearStaleSocket(socketPath: string): void {
@@ -93,6 +102,15 @@ export async function daemonRunCommand(opts: DaemonRunOptions): Promise<void> {
   });
   host.start();
   const server = await listenDaemon(host, socketPath);
+  const startedAtMs = Date.now();
+  const httpPort = resolveHttpPort(opts.httpPort);
+  const statusServer =
+    httpPort !== undefined ? await startStatusServer(host, httpPort, startedAtMs) : null;
+  if (statusServer) {
+    const addr = statusServer.address();
+    const boundPort = typeof addr === "object" && addr ? addr.port : httpPort;
+    process.stderr.write(`reasonix daemon status on http://127.0.0.1:${boundPort}/status\n`);
+  }
   writeDaemonState({
     pid: process.pid,
     socket: socketPath,
@@ -106,6 +124,7 @@ export async function daemonRunCommand(opts: DaemonRunOptions): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     server.close();
+    statusServer?.close();
     await host.closeAll();
     removeDaemonState();
     // Don't remove a systemd-owned socket; only our self-bound one.

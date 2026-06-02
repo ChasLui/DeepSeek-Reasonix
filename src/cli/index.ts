@@ -655,6 +655,11 @@ daemon
     "shut down after this many ms with no sessions (best paired with socket activation)",
     (v) => Number.parseInt(v, 10),
   )
+  .option(
+    "--http-port <port>",
+    "expose a loopback read-only HTTP status endpoint (GET /health, /status)",
+    (v) => Number.parseInt(v, 10),
+  )
   .action(async (opts) => {
     const { daemonRunCommand } = await import("./commands/daemon.js");
     await daemonRunCommand({
@@ -665,6 +670,7 @@ daemon
       mcpSpecs: opts.mcp as string[],
       mcpPrefix: opts.mcpPrefix,
       idleMs: typeof opts.idleMs === "number" ? opts.idleMs : undefined,
+      httpPort: typeof opts.httpPort === "number" ? opts.httpPort : undefined,
     });
   });
 
