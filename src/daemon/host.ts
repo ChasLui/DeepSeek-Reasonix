@@ -23,7 +23,7 @@ import { PauseGate, type PauseRequest, pauseGate } from "../core/pause-gate.js";
 import { autoResolveVerdict } from "../core/pause-policy.js";
 import { appendUsage } from "../telemetry/usage.js";
 import { VERSION } from "../version.js";
-import { IndexMaintainer } from "./index-maintainer.js";
+import { IndexMaintainer, type WorkspaceIndexStatus } from "./index-maintainer.js";
 import { McpPool } from "./mcp-pool.js";
 import { WorkspaceLifecycle } from "./workspace-lifecycle.js";
 
@@ -112,11 +112,7 @@ export class DaemonHost {
   }
 
   /** Per-workspace background index maintenance status (empty when disabled). */
-  indexStatus(): Array<{
-    root: string;
-    pendingStale: number;
-    lastHeavyMs: number | null;
-  }> {
+  indexStatus(): WorkspaceIndexStatus[] {
     return this.indexMaintainer?.status() ?? [];
   }
 

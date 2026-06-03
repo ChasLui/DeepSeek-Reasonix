@@ -9,6 +9,7 @@ import {
   IndexMaintainer,
   type WatchFactory,
   type WatchPrimitives,
+  defaultUpdateSemantic,
   listWatchableDirs,
   recursiveWatch,
 } from "../src/daemon/index-maintainer.js";
@@ -322,7 +323,7 @@ describe("IndexMaintainer — throttled heavy rebuilds + idle prebuild", () => {
     m.dispose();
   });
 
-  it("status() reports each watched root's pending stale + lastHeavy", () => {
+  it("status() reports pending stale, last build duration, and semantic state", async () => {
     vi.useFakeTimers();
     const lc = new WorkspaceLifecycle();
     const fw = fakeWatch();
@@ -331,16 +332,54 @@ describe("IndexMaintainer — throttled heavy rebuilds + idle prebuild", () => {
       debounceMs: 100,
       bgCooldownMs: 1000,
       updateGraph: noop,
-      updateLexical: noop,
-      updateSemantic: noop,
+      updateLexical: async () => {},
+      updateSemantic: async () => "built" as const,
       now: () => 5000,
     });
     lc.onSessionOpen("/a");
     fw.fire("/a", "x.ts"); // queues a stale path
-    expect(m.status()).toEqual([{ root: "/a", pendingStale: 1, lastHeavyMs: null }]);
-    vi.advanceTimersByTime(100); // flush → heavy runs (lastHeavy=5000), stale cleared
-    expect(m.status()).toEqual([{ root: "/a", pendingStale: 0, lastHeavyMs: 5000 }]);
+    expect(m.status()).toEqual([
+      {
+        root: "/a",
+        pendingStale: 1,
+        lastHeavyMs: null,
+        lastBuildMs: null,
+        semantic: "never",
+      },
+    ]);
+    await vi.advanceTimersByTimeAsync(100); // flush → heavy runs + records duration/semantic
+    const s = m.status()[0];
+    expect(s.pendingStale).toBe(0);
+    expect(s.lastHeavyMs).toBe(5000);
+    expect(typeof s.lastBuildMs).toBe("number"); // lexical rebuild duration recorded
+    expect(s.semantic).toBe("built");
     m.dispose();
+  });
+});
+
+describe("defaultUpdateSemantic — embedder-optional gating (NF-104)", () => {
+  it("skips with NO buildIndex call when no semantic index exists (never cold-builds)", async () => {
+    let built = 0;
+    const result = await defaultUpdateSemantic("/ws", {
+      indexExists: async () => false,
+      build: async () => {
+        built++;
+      },
+    });
+    expect(result).toBe("skipped");
+    expect(built).toBe(0); // INV-P5-3: never cold-builds without an existing index
+  });
+
+  it("rebuilds when a semantic index already exists", async () => {
+    let built = 0;
+    const result = await defaultUpdateSemantic("/ws", {
+      indexExists: async () => true,
+      build: async () => {
+        built++;
+      },
+    });
+    expect(result).toBe("built");
+    expect(built).toBe(1);
   });
 });
 

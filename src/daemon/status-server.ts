@@ -3,6 +3,7 @@
 import { type Server, createServer } from "node:http";
 import { VERSION } from "../version.js";
 import type { DaemonHost } from "./host.js";
+import type { WorkspaceIndexStatus } from "./index-maintainer.js";
 
 export interface DaemonStatus {
   ok: true;
@@ -10,11 +11,7 @@ export interface DaemonStatus {
   version: string;
   uptimeMs: number;
   sessions: Array<{ id: string; workspace: string; busy: boolean }>;
-  index: Array<{
-    root: string;
-    pendingStale: number;
-    lastHeavyMs: number | null;
-  }>;
+  index: WorkspaceIndexStatus[];
 }
 
 export function daemonStatusPayload(

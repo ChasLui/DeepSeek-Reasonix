@@ -2,6 +2,7 @@
 
 import { type Dirent, watch as fsWatch, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
+import { performance } from "node:perf_hooks";
 import { SKIP_DIR_NAMES, incrementalUpdate } from "../index/code-graph/builder.js";
 import { loadCodeGraph } from "../index/code-graph/loader.js";
 import { buildCodeLexicalIndex } from "../index/lexical/code.js";
@@ -12,6 +13,9 @@ import type { WorkspaceLifecycle } from "./workspace-lifecycle.js";
 const DEFAULT_DEBOUNCE_MS = 500;
 /** Throttle the expensive full rebuilds (lexical/semantic) per workspace. */
 const DEFAULT_BG_COOLDOWN_MS = 30_000;
+
+/** Outcome of a semantic maintenance pass — surfaced in status() (active vs gated-skip). */
+export type SemanticState = "built" | "skipped" | "never";
 
 function resolveMs(envVar: string, fallback: number): number {
   const raw = process.env[envVar];
@@ -35,8 +39,10 @@ export interface WatchPrimitives {
 
 /** Pluggable incremental code-graph updater — defaults to loadCodeGraph + incrementalUpdate. */
 export type GraphUpdater = (root: string, staleFiles: string[]) => Promise<void>;
-/** Pluggable full-rebuild updater for lexical/semantic — defaults wrap the real builders. */
+/** Pluggable full-rebuild updater for lexical — defaults wrap the real builder. */
 export type IndexUpdater = (root: string) => Promise<void>;
+/** Semantic updater reports whether it rebuilt or skipped (gated on an existing index). */
+export type SemanticUpdater = (root: string) => Promise<"built" | "skipped">;
 
 export interface IndexMaintainerOptions {
   debounceMs?: number;
@@ -45,7 +51,7 @@ export interface IndexMaintainerOptions {
   watch?: WatchFactory;
   updateGraph?: GraphUpdater;
   updateLexical?: IndexUpdater;
-  updateSemantic?: IndexUpdater;
+  updateSemantic?: SemanticUpdater;
   /** Clock seam (default Date.now) — injected so throttling is testable without real time. */
   now?: () => number;
   /** Surface background errors (default: swallow — best-effort maintenance must never crash the daemon). */
@@ -56,6 +62,19 @@ interface WorkspaceWatch {
   watcher: { close: () => void };
   staleSet: Set<string>;
   debounceTimer: ReturnType<typeof setTimeout> | null;
+}
+
+/** Per-workspace maintenance status for the daemon /status endpoint (Slice 3). */
+export interface WorkspaceIndexStatus {
+  root: string;
+  /** Changed paths queued for the next code-graph incremental pass. */
+  pendingStale: number;
+  /** Timestamp of the last heavy (lexical/semantic) rebuild trigger, or null. */
+  lastHeavyMs: number | null;
+  /** Wall-clock duration of the last lexical rebuild in ms, or null. */
+  lastBuildMs: number | null;
+  /** Whether the last semantic pass rebuilt, skipped (no index / no embedder), or never ran. */
+  semantic: SemanticState;
 }
 
 /** Immediate child directories of `dir`, excluding SKIP_DIR_NAMES + symlinks so node_modules/.git are never watched (P1-I / NF-106). Exported for testing. */
@@ -122,23 +141,32 @@ const defaultUpdateLexical: IndexUpdater = async (root) => {
   await buildCodeLexicalIndex(root);
 };
 
-const defaultUpdateSemantic: IndexUpdater = async (root) => {
-  // INV-P5-3: only maintain an EXISTING semantic index — never cold-build (embedder-optional).
-  if (!(await indexExists(root))) return;
+/** Default semantic maintenance — gated on an existing index, so it NEVER cold-builds (embedder-optional, INV-P5-3/NF-104). Returns "skipped" when no index exists. deps are injectable so the gate is testable without ollama. */
+export async function defaultUpdateSemantic(
+  root: string,
+  deps: {
+    indexExists: (root: string) => Promise<boolean>;
+    build: (root: string) => Promise<unknown>;
+  } = { indexExists, build: buildSemanticIndex },
+): Promise<"built" | "skipped"> {
+  if (!(await deps.indexExists(root))) return "skipped";
   // Throws if the embedder is gone (ollama down) → caller's catch → onError, then skipped.
-  await buildSemanticIndex(root);
-};
+  await deps.build(root);
+  return "built";
+}
 
 export class IndexMaintainer {
   private readonly watches = new Map<string, WorkspaceWatch>();
   private readonly lastHeavy = new Map<string, number>();
+  private readonly lastBuildMs = new Map<string, number>();
+  private readonly lastSemantic = new Map<string, "built" | "skipped">();
   private readonly unsubs: Array<() => void> = [];
   private readonly debounceMs: number;
   private readonly bgCooldownMs: number;
   private readonly watchFn: WatchFactory;
   private readonly updateGraph: GraphUpdater;
   private readonly updateLexical: IndexUpdater;
-  private readonly updateSemantic: IndexUpdater;
+  private readonly updateSemantic: SemanticUpdater;
   private readonly now: () => number;
   private readonly onError: (root: string, err: unknown) => void;
 
@@ -150,7 +178,7 @@ export class IndexMaintainer {
     this.watchFn = opts.watch ?? defaultWatch;
     this.updateGraph = opts.updateGraph ?? defaultUpdateGraph;
     this.updateLexical = opts.updateLexical ?? defaultUpdateLexical;
-    this.updateSemantic = opts.updateSemantic ?? defaultUpdateSemantic;
+    this.updateSemantic = opts.updateSemantic ?? ((root) => defaultUpdateSemantic(root));
     this.now = opts.now ?? (() => Date.now());
     this.onError = opts.onError ?? (() => {});
     this.unsubs.push(lifecycle.onOpened((root) => this.start(root)));
@@ -159,15 +187,13 @@ export class IndexMaintainer {
   }
 
   /** Per-workspace maintenance status for the daemon status endpoint (Slice 3). */
-  status(): Array<{
-    root: string;
-    pendingStale: number;
-    lastHeavyMs: number | null;
-  }> {
+  status(): WorkspaceIndexStatus[] {
     return [...this.watches.entries()].map(([root, ws]) => ({
       root,
       pendingStale: ws.staleSet.size,
       lastHeavyMs: this.lastHeavy.get(root) ?? null,
+      lastBuildMs: this.lastBuildMs.get(root) ?? null,
+      semantic: this.lastSemantic.get(root) ?? "never",
     }));
   }
 
@@ -218,13 +244,22 @@ export class IndexMaintainer {
     this.maybeHeavy(root);
   }
 
-  /** Run the throttled lexical + semantic full rebuilds if the per-root cooldown has elapsed. */
+  /** Run the throttled lexical + semantic full rebuilds if the per-root cooldown has elapsed; record duration + semantic outcome for status(). */
   private maybeHeavy(root: string): void {
     const now = this.now();
     if (now - (this.lastHeavy.get(root) ?? 0) < this.bgCooldownMs) return;
     this.lastHeavy.set(root, now);
-    void this.updateLexical(root).catch((err) => this.onError(root, err));
-    void this.updateSemantic(root).catch((err) => this.onError(root, err));
+    const startedAt = performance.now();
+    void this.updateLexical(root)
+      .then(() => this.lastBuildMs.set(root, Math.round(performance.now() - startedAt)))
+      .catch((err) => this.onError(root, err));
+    void this.updateSemantic(root)
+      .then((state) => this.lastSemantic.set(root, state))
+      .catch((err) => {
+        // A throwing semantic pass (embedder gone) is a skip from the index's POV.
+        this.lastSemantic.set(root, "skipped");
+        this.onError(root, err);
+      });
   }
 
   private stop(root: string): void {
@@ -236,6 +271,8 @@ export class IndexMaintainer {
     ws.watcher.close();
     this.watches.delete(root);
     this.lastHeavy.delete(root);
+    this.lastBuildMs.delete(root);
+    this.lastSemantic.delete(root);
   }
 
   /** Stop all watchers + unsubscribe from lifecycle (daemon shutdown). */
