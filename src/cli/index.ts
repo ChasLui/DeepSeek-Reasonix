@@ -659,6 +659,10 @@ daemon
     "expose a loopback read-only HTTP status endpoint (GET /health, /status)",
     (v) => Number.parseInt(v, 10),
   )
+  .option(
+    "--bg-index",
+    "enable Pillar 5 background index maintenance (per-workspace fs-watch → incremental)",
+  )
   .action(async (opts) => {
     const { daemonRunCommand } = await import("./commands/daemon.js");
     await daemonRunCommand({
@@ -670,6 +674,7 @@ daemon
       mcpPrefix: opts.mcpPrefix,
       idleMs: typeof opts.idleMs === "number" ? opts.idleMs : undefined,
       httpPort: typeof opts.httpPort === "number" ? opts.httpPort : undefined,
+      backgroundIndex: opts.bgIndex ? true : undefined,
     });
   });
 

@@ -48,6 +48,8 @@ export interface DaemonRunOptions {
   idleMs?: number;
   /** Loopback HTTP status port (GET /health, /status). Flag > REASONIX_DAEMON_HTTP_PORT; absent disables. */
   httpPort?: number;
+  /** Enable Pillar 5 background index maintenance. Flag > REASONIX_BG_INDEX; opt-in (watchers + rebuilds cost CPU/IO). */
+  backgroundIndex?: boolean;
 }
 
 /** Flag > env > disabled. Non-positive / malformed → disabled (stay up). */
@@ -60,6 +62,12 @@ function resolveIdleMs(flag: number | undefined): number | undefined {
 function resolveHttpPort(flag: number | undefined): number | undefined {
   const raw = flag ?? Number.parseInt(process.env.REASONIX_DAEMON_HTTP_PORT ?? "", 10);
   return Number.isInteger(raw) && raw >= 0 && raw <= 65535 ? raw : undefined;
+}
+
+/** Flag > env. Pillar 5 background indexing — opt-in (fs watchers + background rebuilds cost CPU/IO). */
+function resolveBackgroundIndex(flag: boolean | undefined): boolean {
+  if (flag !== undefined) return flag;
+  return /^(1|true|yes|on)$/i.test(process.env.REASONIX_BG_INDEX ?? "");
 }
 
 function clearStaleSocket(socketPath: string): void {
@@ -95,6 +103,7 @@ export async function daemonRunCommand(opts: DaemonRunOptions): Promise<void> {
     mcpSpecs: opts.mcpSpecs,
     mcpPrefix: opts.mcpPrefix,
     idleMs,
+    backgroundIndex: resolveBackgroundIndex(opts.backgroundIndex),
     // Reuse the SIGTERM path so idle shutdown drains MCP + checkpoints SQLite.
     onIdle: () => {
       process.stderr.write(`reasonix daemon idle for ${idleMs}ms — shutting down\n`);
