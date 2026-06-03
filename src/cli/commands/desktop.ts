@@ -55,6 +55,10 @@ import {
   pauseGate,
 } from "../../core/pause-gate.js";
 import { autoResolveVerdict } from "../../core/pause-policy.js";
+import {
+  type DesktopDaemonSession,
+  openDesktopDaemonSession,
+} from "../../daemon/desktop-runtime.js";
 import { augmentProcessPath } from "../../desktop/login-shell-path.js";
 import {
   loadDesktopQQState,
@@ -62,7 +66,7 @@ import {
   setDesktopQQEnabled,
 } from "../../desktop/qq-settings.js";
 import { loadDotenv } from "../../env.js";
-import { CacheFirstLoop, ImmutablePrefix, PREFIX_MAX_TIER } from "../../index.js";
+import { type CacheFirstLoop, ImmutablePrefix, PREFIX_MAX_TIER } from "../../index.js";
 import { parseMcpSpec } from "../../mcp/spec.js";
 import {
   deleteSession,
@@ -742,6 +746,8 @@ interface Tab {
   /** Empty while bootstrapping; populated together with `toolset`. */
   system: string;
   runtime: RuntimeState | null;
+  /** Daemon-only architecture: the tab's loop runs in the daemon; this is its session + connection. */
+  daemonSession: DesktopDaemonSession | null;
   aborter: AbortController | null;
   fileIndex: FileWithStats[] | null;
   fileIndexBuilding: Promise<FileWithStats[]> | null;
@@ -775,46 +781,21 @@ function mintSessionFor(rootDir: string): string {
   return name;
 }
 
+// Daemon-only: the loop runs in the daemon. buildRuntimeFor wraps the tab's
+// already-open daemon session (opened during async init) in a RemoteLoop, so
+// this stays synchronous. The local toolset is still built for the side panels.
 function buildRuntimeFor(tab: Tab): RuntimeState {
-  if (!tab.toolset) throw new Error("buildRuntimeFor called before initTabToolset finished");
-  const toolset = tab.toolset;
-  const client = getOrCreateDeepSeekClient({ baseUrl: loadBaseUrl() });
-  applySessionToolset(toolset.tools, resolveSessionToolset());
-  // Tiered exposure (FR-005): apply config tier overrides + capability-hint.
-  // No-op without `toolTiers` config (FR-010). Desktop's MCP tools arrive later
-  // via the runtime; their default-tier deferral threads through createMcpRuntime.
-  const tieringCfg = readConfig();
-  const tiering = activateToolTiering(
-    toolset.tools,
-    tieringCfg,
-    getDb(),
-    resolveCatalogSkills({ projectRoot: tab.rootDir, cfg: tieringCfg }),
-  );
-  const prefix = new ImmutablePrefix({
-    system: tab.system + tiering.capabilityHint,
-    toolSpecs: toolset.tools.filteredSpecs(PREFIX_MAX_TIER),
-  });
+  if (!tab.daemonSession) {
+    throw new Error("buildRuntimeFor called before the daemon session opened");
+  }
   const reasoningEffort = loadReasoningEffort();
-  const { autoEscalate } = resolvePreset(tab.currentPreset);
-  const loop = new CacheFirstLoop({
-    client,
-    prefix,
-    tools: toolset.tools,
-    model: tab.currentModel,
-    budgetUsd: tab.budgetUsd,
-    budgetWindows: resolveBudgetWindows(),
-    workspace: tab.rootDir,
-    session: tab.currentSession,
-    reasoningEffort,
-    autoEscalate,
-  });
   const eventizer = new Eventizer();
-  const ctx = {
-    model: tab.currentModel,
-    prefixHash: prefix.fingerprint,
-    reasoningEffort,
+  const ctx = { model: tab.currentModel, prefixHash: "", reasoningEffort };
+  return {
+    loop: tab.daemonSession.loop as unknown as CacheFirstLoop,
+    eventizer,
+    ctx,
   };
-  return { loop, eventizer, ctx };
 }
 
 const TS_EXPORT_RE =
@@ -1289,6 +1270,7 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
       toolset: null,
       system: "",
       runtime: null,
+      daemonSession: null,
       aborter: null,
       fileIndex: null,
       fileIndexBuilding: null,
@@ -1321,8 +1303,26 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
     });
     if (loadApiKey()) {
       process.env.DEEPSEEK_API_KEY = loadApiKey();
-      tab.runtime = buildRuntimeFor(tab);
-      void bridgeTabMcp(tab);
+      try {
+        // Daemon-only: open the tab's loop session in the daemon; confirmations
+        // re-raise on this process's local PauseGate so the existing confirm UI works.
+        tab.daemonSession = await openDesktopDaemonSession({
+          rootDir: tab.rootDir,
+          model: tab.currentModel,
+          ask: (req) => pauseGate.ask(req),
+        });
+        tab.runtime = buildRuntimeFor(tab);
+        void bridgeTabMcp(tab);
+      } catch (err) {
+        // Don't leave the tab wedged with no $ready — surface the daemon failure.
+        emit(
+          {
+            type: "$error",
+            message: `could not start the daemon: ${(err as Error).message}. Try \`reasonix daemon run\`.`,
+          },
+          tab.id,
+        );
+      }
     }
   }
 
@@ -1427,6 +1427,13 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
         // MCP shutdown errors aren't actionable here either
       }
     }
+    // Close the tab's daemon connection (the daemon drops the orphaned session).
+    try {
+      tab.daemonSession?.client.close();
+    } catch {
+      // already gone
+    }
+    tab.daemonSession = null;
     tabs.delete(tab.id);
     if (first && first.id === tab.id) {
       const next = tabs.values().next().value;
@@ -1534,6 +1541,19 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
       hasSemanticSearch: tab.toolset.semantic.enabled,
       modelId: tab.currentModel,
     });
+    // The daemon session is rooted at the old workspace — reopen it for the new one.
+    if (tab.daemonSession) {
+      try {
+        tab.daemonSession.client.close();
+      } catch {
+        // already gone
+      }
+      tab.daemonSession = await openDesktopDaemonSession({
+        rootDir: target,
+        model: tab.currentModel,
+        ask: (req) => pauseGate.ask(req),
+      });
+    }
     if (tab.runtime) tab.runtime = buildRuntimeFor(tab);
     emitSessions(tab);
     emitSettings(tab);

@@ -138,7 +138,7 @@ program
 // `reasonix` with no subcommand → setup wizard on first run, otherwise `code`
 // in the current directory. Filesystem-less chat stays reachable via
 // `reasonix chat`.
-program.action(async (opts: { continue?: boolean; mouse?: boolean }) => {
+program.action(async () => {
   const cfg = readConfig();
   const mode = resolveBareCommandMode(cfg);
   if (mode === "setup") {
@@ -146,12 +146,10 @@ program.action(async (opts: { continue?: boolean; mouse?: boolean }) => {
     await setupCommand({ forceKeyStep: true });
     return;
   }
-  const { codeCommand } = await import("./commands/code.js");
-  await codeCommand({
-    dir: process.cwd(),
-    forceResume: !!opts.continue,
-    noMouse: opts.mouse === false,
-  });
+  // Daemon-first: bare `reasonix` is the daemon thin client. Use
+  // `reasonix code --local` for the rich in-process TUI.
+  const { codeRemoteCommand } = await import("./commands/code-remote.js");
+  await codeRemoteCommand({ cwd: process.cwd() });
 });
 
 program
@@ -186,7 +184,16 @@ program
     "--profile [path]",
     "record a V8 CPU profile; saved on exit. Send the .cpuprofile back if you're reporting a perf bug.",
   )
+  .option("--local", "use the rich in-process TUI instead of the daemon thin client (escape hatch)")
   .action(async (dir: string | undefined, opts) => {
+    // Daemon-first: the daemon is the single architecture. --local keeps the
+    // rich in-process App.tsx (full dashboard/plan/checkpoint UI) until that UI
+    // is itself daemon-backed.
+    if (!opts.local) {
+      const { codeRemoteCommand } = await import("./commands/code-remote.js");
+      await codeRemoteCommand({ cwd: dir });
+      return;
+    }
     const profiling = await maybeStartCpuProfile(opts.profile);
     try {
       const { codeCommand } = await import("./commands/code.js");
@@ -316,9 +323,16 @@ program
     [] as string[],
   )
   .option("--mcp-prefix <str>", t("ui.mcpPrefixHintShort"))
+  .option("--local", "run the task in an in-process loop instead of the daemon (escape hatch)")
   .option("--no-config", t("ui.noConfigHint"))
   .option("--no-proxy", t("ui.noProxyHint"))
   .action(async (task: string, opts) => {
+    // Daemon-first: the daemon is the single architecture; --local is the escape hatch.
+    if (!opts.local) {
+      const { runRemoteCommand } = await import("./commands/daemon.js");
+      await runRemoteCommand({ task });
+      return;
+    }
     const defaults = resolveDefaults({
       model: opts.model,
       mcp: opts.mcp as string[],
@@ -616,6 +630,86 @@ mcp
       process.exit(1);
     }
   });
+
+const daemon = program
+  .command("daemon")
+  .description("long-running OS-managed session host (CLI/TUI/desktop connect as thin clients)");
+
+daemon
+  .command("run")
+  .description("run the daemon in the foreground (the launchd/systemd ExecStart target)")
+  .option("--dir <path>", "default workspace for sessions without an explicit cwd")
+  .option("-m, --model <id>", t("ui.modelIdHint"))
+  .option("--budget <usd>", t("ui.budgetHintShort"), (v) => Number.parseFloat(v))
+  .option("--yolo", t("ui.yoloHint"))
+  .option(
+    "--mcp <spec>",
+    t("ui.mcpSpecHintShort"),
+    (value: string, previous: string[] = []) => [...previous, value],
+    [] as string[],
+  )
+  .option("--mcp-prefix <str>", t("ui.mcpPrefixHintShort"))
+  .option(
+    "--idle-ms <ms>",
+    "shut down after this many ms with no sessions (best paired with socket activation)",
+    (v) => Number.parseInt(v, 10),
+  )
+  .option(
+    "--http-port <port>",
+    "expose a loopback read-only HTTP status endpoint (GET /health, /status)",
+    (v) => Number.parseInt(v, 10),
+  )
+  .option(
+    "--bg-index",
+    "enable Pillar 5 background index maintenance (per-workspace fs-watch → incremental)",
+  )
+  .action(async (opts) => {
+    const { daemonRunCommand } = await import("./commands/daemon.js");
+    await daemonRunCommand({
+      dir: opts.dir,
+      model: opts.model,
+      budgetUsd: parseBudgetFlag(opts.budget),
+      yolo: !!opts.yolo,
+      mcpSpecs: opts.mcp as string[],
+      mcpPrefix: opts.mcpPrefix,
+      idleMs: typeof opts.idleMs === "number" ? opts.idleMs : undefined,
+      httpPort: typeof opts.httpPort === "number" ? opts.httpPort : undefined,
+      backgroundIndex: opts.bgIndex ? true : undefined,
+    });
+  });
+
+daemon
+  .command("attach [dir]")
+  .description("interactive multi-turn session against the running daemon (thin client)")
+  .action(async (dir: string | undefined) => {
+    const { attachRemoteCommand } = await import("./commands/daemon.js");
+    await attachRemoteCommand({ cwd: dir });
+  });
+
+for (const [name, desc] of [
+  ["install", "install + load the launchd/systemd service"],
+  ["uninstall", "stop + remove the launchd/systemd service"],
+  ["start", "start the installed service"],
+  ["stop", "stop the running daemon"],
+  ["status", "report daemon liveness + active session count"],
+  ["logs", "tail the daemon log"],
+] as const) {
+  daemon
+    .command(name)
+    .description(desc)
+    .action(async () => {
+      const mod = await import("./commands/daemon.js");
+      const fn = {
+        install: mod.daemonInstallCommand,
+        uninstall: mod.daemonUninstallCommand,
+        start: mod.daemonStartCommand,
+        stop: mod.daemonStopCommand,
+        status: mod.daemonStatusCommand,
+        logs: mod.daemonLogsCommand,
+      }[name];
+      await fn();
+    });
+}
 
 program
   .command("version")
