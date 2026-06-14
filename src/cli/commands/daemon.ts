@@ -269,6 +269,15 @@ function run(cmd: string, args: string[]): { ok: boolean; stderr: string } {
   return { ok: r.status === 0, stderr: r.stderr ?? "" };
 }
 
+function launchdService(): string {
+  const uid = process.getuid?.() ?? 0;
+  return `gui/${uid}/${LAUNCHD_LABEL}`;
+}
+
+function launchdServiceLoaded(): boolean {
+  return run("launchctl", ["print", launchdService()]).ok;
+}
+
 function serviceTarget(): { node: string; cli: string; logPath: string } {
   return {
     node: process.execPath,
@@ -284,8 +293,8 @@ export async function daemonInstallCommand(): Promise<void> {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, renderLaunchdPlist(target));
     // bootout first so a re-install picks up the new plist (idempotent).
+    run("launchctl", ["bootout", launchdService()]);
     const uid = process.getuid?.() ?? 0;
-    run("launchctl", ["bootout", `gui/${uid}/${LAUNCHD_LABEL}`]);
     const res = run("launchctl", ["bootstrap", `gui/${uid}`, path]);
     if (!res.ok) {
       process.stderr.write(`launchctl bootstrap failed: ${res.stderr.trim()}\n`);
@@ -318,8 +327,7 @@ export async function daemonInstallCommand(): Promise<void> {
 
 export async function daemonUninstallCommand(): Promise<void> {
   if (isMac()) {
-    const uid = process.getuid?.() ?? 0;
-    run("launchctl", ["bootout", `gui/${uid}/${LAUNCHD_LABEL}`]);
+    run("launchctl", ["bootout", launchdService()]);
     rmSync(launchdPlistPath(), { force: true });
     process.stdout.write("uninstalled launchd service\n");
     return;
@@ -351,8 +359,19 @@ export async function daemonStartCommand(): Promise<void> {
     process.exit(1);
   }
   if (isMac()) {
-    const uid = process.getuid?.() ?? 0;
-    run("launchctl", ["kickstart", `gui/${uid}/${LAUNCHD_LABEL}`]);
+    if (!launchdServiceLoaded()) {
+      const uid = process.getuid?.() ?? 0;
+      const res = run("launchctl", ["bootstrap", `gui/${uid}`, launchdPlistPath()]);
+      if (!res.ok) {
+        process.stderr.write(`launchctl bootstrap failed: ${res.stderr.trim()}\n`);
+        process.exit(1);
+      }
+    }
+    const res = run("launchctl", ["kickstart", launchdService()]);
+    if (!res.ok) {
+      process.stderr.write(`launchctl kickstart failed: ${res.stderr.trim()}\n`);
+      process.exit(1);
+    }
   } else {
     // Starting the socket arms socket activation; the service spawns on connect.
     run("systemctl", ["--user", "start", "reasonix.socket"]);
@@ -366,8 +385,7 @@ export async function daemonStopCommand(): Promise<void> {
   // has no supervisor — signal its pid from the state file instead.
   if (serviceInstalled()) {
     if (isMac()) {
-      const uid = process.getuid?.() ?? 0;
-      run("launchctl", ["kill", "SIGTERM", `gui/${uid}/${LAUNCHD_LABEL}`]);
+      run("launchctl", ["bootout", launchdService()]);
     } else {
       // Stop the socket too, else the next connection re-activates the service.
       run("systemctl", ["--user", "stop", "reasonix.socket", "reasonix.service"]);
