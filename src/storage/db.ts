@@ -66,7 +66,7 @@ function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function openDb(path: string): Db {
+function openDb(path: string, initialize: (db: Db) => void = migrate): Db {
   installExperimentalWarningFilter();
   mkdirSync(dirname(path), { recursive: true });
   const raw = new DatabaseSync(path);
@@ -135,8 +135,12 @@ function openDb(path: string): Db {
     },
   };
 
-  migrate(db);
+  initialize(db);
   return db;
+}
+
+export function openIsolatedDb(path: string, initialize: (db: Db) => void): Db {
+  return openDb(path, initialize);
 }
 
 let singleton: Db | null = null;

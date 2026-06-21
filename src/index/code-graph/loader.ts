@@ -2,6 +2,11 @@ import { lstat, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { loadCodeGraphEnabled } from "../../config.js";
 import { Bm25Index } from "../lexical/bm25.js";
+import {
+  type CodeGraphArtifactRows,
+  codeGraphArtifactStoreExists,
+  openCodeGraphArtifactStore,
+} from "./artifact-store.js";
 import { recordCodeGraphLoad } from "./stats.js";
 import {
   CODE_GRAPH_VERSION,
@@ -53,37 +58,19 @@ const EDGE_PROVENANCES: ReadonlySet<string> = new Set(EDGE_PROVENANCE_VALUES);
 export async function loadCodeGraph(root: string): Promise<InMemoryCodeGraph | null> {
   if (!loadCodeGraphEnabled()) return null;
   const absRoot = resolve(root);
-  const paths = codeGraphPaths(absRoot);
-  const signature = await graphSignature([paths.nodes, paths.edges, paths.bm25, paths.filesStamps]);
-  if (!signature) return null;
+  const artifacts = await loadArtifactRows(absRoot);
+  if (!artifacts) return null;
   const cached = graphCache.get(absRoot);
-  if (cached?.signature === signature.value) {
+  if (cached?.signature === artifacts.signature) {
     recordCodeGraphLoad({
       cacheHit: true,
       nodes: cached.graph.nodes.length,
       edges: cached.graph.edges.length,
-      artifactBytes: signature.bytes,
+      artifactBytes: artifacts.bytes,
     });
     return cached.graph;
   }
-  let nodesRaw: string;
-  let edgesRaw: string;
-  let bm25Raw: string;
-  let filesRaw: string;
-  try {
-    [nodesRaw, edgesRaw, bm25Raw, filesRaw] = await Promise.all([
-      readFile(paths.nodes, "utf8"),
-      readFile(paths.edges, "utf8"),
-      readFile(paths.bm25, "utf8"),
-      readFile(paths.filesStamps, "utf8"),
-    ]);
-  } catch (err) {
-    if (isMissingFile(err)) {
-      graphCache.delete(absRoot);
-      return null;
-    }
-    throw err;
-  }
+  const { nodes: nodesRaw, edges: edgesRaw, bm25: bm25Raw, files: filesRaw } = artifacts.rows;
 
   assertMatchingGraphHashes([
     graphHashPayload(nodesRaw, "nodes"),
@@ -109,13 +96,67 @@ export async function loadCodeGraph(root: string): Promise<InMemoryCodeGraph | n
     edgesByTarget: groupBy(edgePayload.edges, (edge) => edge.target),
     bm25: Bm25Index.load(bm25Raw),
   };
-  graphCache.set(absRoot, { signature: signature.value, graph });
+  graphCache.set(absRoot, { signature: artifacts.signature, graph });
   recordCodeGraphLoad({
     nodes: nodes.length,
     edges: edgePayload.edges.length,
-    artifactBytes: signature.bytes,
+    artifactBytes: artifacts.bytes,
   });
   return graph;
+}
+
+async function loadArtifactRows(
+  absRoot: string,
+): Promise<{ rows: CodeGraphArtifactRows; signature: string; bytes: number } | null> {
+  const sqlite = loadSqliteArtifactRows(absRoot);
+  if (sqlite) return sqlite;
+  return loadFileArtifactRows(absRoot);
+}
+
+function loadSqliteArtifactRows(
+  absRoot: string,
+): { rows: CodeGraphArtifactRows; signature: string; bytes: number } | null {
+  if (!codeGraphArtifactStoreExists(absRoot)) return null;
+  const store = openCodeGraphArtifactStore(absRoot);
+  try {
+    const rows = store.read();
+    const stats = store.stats();
+    if (!rows || !stats) return null;
+    return {
+      rows,
+      signature: `sqlite:${hashGraphArtifacts([rows.nodes, rows.edges, rows.bm25, rows.files])}`,
+      bytes: stats.artifactBytes,
+    };
+  } finally {
+    store.close();
+  }
+}
+
+async function loadFileArtifactRows(
+  absRoot: string,
+): Promise<{ rows: CodeGraphArtifactRows; signature: string; bytes: number } | null> {
+  const paths = codeGraphPaths(absRoot);
+  const signature = await graphSignature([paths.nodes, paths.edges, paths.bm25, paths.filesStamps]);
+  if (!signature) return null;
+  try {
+    const [nodes, edges, bm25, files] = await Promise.all([
+      readFile(paths.nodes, "utf8"),
+      readFile(paths.edges, "utf8"),
+      readFile(paths.bm25, "utf8"),
+      readFile(paths.filesStamps, "utf8"),
+    ]);
+    return {
+      rows: { nodes, edges, bm25, files },
+      signature: `files:${signature.value}`,
+      bytes: signature.bytes,
+    };
+  } catch (err) {
+    if (isMissingFile(err)) {
+      graphCache.delete(absRoot);
+      return null;
+    }
+    throw err;
+  }
 }
 
 async function graphSignature(

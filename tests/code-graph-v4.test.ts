@@ -23,6 +23,10 @@ import {
   impact,
   resetCodeGraphBuildCooldown,
 } from "../src/code-query/relations.js";
+import {
+  codeGraphArtifactDbPath,
+  openCodeGraphArtifactStore,
+} from "../src/index/code-graph/artifact-store.js";
 import { buildCodeGraph, incrementalUpdate } from "../src/index/code-graph/builder.js";
 import { diffStaleStamps } from "../src/index/code-graph/hash.js";
 import { loadCodeGraph } from "../src/index/code-graph/loader.js";
@@ -33,6 +37,7 @@ import {
 } from "../src/index/code-graph/stats.js";
 import { codeGraphPaths, hashGraphArtifacts } from "../src/index/code-graph/writer.js";
 import { Bm25Index } from "../src/index/lexical/bm25.js";
+import { withoutGitEnv } from "../src/utils/git-env.js";
 
 interface NodesFile {
   nodes: Array<{
@@ -82,6 +87,29 @@ function rewriteGraphHashes(root: string): void {
   for (const target of targets) {
     writeFileSync(target, withGraphHash(readFileSync(target, "utf8"), graphHash));
   }
+  mirrorJsonArtifactsToSqlite(root);
+}
+
+function mirrorJsonArtifactsToSqlite(root: string): void {
+  const paths = codeGraphPaths(root);
+  const rows = {
+    nodes: readFileSync(paths.nodes, "utf8"),
+    edges: readFileSync(paths.edges, "utf8"),
+    bm25: readFileSync(paths.bm25, "utf8"),
+    files: readFileSync(paths.filesStamps, "utf8"),
+  };
+  const graphHash = hashGraphArtifacts([
+    graphHashPayload(rows.nodes),
+    graphHashPayload(rows.edges),
+    graphHashPayload(rows.bm25),
+    graphHashPayload(rows.files),
+  ]);
+  const store = openCodeGraphArtifactStore(root);
+  try {
+    store.write(rows, graphHash);
+  } finally {
+    store.close();
+  }
 }
 
 function graphHashPayload(raw: string): string {
@@ -103,7 +131,7 @@ async function waitForMtimeTick(): Promise<void> {
 }
 
 function git(root: string, args: string[]): void {
-  execFileSync("git", args, { cwd: root, stdio: "pipe" });
+  execFileSync("git", args, { cwd: root, env: withoutGitEnv(), stdio: "pipe" });
 }
 
 function initGitRepo(root: string): void {
@@ -180,6 +208,7 @@ describe("code graph v4 index", () => {
     expect(existsSync(paths.edges)).toBe(true);
     expect(existsSync(paths.bm25)).toBe(true);
     expect(existsSync(paths.filesStamps)).toBe(true);
+    expect(existsSync(codeGraphArtifactDbPath(root))).toBe(true);
 
     const nodesFile = readJson<NodesFile>(paths.nodes);
     const edgesFile = readJson<EdgesFile>(paths.edges);
@@ -194,6 +223,44 @@ describe("code graph v4 index", () => {
       expect.arrayContaining(["extracted", "inferred"]),
     );
     expect(Bm25Index.load(readFileSync(paths.bm25, "utf8")).size).toBe(nodesFile.nodes.length);
+  });
+
+  it("loads code-graph artifacts from per-repo sqlite when JSON mirrors are absent", async () => {
+    writeProjectFile(root, "src/a.ts", "export function helper() { return 1; }\n");
+    writeProjectFile(
+      root,
+      "src/b.ts",
+      'import { helper } from "./a";\nexport function run() { return helper(); }\n',
+    );
+    await buildCodeGraph(root);
+    const paths = codeGraphPaths(root);
+    rmSync(paths.nodes);
+    rmSync(paths.edges);
+    rmSync(paths.bm25);
+    rmSync(paths.filesStamps);
+
+    const graph = await loadCodeGraph(root);
+    const artifact = await readCodeGraphArtifactStats(root);
+
+    expect(graph?.nodes.map((node) => node.name)).toEqual(
+      expect.arrayContaining(["helper", "run"]),
+    );
+    expect(artifact).toMatchObject({
+      nodes: graph?.nodes.length,
+      edges: graph?.edges.length,
+      files: 2,
+      stalenessRatio: 0,
+    });
+  });
+
+  it("falls back to JSON code-graph artifacts when sqlite is missing", async () => {
+    writeProjectFile(root, "src/mod.ts", "export function helper() { return 1; }\n");
+    await buildCodeGraph(root);
+    rmSync(codeGraphArtifactDbPath(root));
+
+    const graph = await loadCodeGraph(root);
+
+    expect(graph?.nodes.map((node) => node.name)).toContain("helper");
   });
 
   it("keeps body fields out by default while allowing explicit opt-in", async () => {
@@ -1262,6 +1329,7 @@ describe("code graph v4 index", () => {
     const filesFile = readJson<Record<string, unknown>>(paths.filesStamps);
     filesFile.graphHash = "different";
     writeFileSync(paths.filesStamps, JSON.stringify(filesFile));
+    mirrorJsonArtifactsToSqlite(root);
 
     await expect(loadCodeGraph(root)).rejects.toThrow("mismatched code graph artifacts");
     await expect(readCodeGraphArtifactStats(root)).rejects.toThrow(
@@ -1276,6 +1344,7 @@ describe("code graph v4 index", () => {
     const nodesFile = readJson<NodesFile>(paths.nodes);
     nodesFile.nodes = [];
     writeFileSync(paths.nodes, JSON.stringify(nodesFile));
+    mirrorJsonArtifactsToSqlite(root);
 
     await expect(loadCodeGraph(root)).rejects.toThrow("invalid code graph artifact hash");
     await expect(readCodeGraphArtifactStats(root)).rejects.toThrow(
@@ -1294,15 +1363,17 @@ describe("code graph v4 index", () => {
     const afterRaw = beforeRaw.replace("helper", "boguss");
     expect(afterRaw.length).toBe(beforeRaw.length);
     writeFileSync(paths.nodes, afterRaw);
+    mirrorJsonArtifactsToSqlite(root);
     utimesSync(paths.nodes, beforeStat.atimeMs / 1000, beforeStat.mtimeMs / 1000);
 
     await expect(loadCodeGraph(root)).rejects.toThrow("invalid code graph artifact hash");
   });
 
-  it("rejects non-file graph artifacts instead of treating the index as missing", async () => {
+  it("rejects non-file JSON graph artifacts instead of treating the fallback as missing", async () => {
     writeProjectFile(root, "src/mod.ts", "export function helper() { return 1; }\n");
     await buildCodeGraph(root);
     const paths = codeGraphPaths(root);
+    rmSync(codeGraphArtifactDbPath(root));
     unlinkSync(paths.nodes);
     mkdirSync(paths.nodes);
 

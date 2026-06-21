@@ -2,6 +2,11 @@ import { lstat, readFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 import { Bm25Index } from "../lexical/bm25.js";
 import {
+  type CodeGraphArtifactRows,
+  codeGraphArtifactStoreExists,
+  openCodeGraphArtifactStore,
+} from "./artifact-store.js";
+import {
   CODE_GRAPH_VERSION,
   type CodeGraphEdgeKind,
   type CodeGraphEdgeProvenance,
@@ -113,6 +118,56 @@ export async function readCodeGraphArtifactStats(
   root: string,
 ): Promise<CodeGraphArtifactStats | null> {
   const absRoot = resolve(root);
+  const artifacts = await readArtifactRows(absRoot);
+  if (!artifacts) return null;
+  const { nodes: nodesRaw, edges: edgesRaw, bm25: bm25Raw, files: filesRaw } = artifacts.rows;
+
+  assertMatchingGraphHashes([
+    graphHashPayload(nodesRaw, "nodes"),
+    graphHashPayload(edgesRaw, "edges"),
+    graphHashPayload(bm25Raw, "bm25"),
+    graphHashPayload(filesRaw, "files"),
+  ]);
+  const nodes = parseNodesForStats(nodesRaw);
+  const edges = parseEdgesForStats(edgesRaw, nodes.ids);
+  Bm25Index.load(bm25Raw);
+  const files = parseFileStamps(filesRaw);
+  const stalenessRatio = await computeStalenessRatio(absRoot, files);
+  return {
+    nodes: nodes.count,
+    edges,
+    files: Object.keys(files).length,
+    artifactBytes: artifacts.artifactBytes,
+    stalenessRatio,
+  };
+}
+
+async function readArtifactRows(
+  absRoot: string,
+): Promise<{ rows: CodeGraphArtifactRows; artifactBytes: number } | null> {
+  const sqlite = readSqliteArtifactRows(absRoot);
+  if (sqlite) return sqlite;
+  return readFileArtifactRows(absRoot);
+}
+
+function readSqliteArtifactRows(
+  absRoot: string,
+): { rows: CodeGraphArtifactRows; artifactBytes: number } | null {
+  if (!codeGraphArtifactStoreExists(absRoot)) return null;
+  const store = openCodeGraphArtifactStore(absRoot);
+  try {
+    const rows = store.read();
+    const stats = store.stats();
+    if (!rows || !stats) return null;
+    return { rows, artifactBytes: stats.artifactBytes };
+  } finally {
+    store.close();
+  }
+}
+
+async function readFileArtifactRows(
+  absRoot: string,
+): Promise<{ rows: CodeGraphArtifactRows; artifactBytes: number } | null> {
   const paths = codeGraphPaths(absRoot);
   let artifactBytes = 0;
   try {
@@ -137,23 +192,9 @@ export async function readCodeGraphArtifactStats(
     readFile(paths.bm25, "utf8"),
     readFile(paths.filesStamps, "utf8"),
   ]);
-  assertMatchingGraphHashes([
-    graphHashPayload(nodesRaw, "nodes"),
-    graphHashPayload(edgesRaw, "edges"),
-    graphHashPayload(bm25Raw, "bm25"),
-    graphHashPayload(filesRaw, "files"),
-  ]);
-  const nodes = parseNodesForStats(nodesRaw);
-  const edges = parseEdgesForStats(edgesRaw, nodes.ids);
-  Bm25Index.load(bm25Raw);
-  const files = parseFileStamps(filesRaw);
-  const stalenessRatio = await computeStalenessRatio(absRoot, files);
   return {
-    nodes: nodes.count,
-    edges,
-    files: Object.keys(files).length,
+    rows: { nodes: nodesRaw, edges: edgesRaw, bm25: bm25Raw, files: filesRaw },
     artifactBytes,
-    stalenessRatio,
   };
 }
 

@@ -1,4 +1,4 @@
-/** Background index maintenance for Pillar 5 (Slices 1–3): recursively watch each active workspace, debounce changes, then maintain its retrieval indexes (code-graph incremental every flush; lexical/semantic full rebuilds throttled per root; idle prebuild). Writes only file-backed derived state under .reasonix/index, never a session prefix/log — zero Pillar-1 risk (INV-P1). */
+/** Background index maintenance for Pillar 5 (Slices 1–3): recursively watch each active workspace, debounce changes, then maintain its retrieval indexes (code-graph incremental every flush; lexical/semantic full rebuilds throttled per root; idle prebuild). Writes only derived state under .reasonix/index, never a session prefix/log — zero Pillar-1 risk (INV-P1). */
 
 import { type Dirent, watch as fsWatch, readdirSync } from "node:fs";
 import { join, relative } from "node:path";

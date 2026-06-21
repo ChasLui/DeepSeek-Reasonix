@@ -1,6 +1,7 @@
 /** Read-only HTTP status endpoint for the daemon — loopback-only observability (GET /health, /status). */
 
 import { type Server, createServer } from "node:http";
+import { type FuseStatus, getFuseStatus } from "../fuse/status.js";
 import { VERSION } from "../version.js";
 import type { DaemonHost } from "./host.js";
 import type { WorkspaceIndexStatus } from "./index-maintainer.js";
@@ -12,6 +13,7 @@ export interface DaemonStatus {
   uptimeMs: number;
   sessions: Array<{ id: string; workspace: string; busy: boolean }>;
   index: WorkspaceIndexStatus[];
+  fuse: FuseStatus;
 }
 
 export function daemonStatusPayload(
@@ -26,6 +28,7 @@ export function daemonStatusPayload(
     uptimeMs: Math.max(0, nowMs - startedAtMs),
     sessions: host.sessionSummaries(),
     index: host.indexStatus(),
+    fuse: getFuseStatus(),
   };
 }
 
