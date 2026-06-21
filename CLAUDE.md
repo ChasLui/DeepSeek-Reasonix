@@ -55,3 +55,5 @@ Three persistent stores, three different scopes. Don't duplicate; if a fact fits
 `.mcp.json` registers Serena MCP. `.serena/project.yml` ignores `.wolf/`, `.maos/`, `.codex/`, `.gemini/`, `.claude/` plus standard build outputs. Prefer `mcp__serena__get_symbols_overview` / `find_symbol` / `find_referencing_symbols` over full `Read` for `.ts`/`.rs` sources.
 
 See [`AGENTS.md`](./AGENTS.md) for repo layout, build commands, and the four-pillar architecture.
+
+@.claude/h5i.md
