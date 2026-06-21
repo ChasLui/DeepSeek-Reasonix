@@ -502,8 +502,9 @@ metered and shown to the user, not treated as free.
 
 The lexical index is file-backed under `.reasonix/index/lexical/code.json`,
 decoupled from the embedder build so `reasonix index --lexical-only` works with
-no ollama. Per C-002 the indexes stay file-backed (rebuildable derived state),
-not in the unified SQLite store.
+no ollama. Code-graph/BM25 relation artifacts use a per-repo derived-artifact
+SQLite database under `.reasonix/index/code-graph/artifacts.sqlite`; the legacy
+JSON files remain compatibility mirrors and fallback inputs.
 
 ### Structured Payload Encoding — TOON
 
@@ -593,23 +594,20 @@ A single SQLite database at `~/.reasonix/reasonix.db` (WAL mode,
 the event log, session metadata/messages, and user/project memory. There is
 no file/JSONL backend, no `.store-version` gate, and no `migrate-store`
 command — these transitional pieces were removed pre-launch. `node:sqlite` is
-isolated to `src/storage/db.ts` (one `DatabaseSync` singleton); the connection
+isolated to `src/storage/db.ts`; the user DB is a singleton connection that
 checkpoints the WAL on process exit so `quitProcess`' `process.exit(0)` never
 drops the last turn's frames. Schema migrations are forward-only
 (`src/storage/schema.ts`).
 
-Still file-backed (intentionally OUT of the DB): the semantic index, the
-code-graph, BM25 artifacts, in-memory tool caches, and config (`.toon`/`.json`).
-This is a standing decision (`2026-05-30-sqlite-unified-storage-ral.md` C-002),
-not a pending migration. They are per-project, rebuildable derived indexes — not
-authoritative relational state — and gain no query/latency win from SQL (a 4.9 MB
-graph loads in <50 ms; impact is depth-2 bounded). The code-graph's first-class
-`?:` unresolved-ref sentinel targets (`loader.ts` `assertEdgesReferenceNodes`) are
-also incompatible with SQL foreign keys, the one integrity feature a relational
-backend would add. Note the scope split: the DB is per-user
-(`~/.reasonix/reasonix.db`) while the code-graph is per-project
-(`<root>/.reasonix/index/`), so any future move must target a per-repo table, never
-the shared user DB. BM25→FTS5 is a separate plan, gated on a real full-text need.
+Still outside the shared user DB: the semantic index, in-memory tool caches, and
+config (`.toon`/`.json`). Code-graph/BM25 derived artifacts moved to a per-repo
+SQLite database at `<root>/.reasonix/index/code-graph/artifacts.sqlite`; the
+loader and doctor read that store first, then fall back to the legacy JSON
+mirrors. This preserves the C-002 scope split: `~/.reasonix/reasonix.db` remains
+per-user authoritative state, while rebuildable derived indexes live under the
+project root and never enter the shared user DB. The code-graph keeps `?:`
+unresolved-ref sentinel targets as payload data rather than SQL foreign keys, so
+incremental re-resolution remains byte-compatible with the JSON artifacts.
 
 ## Module layout
 
@@ -640,8 +638,9 @@ src/
 │   ├── subagent.ts         # spawn_subagent — flash+high by default
 │   ├── plan.ts             # submit_plan (review gate)
 │   └── web.ts              # web_search, web_fetch (multi-engine: Mojeek, SearXNG or Metaso)
+├── fuse/                   # FUSE-default capability/status probe; native mount remains a later slice
 ├── mcp/                    # MCP client + bridge (stdio + SSE)
-├── index/code-graph/       # JSON code-graph fast path for relation tools
+├── index/code-graph/       # Per-repo SQLite + JSON-mirror code-graph fast path
 ├── memory.ts               # ImmutablePrefix / AppendOnlyLog / VolatileScratch
 ├── project-memory.ts       # REASONIX.md loader
 ├── user-memory.ts          # ~/.reasonix/memory/ store (project + global)

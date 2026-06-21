@@ -19,6 +19,7 @@ import {
   resolveSessionToolset,
 } from "../../config.js";
 import { loadDotenv } from "../../env.js";
+import { getFuseStatus } from "../../fuse/status.js";
 import { loadHooks } from "../../hooks.js";
 import { t } from "../../i18n/index.js";
 import { getCodeGraphStats, readCodeGraphArtifactStats } from "../../index/code-graph/stats.js";
@@ -94,6 +95,7 @@ export async function runDoctorChecks(
     r[6],
     r[7],
     r[8],
+    checkFuse(),
     checkVfsLite(),
     checkToolCache(),
     checkPromptCache(opts.promptCacheStats),
@@ -508,6 +510,23 @@ function checkToolset(): Check {
       ? `no selection — all tools load (current behavior)${groups}`
       : `${selection.size} selected + essential kept${groups}`;
   return { id: "toolset", label: "toolset      ", level: "ok", detail };
+}
+
+function checkFuse(): Check {
+  const status = getFuseStatus();
+  const level: Level =
+    status.state === "ready" || status.state === "disabled"
+      ? "ok"
+      : status.mode === "required"
+        ? "fail"
+        : "warn";
+  const mode = status.mode === "default" ? "default-on" : status.mode;
+  return {
+    id: "fuse",
+    label: "fuse         ",
+    level,
+    detail: `${mode} · ${status.state} · ${status.detail}`,
+  };
 }
 
 /** VFS-Lite telemetry — pure-Node intercepts vs spawn fallbacks. Informational. */

@@ -6,7 +6,9 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 import { grammarForPath } from "../../code-query/parser.js";
 import { loadCodeGraphIncludeBody } from "../../config.js";
+import { withoutGitEnv } from "../../utils/git-env.js";
 import { Bm25Index } from "../lexical/bm25.js";
+import { openCodeGraphArtifactStore } from "./artifact-store.js";
 import { extractCodeGraphFile } from "./extractors.js";
 import { resolveUnresolved } from "./resolver.js";
 import { recordCodeGraphBuild, recordCodeGraphBuildTimeout } from "./stats.js";
@@ -121,7 +123,7 @@ export async function buildCodeGraph(
   assertBuildBudget(started, opts.timeoutMs);
   const paths = await writeCodeGraph(absRoot, graph);
   const elapsedMs = Math.round(performance.now() - started);
-  const artifactBytes = await totalArtifactBytes(paths);
+  const artifactBytes = await totalArtifactBytes(absRoot, paths);
   recordCodeGraphBuild({
     elapsedMs,
     nodes: sortedNodes.length,
@@ -217,7 +219,7 @@ export async function incrementalUpdate(
   assertBuildBudget(started, opts.timeoutMs);
   const paths = await writeCodeGraph(absRoot, updatedGraph);
   const elapsedMs = Math.round(performance.now() - started);
-  const artifactBytes = await totalArtifactBytes(paths);
+  const artifactBytes = await totalArtifactBytes(absRoot, paths);
   recordCodeGraphBuild({
     elapsedMs,
     nodes: sortedNodes.length,
@@ -250,7 +252,14 @@ function assertBuildBudget(started: number, timeoutMs: number | undefined): void
   throw new CodeGraphBuildTimeoutError(timeoutMs);
 }
 
-async function totalArtifactBytes(paths: CodeGraphPaths): Promise<number> {
+async function totalArtifactBytes(root: string, paths: CodeGraphPaths): Promise<number> {
+  const store = openCodeGraphArtifactStore(root);
+  try {
+    const stats = store.stats();
+    if (stats) return stats.artifactBytes;
+  } finally {
+    store.close();
+  }
   const fileStats = await Promise.all([
     stat(paths.nodes),
     stat(paths.edges),
@@ -304,7 +313,7 @@ async function listGitFiles(root: string): Promise<string[] | null> {
     const result = await execFileAsync(
       "git",
       ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
-      { cwd: root, maxBuffer: 20 * 1024 * 1024 },
+      { cwd: root, env: withoutGitEnv(), maxBuffer: 20 * 1024 * 1024 },
     );
     const candidates = result.stdout
       .split("\0")

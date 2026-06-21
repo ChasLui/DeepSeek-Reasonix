@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { openCodeGraphArtifactStore } from "./artifact-store.js";
 import {
   CODE_GRAPH_VERSION,
   type CodeGraphData,
@@ -43,12 +44,24 @@ export async function writeCodeGraph(root: string, graph: CodeGraphData): Promis
   const bm25Raw = graph.bm25.serialize();
   const filesRaw = serializeFileStamps(graph);
   const graphHash = hashGraphArtifacts([nodesRaw, edgesRaw, bm25Raw, filesRaw]);
+  const rows = {
+    nodes: withGraphHash(nodesRaw, graphHash),
+    edges: withGraphHash(edgesRaw, graphHash),
+    bm25: withGraphHash(bm25Raw, graphHash),
+    files: withGraphHash(filesRaw, graphHash),
+  };
   await mkdir(paths.dir, { recursive: true });
+  const store = openCodeGraphArtifactStore(root);
+  try {
+    store.write(rows, graphHash);
+  } finally {
+    store.close();
+  }
   await Promise.all([
-    atomicWrite(paths.nodes, withGraphHash(nodesRaw, graphHash)),
-    atomicWrite(paths.edges, withGraphHash(edgesRaw, graphHash)),
-    atomicWrite(paths.bm25, withGraphHash(bm25Raw, graphHash)),
-    atomicWrite(paths.filesStamps, withGraphHash(filesRaw, graphHash)),
+    atomicWrite(paths.nodes, rows.nodes),
+    atomicWrite(paths.edges, rows.edges),
+    atomicWrite(paths.bm25, rows.bm25),
+    atomicWrite(paths.filesStamps, rows.files),
   ]);
   return paths;
 }

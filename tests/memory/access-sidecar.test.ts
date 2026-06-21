@@ -155,6 +155,7 @@ describe("memory access sidecar", () => {
       body: "Body",
       priority: "low",
     });
+    appendAccess("global", "old_low", new Date("2026-05-01T00:00:00Z"), { homeDir: home });
 
     const result = forget(store, {
       minScore: 0.5,
@@ -176,6 +177,7 @@ describe("memory access sidecar", () => {
       body: "Body",
       priority: "low",
     });
+    appendAccess("global", "old_low", new Date("2026-05-01T00:00:00Z"), { homeDir: home });
 
     const result = forget(store, {
       minScore: 0.5,

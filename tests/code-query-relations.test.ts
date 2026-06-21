@@ -9,6 +9,7 @@ import { scavengeToolCalls } from "../src/repair/scavenge.js";
 import { countTokensBounded } from "../src/tokenizer.js";
 import { ToolRegistry } from "../src/tools.js";
 import { registerCodeQueryTools } from "../src/tools/code-query.js";
+import { withoutGitEnv } from "../src/utils/git-env.js";
 import { parseToolResult } from "./helpers/tool-result.js";
 
 function writeProjectFile(root: string, path: string, content: string): void {
@@ -18,7 +19,7 @@ function writeProjectFile(root: string, path: string, content: string): void {
 }
 
 function git(root: string, args: string[]): void {
-  execFileSync("git", args, { cwd: root, stdio: "pipe" });
+  execFileSync("git", args, { cwd: root, env: withoutGitEnv(), stdio: "pipe" });
 }
 
 function initGitRepo(root: string): void {

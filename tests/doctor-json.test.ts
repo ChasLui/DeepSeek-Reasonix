@@ -63,6 +63,7 @@ describe("doctorCommand --json (integration)", () => {
     vi.stubEnv("USERPROFILE", tmpHome);
     // Ensure no API key so checkApiReach skips the network call.
     vi.stubEnv("DEEPSEEK_API_KEY", "");
+    vi.stubEnv("REASONIX_FUSE", "0");
     process.chdir(tmpCwd);
     logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
@@ -106,6 +107,11 @@ describe("doctorCommand --json (integration)", () => {
       id: "cache",
       status: "ok",
       message: expect.stringContaining("file-cache enabled; parse-cache enabled"),
+    });
+    expect(parsed.checks).toContainEqual({
+      id: "fuse",
+      status: "ok",
+      message: expect.stringContaining("off · disabled"),
     });
     for (const c of parsed.checks) {
       expect(typeof c.id).toBe("string");

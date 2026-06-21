@@ -13,6 +13,7 @@ import { diffStaleStamps } from "../index/code-graph/hash.js";
 import { loadCodeGraph } from "../index/code-graph/loader.js";
 import { findReferencesInGraph } from "../index/code-graph/queries.js";
 import { recordCodeGraphQuery, recordCodeGraphStaleness } from "../index/code-graph/stats.js";
+import { withoutGitEnv } from "../utils/git-env.js";
 import { classifyIdentifierNode, isIdentifierNode, walkCodeNodes } from "./find-in-code.js";
 import {
   type ParseSourceOptions,
@@ -1298,6 +1299,7 @@ async function readGitDiff(rootDir: string, scope: DetectChangesScope): Promise<
       : ["diff", "--no-ext-diff", "--unified=0", "--"];
   const result = await execFileAsync("git", args, {
     cwd: rootDir,
+    env: withoutGitEnv(),
     maxBuffer: 10 * 1024 * 1024,
   });
   return result.stdout;

@@ -405,8 +405,9 @@ query
 触发是一次 cache-miss，成本随对话深度增长，故被度量并展示给用户，不当作免费。
 
 词法索引以文件形式存于 `.reasonix/index/lexical/code.json`，与 embedder 构建解耦，
-故 `reasonix index --lexical-only` 无 ollama 也能用。按 C-002 索引保持文件式（可重建
-的派生状态），不进统一 SQLite 存储。
+故 `reasonix index --lexical-only` 无 ollama 也能用。code-graph/BM25 关系工件使用
+per-repo 派生工件 SQLite：`.reasonix/index/code-graph/artifacts.sqlite`；旧 JSON
+文件保留为兼容镜像和 fallback 输入。
 
 ### 结构化载荷编码 —— TOON
 
@@ -473,21 +474,17 @@ function calling；默认的载荷编码器不改变那条协议边界。
 `auto_vacuum=INCREMENTAL`）是用量记账、事件日志、会话元数据/消息，以及
 用户/项目记忆的**唯一**后端。没有文件/JSONL 后端，没有 `.store-version`
 开关，也没有 `migrate-store` 命令——这些过渡件在发布前已移除。`node:sqlite`
-被隔离在 `src/storage/db.ts`（单个 `DatabaseSync` 单例）；连接在进程退出时
-checkpoint WAL，使 `quitProcess` 的 `process.exit(0)` 永不丢掉最后一轮的帧。
+被隔离在 `src/storage/db.ts`；用户 DB 是单例连接，进程退出时 checkpoint WAL，
+使 `quitProcess` 的 `process.exit(0)` 永不丢掉最后一轮的帧。
 Schema 迁移是只进的（`src/storage/schema.ts`）。
 
-仍保持文件支撑（有意 OUT of DB）：语义索引、code-graph、BM25 工件、内存
-工具缓存，以及配置（`.toon`/`.json`）。这是既定决策
-（`2026-05-30-sqlite-unified-storage-ral.md` C-002），不是待办迁移。它们是
-**按项目（per-project）、可重建的派生索引**，而非权威关系型 state，且从 SQL
-得不到 query/latency 收益（4.9MB 的图 <50ms 载入，impact 封顶 depth-2）。
-code-graph 的一等 `?:` 未解析引用 sentinel target（`loader.ts`
-`assertEdgesReferenceNodes`）还与 SQL 外键不兼容——而外键正是关系型后端唯一
-能新增的完整性特性。注意作用域差异：DB 是 per-user（`~/.reasonix/reasonix.db`），
-而 code-graph 是 per-project（`<root>/.reasonix/index/`），因此未来若要搬，
-也必须搬进 per-repo 的表，绝不是共享的用户级 DB。BM25→FTS5 是独立 plan，
-仅在出现真实全文需求时重开。
+仍在共享用户 DB 之外：语义索引、内存工具缓存，以及配置（`.toon`/`.json`）。
+code-graph/BM25 派生工件移入 per-repo SQLite：
+`<root>/.reasonix/index/code-graph/artifacts.sqlite`；loader 和 doctor 优先读取它，
+再回退旧 JSON 镜像。这样保留 C-002 的作用域拆分：`~/.reasonix/reasonix.db`
+仍只存 per-user 权威 state，可重建派生索引留在项目根目录下，绝不进入共享用户
+DB。code-graph 的 `?:` 未解析引用 sentinel target 继续作为载荷数据保存，而不是
+SQL 外键，因此增量重解析仍与 JSON 工件字节兼容。
 
 ## 模块布局
 
@@ -518,8 +515,9 @@ src/
 │   ├── subagent.ts         # spawn_subagent — flash+high by default
 │   ├── plan.ts             # submit_plan (review gate)
 │   └── web.ts              # web_search, web_fetch (multi-engine: Mojeek, SearXNG or Metaso)
+├── fuse/                   # FUSE 默认能力/status probe；native mount 仍是后续切片
 ├── mcp/                    # MCP client + bridge (stdio + SSE)
-├── index/code-graph/       # JSON code-graph fast path for relation tools
+├── index/code-graph/       # Per-repo SQLite + JSON-mirror code-graph fast path
 ├── memory.ts               # ImmutablePrefix / AppendOnlyLog / VolatileScratch
 ├── project-memory.ts       # REASONIX.md loader
 ├── user-memory.ts          # ~/.reasonix/memory/ store (project + global)
