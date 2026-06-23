@@ -92,7 +92,9 @@ async function compareByteIdentical(cmd: string) {
   expect(vfs!.exitCode).toBe(bash.code);
 }
 
-describe("cat — byte-identical with bash", () => {
+const describeBashParity = process.platform === "win32" ? describe.skip : describe;
+
+describeBashParity("cat — byte-identical with bash", () => {
   it("cat a.txt (10 lines + trailing newline)", () => compareByteIdentical(`cat ${fileA}`));
   it("cat b.txt (no trailing newline)", () => compareByteIdentical(`cat ${fileB}`));
   it("cat a.txt b.txt (concatenation)", () => compareByteIdentical(`cat ${fileA} ${fileB}`));
@@ -100,43 +102,43 @@ describe("cat — byte-identical with bash", () => {
     compareByteIdentical(`cat ${root}/missing.txt`));
 });
 
-describe("head — byte-identical with bash", () => {
+describeBashParity("head — byte-identical with bash", () => {
   it("head -5 a.txt", () => compareByteIdentical(`head -5 ${fileA}`));
   it("head -n 3 a.txt", () => compareByteIdentical(`head -n 3 ${fileA}`));
   it("head a.txt (default -10)", () => compareByteIdentical(`head ${fileA}`));
   it("head -2 b.txt (no trailing newline)", () => compareByteIdentical(`head -2 ${fileB}`));
 });
 
-describe("tail — byte-identical with bash", () => {
+describeBashParity("tail — byte-identical with bash", () => {
   it("tail -3 a.txt", () => compareByteIdentical(`tail -3 ${fileA}`));
   it("tail -n 5 a.txt", () => compareByteIdentical(`tail -n 5 ${fileA}`));
   it("tail b.txt (no trailing newline, default -10)", () => compareByteIdentical(`tail ${fileB}`));
 });
 
-describe("printf — byte-identical with bash", () => {
+describeBashParity("printf — byte-identical with bash", () => {
   it('printf "%s\\n" hello', () => compareByteIdentical('printf "%s\\n" hello'));
   it("printf %d %d 1 2", () => compareByteIdentical('printf "%d %d\\n" 1 2'));
   it("printf width %-10s|%s a b", () => compareByteIdentical('printf "%-10s|%s\\n" a b'));
   it("printf no-newline", () => compareByteIdentical('printf "no-newline"'));
 });
 
-describe("echo — byte-identical with bash", () => {
+describeBashParity("echo — byte-identical with bash", () => {
   it("echo hello", () => compareByteIdentical("echo hello"));
   it("echo a b c (multi-arg)", () => compareByteIdentical("echo a b c"));
   it('echo "hello world" (quoted, single token)', () => compareByteIdentical('echo "hello world"'));
   it("echo -n no-newline", () => compareByteIdentical("echo -n no-newline"));
 });
 
-describe("pwd — byte-identical with bash", () => {
+describeBashParity("pwd — byte-identical with bash", () => {
   it("pwd", () => compareByteIdentical("pwd"));
 });
 
-describe("true / false — exit codes", () => {
+describeBashParity("true / false — exit codes", () => {
   it("true → exit 0 empty stdout", () => compareByteIdentical("true"));
   it("false → exit 1 empty stdout", () => compareByteIdentical("false"));
 });
 
-describe("basename / dirname — byte-identical with bash", () => {
+describeBashParity("basename / dirname — byte-identical with bash", () => {
   it("basename /a/b/c.txt", () => compareByteIdentical("basename /a/b/c.txt"));
   it("basename /a/b/c.txt .txt", () => compareByteIdentical("basename /a/b/c.txt .txt"));
   it("dirname /a/b/c.txt", () => compareByteIdentical("dirname /a/b/c.txt"));

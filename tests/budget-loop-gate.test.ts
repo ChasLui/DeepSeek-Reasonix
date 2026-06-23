@@ -3,7 +3,7 @@
 
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BudgetWindow } from "../src/budget/window.js";
 import { DeepSeekClient } from "../src/client.js";
@@ -247,8 +247,8 @@ describe("CacheFirstLoop window budget gate", () => {
     expect(fetcher.calls()).toBe(callsBefore); // no new model call
   });
 
-  const WS_A = "/ws/a";
-  const WS_B = "/ws/b";
+  const WS_A = resolve("/ws/a");
+  const WS_B = resolve("/ws/b");
   const DAILY_1USD_WS: BudgetWindow = {
     period: "daily",
     capUsd: 1,

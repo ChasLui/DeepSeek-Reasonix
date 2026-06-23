@@ -19,6 +19,7 @@ describe("TOON prefix payloads", () => {
     writeFileSync(join(root, "src", "loop.ts"), "export const x = 1;\n");
     // SQLite-only: applyUserMemory + openMemoryStore resolve getDb() from $HOME.
     vi.stubEnv("HOME", home);
+    vi.stubEnv("USERPROFILE", home);
     resetToonStats();
   });
 

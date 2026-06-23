@@ -1,6 +1,6 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, normalize } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MemorySemanticStore, openMemorySemanticStore } from "../../src/index/memory-semantic.js";
 
@@ -25,8 +25,8 @@ describe("MemorySemanticStore", () => {
       },
     ]);
 
-    expect(store.indexDir).toContain("memory/.semantic");
-    expect(store.indexDir).not.toContain(".reasonix/semantic");
+    expect(store.indexDir).toContain(normalize("memory/.semantic"));
+    expect(store.indexDir).not.toContain(normalize(".reasonix/semantic"));
   });
 
   it("round-trips persisted embeddings", async () => {

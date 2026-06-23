@@ -132,9 +132,9 @@ describe("/budget window slash", () => {
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "budget-slash-"));
-    // defaultConfigPath() resolves via homedir() → $HOME on POSIX, so this
-    // isolates saveBudgetWindow's default-path write away from the real config.
+    // defaultConfigPath() resolves via homedir(), so isolate both platform home envs.
     vi.stubEnv("HOME", dir);
+    vi.stubEnv("USERPROFILE", dir);
   });
   afterEach(() => {
     // resetDb so a singleton opened under the stubbed HOME doesn't leak into

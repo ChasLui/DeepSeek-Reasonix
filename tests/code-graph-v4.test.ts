@@ -13,7 +13,7 @@ import {
 } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, normalize } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { rebuildCodeGraphCommand } from "../src/cli/commands/code-index.js";
 import { runDoctorChecks } from "../src/cli/commands/doctor.js";
@@ -176,8 +176,8 @@ describe("code graph v4 index", () => {
     rmSync(root, {
       recursive: true,
       force: true,
-      maxRetries: 5,
-      retryDelay: 50,
+      maxRetries: 10,
+      retryDelay: 100,
     });
   });
 
@@ -345,7 +345,9 @@ describe("code graph v4 index", () => {
     };
     expect(parsed.filesScanned).toBe(1);
     expect(parsed.nodes).toBe(1);
-    expect(codeGraphPaths(root).nodes).toContain(".reasonix/index/code-graph/nodes.json");
+    expect(codeGraphPaths(root).nodes).toContain(
+      normalize(".reasonix/index/code-graph/nodes.json"),
+    );
   });
 
   it("rebuild command honors REASONIX_CODE_GRAPH=0 without creating artifacts", async () => {

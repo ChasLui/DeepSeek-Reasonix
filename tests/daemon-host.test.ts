@@ -55,6 +55,17 @@ function wait(ms = 15): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function eventually<T>(read: () => T | undefined, timeoutMs = 500): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  let value = read();
+  while (value === undefined && Date.now() < deadline) {
+    await wait();
+    value = read();
+  }
+  expect(value).not.toBeUndefined();
+  return value as T;
+}
+
 function responseFor(
   lines: unknown[],
   id: number,
@@ -73,10 +84,14 @@ describe("DaemonHost — session protocol", () => {
       method: "initialize",
       params: { protocolVersion: 1 },
     });
-    await wait();
-    const reply = responseFor(h.lines(), 1) as {
-      result?: { agentInfo?: { name?: string } };
-    };
+    const reply = await eventually(
+      () =>
+        responseFor(h.lines(), 1) as
+          | {
+              result?: { agentInfo?: { name?: string } };
+            }
+          | undefined,
+    );
     expect(reply?.result?.agentInfo?.name).toBe("reasonix");
     h.close();
   });
@@ -84,10 +99,14 @@ describe("DaemonHost — session protocol", () => {
   it("ping reports the process pid and active session count", async () => {
     const h = makeHostPair([]);
     h.send({ jsonrpc: "2.0", id: 1, method: "ping", params: {} });
-    await wait();
-    const reply = responseFor(h.lines(), 1) as {
-      result?: { pid?: number; sessions?: number };
-    };
+    const reply = await eventually(
+      () =>
+        responseFor(h.lines(), 1) as
+          | {
+              result?: { pid?: number; sessions?: number };
+            }
+          | undefined,
+    );
     expect(reply?.result?.pid).toBe(process.pid);
     expect(reply?.result?.sessions).toBe(0);
     h.close();
@@ -106,10 +125,14 @@ describe("DaemonHost — session protocol", () => {
       method: "session/new",
       params: { cwd: "/tmp" },
     });
-    await wait();
-    const created = responseFor(h.lines(), 1) as {
-      result?: { sessionId?: string };
-    };
+    const created = await eventually(
+      () =>
+        responseFor(h.lines(), 1) as
+          | {
+              result?: { sessionId?: string };
+            }
+          | undefined,
+    );
     const sessionId = created?.result?.sessionId;
     expect(sessionId).toBe("sess_test");
 
@@ -119,7 +142,7 @@ describe("DaemonHost — session protocol", () => {
       method: "session/prompt",
       params: { sessionId, prompt: [{ type: "text", text: "hi" }] },
     });
-    await wait();
+    await eventually(() => responseFor(h.lines(), 2));
 
     const loopEvents = h
       .lines()
@@ -142,8 +165,9 @@ describe("DaemonHost — session protocol", () => {
       method: "session/prompt",
       params: { sessionId: "nope", prompt: [{ type: "text", text: "hi" }] },
     });
-    await wait();
-    const reply = responseFor(h.lines(), 1) as { error?: { message?: string } };
+    const reply = await eventually(
+      () => responseFor(h.lines(), 1) as { error?: { message?: string } } | undefined,
+    );
     expect(reply?.error?.message).toContain("unknown session");
     h.close();
   });
@@ -194,7 +218,7 @@ describe("DaemonHost — concurrent sessions", () => {
       method: "session/new",
       params: { cwd: "/tmp" },
     });
-    await wait();
+    await Promise.all([1, 2].map((i) => eventually(() => responseFor(collected, i))));
     const ids = [1, 2]
       .map((i) => responseFor(collected, i) as { result?: { sessionId?: string } })
       .map((r) => r?.result?.sessionId);
@@ -212,7 +236,14 @@ describe("DaemonHost — concurrent sessions", () => {
       method: "session/prompt",
       params: { sessionId: ids[1], prompt: [{ type: "text", text: "b" }] },
     });
-    await wait(40);
+    await eventually(() => {
+      const deltas = collected.filter(
+        (l) =>
+          (l as { method?: string }).method === "session/loopEvent" &&
+          (l as { params: { event: LoopEvent } }).params.event.role === "assistant_delta",
+      );
+      return deltas.length >= 2 ? deltas : undefined;
+    });
 
     const deltas = collected
       .filter(
@@ -266,14 +297,16 @@ describe("DaemonHost — kernel-event convergence", () => {
       method: "session/new",
       params: { cwd: "/tmp" },
     });
-    await wait();
+    await eventually(() => responseFor(collected, 1));
     send({
       jsonrpc: "2.0",
       id: 2,
       method: "session/prompt",
       params: { sessionId: "sess_k", prompt: [{ type: "text", text: "x" }] },
     });
-    await wait();
+    await eventually(() =>
+      collected.find((l) => (l as { method?: string }).method === "session/update"),
+    );
 
     const updates = collected
       .filter((l) => (l as { method?: string }).method === "session/update")

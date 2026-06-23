@@ -27,6 +27,7 @@ describe("custom memory types (#709)", () => {
     projectRoot = mkdtempSync(join(tmpdir(), "reasonix-memtype-proj-"));
     // SQLite-only: openMemoryStore + applyUserMemory resolve getDb() from $HOME.
     vi.stubEnv("HOME", home);
+    vi.stubEnv("USERPROFILE", home);
     // biome-ignore lint/performance/noDelete: avoid leaking "undefined" into env
     delete process.env["REASONIX_MEMORY"];
   });

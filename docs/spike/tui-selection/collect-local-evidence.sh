@@ -67,7 +67,11 @@ gui_report="$out_dir/gui-capability.md"
   printf 'Generated: %s\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf '## Environment\n\n'
   printf '```text\n'
-  sw_vers || true
+  if command -v sw_vers >/dev/null 2>&1; then
+    sw_vers
+  else
+    uname -a
+  fi
   printf 'TERM=%s\n' "${TERM:-}"
   printf 'TTY=%s\n' "$(tty 2>/dev/null || true)"
   printf '```\n\n'
@@ -190,12 +194,12 @@ render_dir="$out_dir/e3-render-samples"
 E3_RENDER_DIR="$render_dir" pnpm exec tsx - <<'TS' >"$out_dir/e3-render-samples.log"
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Chalk } from "chalk";
 
 const outDir = process.env.E3_RENDER_DIR ?? "";
 if (outDir.length === 0) throw new Error("E3_RENDER_DIR is required");
 mkdirSync(outDir, { recursive: true });
-const chalk = new Chalk({ level: 1 });
+const inverse = (s: string) => `\x1b[7m${s}\x1b[27m`;
+const solid = (s: string) => `\x1b[43m\x1b[30m${s}\x1b[39m\x1b[49m`;
 
 const samples = [
   "tool: console.log('中👩‍💻')",
@@ -203,9 +207,9 @@ const samples = [
   "json: {\"status\":\"ok\",\"emoji\":\"🚀\",\"cjk\":\"中文\"}",
 ];
 const variants = [
-  ["chalk-inverse", samples.map((s) => chalk.inverse(s)).join("\n")],
-  ["solid-bg", samples.map((s) => `${chalk.bgYellow.black(s)}\x1b[49m`).join("\n")],
-  ["raw-inverse", samples.map((s) => `\x1b[7m${s}\x1b[27m`).join("\n")],
+  ["chalk-inverse", samples.map(inverse).join("\n")],
+  ["solid-bg", samples.map(solid).join("\n")],
+  ["raw-inverse", samples.map(inverse).join("\n")],
 ] as const;
 
 const combined: string[] = [];

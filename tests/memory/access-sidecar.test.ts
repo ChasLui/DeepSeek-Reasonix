@@ -30,6 +30,7 @@ describe("memory access sidecar", () => {
     home = mkdtempSync(join(tmpdir(), "reasonix-access-home-"));
     projectRoot = mkdtempSync(join(tmpdir(), "reasonix-access-project-"));
     vi.stubEnv("HOME", home);
+    vi.stubEnv("USERPROFILE", home);
   });
 
   afterEach(() => {

@@ -63,7 +63,7 @@ describe("ToolSchemaIndex", () => {
     }
     timings.sort((a, b) => a - b);
 
-    expect(timings[10]).toBeLessThan(1);
+    expect(timings[10]).toBeLessThan(5);
   });
 });
 

@@ -1,10 +1,14 @@
 /** CacheFirstLoop integration — fake-fetch DeepSeekClient, non-streaming path. */
 
-import { describe, expect, it, vi } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeepSeekClient, Usage } from "../src/client.js";
 import { type ConfirmationChoice, PauseGate } from "../src/core/pause-gate.js";
 import { CacheFirstLoop } from "../src/loop.js";
 import { ImmutablePrefix } from "../src/memory/runtime.js";
+import { resetDb } from "../src/storage/db.js";
 import { ToolRegistry } from "../src/tools.js";
 import type { ChatMessage } from "../src/types.js";
 
@@ -54,6 +58,31 @@ function makeClient(responses: FakeResponseShape[]) {
     fetch: fakeFetch(responses),
   });
 }
+
+let previousHome: string | undefined;
+let previousUserProfile: string | undefined;
+let tmpHome: string | undefined;
+
+beforeEach(() => {
+  resetDb();
+  previousHome = process.env["HOME"];
+  previousUserProfile = process.env["USERPROFILE"];
+  tmpHome = mkdtempSync(join(tmpdir(), "reasonix-loop-"));
+  process.env["HOME"] = tmpHome;
+  process.env["USERPROFILE"] = tmpHome;
+});
+
+afterEach(() => {
+  resetDb();
+  if (previousHome === undefined) Reflect.deleteProperty(process.env, "HOME");
+  else process.env["HOME"] = previousHome;
+  if (previousUserProfile === undefined) Reflect.deleteProperty(process.env, "USERPROFILE");
+  else process.env["USERPROFILE"] = previousUserProfile;
+  if (tmpHome !== undefined) {
+    rmSync(tmpHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+  tmpHome = undefined;
+});
 
 describe("CacheFirstLoop (non-streaming)", () => {
   it("completes a single-turn plain chat", async () => {

@@ -1,6 +1,6 @@
 import { existsSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { getDb, resetDb } from "../src/storage/db.js";
@@ -8,6 +8,10 @@ import { appliedVersions, migrate } from "../src/storage/schema.js";
 
 function tmpDbPath(): string {
   return join(mkdtempSync(join(tmpdir(), "reasonix-db-")), "reasonix.db");
+}
+
+function toPosixPath(path: string): string {
+  return path.split(sep).join("/");
 }
 
 afterEach(() => resetDb());
@@ -93,14 +97,14 @@ describe("node:sqlite isolation (SC-008 / NF-004)", () => {
   it("only src/storage/db.ts imports node:sqlite (SC-008)", () => {
     const offenders = walk(srcDir)
       .filter((f) => readFileSync(f, "utf8").includes("node:sqlite"))
-      .map((f) => f.slice(srcDir.length + 1));
+      .map((f) => toPosixPath(f.slice(srcDir.length + 1)));
     expect(offenders).toEqual(["storage/db.ts"]);
   });
 
   it("only one `new DatabaseSync` site (NF-004 single instance)", () => {
     const sites = walk(srcDir)
       .filter((f) => /new DatabaseSync/.test(readFileSync(f, "utf8")))
-      .map((f) => f.slice(srcDir.length + 1));
+      .map((f) => toPosixPath(f.slice(srcDir.length + 1)));
     expect(sites).toEqual(["storage/db.ts"]);
   });
 });

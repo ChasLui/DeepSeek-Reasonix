@@ -11,6 +11,17 @@ function wait(ms = 15): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function eventually<T>(read: () => T | undefined, timeoutMs = 500): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  let value = read();
+  while (value === undefined && Date.now() < deadline) {
+    await wait();
+    value = read();
+  }
+  expect(value).not.toBeUndefined();
+  return value as T;
+}
+
 describe("WorkspaceLifecycle — refcount + closed", () => {
   it("emits closed only when a root's last session detaches", () => {
     const lc = new WorkspaceLifecycle();
@@ -182,8 +193,10 @@ describe("DaemonHost — workspace lifecycle wiring", () => {
       method: "session/new",
       params: { cwd: "/tmp" },
     });
-    await wait();
-    const roots = host.workspaceLifecycle.activeRoots();
+    const roots = await eventually(() => {
+      const active = host.workspaceLifecycle.activeRoots();
+      return active.length === 1 ? active : undefined;
+    });
     expect(roots.length).toBe(1);
     expect(host.workspaceLifecycle.refcountOf(roots[0]!)).toBe(1);
 
@@ -203,8 +216,7 @@ describe("DaemonHost — workspace lifecycle wiring", () => {
       method: "session/new",
       params: { cwd: "/tmp" },
     });
-    await wait();
-    const root = host.workspaceLifecycle.activeRoots()[0]!;
+    const root = await eventually(() => host.workspaceLifecycle.activeRoots()[0]);
 
     send({
       jsonrpc: "2.0",
