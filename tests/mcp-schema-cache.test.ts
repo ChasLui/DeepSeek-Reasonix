@@ -56,9 +56,11 @@ describe("MCP tools/list schema cache", () => {
 
     expect(loadMcpToolCache("serena", spec(), client())).toEqual([tool]);
     expect(readdirSync(join(home, "mcp-cache"))).toEqual(["serena.json"]);
-    expect(statSync(join(home, "mcp-cache")).mode & 0o777).toBe(0o700);
-    expect(statSync(join(home, "mcp-cache", "serena.json")).mode & 0o777).toBe(0o600);
-    expect(statSync(join(home, ".cache-salt")).mode & 0o777).toBe(0o600);
+    if (process.platform !== "win32") {
+      expect(statSync(join(home, "mcp-cache")).mode & 0o777).toBe(0o700);
+      expect(statSync(join(home, "mcp-cache", "serena.json")).mode & 0o777).toBe(0o600);
+      expect(statSync(join(home, ".cache-salt")).mode & 0o777).toBe(0o600);
+    }
   });
 
   it("misses when env changes because the internal salted specHash changes", () => {

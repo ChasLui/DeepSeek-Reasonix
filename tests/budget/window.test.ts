@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   checkBudgetWindow,
@@ -84,9 +85,11 @@ describe("checkBudgetWindow", () => {
 });
 
 describe("checkBudgetWindows (scope-aware)", () => {
+  const WS_A = resolve("/ws/a");
+  const WS_B = resolve("/ws/b");
   const records = [
-    rec(-1000, 0.9, "/ws/a"),
-    rec(-1000, 5, "/ws/b"),
+    rec(-1000, 0.9, WS_A),
+    rec(-1000, 5, WS_B),
     rec(-1000, 0.2), // legacy row, no workspace
   ];
 
@@ -97,7 +100,7 @@ describe("checkBudgetWindows (scope-aware)", () => {
         { period: "daily", capUsd: 1, scope: "global" },
         { period: "daily", capUsd: 1, scope: "workspace" },
       ],
-      { now: NOW, workspace: "/ws/a" },
+      { now: NOW, workspace: WS_A },
     );
     const global = statuses.find((s) => s.scope === "global");
     const ws = statuses.find((s) => s.scope === "workspace");
@@ -111,7 +114,7 @@ describe("checkBudgetWindows (scope-aware)", () => {
     const statuses = checkBudgetWindows(
       records,
       [{ period: "daily", capUsd: 1, scope: "workspace" }],
-      { now: NOW, workspace: "/ws/b" },
+      { now: NOW, workspace: WS_B },
     );
     expect(statuses[0]?.spentUsd).toBeCloseTo(5);
     expect(statuses[0]?.state).toBe("exhausted");

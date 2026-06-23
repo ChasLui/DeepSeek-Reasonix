@@ -52,8 +52,8 @@ describe("bare CLI routing", () => {
     stderr.mockRestore();
     process.chdir(origCwd);
     process.argv = origArgv;
-    rmSync(home, { recursive: true, force: true });
-    rmSync(cwd, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    rmSync(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     if (origHome === undefined) {
       // biome-ignore lint/performance/noDelete: env restoration needs absence, not "undefined"
       delete process.env["HOME"];

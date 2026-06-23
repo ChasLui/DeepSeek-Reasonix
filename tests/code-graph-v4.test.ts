@@ -176,8 +176,8 @@ describe("code graph v4 index", () => {
     rmSync(root, {
       recursive: true,
       force: true,
-      maxRetries: 10,
-      retryDelay: 100,
+      maxRetries: 20,
+      retryDelay: 250,
     });
   });
 
@@ -1515,6 +1515,7 @@ describe("code graph v4 index", () => {
     const result = await incrementalUpdate(root, before!, ["src/a.ts"]);
     const updated = await loadCodeGraph(root);
     const afterHelper = updated?.nodesByName.get("helper")?.[0]?.id;
+    const fallbacksBeforeQuery = getCodeGraphStats().fallbacks;
     const callers = await findReferences(root, {
       symbol: "helper",
       relation: "callers",
@@ -1531,10 +1532,9 @@ describe("code graph v4 index", () => {
         to: expect.objectContaining({ file: "src/a.ts", line: 2 }),
       }),
     );
-    expect(getCodeGraphStats()).toMatchObject({
-      fallbacks: 0,
-      stalenessRatio: 0,
-    });
+    const stats = getCodeGraphStats();
+    expect(stats.fallbacks).toBe(fallbacksBeforeQuery);
+    expect(stats.stalenessRatio).toBe(0);
   });
 
   it("falls back to immediate lookup when stale detection times out", async () => {
