@@ -28,7 +28,7 @@ function makeHostPair(events: LoopEvent[]): {
   });
   const server = new AcpServer({ input, output });
   const host = new DaemonHost({
-    defaultDir: "/tmp",
+    defaultDir: tmpdir(),
     createSession: async (rootDir): Promise<Session> =>
       ({
         id: "sess_test",
@@ -123,7 +123,7 @@ describe("DaemonHost — session protocol", () => {
       jsonrpc: "2.0",
       id: 1,
       method: "session/new",
-      params: { cwd: "/tmp" },
+      params: { cwd: tmpdir() },
     });
     const created = await eventually(
       () =>
@@ -186,7 +186,7 @@ describe("DaemonHost — concurrent sessions", () => {
     const server = new AcpServer({ input, output });
     let n = 0;
     const host = new DaemonHost({
-      defaultDir: "/tmp",
+      defaultDir: tmpdir(),
       createSession: async (rootDir): Promise<Session> => {
         const id = `sess_${++n}`;
         return {
@@ -210,13 +210,13 @@ describe("DaemonHost — concurrent sessions", () => {
       jsonrpc: "2.0",
       id: 1,
       method: "session/new",
-      params: { cwd: "/tmp" },
+      params: { cwd: tmpdir() },
     });
     send({
       jsonrpc: "2.0",
       id: 2,
       method: "session/new",
-      params: { cwd: "/tmp" },
+      params: { cwd: tmpdir() },
     });
     await Promise.all([1, 2].map((i) => eventually(() => responseFor(collected, i))));
     const ids = [1, 2]
@@ -271,7 +271,7 @@ describe("DaemonHost — kernel-event convergence", () => {
     });
     const server = new AcpServer({ input, output });
     const host = new DaemonHost({
-      defaultDir: "/tmp",
+      defaultDir: tmpdir(),
       createSession: async (rootDir): Promise<Session> =>
         ({
           id: "sess_k",
@@ -295,7 +295,7 @@ describe("DaemonHost — kernel-event convergence", () => {
       jsonrpc: "2.0",
       id: 1,
       method: "session/new",
-      params: { cwd: "/tmp" },
+      params: { cwd: tmpdir() },
     });
     await eventually(() => responseFor(collected, 1));
     send({
@@ -329,7 +329,7 @@ describe("DaemonHost — kernel-event convergence", () => {
 describe("DaemonHost — real socket transport", () => {
   it.skipIf(process.platform === "win32")("serves ping over a unix domain socket", async () => {
     const sock = join(tmpdir(), `reasonix-daemon-test-${process.pid}-${Date.now()}.sock`);
-    const host = new DaemonHost({ defaultDir: "/tmp" });
+    const host = new DaemonHost({ defaultDir: tmpdir() });
     const server = await listenDaemon(host, sock);
     const client = await connectDaemon(sock);
     try {
@@ -347,7 +347,7 @@ describe("DaemonHost — real socket transport", () => {
 describe("DaemonHost — idle shutdown (Slice 5)", () => {
   it("fires onIdle after the idle window when no session ever connects", async () => {
     const onIdle = vi.fn();
-    const host = new DaemonHost({ defaultDir: "/tmp", idleMs: 25, onIdle });
+    const host = new DaemonHost({ defaultDir: tmpdir(), idleMs: 25, onIdle });
     host.start();
     await wait(60);
     expect(onIdle).toHaveBeenCalledTimes(1);
@@ -360,7 +360,7 @@ describe("DaemonHost — idle shutdown (Slice 5)", () => {
     const output = new PassThrough();
     const server = new AcpServer({ input, output });
     const host = new DaemonHost({
-      defaultDir: "/tmp",
+      defaultDir: tmpdir(),
       idleMs: 25,
       onIdle,
       createSession: async (rootDir): Promise<Session> =>
@@ -374,7 +374,7 @@ describe("DaemonHost — idle shutdown (Slice 5)", () => {
     host.attach(server);
     host.start(); // armed (0 sessions)
     input.write(
-      `${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "session/new", params: { cwd: "/tmp" } })}\n`,
+      `${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "session/new", params: { cwd: tmpdir() } })}\n`,
     );
     await wait(40); // session active → idle disarmed, must NOT fire
     expect(onIdle).not.toHaveBeenCalled();

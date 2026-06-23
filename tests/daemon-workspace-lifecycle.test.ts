@@ -1,5 +1,6 @@
 /** WorkspaceLifecycle (Slice 0) — per-workspace refcount + busy/idle bookkeeping, and its DaemonHost wiring (session/new → open, detach → close, cancel keeps the session alive). */
 
+import { tmpdir } from "node:os";
 import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AcpServer } from "../src/acp/server.js";
@@ -168,7 +169,7 @@ describe("DaemonHost — workspace lifecycle wiring", () => {
     const output = new PassThrough();
     const server = new AcpServer({ input, output });
     const host = new DaemonHost({
-      defaultDir: "/tmp",
+      defaultDir: tmpdir(),
       createSession: async (rootDir): Promise<Session> =>
         ({
           id: "sess1",
@@ -191,7 +192,7 @@ describe("DaemonHost — workspace lifecycle wiring", () => {
       jsonrpc: "2.0",
       id: 1,
       method: "session/new",
-      params: { cwd: "/tmp" },
+      params: { cwd: tmpdir() },
     });
     const roots = await eventually(() => {
       const active = host.workspaceLifecycle.activeRoots();
@@ -214,7 +215,7 @@ describe("DaemonHost — workspace lifecycle wiring", () => {
       jsonrpc: "2.0",
       id: 1,
       method: "session/new",
-      params: { cwd: "/tmp" },
+      params: { cwd: tmpdir() },
     });
     const root = await eventually(() => host.workspaceLifecycle.activeRoots()[0]);
 
