@@ -1,12 +1,12 @@
 {
   "worktree": {
-    "setup": "npm ci"
+    "setup": "pnpm install --frozen-lockfile"
   },
   "scripts": {
-    "build": { "command": "npm run build" },
-    "test": { "command": "npm test" },
-    "typecheck": { "command": "npm run typecheck" },
-    "lint": { "command": "npm run lint" },
-    "verify": { "command": "npm run verify" }
+    "build": { "command": "pnpm run build" },
+    "test": { "command": "pnpm test" },
+    "typecheck": { "command": "pnpm run typecheck" },
+    "lint": { "command": "pnpm run lint" },
+    "verify": { "command": "pnpm run verify" }
   }
 }

@@ -3,6 +3,7 @@
   "version": "0.47.2",
   "description": "DeepSeek-native coding agent: cache-first loop, flash-first cost control, tool-call repair.",
   "type": "module",
+  "packageManager": "pnpm@10.33.0",
   "bin": {
     "reasonix": "dist/cli/index.js"
   },
@@ -24,9 +25,6 @@
     "README.md",
     "LICENSE"
   ],
-  "workspaces": [
-    "packages/*"
-  ],
   "scripts": {
     "build": "rolldown -c rolldown.config.mjs && node scripts/copy-dashboard-vendor-css.mjs && node scripts/copy-tree-sitter-grammars.mjs",
     "dev": "tsx src/cli/index.ts",
@@ -39,19 +37,31 @@
     "lint:fix": "oxlint src tests dashboard/src desktop/src packages/core-utils/src --fix",
     "format": "oxfmt src tests dashboard/src desktop/src packages/core-utils/src",
     "format:check": "oxfmt --check src tests dashboard/src desktop/src packages/core-utils/src",
-    "typecheck": "tsgo --noEmit && tsgo --noEmit -p tsconfig.tests.json && tsgo --noEmit -p dashboard && tsgo --noEmit -p packages/core-utils && tsgo --noEmit -p desktop && npm run typecheck:declarations",
+    "typecheck": "tsgo --noEmit && tsgo --noEmit -p tsconfig.tests.json && tsgo --noEmit -p dashboard && tsgo --noEmit -p packages/core-utils && tsgo --noEmit -p desktop && pnpm run typecheck:declarations",
     "typecheck:declarations": "tsgo --noEmit -p dashboard/tsconfig.declaration.json && tsgo --noEmit -p desktop/tsconfig.declaration.json",
-    "verify": "npm run build && npm run lint && npm run format:check && npm run typecheck && npm run transform:check && npm run test --silent",
+    "verify": "pnpm run build && pnpm run lint && pnpm run format:check && pnpm run typecheck && pnpm run transform:check && pnpm run test --silent",
     "transform:check": "node scripts/probe-oxc-transform.mjs",
     "prepare": "simple-git-hooks || true",
-    "prepublishOnly": "npm run lint && npm run format:check && npm run typecheck && npm run transform:check && npm run test && npm run build",
+    "prepublishOnly": "pnpm run lint && pnpm run format:check && pnpm run typecheck && pnpm run transform:check && pnpm run test && pnpm run build",
     "bench-shield": "tsx scripts/bench-mcp-shield.mts",
     "bench-daemon-warm": "tsx scripts/bench-daemon-warm.mts",
     "bench-daemon-cache": "tsx scripts/bench-daemon-token-cache.mts"
   },
   "simple-git-hooks": {
-    "pre-commit": "npm run lint",
-    "pre-push": "npm run verify"
+    "pre-commit": "pnpm run lint",
+    "pre-push": "pnpm run verify"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "simple-git-hooks",
+      "tree-sitter-go",
+      "tree-sitter-java",
+      "tree-sitter-javascript",
+      "tree-sitter-python",
+      "tree-sitter-rust",
+      "tree-sitter-typescript"
+    ]
   },
   "keywords": [
     "agent",
@@ -105,7 +115,7 @@
     "@types/react": "^19.2.17",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.1.9",
-    "esbuild": "^0.21.5",
+    "esbuild": "^0.28.0",
     "highlight.js": "^11.10.0",
     "htm": "^3.1.1",
     "ink-testing-library": "^4.0.0",

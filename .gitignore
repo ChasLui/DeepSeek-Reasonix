@@ -62,9 +62,9 @@ Thumbs.db
 # =============================================================================
 # Local-only package manager artefacts
 # =============================================================================
-# Personal bun lockfile — project uses npm officially.
+# Personal bun lockfile — project uses pnpm officially.
 bun.lock
-# Local portable Node/npm used for development on machines without npm.
+# Local portable Node/pnpm used for development on machines without pnpm.
 .tools/
 .npm-cache/
 

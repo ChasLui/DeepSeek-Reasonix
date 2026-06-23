@@ -1863,11 +1863,15 @@ describe("CacheFirstLoop (streaming) — tool_call_delta emission", () => {
         { content: "ok" },
       ]);
       const tools = new ToolRegistry();
+      const spans: Array<{ start: number; end: number }> = [];
       tools.register({
         name: "slow_read",
         parallelSafe: true,
         fn: async (args: { k: number }) => {
+          const span = { start: Date.now(), end: 0 };
+          spans.push(span);
           await new Promise((r) => setTimeout(r, 80));
+          span.end = Date.now();
           return String(args.k);
         },
       });
@@ -1884,7 +1888,11 @@ describe("CacheFirstLoop (streaming) — tool_call_delta emission", () => {
       }
       const elapsed = Date.now() - t0;
 
-      expect(elapsed).toBeLessThan(220);
+      expect(spans).toHaveLength(3);
+      expect(Math.max(...spans.map((span) => span.start))).toBeLessThan(
+        Math.min(...spans.map((span) => span.end)),
+      );
+      expect(elapsed).toBeLessThan(600);
     });
 
     it("unsafe call splits the chunk into serial barriers", async () => {

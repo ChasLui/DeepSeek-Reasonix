@@ -4,7 +4,7 @@
  * This is intentionally NOT wired into CI. It needs DEEPSEEK_API_KEY and the
  * live provider cache. Run manually when validating cache neutrality:
  *
- *   npx tsx scripts/probe-lifecycle-cache-neutral.mts
+ *   pnpm exec tsx scripts/probe-lifecycle-cache-neutral.mts
  *
  * The deterministic invariant lives in tests/code-prompt.test.ts. This probe
  * checks the economic side: off/strict prompts are byte-identical, and warm

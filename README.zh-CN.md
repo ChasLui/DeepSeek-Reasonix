@@ -220,7 +220,7 @@ npx reasonix code --dir /path/to/project
   </a>
 </p>
 
-**第一次提 PR 之前**：先读 [`CONTRIBUTING.zh-CN.md`](./CONTRIBUTING.zh-CN.md) —— 短小、严格的项目规则（注释、错误处理、用现成库不手写）。`tests/comment-policy.test.ts` 静态强制执行注释那部分，`npm run verify` 是 push 前的闸。参与本项目即同意 [行为准则](./CODE_OF_CONDUCT.zh-CN.md)。安全相关问题请走 [SECURITY.zh-CN.md](./SECURITY.zh-CN.md)。
+**第一次提 PR 之前**：先读 [`CONTRIBUTING.zh-CN.md`](./CONTRIBUTING.zh-CN.md) —— 短小、严格的项目规则（注释、错误处理、用现成库不手写）。`tests/comment-policy.test.ts` 静态强制执行注释那部分，`pnpm run verify` 是 push 前的闸。参与本项目即同意 [行为准则](./CODE_OF_CONDUCT.zh-CN.md)。安全相关问题请走 [SECURITY.zh-CN.md](./SECURITY.zh-CN.md)。
 
 <br/>
 

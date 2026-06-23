@@ -1,0 +1,12 @@
+packages:
+  - packages/*
+  - desktop
+allowBuilds:
+  esbuild: true
+  simple-git-hooks: true
+  tree-sitter-go: true
+  tree-sitter-java: true
+  tree-sitter-javascript: true
+  tree-sitter-python: true
+  tree-sitter-rust: true
+  tree-sitter-typescript: true

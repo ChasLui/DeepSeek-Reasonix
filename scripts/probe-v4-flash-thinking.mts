@@ -23,7 +23,7 @@ const PROMPT = "What is 17 + 25?";
 const KINDS: readonly ProbeKind[] = ["enabled", "disabled", "omitted"];
 
 function usage(): string {
-  return `Usage: npx tsx scripts/probe-v4-flash-thinking.mts [options]
+  return `Usage: pnpm exec tsx scripts/probe-v4-flash-thinking.mts [options]
 
 Options:
   --key <key>        DeepSeek API key (default: DEEPSEEK_API_KEY)
@@ -118,9 +118,7 @@ function sanitize(value: unknown): unknown {
 function redactSecretLikeStrings(value: string): string {
   const bearerKeyPattern = new RegExp(`Bearer\\s+${"sk-"}[A-Za-z0-9_-]+`, "g");
   const keyPattern = new RegExp(`${"sk-"}[A-Za-z0-9_-]{8,}`, "g");
-  return value
-    .replace(bearerKeyPattern, "Bearer <redacted>")
-    .replace(keyPattern, "<redacted>");
+  return value.replace(bearerKeyPattern, "Bearer <redacted>").replace(keyPattern, "<redacted>");
 }
 
 async function runProbe(kind: ProbeKind, opts: Required<Pick<CliOptions, "key" | "baseUrl">>) {

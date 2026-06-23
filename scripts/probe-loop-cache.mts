@@ -6,7 +6,7 @@
  * actually sustains high cache hit on a long-ish session, not just
  * that the API-level append-vs-mutate primitive behaves as expected.
  *
- * Run after `npm run build`: REASONIX_LOG_LEVEL=ERROR node scripts/probe-loop-cache.mts
+ * Run after `pnpm run build`: REASONIX_LOG_LEVEL=ERROR node scripts/probe-loop-cache.mts
  * Reads DEEPSEEK_API_KEY from env, or .env.testbak when present.
  */
 

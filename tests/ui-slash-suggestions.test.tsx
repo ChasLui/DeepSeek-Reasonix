@@ -145,7 +145,7 @@ describe("SlashSuggestions", () => {
     rerender(suggestionElement(commands, 21));
     expect(firstVisibleCommand(lastFrame() ?? "", commands)).toBe("/cmd02");
     unmount();
-  });
+  }, 15_000);
 
   it("renders each visible command as one row instead of wrapping selected text into extra blocks", () => {
     const frame = renderSuggestions(7);

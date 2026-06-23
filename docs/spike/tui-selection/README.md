@@ -65,7 +65,7 @@ node docs/spike/tui-selection/verify-manual-evidence.mjs /tmp/reasonix-tui-selec
 
 The verifier is intentionally stricter than the Markdown checklist: it requires helper artifacts, an E0 same-row default native / `/mouse on` / `/mouse off` contrast, E0/E3/E4/FR-104 evidence files to exist, E3 screenshot files to have PNG/JPEG magic bytes across at least 4 complete terminal/scheme sets, and the E2/E4/FR-104 matrices to cover their required contexts instead of repeating one local-only row.
 
-Script regressions are covered by `tests/tui-selection-spike-scripts.test.ts`; run `npx vitest run tests/tui-selection-spike-scripts.test.ts` after editing this directory.
+Script regressions are covered by `tests/tui-selection-spike-scripts.test.ts`; run `pnpm exec vitest run tests/tui-selection-spike-scripts.test.ts` after editing this directory.
 
 The helper also writes `$OUT_DIR/completion-audit.md`, including plan evidence, implementation evidence, spike artifacts, and the manual evidence gate. Regenerate it after filling manual evidence:
 

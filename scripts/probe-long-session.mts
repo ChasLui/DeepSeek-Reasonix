@@ -6,7 +6,7 @@
  * Reports per-turn: prompt size, cache hit %, miss tokens, USD cost.
  * Surfaces: cache trajectory, cost shape, anything degrading over time.
  *
- * Run: REASONIX_LOG_LEVEL=ERROR npx tsx scripts/probe-long-session.mts
+ * Run: REASONIX_LOG_LEVEL=ERROR pnpm exec tsx scripts/probe-long-session.mts
  */
 
 import { readFileSync } from "node:fs";

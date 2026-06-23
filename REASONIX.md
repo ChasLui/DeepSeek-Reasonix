@@ -41,15 +41,15 @@ MIT-licensed. Node ≥22 required.
 ## Commands
 
 ```sh
-npm run build       # Rolldown → dist/ + dashboard/dist
-npm run dev         # tsx src/cli/index.ts
-npm run chat        # tsx src/cli/index.ts chat
-npm run test        # vitest run
-npm run test:watch  # vitest
-npm run lint        # oxlint
-npm run lint:fix    # oxlint --fix
-npm run format      # oxfmt src tests dashboard/src desktop/src packages/core-utils/src
-npm run typecheck   # tsgo root/tests/dashboard/core-utils/desktop + declaration probes
+pnpm run build       # Rolldown → dist/ + dashboard/dist
+pnpm run dev         # tsx src/cli/index.ts
+pnpm run chat        # tsx src/cli/index.ts chat
+pnpm run test        # vitest run
+pnpm run test:watch  # vitest
+pnpm run lint        # oxlint
+pnpm run lint:fix    # oxlint --fix
+pnpm run format      # oxfmt src tests dashboard/src desktop/src packages/core-utils/src
+pnpm run typecheck   # tsgo root/tests/dashboard/core-utils/desktop + declaration probes
 ```
 
 `prepublishOnly`: lint → typecheck → test → build.

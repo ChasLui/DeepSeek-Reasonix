@@ -65,7 +65,7 @@ interface CliOptions extends ProbeOptions {
 }
 
 function usage(): string {
-  return `Usage: npx tsx scripts/probe-code-rel-adoption.mts [options]
+  return `Usage: pnpm exec tsx scripts/probe-code-rel-adoption.mts [options]
 
 Options:
   --dir <path>             Session directory (default: REASONIX_SESSIONS_DIR or ~/.reasonix/sessions)

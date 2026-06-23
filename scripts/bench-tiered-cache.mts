@@ -1,6 +1,6 @@
 // SC-004 / SC-001c bench (deterministic, no API): compares baseline (all tools
 // in prefix) vs tiered (MCP deferred) prefix-token cost and models the
-// mid-conversation unlock-cost curve. Run: npx tsx scripts/bench-tiered-cache.mts
+// mid-conversation unlock-cost curve. Run: pnpm exec tsx scripts/bench-tiered-cache.mts
 //
 // What needs a LIVE API instead (recipe at the bottom): confirming DeepSeek
 // actually returns prompt_cache_hit_tokens on the stable prefix. The token
@@ -134,10 +134,18 @@ for (const k of [0, 1, 3, 6, 10]) {
 
 console.log(`\n=== Live-API confirmation recipe (SC-004 cache-hit ratio) ===`);
 console.log(`  1. Attach a bloated MCP server and run a multi-tool-call task twice:`);
-console.log(`       reasonix run --mcp 'github=...' --transcript /tmp/base.jsonl "<task>"   # toolTiers OFF`);
-console.log(`       # add { "toolTiers": { "mcpDefaultTier": 2 } } to ~/.reasonix/config.json, then:`);
-console.log(`       reasonix run --mcp 'github=...' --transcript /tmp/tier.jsonl "<task>"   # toolTiers ON`);
+console.log(
+  `       reasonix run --mcp 'github=...' --transcript /tmp/base.jsonl "<task>"   # toolTiers OFF`,
+);
+console.log(
+  `       # add { "toolTiers": { "mcpDefaultTier": 2 } } to ~/.reasonix/config.json, then:`,
+);
+console.log(
+  `       reasonix run --mcp 'github=...' --transcript /tmp/tier.jsonl "<task>"   # toolTiers ON`,
+);
 console.log(`  2. Compare cache-hit ratio + prefix tokens:`);
 console.log(`       reasonix stats           # cross-session cache-hit cell`);
 console.log(`       jq -c 'select(.stats.usage) | .stats.usage' /tmp/base.jsonl /tmp/tier.jsonl`);
-console.log(`     Expect: stable prefix → hit ratio ~equal; tiered prefix tokens lower by ~${perTurnSaving}.\n`);
+console.log(
+  `     Expect: stable prefix → hit ratio ~equal; tiered prefix tokens lower by ~${perTurnSaving}.\n`,
+);

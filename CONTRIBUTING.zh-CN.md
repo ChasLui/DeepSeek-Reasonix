@@ -9,8 +9,8 @@
 ```sh
 git clone https://github.com/esengine/reasonix
 cd reasonix
-npm install
-npm run dev          # tsx src/cli/index.ts — 实时运行源码
+pnpm install
+pnpm run dev         # tsx src/cli/index.ts — 实时运行源码
 ```
 
 Node ≥ 22。开发期间无需全局安装。
@@ -29,7 +29,7 @@ Node ≥ 22。开发期间无需全局安装。
 ## 代码规范
 
 这些规范由 review 强制执行，并尽可能由
-`tests/comment-policy.test.ts` 保障 —— 该测试在 `npm run verify`
+`tests/comment-policy.test.ts` 保障 —— 该测试在 `pnpm run verify`
 下运行，并作为 pre-push 的门禁。
 
 ### 注释 —— 默认不写
@@ -105,7 +105,7 @@ Node ≥ 22。开发期间无需全局安装。
 ## PR 要求
 
 - 从 `main` 拉分支。一个 PR 一个逻辑变更。
-- `npm run verify` 必须在本地通过（lint + typecheck + tests +
+- `pnpm run verify` 必须在本地通过（lint + typecheck + tests +
   comment-policy 门禁）。pre-push hook 会运行它；CI 在 Node 22 上运行。
 - 不要动 `CHANGELOG.md` —— release notes 由维护者在发版时根据 commit
   历史撰写。在工作进行期间，PR 描述才是权威记录。

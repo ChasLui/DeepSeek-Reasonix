@@ -1438,11 +1438,15 @@ describe("code graph v4 index", () => {
       'import { helper } from "./a";\nexport function run() { return helper(); }\n',
     );
 
-    const result = await findReferences(root, {
-      symbol: "helper",
-      relation: "callers",
-      scope: "src",
-    });
+    const result = await findReferences(
+      root,
+      {
+        symbol: "helper",
+        relation: "callers",
+        scope: "src",
+      },
+      { codeGraphBuildTimeoutMs: 5_000 },
+    );
 
     expect(result.records).toContainEqual(
       expect.objectContaining({

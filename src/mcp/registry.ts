@@ -624,10 +624,8 @@ export function truncateForModelByTokens(s: string, maxTokens: number): string {
 
 function sizePrefixToTokens(s: string, budget: number): string {
   if (budget <= 0 || s.length === 0) return "";
-  // Optimistic starting size: assume ~4 chars/token (English/code
-  // average). If the content is denser (CJK ~1 char/token), the first
-  // tokenize will show we're over and we shrink.
-  let size = Math.min(s.length, budget * 4);
+  const charsPerToken = estimateCharsPerToken(s);
+  let size = Math.min(s.length, Math.max(1, Math.floor(budget * charsPerToken)));
   for (let iter = 0; iter < 6; iter++) {
     if (size <= 0) return "";
     const slice = s.slice(0, size);
@@ -644,7 +642,8 @@ function sizePrefixToTokens(s: string, budget: number): string {
 /** Slice `s` from the end to the largest suffix that fits `budget` tokens. */
 function sizeSuffixToTokens(s: string, budget: number): string {
   if (budget <= 0 || s.length === 0) return "";
-  let size = Math.min(s.length, budget * 4);
+  const charsPerToken = estimateCharsPerToken(s);
+  let size = Math.min(s.length, Math.max(1, Math.floor(budget * charsPerToken)));
   for (let iter = 0; iter < 6; iter++) {
     if (size <= 0) return "";
     const slice = s.slice(-size);
@@ -655,6 +654,14 @@ function sizeSuffixToTokens(s: string, budget: number): string {
     size = next;
   }
   return s.slice(-Math.max(0, size));
+}
+
+function estimateCharsPerToken(s: string): number {
+  const sample = s.length > 512 ? `${s.slice(0, 256)}${s.slice(-256)}` : s;
+  for (let i = 0; i < sample.length; i++) {
+    if (sample.charCodeAt(i) > 0x7f) return 2;
+  }
+  return 4;
 }
 
 function blockToString(block: McpContentBlock, opts: FlattenOptions): string {
