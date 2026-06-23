@@ -80,8 +80,8 @@ function rmTestDir(path: string): void {
     rmSync(path, {
       recursive: true,
       force: true,
-      maxRetries: 50,
-      retryDelay: 250,
+      maxRetries: process.platform === "win32" ? 1 : 5,
+      retryDelay: process.platform === "win32" ? 25 : 50,
     });
   } catch (err) {
     if (process.platform === "win32" && (err as NodeJS.ErrnoException).code === "EBUSY") return;
