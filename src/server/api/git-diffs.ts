@@ -10,7 +10,7 @@ export interface FileDiff {
   file: string;
   additions: number;
   deletions: number;
-  patch?: string;
+  patch?: string | undefined;
   status: "added" | "deleted" | "modified";
 }
 

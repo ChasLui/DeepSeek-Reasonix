@@ -33,39 +33,39 @@ import { chatCommand } from "./chat.js";
 
 export interface CodeOptions {
   /** Directory to root the filesystem tools at. Defaults to process.cwd(). */
-  dir?: string;
+  dir?: string | undefined;
   /** Override the default `smart` model. */
-  model?: string;
+  model?: string | undefined;
   /** Disable session persistence. */
-  noSession?: boolean;
+  noSession?: boolean | undefined;
   /** Transcript file for replay/diff. */
-  transcript?: string;
+  transcript?: string | undefined;
   /** Skip the session picker — always resume prior messages. */
-  forceResume?: boolean;
+  forceResume?: boolean | undefined;
   /** Skip the session picker — always wipe prior messages and start fresh. */
-  forceNew?: boolean;
+  forceNew?: boolean | undefined;
   /**
    * Soft USD spend cap. Off by default. Same semantics as `chat`:
    * warns at 80%, refuses next turn at 100%. Mid-session adjustable
    * via `/budget <usd>` slash command.
    */
-  budgetUsd?: number;
+  budgetUsd?: number | undefined;
   /** Suppress the auto-launched embedded web dashboard. */
-  noDashboard?: boolean;
+  noDashboard?: boolean | undefined;
   /** When true and the dashboard is enabled, open its URL in the system default browser as soon as the server is ready. */
-  openDashboard?: boolean;
+  openDashboard?: boolean | undefined;
   /** Pin the dashboard to a fixed port. `undefined` keeps ephemeral assignment. */
-  dashboardPort?: number;
+  dashboardPort?: number | undefined;
   /** Dashboard bind address (#968). `undefined` keeps the default 127.0.0.1. */
-  dashboardHost?: string;
+  dashboardHost?: string | undefined;
   /** Stable dashboard URL token (#968). `undefined` mints a fresh per-boot token. */
-  dashboardToken?: string;
+  dashboardToken?: string | undefined;
   /** Inline string appended to the code system prompt after the generated base prompt. */
-  systemAppend?: string;
+  systemAppend?: string | undefined;
   /** Path to a UTF-8 text file whose contents are appended to the code system prompt. */
-  systemAppendFile?: string;
+  systemAppendFile?: string | undefined;
   /** Disable terminal mouse modes so the terminal keeps native selection and right-click behavior. */
-  noMouse?: boolean;
+  noMouse?: boolean | undefined;
 }
 
 export async function codeCommand(opts: CodeOptions = {}): Promise<void> {
@@ -80,8 +80,8 @@ export async function codeCommand(opts: CodeOptions = {}): Promise<void> {
   // before buildCodeToolset runs, which is BEFORE chatCommand.
   loadDotenv();
   const cfgKey = loadApiKey();
-  if (cfgKey && !process.env.DEEPSEEK_API_KEY) {
-    process.env.DEEPSEEK_API_KEY = cfgKey;
+  if (cfgKey && !process.env["DEEPSEEK_API_KEY"]) {
+    process.env["DEEPSEEK_API_KEY"] = cfgKey;
   }
   const { codeSystemPrompt } = await import("../../code/prompt.js");
   const rootDir = resolve(opts.dir ?? process.cwd());

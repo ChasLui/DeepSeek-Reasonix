@@ -344,19 +344,19 @@ function estimateCost(userText: string, loop: import("@/loop.js").CacheFirstLoop
 }
 
 const feedback: SlashHandler = (_args, loop, ctx) => {
-  const themeName = resolveThemePreference(loadTheme(), process.env.REASONIX_THEME);
+  const themeName = resolveThemePreference(loadTheme(), process.env["REASONIX_THEME"]);
   const diagnostic = buildFeedbackDiagnostic({
     version: VERSION,
     latestVersion: ctx.latestVersion ?? undefined,
     platform: process.platform,
     osRelease: release(),
-    termProgram: process.env.TERM_PROGRAM,
-    term: process.env.TERM,
-    colorTerm: process.env.COLORTERM,
-    inWindowsTerminal: !!process.env.WT_SESSION,
-    inTmux: !!process.env.TMUX,
-    inSsh: !!process.env.SSH_TTY,
-    wslDistro: process.env.WSL_DISTRO_NAME,
+    termProgram: process.env["TERM_PROGRAM"],
+    term: process.env["TERM"],
+    colorTerm: process.env["COLORTERM"],
+    inWindowsTerminal: !!process.env["WT_SESSION"],
+    inTmux: !!process.env["TMUX"],
+    inSsh: !!process.env["SSH_TTY"],
+    wslDistro: process.env["WSL_DISTRO_NAME"],
     cols: process.stdout.columns,
     rows: process.stdout.rows,
     nodeVersion: process.version,

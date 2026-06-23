@@ -32,8 +32,8 @@ function resolveTeeDir(): string | null {
   // %LOCALAPPDATA%\reasonix\tee on Windows. Falls back to tmpdir if neither resolves.
   const home = homedir() || tmpdir();
   if (platform() === "win32") {
-    cachedDir = process.env.LOCALAPPDATA
-      ? join(process.env.LOCALAPPDATA, "reasonix", "tee")
+    cachedDir = process.env["LOCALAPPDATA"]
+      ? join(process.env["LOCALAPPDATA"], "reasonix", "tee")
       : join(home, "AppData", "Local", "reasonix", "tee");
   } else {
     cachedDir = join(home, ".local", "share", "reasonix", "tee");
@@ -78,9 +78,9 @@ async function pruneFifo(dir: string): Promise<void> {
 
 export interface TeeWriteOptions {
   /** Override the destination directory (tests / config). */
-  overrideDir?: string;
+  overrideDir?: string | undefined;
   /** Skip writing even when env says otherwise. */
-  disabled?: boolean;
+  disabled?: boolean | undefined;
 }
 
 /** Persist `raw` and return the absolute path, or null on disabled / write failure. */

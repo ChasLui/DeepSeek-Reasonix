@@ -2,8 +2,8 @@ import type { DashboardContext } from "../context.js";
 import type { ApiResult } from "../router.js";
 
 interface LoopStartBody {
-  intervalMs?: unknown;
-  prompt?: unknown;
+  intervalMs?: unknown | undefined;
+  prompt?: unknown | undefined;
 }
 
 function parseBody(raw: string): LoopStartBody {

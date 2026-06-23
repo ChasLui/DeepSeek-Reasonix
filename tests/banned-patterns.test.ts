@@ -12,10 +12,6 @@ const SRC_ROOT = join(REPO_ROOT, "src");
  *  use `nullPrototype()` from `src/utils/safe-object.ts` or add `// @banned-pattern-ignore: <reason>`. */
 const ALLOWLIST: ReadonlySet<string> = new Set<string>();
 
-/** Top-level `const NAME: <type incl. Record> = { ... }` lookup tables — must be wrapped. */
-const LOOKUP_TABLE_RE =
-  /^(?:export\s+)?const\s+[A-Z][A-Z0-9_]*\s*:\s*(?:Readonly<)?Record<[^=]*=\s*(\{)/m;
-
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir, { withFileTypes: true })) {
     if (name.name === "node_modules" || name.name === "dist") continue;

@@ -14,7 +14,7 @@ export interface EventBase {
 export interface UserMessageEvent extends EventBase {
   type: "user.message";
   text: string;
-  attachments?: ReadonlyArray<{ kind: "file" | "url"; ref: string }>;
+  attachments?: ReadonlyArray<{ kind: "file" | "url"; ref: string }> | undefined;
 }
 
 export interface SlashInvokedEvent extends EventBase {
@@ -34,18 +34,18 @@ export interface ModelDeltaEvent extends EventBase {
   type: "model.delta";
   channel: "content" | "reasoning" | "tool_args";
   text: string;
-  toolCallIndex?: number;
+  toolCallIndex?: number | undefined;
 }
 
 export interface ModelFinalEvent extends EventBase {
   type: "model.final";
   content: string;
-  reasoningContent?: string;
+  reasoningContent?: string | undefined;
   toolCalls: ReadonlyArray<ToolCall>;
   usage: RawUsage;
   costUsd: number;
   /** True iff this was the no-tools wrap-up after budget / abort / context guard. */
-  forcedSummary?: boolean;
+  forcedSummary?: boolean | undefined;
 }
 
 export interface ToolPreparingEvent extends EventBase {
@@ -95,7 +95,7 @@ export interface ToolResultEvent extends EventBase {
   callId: string;
   ok: boolean;
   output: string;
-  truncated?: boolean;
+  truncated?: boolean | undefined;
   durationMs: number;
 }
 
@@ -115,7 +115,7 @@ export interface ToolConfirmDenyEvent extends EventBase {
   type: "tool.confirm.deny";
   kind: "run_command" | "run_background";
   payload: { command: string };
-  denyContext?: string;
+  denyContext?: string | undefined;
 }
 
 export interface ToolConfirmAlwaysAllowEvent extends EventBase {
@@ -147,8 +147,8 @@ export interface PlanSubmittedEvent extends EventBase {
 export interface PlanStepCompletedEvent extends EventBase {
   type: "plan.step.completed";
   stepId: string;
-  title?: string;
-  notes?: string;
+  title?: string | undefined;
+  notes?: string | undefined;
   /** Raw payload echoed for replay; mirrors what the tool returned. */
   completion: StepCompletion;
 }
@@ -195,7 +195,7 @@ export interface EscalatedEvent extends EventBase {
   toModel: string;
   reason: "self-report" | "failure-threshold" | "user-request";
   /** Optional one-liner rationale from the `<<<NEEDS_PRO: ...>>>` form. */
-  rationale?: string;
+  rationale?: string | undefined;
 }
 
 export interface SessionOpenedEvent extends EventBase {
@@ -296,9 +296,9 @@ export interface PlanStepView {
   id: string;
   title: string;
   action: string;
-  risk?: PlanStepRisk;
+  risk?: PlanStepRisk | undefined;
   completed: boolean;
-  notes?: string;
+  notes?: string | undefined;
 }
 
 export interface PlanView {

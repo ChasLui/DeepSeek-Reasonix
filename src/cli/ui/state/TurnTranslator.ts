@@ -2,12 +2,16 @@ import type { TurnStats } from "../../../telemetry/stats.js";
 import type { Scrollback } from "../hooks/useScrollback.js";
 
 export class TurnTranslator {
+  private readonly log: Scrollback;
+
   private reasoningCardId: string | null = null;
   private streamingCardId: string | null = null;
   private toolCardId: string | null = null;
   private toolStartedAt = 0;
 
-  constructor(private readonly log: Scrollback) {}
+  constructor(log: Scrollback) {
+    this.log = log;
+  }
 
   flushBuffers(reasoningChunk: string, contentChunk: string, model?: string): void {
     if (reasoningChunk) {
@@ -40,7 +44,7 @@ export class TurnTranslator {
   toolAbort(output?: string): void {
     if (this.toolCardId) {
       this.log.endTool(this.toolCardId, {
-        output,
+        ...(output !== undefined ? { output } : {}),
         elapsedMs: Date.now() - this.toolStartedAt,
         aborted: true,
       });

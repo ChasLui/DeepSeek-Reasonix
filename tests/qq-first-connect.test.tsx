@@ -46,12 +46,12 @@ describe("QQ first-connect onboarding", () => {
   type QQApi = ReturnType<typeof useQQChannel>;
 
   function mountHarness(log: {
-    pushInfo: ReturnType<typeof vi.fn>;
-    pushWarning: ReturnType<typeof vi.fn>;
+    pushInfo: (text: string) => void;
+    pushWarning: (title: string, detail: string) => void;
   }) {
-    let api: QQApi | null = null;
+    const apiRef: { current?: QQApi } = {};
     function Harness() {
-      api = useQQChannel({
+      apiRef.current = useQQChannel({
         codeMode: false,
         log,
         setQueuedSubmit: () => undefined,
@@ -73,6 +73,7 @@ describe("QQ first-connect onboarding", () => {
       return null;
     }
     const mounted = render(<Harness />);
+    const api = apiRef.current;
     if (!api) throw new Error("QQ harness did not mount");
     return { api, ...mounted };
   }

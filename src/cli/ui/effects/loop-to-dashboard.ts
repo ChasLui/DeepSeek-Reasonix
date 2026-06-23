@@ -16,7 +16,12 @@ export function loopEventToDashboard(
       };
     case "tool_start":
       if (!ev.toolName) return null;
-      return { kind: "tool_start", id, toolName: ev.toolName, args: ev.toolArgs };
+      return {
+        kind: "tool_start",
+        id,
+        toolName: ev.toolName,
+        ...(ev.toolArgs !== undefined ? { args: ev.toolArgs } : {}),
+      };
     case "tool":
       if (!ev.toolName) return null;
       return {

@@ -59,7 +59,7 @@ printf 'Writing probe artifacts to %s\n' "$out_dir"
 run_logged "git branch" git branch --show-current
 run_logged "git head" git rev-parse HEAD
 run_logged "system" uname -a
-run_logged "source version" npm run dev -- --version
+run_logged "source version" pnpm run dev --version
 
 gui_report="$out_dir/gui-capability.md"
 {
@@ -67,7 +67,11 @@ gui_report="$out_dir/gui-capability.md"
   printf 'Generated: %s\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf '## Environment\n\n'
   printf '```text\n'
-  sw_vers || true
+  if command -v sw_vers >/dev/null 2>&1; then
+    sw_vers
+  else
+    uname -a
+  fi
   printf 'TERM=%s\n' "${TERM:-}"
   printf 'TTY=%s\n' "$(tty 2>/dev/null || true)"
   printf '```\n\n'
@@ -134,7 +138,7 @@ if command -v script >/dev/null 2>&1; then
   if [[ "$skip_interactive" == "1" ]]; then
     printf '[manual] SKIP_INTERACTIVE=1, skipping Reasonix PTY startup probe.\n'
   else
-    script -q "$out_dir/mm-startup.log" npm run dev -- chat --no-session --no-dashboard --new --no-config
+    script -q "$out_dir/mm-startup.log" pnpm run dev chat --no-session --no-dashboard --new --no-config
     perl -0777 -ne 'while(/\e\[\?([0-9;]+)([hl])/g){ print "?${1}${2}\n" } while(/\e\[([0-9;]*)([A-Za-z])/g){ print "CSI ${1}${2}\n" }' \
       "$out_dir/mm-startup.log" >"$out_dir/mm-sequences.txt"
   fi
@@ -143,7 +147,7 @@ else
   printf 'script(1) not found; skipping PTY startup and stty probes\n' >>"$log_file"
 fi
 
-npx tsx - <<'TS' >"$out_dir/stdin-parser-probe.txt"
+pnpm exec tsx - <<'TS' >"$out_dir/stdin-parser-probe.txt"
 import { enableMouseMode, disableMouseMode } from "./src/cli/ui/mouse-mode.ts";
 import { StdinReader, type KeyEvent } from "./src/cli/ui/stdin-reader.ts";
 
@@ -174,7 +178,7 @@ disableMouseMode();
 process.stdout.write = originalWrite;
 TS
 
-npx tsx - <<'TS' >"$out_dir/clip-to-cells-probe.txt"
+pnpm exec tsx - <<'TS' >"$out_dir/clip-to-cells-probe.txt"
 import { clipToCells, graphemeWidth, graphemes, stringWidth } from "./src/frame/width.ts";
 
 const samples = ["abcdef", "中abcdef", "a👩‍💻b", "中"];
@@ -187,15 +191,15 @@ for (const s of samples) {
 TS
 
 render_dir="$out_dir/e3-render-samples"
-E3_RENDER_DIR="$render_dir" npx tsx - <<'TS' >"$out_dir/e3-render-samples.log"
+E3_RENDER_DIR="$render_dir" pnpm exec tsx - <<'TS' >"$out_dir/e3-render-samples.log"
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Chalk } from "chalk";
 
 const outDir = process.env.E3_RENDER_DIR ?? "";
 if (outDir.length === 0) throw new Error("E3_RENDER_DIR is required");
 mkdirSync(outDir, { recursive: true });
-const chalk = new Chalk({ level: 1 });
+const inverse = (s: string) => `\x1b[7m${s}\x1b[27m`;
+const solid = (s: string) => `\x1b[43m\x1b[30m${s}\x1b[39m\x1b[49m`;
 
 const samples = [
   "tool: console.log('中👩‍💻')",
@@ -203,9 +207,9 @@ const samples = [
   "json: {\"status\":\"ok\",\"emoji\":\"🚀\",\"cjk\":\"中文\"}",
 ];
 const variants = [
-  ["chalk-inverse", samples.map((s) => chalk.inverse(s)).join("\n")],
-  ["solid-bg", samples.map((s) => `${chalk.bgYellow.black(s)}\x1b[49m`).join("\n")],
-  ["raw-inverse", samples.map((s) => `\x1b[7m${s}\x1b[27m`).join("\n")],
+  ["chalk-inverse", samples.map(inverse).join("\n")],
+  ["solid-bg", samples.map(solid).join("\n")],
+  ["raw-inverse", samples.map(inverse).join("\n")],
 ] as const;
 
 const combined: string[] = [];

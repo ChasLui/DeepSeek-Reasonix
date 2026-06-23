@@ -47,16 +47,16 @@ export interface PromptInputProps {
   value: string;
   onChange: (v: string) => void;
   onSubmit: (v: string) => void;
-  disabled?: boolean;
-  placeholder?: string;
+  disabled?: boolean | undefined;
+  placeholder?: string | undefined;
   /** Ctrl+P / Ctrl+N hand off here when no in-buffer cursor move applies — parent walks history and swaps `value` via `onChange`. */
-  onHistoryPrev?: (source: MultilineAction["historyHandoffSource"]) => void;
-  onHistoryNext?: (source: MultilineAction["historyHandoffSource"]) => void;
+  onHistoryPrev?: ((source: MultilineAction["historyHandoffSource"]) => void) | undefined;
+  onHistoryNext?: ((source: MultilineAction["historyHandoffSource"]) => void) | undefined;
   /** Ctrl+X — parent spawns $EDITOR with the current buffer and re-injects on exit. */
-  onOpenExternalEditor?: () => void;
-  onCursorChange?: (cursor: number) => void;
+  onOpenExternalEditor?: (() => void) | undefined;
+  onCursorChange?: ((cursor: number) => void) | undefined;
   /** Rows the parent renders below this box — drives IME cursor sync so fcitx5/ibus/Win-IME candidate popups land next to the visual ▌. */
-  rowsAfter?: number;
+  rowsAfter?: number | undefined;
 }
 
 export function PromptInput({
@@ -70,7 +70,7 @@ export function PromptInput({
   onOpenExternalEditor,
   onCursorChange,
   rowsAfter = 0,
-}: PromptInputProps) {
+}: PromptInputProps): React.ReactElement {
   // Cap at 24 — collapseLinesForDisplay hides content past ~20 logical lines.
   // Quantize spec.max to 4-row buckets so per-keystroke line-count changes
   // don't churn viewport-budget; without this every single character that

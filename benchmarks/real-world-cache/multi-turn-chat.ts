@@ -17,7 +17,7 @@ const MODEL = "deepseek-v4-flash";
 const here = dirname(fileURLToPath(import.meta.url));
 
 async function main(): Promise<void> {
-  if (!process.env.DEEPSEEK_API_KEY) {
+  if (!process.env["DEEPSEEK_API_KEY"]) {
     console.warn("skip: DEEPSEEK_API_KEY missing");
     return;
   }

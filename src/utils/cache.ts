@@ -3,11 +3,11 @@ import { LRUCache } from "lru-cache";
 export type CacheEvictReason = "lru" | "size" | "ttl" | "manual";
 
 export interface MemoOpts<K extends {}, V extends {}> {
-  ttlMs?: number;
-  maxEntries?: number;
-  maxSizeBytes?: number;
-  sizeOf?: (value: V) => number;
-  onEvict?: (key: K, value: V, reason: CacheEvictReason) => void;
+  ttlMs?: number | undefined;
+  maxEntries?: number | undefined;
+  maxSizeBytes?: number | undefined;
+  sizeOf?: ((value: V) => number | undefined) | undefined;
+  onEvict?: ((key: K, value: V, reason: CacheEvictReason) => void) | undefined;
 }
 
 export interface CacheStats {
@@ -55,11 +55,12 @@ export function createTtlMemoAsync<K extends {}, V extends {}>(
   const refreshing = new Map<K, Promise<void>>();
   const cache = new LRUCache<K, V>({
     max: opts.maxEntries ?? 100,
-    maxSize: opts.maxSizeBytes,
-    ttl: opts.ttlMs,
     allowStale: true,
     noDeleteOnStaleGet: true,
-    sizeCalculation: opts.maxSizeBytes ? (value) => sizeOfValue(opts, value) : undefined,
+    ...(opts.maxSizeBytes !== undefined
+      ? { maxSize: opts.maxSizeBytes, sizeCalculation: (value: V) => sizeOfValue(opts, value) }
+      : {}),
+    ...(opts.ttlMs !== undefined ? { ttl: opts.ttlMs } : {}),
     dispose: (value, key, reason) => {
       if (reason === "evict" || reason === "expire") evictions++;
       opts.onEvict?.(key, value, mapDisposeReason(reason));
@@ -120,9 +121,10 @@ function createMemo<K extends {}, V extends {}>(opts: MemoOpts<K, V>): MemoCache
   let evictions = 0;
   const cache = new LRUCache<K, V>({
     max: opts.maxEntries ?? 100,
-    maxSize: opts.maxSizeBytes,
-    ttl: opts.ttlMs,
-    sizeCalculation: opts.maxSizeBytes ? (value) => sizeOfValue(opts, value) : undefined,
+    ...(opts.maxSizeBytes !== undefined
+      ? { maxSize: opts.maxSizeBytes, sizeCalculation: (value: V) => sizeOfValue(opts, value) }
+      : {}),
+    ...(opts.ttlMs !== undefined ? { ttl: opts.ttlMs, ttlAutopurge: true } : {}),
     dispose: (value, key, reason) => {
       if (reason === "evict" || reason === "expire") evictions++;
       opts.onEvict?.(key, value, mapDisposeReason(reason));

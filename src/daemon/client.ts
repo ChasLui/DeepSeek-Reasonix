@@ -12,9 +12,11 @@ import type { DaemonSessionStats } from "./host.js";
 
 export interface DaemonClientOptions {
   /** Handle a daemon-forwarded confirmation. Omit → fail closed (cancelled/deny). */
-  onPermission?: (params: PermissionRequestParams) => Promise<PermissionRequestResult>;
+  onPermission?:
+    | ((params: PermissionRequestParams) => Promise<PermissionRequestResult>)
+    | undefined;
   /** Subscribe to the kernel-event session/update stream (what a rich/TUI client renders). */
-  onUpdate?: (params: SessionUpdateParams) => void;
+  onUpdate?: ((params: SessionUpdateParams) => void) | undefined;
 }
 
 export interface DaemonClient {

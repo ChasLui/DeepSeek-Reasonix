@@ -7,28 +7,28 @@ import { loadQQConfig, saveQQConfig } from "../src/config.js";
 describe("QQ config", () => {
   let dir: string;
   let path: string;
-  const originalOwner = process.env.QQ_OWNER_OPENID;
-  const originalAllowlist = process.env.QQ_ALLOWLIST;
+  const originalOwner = process.env["QQ_OWNER_OPENID"];
+  const originalAllowlist = process.env["QQ_ALLOWLIST"];
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "reasonix-qq-config-"));
     path = join(dir, "config.json");
     // biome-ignore lint/performance/noDelete: tests must restore exact env absence
-    delete process.env.QQ_OWNER_OPENID;
+    delete process.env["QQ_OWNER_OPENID"];
     // biome-ignore lint/performance/noDelete: tests must restore exact env absence
-    delete process.env.QQ_ALLOWLIST;
+    delete process.env["QQ_ALLOWLIST"];
   });
 
   afterEach(() => {
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
     if (originalOwner === undefined) {
       // biome-ignore lint/performance/noDelete: tests must restore exact env absence
-      delete process.env.QQ_OWNER_OPENID;
-    } else process.env.QQ_OWNER_OPENID = originalOwner;
+      delete process.env["QQ_OWNER_OPENID"];
+    } else process.env["QQ_OWNER_OPENID"] = originalOwner;
     if (originalAllowlist === undefined) {
       // biome-ignore lint/performance/noDelete: tests must restore exact env absence
-      delete process.env.QQ_ALLOWLIST;
-    } else process.env.QQ_ALLOWLIST = originalAllowlist;
+      delete process.env["QQ_ALLOWLIST"];
+    } else process.env["QQ_ALLOWLIST"] = originalAllowlist;
   });
 
   it("round-trips ownerOpenId and allowlist", () => {
@@ -75,8 +75,8 @@ describe("QQ config", () => {
       },
       path,
     );
-    process.env.QQ_OWNER_OPENID = "owner-env";
-    process.env.QQ_ALLOWLIST = "env-a, env-b env-a";
+    process.env["QQ_OWNER_OPENID"] = "owner-env";
+    process.env["QQ_ALLOWLIST"] = "env-a, env-b env-a";
     expect(loadQQConfig(path)).toMatchObject({
       ownerOpenId: "owner-env",
       allowlist: ["env-a", "env-b"],

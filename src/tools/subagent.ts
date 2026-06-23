@@ -20,19 +20,19 @@ export interface SubagentEvent {
   /** Stable per-spawn id; lets the UI key parallel runs apart instead of overwriting one shared row. */
   runId: string;
   task: string;
-  skillName?: string;
-  model?: string;
-  iter?: number;
-  elapsedMs?: number;
-  summary?: string;
-  error?: string;
-  turns?: number;
-  costUsd?: number;
-  usage?: Usage;
+  skillName?: string | undefined;
+  model?: string | undefined;
+  iter?: number | undefined;
+  elapsedMs?: number | undefined;
+  summary?: string | undefined;
+  error?: string | undefined;
+  turns?: number | undefined;
+  costUsd?: number | undefined;
+  usage?: Usage | undefined;
   /** When kind === "inner": the raw child loop event. Parent UI translates to a child summary. */
-  inner?: import("../loop.js").LoopEvent;
+  inner?: import("../loop.js").LoopEvent | undefined;
   /** When kind === "phase": coarse status verb for the activity row. */
-  phase?: "exploring" | "summarising";
+  phase?: "exploring" | "summarising" | undefined;
 }
 
 let runIdCounter = 0;
@@ -50,45 +50,45 @@ export interface SpawnSubagentOptions {
   parentRegistry: ToolRegistry;
   system: string;
   task: string;
-  model?: string;
-  maxResultChars?: number;
-  sink?: SubagentSink;
+  model?: string | undefined;
+  maxResultChars?: number | undefined;
+  sink?: SubagentSink | undefined;
   /** Forwarded into the child loop so parent Esc cancels nested work. */
-  parentSignal?: AbortSignal;
-  skillName?: string;
+  parentSignal?: AbortSignal | undefined;
+  skillName?: string | undefined;
   /** Scopes the child registry to these literal tool names; NEVER_INHERITED still wins. Driven by skill `allowed-tools` frontmatter. */
-  allowedTools?: readonly string[];
+  allowedTools?: readonly string[] | undefined;
   /** Continue an earlier session instead of starting fresh — loads the prior messages from disk; `task` is treated as a continuation nudge. */
-  resumeSession?: string;
+  resumeSession?: string | undefined;
   /** Parent workspace root, forwarded so the child loop's per-workspace budget gate scopes to the same workspace as the parent. */
-  workspace?: string;
+  workspace?: string | undefined;
 }
 
 export interface SubagentResult {
   success: boolean;
   output: string;
-  error?: string;
+  error?: string | undefined;
   turns: number;
   toolIters: number;
   elapsedMs: number;
   costUsd: number;
   model: string;
-  skillName?: string;
+  skillName?: string | undefined;
   /** Zero-filled when no API calls landed so consumers always see a valid shape. */
   usage: Usage;
   /** True when the child terminated via forceSummaryAfterIterLimit (storm-breaker / context-guard) — `output` carries the partial synthesis the model managed to produce; not a full answer. User-abort forced summaries do NOT set this (their content is a UX placeholder, routed to `error`). */
-  forcedSummary?: boolean;
+  forcedSummary?: boolean | undefined;
 }
 
 export interface SubagentToolOptions {
   client: DeepSeekClient;
-  defaultSystem?: string;
-  projectRoot?: string;
-  defaultModel?: string;
-  maxResultChars?: number;
-  sink?: SubagentSink;
+  defaultSystem?: string | undefined;
+  projectRoot?: string | undefined;
+  defaultModel?: string | undefined;
+  maxResultChars?: number | undefined;
+  sink?: SubagentSink | undefined;
   /** Fires once per spawn, after `spawnSubagent` returns and before its result is formatted for the parent. Bind a `SubagentTelemetry.record` here for automatic distillation capture. */
-  onSpawnComplete?: (result: SubagentResult) => void;
+  onSpawnComplete?: ((result: SubagentResult) => void) | undefined;
 }
 
 /** Memory-stable prefix — shared across spawns, cached. The model-dependent escalation contract is appended per spawn so a pro spawn doesn't get told it's running on flash (#582). */
@@ -103,10 +103,6 @@ Rules:
 ${NEGATIVE_CLAIM_RULE}
 
 ${TUI_FORMATTING_RULES}`;
-
-function defaultSubagentSystem(modelId: string): string {
-  return `${SUBAGENT_BASE_SYSTEM}\n\n${escalationContract(modelId)}`;
-}
 
 const DEFAULT_MAX_RESULT_CHARS = 8000;
 // Subagents default to flash — their work is read-and-synthesize
@@ -480,11 +476,11 @@ export function registerSubagentTool(
     },
     fn: async (
       args: {
-        task?: unknown;
-        system?: unknown;
-        model?: unknown;
-        type?: unknown;
-        resume_session?: unknown;
+        task?: unknown | undefined;
+        system?: unknown | undefined;
+        model?: unknown | undefined;
+        type?: unknown | undefined;
+        resume_session?: unknown | undefined;
       },
       ctx,
     ) => {

@@ -8,7 +8,7 @@
 
 Example: `tests/bang.test.ts::detectBangCommand returns the command body for a \`!\`-prefixed input`
 
-Verified against the JSON reporter (`npx vitest --reporter=json`); `fullName` is the documented `describe` chain joined with the leaf title and is what `-t "<fullName>"` matches against.
+Verified against the JSON reporter (`pnpm exec vitest --reporter=json`); `fullName` is the documented `describe` chain joined with the leaf title and is what `-t "<fullName>"` matches against.
 
 | event | stable? |
 |---|---|

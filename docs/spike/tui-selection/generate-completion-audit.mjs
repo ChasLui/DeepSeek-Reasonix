@@ -211,7 +211,7 @@ function renderMarkdown({ status, plans, implementation, artifacts, manual }) {
   lines.push(`Status: ${status}`);
   lines.push("");
   lines.push(
-    "This audit is evidence-only. `COMPLETE_CANDIDATE` still requires a fresh final verification run such as `npm run verify` before the thread goal can be marked complete.",
+    "This audit is evidence-only. `COMPLETE_CANDIDATE` still requires a fresh final verification run such as `pnpm run verify` before the thread goal can be marked complete.",
   );
   lines.push("");
   lines.push("## Plan Evidence");

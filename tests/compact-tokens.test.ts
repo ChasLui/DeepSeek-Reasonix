@@ -156,9 +156,9 @@ describe("shrinkOversizedToolCallArgsByTokens", () => {
     const a = r.messages[0];
     if (a?.role !== "assistant" || !a.tool_calls) throw new Error("assistant missing");
     const parsed = JSON.parse(a.tool_calls[0]!.function.arguments) as Record<string, unknown>;
-    expect(parsed.path).toBe("src/foo.ts");
-    expect(parsed.mode).toBe("append");
-    expect(String(parsed.content)).toMatch(/shrunk/);
+    expect(parsed["path"]).toBe("src/foo.ts");
+    expect(parsed["mode"]).toBe("append");
+    expect(String(parsed["content"])).toMatch(/shrunk/);
   });
 
   it("never mutates the input array or its tool_calls", () => {

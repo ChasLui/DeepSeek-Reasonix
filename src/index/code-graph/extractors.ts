@@ -24,8 +24,8 @@ export interface ExtractCodeGraphFileResult {
 }
 
 export interface ExtractCodeGraphOptions {
-  includeBody?: boolean;
-  projectFiles?: ReadonlySet<string>;
+  includeBody?: boolean | undefined;
+  projectFiles?: ReadonlySet<string> | undefined;
 }
 
 interface SymbolNodePair {
@@ -447,7 +447,7 @@ function pushSymbol(
   kind: SymbolKind,
   name: string,
   endLine: number,
-  parent?: string,
+  parent?: string | undefined,
 ): void {
   out.push({
     name,
@@ -574,8 +574,8 @@ async function extractCallRefs(
     for (const match of codeLine.matchAll(
       /\b(?:(?<receiver>[A-Za-z_$][\w$]*)\s*\.\s*)?(?<name>[A-Za-z_$][\w$]*)\s*\(/g,
     )) {
-      const name = match.groups?.name;
-      const receiverName = match.groups?.receiver;
+      const name = match.groups?.["name"];
+      const receiverName = match.groups?.["receiver"];
       const callIndex = (match.index ?? 0) + (match[0].lastIndexOf(name ?? "") ?? 0);
       if (!name || shouldSkipCallCandidate(originalLine, callIndex, name)) continue;
       refs.push({
@@ -1121,7 +1121,7 @@ function resolveImportPath(
   root: string,
   fromAbsPath: string,
   source: string,
-  projectFiles?: ReadonlySet<string>,
+  projectFiles?: ReadonlySet<string> | undefined,
 ): string | undefined {
   if (!source.startsWith(".")) return undefined;
   const absRoot = resolve(root);
@@ -1178,7 +1178,7 @@ function uniqueStrings(values: readonly string[]): string[] {
 function isProjectCodeFile(
   root: string,
   candidate: string,
-  projectFiles?: ReadonlySet<string>,
+  projectFiles?: ReadonlySet<string> | undefined,
 ): boolean {
   const resolved = resolve(candidate);
   if (!isWithinRoot(root, resolved) || grammarForPath(resolved) === null) return false;

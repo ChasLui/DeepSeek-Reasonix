@@ -24,15 +24,15 @@ export interface AccessStats {
 }
 
 export interface AccessOptions {
-  homeDir?: string;
+  homeDir?: string | undefined;
 }
 
 export interface ForgetOptions {
   minScore: number;
-  scope?: MemoryScope;
-  dryRun?: boolean;
-  halflifeDays?: number;
-  now?: Date;
+  scope?: MemoryScope | undefined;
+  dryRun?: boolean | undefined;
+  halflifeDays?: number | undefined;
+  now?: Date | undefined;
 }
 
 export interface ForgetCandidate {
@@ -40,7 +40,7 @@ export interface ForgetCandidate {
   decayScore: number;
   lastAccessedAt: string;
   action: "preview" | "soft-delete";
-  trashPath?: string;
+  trashPath?: string | undefined;
 }
 
 export interface ForgetResult {
@@ -50,9 +50,9 @@ export interface ForgetResult {
 }
 
 export interface PurgeOptions {
-  olderThanDays?: number;
-  ciGuard?: boolean;
-  now?: Date;
+  olderThanDays?: number | undefined;
+  ciGuard?: boolean | undefined;
+  now?: Date | undefined;
 }
 
 export interface PurgeResult {
@@ -166,7 +166,7 @@ export function forget(store: SqliteMemoryStore, opts: ForgetOptions): ForgetRes
 }
 
 export function purge(store: SqliteMemoryStore, opts: PurgeOptions = {}): PurgeResult {
-  if (opts.ciGuard !== false && /^true$/i.test(process.env.CI ?? "")) {
+  if (opts.ciGuard !== false && /^true$/i.test(process.env["CI"] ?? "")) {
     throw new Error("refusing to purge memory trash while CI=true");
   }
   const root = memoryRootFromStore(store);

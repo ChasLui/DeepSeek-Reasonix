@@ -119,10 +119,24 @@ export function reduce(state: AgentState, event: AgentEvent): AgentState {
       };
 
     case "language.change":
-      return { ...state, lang: event.lang as any };
+      return { ...state, lang: event.lang };
 
     case "session.update":
-      return { ...state, status: { ...state.status, ...event.patch } };
+      return {
+        ...state,
+        status: {
+          ...state.status,
+          ...(event.patch.cost !== undefined ? { cost: event.patch.cost } : {}),
+          ...(event.patch.sessionCost !== undefined
+            ? { sessionCost: event.patch.sessionCost }
+            : {}),
+          ...(event.patch.balance !== undefined ? { balance: event.patch.balance } : {}),
+          ...(event.patch.balanceCurrency !== undefined
+            ? { balanceCurrency: event.patch.balanceCurrency }
+            : {}),
+          ...(event.patch.cacheHit !== undefined ? { cacheHit: event.patch.cacheHit } : {}),
+        },
+      };
 
     case "session.model.change":
       return state.session.model === event.model
@@ -458,5 +472,5 @@ function makeLiveCard(
 /** Detect the plan-mode bounce marker emitted by ToolRegistry.dispatch when refusing a write tool. */
 function isPlanModeRejection(output: string): boolean {
   if (!output) return false;
-  return decodeToolResultObject(output)?.rejectedReason === "plan-mode";
+  return decodeToolResultObject(output)?.["rejectedReason"] === "plan-mode";
 }

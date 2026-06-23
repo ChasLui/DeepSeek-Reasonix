@@ -1,3 +1,4 @@
+import type { VNode } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { t, useLang } from "../i18n/index.js";
 import { api } from "../lib/api.js";
@@ -92,7 +93,7 @@ interface McpFailure {
   at: number;
 }
 
-export function McpPanel() {
+export function McpPanel(): VNode | null {
   useLang();
   const [data, setData] = useState<McpData | null>(null);
   const [specs, setSpecs] = useState<string[] | null>(null);
@@ -189,14 +190,14 @@ export function McpPanel() {
       for (const f of rawFailures) {
         if (typeof f !== "object" || f === null) continue;
         const o = f as Record<string, unknown>;
-        const rawSpec = typeof o.spec === "string" ? o.spec : "";
+        const rawSpec = typeof o["spec"] === "string" ? o["spec"] : "";
         const norm = normalizeMcpSpec(rawSpec);
         if (!norm) continue;
         validFailures.push({
           spec: norm,
-          name: typeof o.name === "string" ? o.name : "",
-          reason: typeof o.reason === "string" ? o.reason : "",
-          at: typeof o.at === "number" ? o.at : 0,
+          name: typeof o["name"] === "string" ? o["name"] : "",
+          reason: typeof o["reason"] === "string" ? o["reason"] : "",
+          at: typeof o["at"] === "number" ? o["at"] : 0,
         });
       }
       setFailures(validFailures);
@@ -260,20 +261,38 @@ export function McpPanel() {
   return html`
     <div class="sessions-grid">
       <div class="sessions-list">
-        <div class="ssl-h" style="font-family:var(--font-mono);font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.1em">
+        <div
+          class="ssl-h"
+          style="font-family:var(--font-mono);font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.1em"
+        >
           ${t("mcp.servers", { count: liveCount })}
         </div>
         <div style="padding:8px 12px 4px">
           <div class="chips">
-            <span class=${`chip-f ${filter === "all" ? "active" : ""}`} onClick=${() => setFilter("all")}>${t("mcp.all")} <span class="ct">${liveCount + unbridgedCount}</span></span>
-            <span class=${`chip-f ${filter === "live" ? "active" : ""}`} onClick=${() => setFilter("live")}>${t("mcp.live")} <span class="ct">${liveCount}</span></span>
-            <span class=${`chip-f ${filter === "unbridged" ? "active" : ""}`} onClick=${() => setFilter("unbridged")}>${t("mcp.unbridged")} <span class="ct">${unbridgedCount}</span></span>
-            <span class=${`chip-f ${filter === "marketplace" ? "active" : ""}`} onClick=${() => setFilter("marketplace")}>${t("mcp.marketplace")}</span>
+            <span
+              class=${`chip-f ${filter === "all" ? "active" : ""}`}
+              onClick=${() => setFilter("all")}
+              >${t("mcp.all")} <span class="ct">${liveCount + unbridgedCount}</span></span
+            >
+            <span
+              class=${`chip-f ${filter === "live" ? "active" : ""}`}
+              onClick=${() => setFilter("live")}
+              >${t("mcp.live")} <span class="ct">${liveCount}</span></span
+            >
+            <span
+              class=${`chip-f ${filter === "unbridged" ? "active" : ""}`}
+              onClick=${() => setFilter("unbridged")}
+              >${t("mcp.unbridged")} <span class="ct">${unbridgedCount}</span></span
+            >
+            <span
+              class=${`chip-f ${filter === "marketplace" ? "active" : ""}`}
+              onClick=${() => setFilter("marketplace")}
+              >${t("mcp.marketplace")}</span
+            >
           </div>
         </div>
-        ${
-          showMarketplace
-            ? html`
+        ${showMarketplace
+          ? html`
               <div style="padding:8px 12px;display:flex;gap:6px">
                 <input
                   type="text"
@@ -283,20 +302,18 @@ export function McpPanel() {
                   style="flex:1;font-size:11px"
                 />
               </div>
-              ${
-                registry
-                  ? html`<div style="padding:0 12px 6px;font-size:11px;color:var(--fg-3)">
-                      ${t("mcp.marketplaceCount", {
-                        loaded: registry.loaded,
-                        matched: registry.matched,
-                        source: registry.source,
-                        cached: registry.fromCache ? t("mcp.marketplaceCachedSuffix") : "",
-                      })}
-                    </div>`
-                  : null
-              }
+              ${registry
+                ? html`<div style="padding:0 12px 6px;font-size:11px;color:var(--fg-3)">
+                    ${t("mcp.marketplaceCount", {
+                      loaded: registry.loaded,
+                      matched: registry.matched,
+                      source: registry.source,
+                      cached: registry.fromCache ? t("mcp.marketplaceCachedSuffix") : "",
+                    })}
+                  </div>`
+                : null}
             `
-            : html`
+          : html`
               <div style="padding:8px 12px;display:flex;gap:6px">
                 <input
                   type="text"
@@ -305,49 +322,49 @@ export function McpPanel() {
                   onInput=${(e: Event) => setNewSpec((e.target as HTMLInputElement).value)}
                   style="flex:1;font-size:11px"
                 />
-                <button class="btn primary" disabled=${busy || !newSpec.trim()} onClick=${addSpec}>+</button>
+                <button class="btn primary" disabled=${busy || !newSpec.trim()} onClick=${addSpec}>
+                  +
+                </button>
               </div>
-            `
-        }
-        ${info ? html`<div style="padding:0 12px 8px"><span class="pill ok">${info}</span></div>` : null}
-        ${error ? html`<div class="card accent-err" style="margin:0 12px 8px">${error}</div>` : null}
+            `}
+        ${info
+          ? html`<div style="padding:0 12px 8px"><span class="pill ok">${info}</span></div>`
+          : null}
+        ${error
+          ? html`<div class="card accent-err" style="margin:0 12px 8px">${error}</div>`
+          : null}
 
         <div class="ssl-rows">
-          ${
-            !showMarketplace && liveCount === 0 && unbridgedCount === 0
-              ? html`<div style="color:var(--fg-3);padding:14px;font-size:12px">
+          ${!showMarketplace && liveCount === 0 && unbridgedCount === 0
+            ? html`<div style="color:var(--fg-3);padding:14px;font-size:12px">
                 ${t("mcp.noServers")}
               </div>`
-              : null
-          }
-          ${
-            showMarketplace
-              ? renderMarketplaceRows({
-                  registry,
-                  registryLoading,
-                  openRegistry,
-                  setOpenRegistry: (e) => {
-                    setOpenRegistry(e);
-                    setOpen(null);
-                    setOpenUnbridged(null);
-                  },
-                  loadMore: () => {
-                    const nextLimit = displayLimit + 50;
-                    setDisplayLimit(nextLimit);
-                    // Pages: walk far enough to fill the new cap (each page ≈ 30
-                    // entries) plus a few-page lookahead so the next click also
-                    // has fresh data.
-                    const pagesNeeded = Math.ceil(nextLimit / 30) + 3;
-                    void loadRegistry(registryQuery, pagesNeeded, nextLimit);
-                  },
-                  installedSpecs: new Set(specs ?? []),
-                })
-              : null
-          }
-          ${
-            showLive
-              ? data.servers.map(
-                  (s) => html`
+            : null}
+          ${showMarketplace
+            ? renderMarketplaceRows({
+                registry,
+                registryLoading,
+                openRegistry,
+                setOpenRegistry: (e) => {
+                  setOpenRegistry(e);
+                  setOpen(null);
+                  setOpenUnbridged(null);
+                },
+                loadMore: () => {
+                  const nextLimit = displayLimit + 50;
+                  setDisplayLimit(nextLimit);
+                  // Pages: walk far enough to fill the new cap (each page ≈ 30
+                  // entries) plus a few-page lookahead so the next click also
+                  // has fresh data.
+                  const pagesNeeded = Math.ceil(nextLimit / 30) + 3;
+                  void loadRegistry(registryQuery, pagesNeeded, nextLimit);
+                },
+                installedSpecs: new Set(specs ?? []),
+              })
+            : null}
+          ${showLive
+            ? data.servers.map(
+                (s) => html`
                   <div
                     class=${`ssl-row ${open?.label === s.label ? "sel" : ""}`}
                     onClick=${() => {
@@ -355,19 +372,23 @@ export function McpPanel() {
                       setOpenUnbridged(null);
                     }}
                   >
-                    <span class="name">${s.label} <span class="pill ok">${t("mcp.live")}</span></span>
+                    <span class="name"
+                      >${s.label} <span class="pill ok">${t("mcp.live")}</span></span
+                    >
                     <span class="preview">${specCommand(s.spec)}</span>
-                    <span class="meta"><span><span class="v">${fmtNum(s.toolCount)}</span> ${t("mcp.tools")}</span></span>
+                    <span class="meta"
+                      ><span
+                        ><span class="v">${fmtNum(s.toolCount)}</span> ${t("mcp.tools")}</span
+                      ></span
+                    >
                   </div>
                 `,
-                )
-              : null
-          }
-          ${
-            showUnbridged
-              ? unbridgedSpecs.map((spec) => {
-                  const failure = failures.find((f) => f.spec === spec);
-                  return html`
+              )
+            : null}
+          ${showUnbridged
+            ? unbridgedSpecs.map((spec) => {
+                const failure = failures.find((f) => f.spec === spec);
+                return html`
                   <div
                     class=${`ssl-row ${openUnbridged === spec ? "sel" : ""}`}
                     onClick=${() => {
@@ -375,155 +396,222 @@ export function McpPanel() {
                       setOpen(null);
                     }}
                   >
-                    <span class="name">${specLabel(spec)} <span class=${`pill ${failure ? "err" : ""}`}>${failure ? t("mcp.bridgeFailed") : t("mcp.unbridged")}</span></span>
+                    <span class="name"
+                      >${specLabel(spec)}
+                      <span class=${`pill ${failure ? "err" : ""}`}
+                        >${failure ? t("mcp.bridgeFailed") : t("mcp.unbridged")}</span
+                      ></span
+                    >
                     <span class="preview">${specCommand(spec)}</span>
-                    <span class="meta"><span class=${failure ? "" : "dim"} style=${failure ? "color:var(--c-err)" : ""}>${failure ? failure.reason : t("mcp.inConfig")}</span></span>
+                    <span class="meta"
+                      ><span
+                        class=${failure ? "" : "dim"}
+                        style=${failure ? "color:var(--c-err)" : ""}
+                        >${failure ? failure.reason : t("mcp.inConfig")}</span
+                      ></span
+                    >
                   </div>
                 `;
-                })
-              : null
-          }
+              })
+            : null}
         </div>
       </div>
 
       <div class="sessions-detail">
-        ${
-          openRegistry != null
-            ? renderRegistryDetail({
-                entry: openRegistry,
-                busy,
-                installedSpec: (() => {
-                  const spec = specForEntry(openRegistry);
-                  return spec && (specs ?? []).includes(spec) ? spec : null;
-                })(),
-                onInstall: () => installFromRegistry(openRegistry),
-                onUninstall: (spec: string) => removeSpec(spec),
-                onClose: () => setOpenRegistry(null),
-              })
-            : openUnbridged != null
-              ? (() => {
-                  const failure = failures.find((f) => f.spec === openUnbridged);
-                  return html`
-              <div class="sessions-detail-h">
-                <span class="name">${specLabel(openUnbridged)}</span>
-                <span class="ws"><span class="pill">${failure ? t("mcp.bridgeFailedTitle") : t("mcp.unbridgedTitle")}</span></span>
-                <span class="actions">
-                  <button class="btn" disabled=${busy} onClick=${() => removeSpec(openUnbridged)}
-                    style="border-color:var(--c-err);color:var(--c-err)">${t("mcp.removeBtn")}</button>
-                  <button class="btn ghost" onClick=${() => setOpenUnbridged(null)}>${t("common.back")}</button>
-                </span>
-              </div>
-              <div class="card" style="margin-bottom:12px">
-                <div class="card-h"><span class="title">${t("mcp.spec")}</span></div>
-                <code class="mono" style="font-size:11.5px;color:var(--fg-2);word-break:break-all">${openUnbridged}</code>
-              </div>
-              ${
-                failure
-                  ? html`<div class="card accent-err">
-                      <div class="card-h"><span class="title" style="color:var(--c-err)">${t("mcp.bridgeFailed")}</span></div>
-                      <div class="card-b" style="font-size:13px;line-height:1.6">
-                        <code class="mono" style="font-size:12px;color:var(--fg-1);word-break:break-word;white-space:pre-wrap">${failure.reason}</code>
-                        <div style="margin-top:10px;color:var(--fg-3);font-size:12px">
-                          ${t("mcp.bridgeFailedHint")}
+        ${openRegistry != null
+          ? renderRegistryDetail({
+              entry: openRegistry,
+              busy,
+              installedSpec: (() => {
+                const spec = specForEntry(openRegistry);
+                return spec && (specs ?? []).includes(spec) ? spec : null;
+              })(),
+              onInstall: () => installFromRegistry(openRegistry),
+              onUninstall: (spec: string) => removeSpec(spec),
+              onClose: () => setOpenRegistry(null),
+            })
+          : openUnbridged != null
+            ? (() => {
+                const failure = failures.find((f) => f.spec === openUnbridged);
+                return html`
+                  <div class="sessions-detail-h">
+                    <span class="name">${specLabel(openUnbridged)}</span>
+                    <span class="ws"
+                      ><span class="pill"
+                        >${failure ? t("mcp.bridgeFailedTitle") : t("mcp.unbridgedTitle")}</span
+                      ></span
+                    >
+                    <span class="actions">
+                      <button
+                        class="btn"
+                        disabled=${busy}
+                        onClick=${() => removeSpec(openUnbridged)}
+                        style="border-color:var(--c-err);color:var(--c-err)"
+                      >
+                        ${t("mcp.removeBtn")}
+                      </button>
+                      <button class="btn ghost" onClick=${() => setOpenUnbridged(null)}>
+                        ${t("common.back")}
+                      </button>
+                    </span>
+                  </div>
+                  <div class="card" style="margin-bottom:12px">
+                    <div class="card-h"><span class="title">${t("mcp.spec")}</span></div>
+                    <code
+                      class="mono"
+                      style="font-size:11.5px;color:var(--fg-2);word-break:break-all"
+                      >${openUnbridged}</code
+                    >
+                  </div>
+                  ${failure
+                    ? html`<div class="card accent-err">
+                        <div class="card-h">
+                          <span class="title" style="color:var(--c-err)"
+                            >${t("mcp.bridgeFailed")}</span
+                          >
                         </div>
-                      </div>
-                    </div>`
-                  : html`<div class="card accent-warn">
-                      <div class="card-h"><span class="title" style="color:var(--c-warn)">${t("mcp.whyUnbridged")}</span></div>
-                      <div class="card-b" style="font-size:13px;line-height:1.6">
-                        ${t("mcp.whyUnbridgedDesc")}
-                        <div style="margin-top:10px;color:var(--fg-3);font-size:12px">
-                          ${t("mcp.whyUnbridgedHint")}
+                        <div class="card-b" style="font-size:13px;line-height:1.6">
+                          <code
+                            class="mono"
+                            style="font-size:12px;color:var(--fg-1);word-break:break-word;white-space:pre-wrap"
+                            >${failure.reason}</code
+                          >
+                          <div style="margin-top:10px;color:var(--fg-3);font-size:12px">
+                            ${t("mcp.bridgeFailedHint")}
+                          </div>
                         </div>
-                      </div>
-                    </div>`
-              }
-            `;
-                })()
-              : open == null
-                ? html`<div style="color:var(--fg-3);font-size:13px;text-align:center;padding:60px 20px">
-                ${showMarketplace ? t("mcp.marketplacePickHint") : t("mcp.pickHint")}
-              </div>`
-                : html`
-                <div class="sessions-detail-h">
-                  <span class="name">${open.label}</span>
-                  <span class="ws">${open.serverInfo?.name ?? "—"} ${open.serverInfo?.version ? `v${open.serverInfo.version}` : ""} · ${open.protocolVersion ?? "—"}</span>
-                  <span class="actions">
-                    <button class="btn ghost" onClick=${() => setOpen(null)}>${t("common.back")}</button>
-                  </span>
-                </div>
+                      </div>`
+                    : html`<div class="card accent-warn">
+                        <div class="card-h">
+                          <span class="title" style="color:var(--c-warn)"
+                            >${t("mcp.whyUnbridged")}</span
+                          >
+                        </div>
+                        <div class="card-b" style="font-size:13px;line-height:1.6">
+                          ${t("mcp.whyUnbridgedDesc")}
+                          <div style="margin-top:10px;color:var(--fg-3);font-size:12px">
+                            ${t("mcp.whyUnbridgedHint")}
+                          </div>
+                        </div>
+                      </div>`}
+                `;
+              })()
+            : open == null
+              ? html`<div
+                  style="color:var(--fg-3);font-size:13px;text-align:center;padding:60px 20px"
+                >
+                  ${showMarketplace ? t("mcp.marketplacePickHint") : t("mcp.pickHint")}
+                </div>`
+              : html`
+                  <div class="sessions-detail-h">
+                    <span class="name">${open.label}</span>
+                    <span class="ws"
+                      >${open.serverInfo?.name ?? "—"}
+                      ${open.serverInfo?.version ? `v${open.serverInfo.version}` : ""} ·
+                      ${open.protocolVersion ?? "—"}</span
+                    >
+                    <span class="actions">
+                      <button class="btn ghost" onClick=${() => setOpen(null)}>
+                        ${t("common.back")}
+                      </button>
+                    </span>
+                  </div>
 
-                <div class="card" style="margin-bottom:12px">
-                  <div class="card-h"><span class="title">${t("mcp.spec")}</span></div>
-                  <code class="mono" style="font-size:11.5px;color:var(--fg-2)">${open.spec}</code>
-                </div>
+                  <div class="card" style="margin-bottom:12px">
+                    <div class="card-h"><span class="title">${t("mcp.spec")}</span></div>
+                    <code class="mono" style="font-size:11.5px;color:var(--fg-2)"
+                      >${open.spec}</code
+                    >
+                  </div>
 
-                ${
-                  open.instructions
+                  ${open.instructions
                     ? html`<div class="card accent-brand" style="margin-bottom:12px">
                         <div class="card-b">${open.instructions}</div>
                       </div>`
-                    : null
-                }
+                    : null}
 
-                <h3 style="margin:18px 0 6px;font-family:var(--font-mono);font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.1em">
-                  ${t("mcp.toolsTitle", { count: open.tools.length })}
-                </h3>
-                <div class="card" style="padding:0;overflow:hidden">
-                  <table class="tbl">
-                    <thead><tr><th>${t("mcp.colName")}</th><th>${t("mcp.colDesc")}</th></tr></thead>
-                    <tbody>
-                      ${open.tools.map(
-                        (tool) =>
-                          html`<tr><td><code class="mono">${tool.name}</code></td><td class="dim">${tool.description ?? ""}</td></tr>`,
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                  <h3
+                    style="margin:18px 0 6px;font-family:var(--font-mono);font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.1em"
+                  >
+                    ${t("mcp.toolsTitle", { count: open.tools.length })}
+                  </h3>
+                  <div class="card" style="padding:0;overflow:hidden">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>${t("mcp.colName")}</th>
+                          <th>${t("mcp.colDesc")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${open.tools.map(
+                          (tool) =>
+                            html`<tr>
+                              <td><code class="mono">${tool.name}</code></td>
+                              <td class="dim">${tool.description ?? ""}</td>
+                            </tr>`,
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
 
-                ${
-                  open.resources.length > 0
+                  ${open.resources.length > 0
                     ? html`
-                      <h3 style="margin:18px 0 6px;font-family:var(--font-mono);font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.1em">
-                        ${t("mcp.resourcesTitle", { count: open.resources.length })}
-                      </h3>
-                      <div class="card" style="padding:0;overflow:hidden">
-                        <table class="tbl">
-                          <thead><tr><th>${t("mcp.colName")}</th><th>${t("mcp.colUri")}</th></tr></thead>
-                          <tbody>
-                            ${open.resources.map(
-                              (r) =>
-                                html`<tr><td>${r.name}</td><td class="path">${r.uri}</td></tr>`,
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    `
-                    : null
-                }
-
-                ${
-                  open.prompts.length > 0
+                        <h3
+                          style="margin:18px 0 6px;font-family:var(--font-mono);font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.1em"
+                        >
+                          ${t("mcp.resourcesTitle", { count: open.resources.length })}
+                        </h3>
+                        <div class="card" style="padding:0;overflow:hidden">
+                          <table class="tbl">
+                            <thead>
+                              <tr>
+                                <th>${t("mcp.colName")}</th>
+                                <th>${t("mcp.colUri")}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              ${open.resources.map(
+                                (r) =>
+                                  html`<tr>
+                                    <td>${r.name}</td>
+                                    <td class="path">${r.uri}</td>
+                                  </tr>`,
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      `
+                    : null}
+                  ${open.prompts.length > 0
                     ? html`
-                      <h3 style="margin:18px 0 6px;font-family:var(--font-mono);font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.1em">
-                        ${t("mcp.promptsTitle", { count: open.prompts.length })}
-                      </h3>
-                      <div class="card" style="padding:0;overflow:hidden">
-                        <table class="tbl">
-                          <thead><tr><th>${t("mcp.colName")}</th><th>${t("mcp.colDesc")}</th></tr></thead>
-                          <tbody>
-                            ${open.prompts.map(
-                              (p) =>
-                                html`<tr><td><code class="mono">${p.name}</code></td><td class="dim">${p.description ?? ""}</td></tr>`,
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    `
-                    : null
-                }
-              `
-        }
+                        <h3
+                          style="margin:18px 0 6px;font-family:var(--font-mono);font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.1em"
+                        >
+                          ${t("mcp.promptsTitle", { count: open.prompts.length })}
+                        </h3>
+                        <div class="card" style="padding:0;overflow:hidden">
+                          <table class="tbl">
+                            <thead>
+                              <tr>
+                                <th>${t("mcp.colName")}</th>
+                                <th>${t("mcp.colDesc")}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              ${open.prompts.map(
+                                (p) =>
+                                  html`<tr>
+                                    <td><code class="mono">${p.name}</code></td>
+                                    <td class="dim">${p.description ?? ""}</td>
+                                  </tr>`,
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      `
+                    : null}
+                `}
       </div>
     </div>
   `;
@@ -570,7 +658,9 @@ function renderLoadMoreFooter({
     </div>`;
   }
 
-  return html`<div style="padding:12px;background:var(--bg-elev-2,rgba(36,143,242,0.07));border-top:1px solid var(--bd);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg-2)">
+  return html`<div
+    style="padding:12px;background:var(--bg-elev-2,rgba(36,143,242,0.07));border-top:1px solid var(--bd);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg-2)"
+  >
     <span style="color:var(--c-ok)">✓</span>
     <span>${t("mcp.marketplaceExhaustedFull", { total })}</span>
   </div>`;
@@ -585,10 +675,14 @@ function renderMarketplaceRows({
   installedSpecs,
 }: MarketplaceRowsArgs) {
   if (!registry && registryLoading) {
-    return html`<div style="color:var(--fg-3);padding:14px;font-size:12px">${t("mcp.marketplaceLoading")}</div>`;
+    return html`<div style="color:var(--fg-3);padding:14px;font-size:12px">
+      ${t("mcp.marketplaceLoading")}
+    </div>`;
   }
   if (!registry || registry.entries.length === 0) {
-    return html`<div style="color:var(--fg-3);padding:14px;font-size:12px">${t("mcp.marketplaceNoMatches")}</div>`;
+    return html`<div style="color:var(--fg-3);padding:14px;font-size:12px">
+      ${t("mcp.marketplaceNoMatches")}
+    </div>`;
   }
   return html`
     ${registry.entries.map((e) => {
@@ -601,11 +695,22 @@ function renderMarketplaceRows({
           ? html` <span class="dim">· ${fmtNum(e.popularity)}</span>`
           : null;
       const icon = e.iconUrl
-        ? html`<img src=${e.iconUrl} alt="" style="width:16px;height:16px;border-radius:3px;margin-right:6px;vertical-align:middle;object-fit:cover" loading="lazy" referrerpolicy="no-referrer" onError=${hideBrokenIcon} />`
+        ? html`<img
+            src=${e.iconUrl}
+            alt=""
+            style="width:16px;height:16px;border-radius:3px;margin-right:6px;vertical-align:middle;object-fit:cover"
+            loading="lazy"
+            referrerpolicy="no-referrer"
+            onError=${hideBrokenIcon}
+          />`
         : null;
       return html`
         <div class=${`ssl-row ${sel ? "sel" : ""}`} onClick=${() => setOpenRegistry(e)}>
-          <span class="name">${icon}${e.name} <span class="pill">${tag}</span>${installed ? html` <span class="pill ok">${t("mcp.marketplaceInstalledBadge")}</span>` : null}</span>
+          <span class="name"
+            >${icon}${e.name} <span class="pill">${tag}</span>${installed
+              ? html` <span class="pill ok">${t("mcp.marketplaceInstalledBadge")}</span>`
+              : null}</span
+          >
           <span class="preview">${e.description}</span>
           <span class="meta">${pop}</span>
         </div>
@@ -644,25 +749,43 @@ function renderRegistryDetail({
       }${entry.install.version ? `@${entry.install.version}` : ""}`
     : "";
   const icon = entry.iconUrl
-    ? html`<img src=${entry.iconUrl} alt="" style="width:24px;height:24px;border-radius:4px;margin-right:8px;vertical-align:middle;object-fit:cover" loading="lazy" referrerpolicy="no-referrer" onError=${hideBrokenIcon} />`
+    ? html`<img
+        src=${entry.iconUrl}
+        alt=""
+        style="width:24px;height:24px;border-radius:4px;margin-right:8px;vertical-align:middle;object-fit:cover"
+        loading="lazy"
+        referrerpolicy="no-referrer"
+        onError=${hideBrokenIcon}
+      />`
     : null;
   return html`
     <div class="sessions-detail-h">
-      <span class="name">${icon}${entry.name}${installed ? html` <span class="pill ok">${t("mcp.marketplaceInstalledBadge")}</span>` : null}</span>
-      <span class="ws">${t("mcp.marketplaceSourceTag", { source: entry.source })}${
-        entry.popularity !== undefined ? ` · ${fmtNum(entry.popularity)} uses` : ""
-      }${entry.homepage ? html` · <a href=${entry.homepage} target="_blank" rel="noopener noreferrer">homepage</a>` : ""}</span>
+      <span class="name"
+        >${icon}${entry.name}${installed
+          ? html` <span class="pill ok">${t("mcp.marketplaceInstalledBadge")}</span>`
+          : null}</span
+      >
+      <span class="ws"
+        >${t("mcp.marketplaceSourceTag", { source: entry.source })}${entry.popularity !== undefined
+          ? ` · ${fmtNum(entry.popularity)} uses`
+          : ""}${entry.homepage
+          ? html` ·
+              <a href=${entry.homepage} target="_blank" rel="noopener noreferrer">homepage</a>`
+          : ""}</span
+      >
       <span class="actions">
-        ${
-          installed
-            ? html`<button
-                class="btn"
-                disabled=${busy}
-                onClick=${() => onUninstall(installedSpec)}
-                style="border-color:var(--c-err);color:var(--c-err)"
-              >${t("mcp.marketplaceUninstall")}</button>`
-            : html`<button class="btn primary" disabled=${busy || !installable} onClick=${onInstall}>${t("mcp.marketplaceInstall")}</button>`
-        }
+        ${installed
+          ? html`<button
+              class="btn"
+              disabled=${busy}
+              onClick=${() => onUninstall(installedSpec)}
+              style="border-color:var(--c-err);color:var(--c-err)"
+            >
+              ${t("mcp.marketplaceUninstall")}
+            </button>`
+          : html`<button class="btn primary" disabled=${busy || !installable} onClick=${onInstall}>
+              ${t("mcp.marketplaceInstall")}
+            </button>`}
         <button class="btn ghost" onClick=${onClose}>${t("common.back")}</button>
       </span>
     </div>
@@ -671,55 +794,49 @@ function renderRegistryDetail({
       <div class="card-b" style="font-size:13px;line-height:1.6">${entry.description || "—"}</div>
     </div>
 
-    ${
-      entry.install
+    ${entry.install
+      ? html`<div class="card" style="margin-bottom:12px">
+          <div class="card-h"><span class="title">${t("mcp.spec")}</span></div>
+          <div class="card-b">
+            <code
+              class="mono"
+              style="font-size:11.5px;color:var(--fg-2);word-break:break-all;display:block"
+              >${specPreview}</code
+            >
+            ${installedSpec
+              ? html`<div style="margin-top:8px;font-size:11px;color:var(--fg-3)">
+                  <span class="dim">on disk:</span> <code class="mono">${installedSpec}</code>
+                </div>`
+              : null}
+          </div>
+        </div>`
+      : entry.source === "smithery"
         ? html`<div class="card" style="margin-bottom:12px">
-            <div class="card-h"><span class="title">${t("mcp.spec")}</span></div>
-            <div class="card-b">
-              <code class="mono" style="font-size:11.5px;color:var(--fg-2);word-break:break-all;display:block">${specPreview}</code>
-              ${
-                installedSpec
-                  ? html`<div style="margin-top:8px;font-size:11px;color:var(--fg-3)">
-                      <span class="dim">on disk:</span> <code class="mono">${installedSpec}</code>
-                    </div>`
-                  : null
-              }
+            <div class="card-b" style="font-size:13px;line-height:1.6;color:var(--fg-3)">
+              ${t("mcp.marketplaceFetchOnInstall")}
             </div>
           </div>`
-        : entry.source === "smithery"
-          ? html`<div class="card" style="margin-bottom:12px">
-              <div class="card-b" style="font-size:13px;line-height:1.6;color:var(--fg-3)">
-                ${t("mcp.marketplaceFetchOnInstall")}
-              </div>
-            </div>`
-          : null
-    }
-
-    ${
-      entry.install?.requiredEnv?.length
-        ? html`<div class="card accent-brand" style="margin-bottom:12px">
-            <div class="card-h"><span class="title">${t("mcp.marketplaceEnvTitle")}</span></div>
-            <div class="card-b" style="font-size:13px">
-              ${entry.install.requiredEnv.map(
-                (name) =>
-                  html`<div><code class="mono" style="color:var(--c-warn)">${name}</code></div>`,
-              )}
-              <div style="margin-top:6px;color:var(--fg-3);font-size:12px">
-                ${t("mcp.marketplaceEnvHint")}
-              </div>
+        : null}
+    ${entry.install?.requiredEnv?.length
+      ? html`<div class="card accent-brand" style="margin-bottom:12px">
+          <div class="card-h"><span class="title">${t("mcp.marketplaceEnvTitle")}</span></div>
+          <div class="card-b" style="font-size:13px">
+            ${entry.install.requiredEnv.map(
+              (name) =>
+                html`<div><code class="mono" style="color:var(--c-warn)">${name}</code></div>`,
+            )}
+            <div style="margin-top:6px;color:var(--fg-3);font-size:12px">
+              ${t("mcp.marketplaceEnvHint")}
             </div>
-          </div>`
-        : null
-    }
-
-    ${
-      installed
-        ? html`<div class="card accent-warn">
-            <div class="card-b" style="font-size:12.5px;line-height:1.6">
-              ${t("mcp.marketplaceRestartHint")}
-            </div>
-          </div>`
-        : null
-    }
+          </div>
+        </div>`
+      : null}
+    ${installed
+      ? html`<div class="card accent-warn">
+          <div class="card-b" style="font-size:12.5px;line-height:1.6">
+            ${t("mcp.marketplaceRestartHint")}
+          </div>
+        </div>`
+      : null}
   `;
 }

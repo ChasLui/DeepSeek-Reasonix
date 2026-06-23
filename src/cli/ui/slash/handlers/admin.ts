@@ -44,7 +44,7 @@ const hooks: SlashHandler = (args, loop, ctx) => {
     if (!ctx.reloadHooks) {
       return { info: t("handlers.admin.hooksReloadUnavailable") };
     }
-    const count = ctx.reloadHooks();
+    const count = ctx.reloadHooks() ?? 0;
     return { info: t("handlers.admin.hooksReloaded", { count }) };
   }
 

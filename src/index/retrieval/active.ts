@@ -8,9 +8,9 @@ import { retrieveCode } from "./engine.js";
 import type { RetrievalHit } from "./types.js";
 
 export interface ActiveRetrievalOptions {
-  topK?: number;
+  topK?: number | undefined;
   /** Skip injection when the top fused score is below this (0 = gate on hits only). */
-  minScore?: number;
+  minScore?: number | undefined;
 }
 
 export function buildPreTurnRetrieval(

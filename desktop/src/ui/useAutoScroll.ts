@@ -2,6 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const PIN_THRESHOLD = 80; // px from bottom to consider "pinned"
 
+export interface AutoScrollState {
+  showJumpButton: boolean;
+  scrollToBottom: (smooth?: boolean) => void;
+}
+
 /**
  * Auto-scroll to bottom while content grows; un-pin only on real user input.
  *
@@ -17,7 +22,7 @@ export function useAutoScroll(
   busy: boolean,
   /** Optional boot-time restore: the offset the transcript should open at. */
   getRestoreScrollTop?: () => number | null,
-) {
+): AutoScrollState {
   const [showJumpButton, setShowJumpButton] = useState(false);
   const isPinnedRef = useRef(true);
   const wasBusyRef = useRef(busy);
@@ -32,9 +37,7 @@ export function useAutoScroll(
   const refreshJumpButton = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
-    setShowJumpButton(
-      !isPinnedRef.current && el.scrollHeight > el.clientHeight + PIN_THRESHOLD,
-    );
+    setShowJumpButton(!isPinnedRef.current && el.scrollHeight > el.clientHeight + PIN_THRESHOLD);
   }, [containerRef]);
 
   const scrollToBottom = useCallback(
@@ -147,5 +150,5 @@ export function useAutoScroll(
     return () => clearTimeout(id);
   }, [containerRef, getRestoreScrollTop, refreshJumpButton]);
 
-  return { showJumpButton, scrollToBottom };
+  return { showJumpButton: showJumpButton, scrollToBottom: scrollToBottom };
 }

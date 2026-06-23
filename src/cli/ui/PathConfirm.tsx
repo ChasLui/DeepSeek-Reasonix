@@ -28,7 +28,7 @@ export function PathConfirm({
   sandboxRoot,
   allowPrefix,
   onChoose,
-}: PathConfirmProps) {
+}: PathConfirmProps): React.ReactElement {
   useReserveRows("modal", { min: 8, max: 14 });
 
   const [phase, setPhase] = useState<"pick" | "deny">("pick");

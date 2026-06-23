@@ -11,6 +11,7 @@ import {
 } from "../src/cli/ui/mcp-browse.js";
 import type { McpServerSummary } from "../src/cli/ui/slash.js";
 import type { McpClient } from "../src/mcp/client.js";
+import type { InspectionReport } from "../src/mcp/inspect.js";
 
 interface PushedRow {
   role: "info" | "warning";
@@ -30,8 +31,15 @@ function makeFakeLog() {
       rows.push({ role: "info", text });
       return "i";
     },
+    pushTip: () => "tip",
+    pushCtxPressureIfHigh: () => undefined,
     pushStepProgress: () => "s",
     pushPlanAnnounce: () => "p",
+    showDoctor: () => "d",
+    showUsageVerbose: () => "u",
+    showPlan: () => "pl",
+    completePlanStep: () => undefined,
+    showCtx: () => "ctx",
     startReasoning: () => "r",
     appendReasoning: () => undefined,
     endReasoning: () => undefined,
@@ -51,12 +59,26 @@ function makeFakeLog() {
 }
 
 function server(
-  partial: Partial<McpServerSummary> & { label: string; client?: unknown },
+  partial: Omit<Partial<McpServerSummary>, "report"> & {
+    label: string;
+    client?: unknown;
+    report?: Partial<InspectionReport>;
+  },
 ): McpServerSummary {
   // Tests pass a stubbed `client` for convenience; wrap it in the host shape
   // the bridge expects.
-  const { client, ...rest } = partial;
+  const { client, report: reportOverride, ...rest } = partial;
   const host = rest.host ?? { client: client as never };
+  const report = {
+    protocolVersion: "2024-11-05",
+    serverInfo: { name: partial.label, version: "1.0" },
+    capabilities: {},
+    tools: { supported: true, items: [] },
+    resources: { supported: true, items: [] },
+    prompts: { supported: true, items: [] },
+    elapsedMs: 0,
+    ...reportOverride,
+  } as InspectionReport;
   return {
     spec: partial.spec ?? `fake://${partial.label}`,
     toolCount: partial.toolCount ?? 0,
@@ -68,14 +90,7 @@ function server(
       maxResultChars: 32_000,
       tracker: null,
     },
-    report: partial.report ?? {
-      protocolVersion: "2024-11-05",
-      serverInfo: { name: partial.label, version: "1.0" },
-      capabilities: {},
-      tools: { supported: true, items: [] },
-      resources: { supported: true, items: [] },
-      prompts: { supported: true, items: [] },
-    },
+    report,
     readResource(uri) {
       return host.client.readResource(uri);
     },

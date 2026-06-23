@@ -30,11 +30,12 @@ async function call(
   // POST / DELETE require the token in the header (CSRF defence — query alone rejected).
   if (method !== "GET") headers["X-Reasonix-Token"] = TOKEN;
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
-  const res = await fetch(u.toString(), {
+  const init: RequestInit = {
     method,
     headers,
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-  });
+  };
+  if (opts.body !== undefined) init.body = JSON.stringify(opts.body);
+  const res = await fetch(u.toString(), init);
   const text = await res.text();
   let parsed: any = null;
   try {

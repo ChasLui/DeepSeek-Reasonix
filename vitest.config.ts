@@ -8,7 +8,7 @@ export default defineConfig({
   // vite/vitest's bundled builtin list predates node:sqlite, so it neither strips
   // the prefix correctly nor treats it as external — it tries to load it as a file
   // and fails. Shim it to a virtual module that pulls the real builtin via
-  // createRequire at runtime. Test-only; production (tsup/tsx) never goes through vite.
+  // createRequire at runtime. Test-only; production (rolldown/tsx) never goes through vite.
   plugins: [
     {
       name: "reasonix-node-sqlite-shim",
@@ -45,9 +45,7 @@ export default defineConfig({
     // Threads default OOMs on 16-core boxes where 15 workers × ~300MB blows
     // past Node's 4GB heap cap.
     pool: "forks",
-    poolOptions: {
-      forks: { maxForks: 8, minForks: 1 },
-    },
+    maxWorkers: 8,
     // One retry absorbs Windows scheduler hiccups in jobs.test.ts / loop.test.ts /
     // bundle-smoke (real spawns + tokenizer cold load). A real failure still re-fails.
     retry: 1,

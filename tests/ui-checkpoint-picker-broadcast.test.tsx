@@ -56,7 +56,7 @@ describe("CheckpointPicker — dashboard broadcast", () => {
     const { unmount } = mount(
       [
         fakeCheckpoint("abcdef0123", "before-refactor"),
-        fakeCheckpoint("123456789a", "auto-snap", "auto"),
+        fakeCheckpoint("123456789a", "auto-snap", "auto-pre-restore"),
       ],
       ports,
       () => undefined,
@@ -68,7 +68,7 @@ describe("CheckpointPicker — dashboard broadcast", () => {
     expect(up.modal.pickerKind).toBe("checkpoints");
     expect(up.modal.items.map((i) => i.id)).toEqual(["abcdef0123", "123456789a"]);
     expect(up.modal.items[0]!.title).toBe("before-refactor");
-    expect(up.modal.items[1]!.title).toBe("auto-snap (auto)");
+    expect(up.modal.items[1]!.title).toBe("auto-snap (auto-pre-restore)");
     expect(up.modal.items[0]!.badge).toBe("abcdef0");
     expect(up.modal.actions).toEqual(["pick", "delete", "cancel"]);
     unmount();

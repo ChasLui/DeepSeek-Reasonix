@@ -1,6 +1,6 @@
 import { existsSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { getDb, resetDb } from "../src/storage/db.js";
@@ -8,6 +8,10 @@ import { appliedVersions, migrate } from "../src/storage/schema.js";
 
 function tmpDbPath(): string {
   return join(mkdtempSync(join(tmpdir(), "reasonix-db-")), "reasonix.db");
+}
+
+function toPosixPath(path: string): string {
+  return path.split(sep).join("/");
 }
 
 afterEach(() => resetDb());
@@ -21,11 +25,11 @@ describe("storage/db", () => {
     const before = appliedVersions(db1);
     migrate(db1);
     expect(appliedVersions(db1)).toEqual(before);
-    const count1 = Number(db1.prepare("SELECT count(*) c FROM schema_migrations").get()?.c);
+    const count1 = Number(db1.prepare("SELECT count(*) c FROM schema_migrations").get()?.["c"]);
 
     resetDb();
     const db2 = getDb(path);
-    const count2 = Number(db2.prepare("SELECT count(*) c FROM schema_migrations").get()?.c);
+    const count2 = Number(db2.prepare("SELECT count(*) c FROM schema_migrations").get()?.["c"]);
     expect(count2).toBe(count1);
   });
 
@@ -34,7 +38,7 @@ describe("storage/db", () => {
     const cols = db
       .prepare("PRAGMA table_info(schema_migrations)")
       .all()
-      .map((r) => String(r.name));
+      .map((r) => String(r["name"]));
     expect(cols).toEqual(["version", "name", "applied_at"]);
   });
 
@@ -56,14 +60,14 @@ describe("storage/db", () => {
     const db = getDb(tmpDbPath());
     db.exec("CREATE TABLE t (v INTEGER)");
     db.tx(() => db.prepare("INSERT INTO t VALUES (?)").run(1));
-    expect(Number(db.prepare("SELECT count(*) c FROM t").get()?.c)).toBe(1);
+    expect(Number(db.prepare("SELECT count(*) c FROM t").get()?.["c"])).toBe(1);
     expect(() =>
       db.tx(() => {
         db.prepare("INSERT INTO t VALUES (?)").run(2);
         throw new Error("boom");
       }),
     ).toThrow("boom");
-    expect(Number(db.prepare("SELECT count(*) c FROM t").get()?.c)).toBe(1);
+    expect(Number(db.prepare("SELECT count(*) c FROM t").get()?.["c"])).toBe(1);
   });
 
   it("withBusyRetry returns the result and rethrows non-busy errors", () => {
@@ -93,14 +97,14 @@ describe("node:sqlite isolation (SC-008 / NF-004)", () => {
   it("only src/storage/db.ts imports node:sqlite (SC-008)", () => {
     const offenders = walk(srcDir)
       .filter((f) => readFileSync(f, "utf8").includes("node:sqlite"))
-      .map((f) => f.slice(srcDir.length + 1));
+      .map((f) => toPosixPath(f.slice(srcDir.length + 1)));
     expect(offenders).toEqual(["storage/db.ts"]);
   });
 
   it("only one `new DatabaseSync` site (NF-004 single instance)", () => {
     const sites = walk(srcDir)
       .filter((f) => /new DatabaseSync/.test(readFileSync(f, "utf8")))
-      .map((f) => f.slice(srcDir.length + 1));
+      .map((f) => toPosixPath(f.slice(srcDir.length + 1)));
     expect(sites).toEqual(["storage/db.ts"]);
   });
 });

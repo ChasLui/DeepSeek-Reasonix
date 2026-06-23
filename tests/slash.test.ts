@@ -13,12 +13,7 @@ import {
 } from "../src/cli/ui/slash.js";
 import { DeepSeekClient, Usage } from "../src/client.js";
 import { loadTheme, readConfig } from "../src/config.js";
-import {
-  getLanguage,
-  notifyLanguageChange,
-  onLanguageChange,
-  setLanguageRuntime,
-} from "../src/i18n/index.js";
+import { getLanguage, onLanguageChange, setLanguageRuntime } from "../src/i18n/index.js";
 import { CacheFirstLoop } from "../src/loop.js";
 import { ImmutablePrefix } from "../src/memory/runtime.js";
 import { VERSION } from "../src/version.js";
@@ -32,6 +27,44 @@ function makeLoop() {
     client,
     prefix: new ImmutablePrefix({ system: "s" }),
   });
+}
+
+function mcpSummary(partial: {
+  label: string;
+  spec: string;
+  toolCount?: number;
+  report?: Partial<import("../src/mcp/inspect.js").InspectionReport>;
+}) {
+  const client = {
+    readResource: async () => ({ contents: [] }),
+    getPrompt: async () => ({ messages: [] }),
+  };
+  const host = { client } as never;
+  return {
+    label: partial.label,
+    spec: partial.spec,
+    toolCount: partial.toolCount ?? 0,
+    host,
+    bridgeEnv: {
+      registry: {} as never,
+      host,
+      prefix: "",
+      maxResultChars: 32_000,
+      tracker: null,
+    },
+    report: {
+      protocolVersion: "2024-11-05",
+      serverInfo: { name: partial.label, version: "1.0.0" },
+      capabilities: {},
+      tools: { supported: true as const, items: [] },
+      resources: { supported: false as const, reason: "method not found" },
+      prompts: { supported: false as const, reason: "method not found" },
+      elapsedMs: 0,
+      ...partial.report,
+    },
+    readResource: client.readResource,
+    getPrompt: client.getPrompt,
+  };
 }
 
 describe("parseSlash", () => {
@@ -691,7 +724,7 @@ describe("handleSlash", () => {
 
     it("shows recent prompt-cache breaks", () => {
       const loop = makeLoop();
-      process.env.REASONIX_CACHE_BREAK_DIFF = "0";
+      process.env["REASONIX_CACHE_BREAK_DIFF"] = "0";
       const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
       try {
         loop.cacheMonitor.recordBeforeCall(loop.promptFingerprint.snapshot(loop.prefix));
@@ -730,7 +763,7 @@ describe("handleSlash", () => {
   it("/mcp opens the browser modal when servers are attached", () => {
     const r = handleSlash("mcp", [], makeLoop(), {
       mcpServers: [
-        {
+        mcpSummary({
           label: "fs",
           spec: "fs=npx -y @scope/fs /tmp",
           toolCount: 4,
@@ -742,7 +775,7 @@ describe("handleSlash", () => {
             resources: { supported: true, items: [] },
             prompts: { supported: false, reason: "method not found (-32601)" },
           },
-        },
+        }),
       ],
     });
     expect(r.openMcpHub).toEqual({ tab: "live" });
@@ -757,7 +790,7 @@ describe("handleSlash", () => {
   it("/mcp text falls through to the printed-card view (non-TTY / replay)", () => {
     const r = handleSlash("mcp", ["text"], makeLoop(), {
       mcpServers: [
-        {
+        mcpSummary({
           label: "fs",
           spec: "fs=npx -y @scope/fs /tmp",
           toolCount: 4,
@@ -775,10 +808,10 @@ describe("handleSlash", () => {
             },
             prompts: { supported: false, reason: "method not found (-32601)" },
           },
-        },
+        }),
       ],
     });
-    expect(r.openMcpBrowser).toBeUndefined();
+    expect(r.openMcpHub).toBeUndefined();
     expect(r.info).toMatch(/\[fs\].*fs-server v1\.0\.0/);
     expect(r.info).toMatch(/tools\s+4/);
     expect(r.info).toMatch(/resources\s+2\s+\[docs, readme\]/);
@@ -789,12 +822,9 @@ describe("handleSlash", () => {
     function summary(label: string, spec: string) {
       // Stub host — slash dispatch only reads it; the async reconnect runs
       // in the background and we only inspect the synchronous return.
-      const host = { client: {} as never };
-      return {
+      return mcpSummary({
         label,
         spec,
-        toolCount: 0,
-        host,
         report: {
           protocolVersion: "2024-11-05",
           serverInfo: { name: label, version: "1.0.0" },
@@ -804,7 +834,7 @@ describe("handleSlash", () => {
           prompts: { supported: false as const, reason: "method not found" },
           elapsedMs: 0,
         },
-      };
+      });
     }
 
     it("/mcp reconnect <name> emits the lifecycle line on dispatch", () => {
@@ -851,14 +881,14 @@ describe("handleSlash", () => {
 
     beforeEach(() => {
       tempHome = mkdtempSync(join(tmpdir(), "reasonix-mcp-toggle-"));
-      originalHome = process.env.HOME;
-      originalUserProfile = process.env.USERPROFILE;
-      process.env.HOME = tempHome;
-      process.env.USERPROFILE = tempHome;
+      originalHome = process.env["HOME"];
+      originalUserProfile = process.env["USERPROFILE"];
+      process.env["HOME"] = tempHome;
+      process.env["USERPROFILE"] = tempHome;
     });
     afterEach(() => {
-      process.env.HOME = originalHome;
-      process.env.USERPROFILE = originalUserProfile;
+      process.env["HOME"] = originalHome;
+      process.env["USERPROFILE"] = originalUserProfile;
       rmSync(tempHome, { recursive: true, force: true });
     });
 
@@ -1046,14 +1076,14 @@ describe("handleSlash", () => {
 
     beforeEach(() => {
       tempHome = mkdtempSync(join(tmpdir(), "reasonix-replay-slash-"));
-      originalHome = process.env.HOME;
-      originalUserProfile = process.env.USERPROFILE;
-      process.env.HOME = tempHome;
-      process.env.USERPROFILE = tempHome;
+      originalHome = process.env["HOME"];
+      originalUserProfile = process.env["USERPROFILE"];
+      process.env["HOME"] = tempHome;
+      process.env["USERPROFILE"] = tempHome;
     });
     afterEach(() => {
-      process.env.HOME = originalHome;
-      process.env.USERPROFILE = originalUserProfile;
+      process.env["HOME"] = originalHome;
+      process.env["USERPROFILE"] = originalUserProfile;
       rmSync(tempHome, { recursive: true, force: true });
     });
 
@@ -1185,36 +1215,36 @@ describe("handleSlash", () => {
 
   describe("/memory", () => {
     let root: string;
-    const originalEnv = process.env.REASONIX_MEMORY;
-    const originalHome = process.env.HOME;
-    const originalUserProfile = process.env.USERPROFILE;
+    const originalEnv = process.env["REASONIX_MEMORY"];
+    const originalHome = process.env["HOME"];
+    const originalUserProfile = process.env["USERPROFILE"];
 
     beforeEach(() => {
       root = mkdtempSync(join(tmpdir(), "reasonix-mem-slash-"));
-      process.env.HOME = root;
-      process.env.USERPROFILE = root;
+      process.env["HOME"] = root;
+      process.env["USERPROFILE"] = root;
       // biome-ignore lint/performance/noDelete: avoid "undefined" in env
-      delete process.env.REASONIX_MEMORY;
+      delete process.env["REASONIX_MEMORY"];
     });
     afterEach(() => {
       rmSync(root, { recursive: true, force: true });
       if (originalEnv === undefined) {
         // biome-ignore lint/performance/noDelete: same reason
-        delete process.env.REASONIX_MEMORY;
+        delete process.env["REASONIX_MEMORY"];
       } else {
-        process.env.REASONIX_MEMORY = originalEnv;
+        process.env["REASONIX_MEMORY"] = originalEnv;
       }
       if (originalHome === undefined) {
         // biome-ignore lint/performance/noDelete: env restoration needs absence, not "undefined"
-        delete process.env.HOME;
+        delete process.env["HOME"];
       } else {
-        process.env.HOME = originalHome;
+        process.env["HOME"] = originalHome;
       }
       if (originalUserProfile === undefined) {
         // biome-ignore lint/performance/noDelete: env restoration needs absence, not "undefined"
-        delete process.env.USERPROFILE;
+        delete process.env["USERPROFILE"];
       } else {
-        process.env.USERPROFILE = originalUserProfile;
+        process.env["USERPROFILE"] = originalUserProfile;
       }
     });
 
@@ -1238,7 +1268,7 @@ describe("handleSlash", () => {
 
     it("says memory is disabled when REASONIX_MEMORY=off, even with a file present", () => {
       writeFileSync(join(root, "REASONIX.md"), "content", "utf8");
-      process.env.REASONIX_MEMORY = "off";
+      process.env["REASONIX_MEMORY"] = "off";
       const r = handleSlash("memory", [], makeLoop(), { memoryRoot: root });
       expect(r.info).toMatch(/memory is disabled/);
     });
@@ -1303,7 +1333,8 @@ describe("handleSlash", () => {
       const calls: Array<{ on: boolean; source?: string }> = [];
       handleSlash("plan", ["off"], makeLoop(), {
         planMode: true,
-        setPlanMode: (on, source) => calls.push({ on, source }),
+        setPlanMode: (on, source) =>
+          calls.push({ on, ...(source !== undefined ? { source } : {}) }),
       });
       expect(calls).toEqual([{ on: false, source: "slash" }]);
     });
@@ -1339,21 +1370,21 @@ describe("handleSlash", () => {
 
     beforeEach(() => {
       tempHome = mkdtempSync(join(tmpdir(), "reasonix-theme-slash-"));
-      originalHome = process.env.HOME;
-      originalUserProfile = process.env.USERPROFILE;
-      originalTheme = process.env.REASONIX_THEME;
-      process.env.HOME = tempHome;
-      process.env.USERPROFILE = tempHome;
-      process.env.REASONIX_THEME = "github-dark";
+      originalHome = process.env["HOME"];
+      originalUserProfile = process.env["USERPROFILE"];
+      originalTheme = process.env["REASONIX_THEME"];
+      process.env["HOME"] = tempHome;
+      process.env["USERPROFILE"] = tempHome;
+      process.env["REASONIX_THEME"] = "github-dark";
     });
 
     afterEach(() => {
-      process.env.HOME = originalHome;
-      process.env.USERPROFILE = originalUserProfile;
+      process.env["HOME"] = originalHome;
+      process.env["USERPROFILE"] = originalUserProfile;
       if (originalTheme === undefined) {
-        process.env.REASONIX_THEME = undefined;
+        process.env["REASONIX_THEME"] = undefined;
       } else {
-        process.env.REASONIX_THEME = originalTheme;
+        process.env["REASONIX_THEME"] = originalTheme;
       }
       rmSync(tempHome, { recursive: true, force: true });
     });

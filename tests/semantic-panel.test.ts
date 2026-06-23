@@ -30,6 +30,7 @@ describe("validateSemanticDraft", () => {
         apiKey: "",
         model: "bge-m3",
         extraBodyText: "",
+        batchSize: 64,
         apiKeySet: false,
       },
     });
@@ -46,6 +47,7 @@ describe("validateSemanticDraft", () => {
         apiKey: "sk-test1234567890abcd",
         model: "bge-m3",
         extraBodyText: '{"encoding_format":"float"}',
+        batchSize: 64,
         apiKeySet: true,
       },
     });
@@ -62,6 +64,7 @@ describe("validateSemanticDraft", () => {
         apiKey: "sk-test1234567890abcd",
         model: "bge-m3",
         extraBodyText: '{\nencoding_format="float"\n}',
+        batchSize: 64,
         apiKeySet: true,
       },
     });
@@ -78,6 +81,7 @@ describe("validateSemanticDraft", () => {
         apiKey: "sk-test1234567890abcd",
         model: "bge-m3",
         extraBodyText: "[]",
+        batchSize: 64,
         apiKeySet: true,
       },
     });

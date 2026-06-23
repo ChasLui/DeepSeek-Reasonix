@@ -9,7 +9,7 @@ export const MAX_RESPONSE_BYTES = 65536; // 64KB
 export const HEAVY_FIELD_THRESHOLD = 256;
 
 /** Signal fields that survive heavy-field strip regardless of size. */
-export const SIGNAL_FIELDS = new Set([
+export const SIGNAL_FIELDS: Set<string> = new Set([
   "id",
   "name",
   "title",
@@ -156,7 +156,7 @@ function stripHeavyFields(arr: unknown[]): unknown[] {
     for (const [k, v] of Object.entries(obj)) {
       if (!heavyFields.includes(k)) stripped[k] = v;
     }
-    stripped._omitted = heavyFields;
+    stripped["_omitted"] = heavyFields;
     return stripped;
   });
 }

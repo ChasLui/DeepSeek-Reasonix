@@ -23,24 +23,36 @@ Reply concisely. Do NOT call any tool in this synthetic transcript — just resp
 // 4-turn synthetic transcript with three tool_result messages.
 const transcript = [
   { role: "system", content: SYS },
-  { role: "user", content: "Find where the slugify helper is defined and show me its current implementation." },
+  {
+    role: "user",
+    content: "Find where the slugify helper is defined and show me its current implementation.",
+  },
   {
     role: "assistant",
     content: "",
     tool_calls: [
-      { id: "c1", type: "function", function: { name: "list_dir", arguments: JSON.stringify({ path: "src/util" }) } },
+      {
+        id: "c1",
+        type: "function",
+        function: { name: "list_dir", arguments: JSON.stringify({ path: "src/util" }) },
+      },
     ],
   },
   {
     role: "tool",
     tool_call_id: "c1",
-    content: "src/util/clamp.ts\nsrc/util/color.ts\nsrc/util/duration.ts\nsrc/util/ranges.ts\nsrc/util/ring.ts\nsrc/util/slugify.ts\nsrc/util/uniq.ts",
+    content:
+      "src/util/clamp.ts\nsrc/util/color.ts\nsrc/util/duration.ts\nsrc/util/ranges.ts\nsrc/util/ring.ts\nsrc/util/slugify.ts\nsrc/util/uniq.ts",
   },
   {
     role: "assistant",
     content: "",
     tool_calls: [
-      { id: "c2", type: "function", function: { name: "read_file", arguments: JSON.stringify({ path: "src/util/slugify.ts" }) } },
+      {
+        id: "c2",
+        type: "function",
+        function: { name: "read_file", arguments: JSON.stringify({ path: "src/util/slugify.ts" }) },
+      },
     ],
   },
   {
@@ -58,7 +70,18 @@ const transcript = [
     role: "assistant",
     content: "",
     tool_calls: [
-      { id: "c3", type: "function", function: { name: "edit_file", arguments: JSON.stringify({ path: "src/util/slugify.ts", search: ".replace(/[^a-z0-9]+/g, \"-\")", replace: ".replace(/[^a-z0-9]+/g, \"-\").replace(/-{2,}/g, \"-\")" }) } },
+      {
+        id: "c3",
+        type: "function",
+        function: {
+          name: "edit_file",
+          arguments: JSON.stringify({
+            path: "src/util/slugify.ts",
+            search: '.replace(/[^a-z0-9]+/g, "-")',
+            replace: '.replace(/[^a-z0-9]+/g, "-").replace(/-{2,}/g, "-")',
+          }),
+        },
+      },
     ],
   },
   // baseline tool_result
@@ -67,14 +90,17 @@ const transcript = [
     tool_call_id: "c3",
     content: "Edit applied: src/util/slugify.ts (1 hunk).",
   },
-  { role: "user", content: "Good, now also trim leading/trailing whitespace before the regex pass." },
+  {
+    role: "user",
+    content: "Good, now also trim leading/trailing whitespace before the regex pass.",
+  },
 ];
 
 // Variant B: same transcript, but the edit_file tool_result also carries a test_run footer.
 // This is the EXACT extra payload the RFC would inject.
 const augmentedToolResult = `Edit applied: src/util/slugify.ts (1 hunk).
 
-[test_run] test_id="tests/slugify.test.ts::slugify collapses repeated dashes" status="pass" duration_ms=1873 command="npx vitest --run tests/slugify.test.ts -t \\"collapses repeated dashes\\""
+[test_run] test_id="tests/slugify.test.ts::slugify collapses repeated dashes" status="pass" duration_ms=1873 command="pnpm exec vitest --run tests/slugify.test.ts -t \\"collapses repeated dashes\\""
 [edit_claim] test_id="tests/slugify.test.ts::slugify collapses repeated dashes" edit_target="src/util/slugify.ts" satisfied=true`;
 
 function variantA() {

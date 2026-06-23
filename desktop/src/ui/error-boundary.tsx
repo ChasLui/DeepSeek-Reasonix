@@ -5,17 +5,17 @@ type Props = { label: string; children: ReactNode };
 type State = { error: Error | null };
 
 export class PanelErrorBoundary extends Component<Props, State> {
-  state: State = { error: null };
+  override state: State = { error: null };
 
   static getDerivedStateFromError(error: Error): State {
     return { error };
   }
 
-  componentDidCatch(error: Error, info: { componentStack?: string | null }): void {
+  override componentDidCatch(error: Error, info: { componentStack?: string | null }): void {
     console.error(`[panel:${this.props.label}] render error`, error, info);
   }
 
-  render(): ReactNode {
+  override render(): ReactNode {
     if (!this.state.error) return this.props.children;
     return (
       <div

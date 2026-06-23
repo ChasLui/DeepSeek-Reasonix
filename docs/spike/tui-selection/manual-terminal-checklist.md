@@ -45,7 +45,7 @@ Then run the full Reasonix command below if the protocol helper reproduces the s
 
 | Terminal | OS | Command | Default drag-select result | `/mouse on` drag result | `/mouse off` after `/mouse on` result | Shift+Drag while `/mouse on` result | Clipboard result | Evidence |
 |---|---|---|---|---|---|---|---|---|
-|  |  | `npm run dev -- chat --no-session --no-dashboard --new --no-config` |  |  |  |  |  |  |
+|  |  | `pnpm run dev chat --no-session --no-dashboard --new --no-config` |  |  |  |  |  |  |
 
 Use precise observations:
 

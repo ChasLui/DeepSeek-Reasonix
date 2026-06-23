@@ -8,32 +8,40 @@ import { decodeToolResultObject } from "../../../toon/decode-result.js";
 import type { TurnTranslator } from "../state/TurnTranslator.js";
 import type { Scrollback } from "./useScrollback.js";
 
+type ToolProgress = {
+  progress: number;
+  total?: number | undefined;
+  message?: string | undefined;
+};
+
 export interface ToolEventContext {
   flush: () => void;
   translator: TurnTranslator;
   setOngoingTool: Dispatch<SetStateAction<{ name: string; args?: string } | null>>;
-  setToolProgress: Dispatch<
-    SetStateAction<{ progress: number; total?: number; message?: string } | null>
-  >;
+  setToolProgress: Dispatch<SetStateAction<ToolProgress | null>>;
   toolStartedAtRef: MutableRefObject<number | null>;
   setPendingShell: Dispatch<
     SetStateAction<{ id: number; command: string; kind: "run_command" | "run_background" } | null>
   >;
   setPendingPlan: Dispatch<SetStateAction<string | null>>;
   setPendingRevision: Dispatch<
-    SetStateAction<{ reason: string; remainingSteps: PlanStep[]; summary?: string } | null>
+    SetStateAction<{
+      reason: string;
+      remainingSteps: PlanStep[];
+      summary?: string | undefined;
+    } | null>
   >;
   setPendingChoice: Dispatch<
     SetStateAction<{ question: string; options: ChoiceOption[]; allowCustom: boolean } | null>
   >;
   planStepsRef: MutableRefObject<PlanStep[] | null>;
   completedStepIdsRef: MutableRefObject<Set<string>>;
-  stepCompletionsRef?: MutableRefObject<Map<string, StepCompletion>>;
-  pendingStepCompletionsRef?: MutableRefObject<Map<string, StepCompletion>>;
+  stepCompletionsRef?: MutableRefObject<Map<string, StepCompletion>> | undefined;
+  pendingStepCompletionsRef?: MutableRefObject<Map<string, StepCompletion>> | undefined;
   planBodyRef: MutableRefObject<string | null>;
   planSummaryRef: MutableRefObject<string | null>;
   persistPlanState: () => void;
-  onPlanStepCompleted?: (stepId: string) => void;
+  onPlanStepCompleted?: ((stepId: string) => void) | undefined;
   log: Scrollback;
   session: string | null;
   codeModeOn: boolean;

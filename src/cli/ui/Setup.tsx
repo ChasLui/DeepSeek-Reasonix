@@ -9,7 +9,7 @@ export interface SetupProps {
   onReady: (apiKey: string) => void;
 }
 
-export function Setup({ onReady }: SetupProps) {
+export function Setup({ onReady }: SetupProps): React.ReactElement {
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const { exit } = useApp();
@@ -37,7 +37,7 @@ export function Setup({ onReady }: SetupProps) {
   return (
     <Box flexDirection="column" paddingX={1} marginY={1}>
       <Box>
-        <Text bold color={GRADIENT[0]}>
+        <Text bold {...(GRADIENT[0] !== undefined ? { color: GRADIENT[0] } : {})}>
           {GLYPH.brand}
         </Text>
         <Text>{"  "}</Text>

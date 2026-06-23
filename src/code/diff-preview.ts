@@ -4,15 +4,15 @@ import type { EditBlock } from "./edit-blocks.js";
 
 export interface DiffPreviewOptions {
   /** How many lines of unchanged context to show at each end. Default 2. */
-  contextLines?: number;
+  contextLines?: number | undefined;
   /** Hard cap on total rendered lines. Default 20 — beyond this the preview collapses. */
-  maxLines?: number;
+  maxLines?: number | undefined;
   /** Indent applied to every output line. Default 8 spaces — matches the pending-preview nesting. */
-  indent?: string;
+  indent?: string | undefined;
 }
 
 export interface AllBlockDiffOptions extends DiffPreviewOptions {
-  numbered?: boolean;
+  numbered?: boolean | undefined;
 }
 
 /** Render one edit block's diff. Returns an array of formatted lines. */
@@ -105,7 +105,7 @@ export interface SplitDiffRow {
 
 export interface SplitDiffOptions extends DiffPreviewOptions {
   /** Starting 1-based line number for the old side. Default 1. */
-  startLine?: number;
+  startLine?: number | undefined;
 }
 
 /** Pairs removed/added by index — visually correct for SEARCH/REPLACE shape, skips Myers' O(N²) LCS. */

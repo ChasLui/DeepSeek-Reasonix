@@ -6,9 +6,9 @@ export const DEFAULT_PASTE_CHAR_THRESHOLD = 2000;
 export const DEFAULT_PASTE_HEAD_LINES = 10;
 
 export interface PasteCollapseOptions {
-  lineThreshold?: number;
-  charThreshold?: number;
-  headLines?: number;
+  lineThreshold?: number | undefined;
+  charThreshold?: number | undefined;
+  headLines?: number | undefined;
 }
 
 export interface PasteCollapseResult {

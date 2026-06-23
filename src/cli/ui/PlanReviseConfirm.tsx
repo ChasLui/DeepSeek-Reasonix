@@ -11,7 +11,7 @@ export interface PlanReviseConfirmProps {
   reason: string;
   oldRemaining: PlanStep[];
   newRemaining: PlanStep[];
-  summary?: string;
+  summary?: string | undefined;
   onChoose: (choice: ReviseChoice) => void;
 }
 
@@ -52,7 +52,7 @@ function PlanReviseConfirmInner({
   newRemaining,
   summary,
   onChoose,
-}: PlanReviseConfirmProps) {
+}: PlanReviseConfirmProps): React.ReactElement {
   const rows = computeDiff(oldRemaining, newRemaining);
   const removedCount = rows.filter((r) => r.kind === "removed").length;
   const addedCount = rows.filter((r) => r.kind === "added").length;
@@ -120,4 +120,5 @@ function PlanReviseConfirmInner({
   );
 }
 
-export const PlanReviseConfirm = React.memo(PlanReviseConfirmInner);
+export const PlanReviseConfirm: React.MemoExoticComponent<typeof PlanReviseConfirmInner> =
+  React.memo(PlanReviseConfirmInner);

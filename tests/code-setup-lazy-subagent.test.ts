@@ -14,14 +14,14 @@ describe("buildCodeToolset", () => {
   let tmpRoot: string;
 
   beforeEach(() => {
-    savedKey = process.env.DEEPSEEK_API_KEY;
+    savedKey = process.env["DEEPSEEK_API_KEY"];
     // biome-ignore lint/performance/noDelete: setting to "undefined" string would mask test
-    delete process.env.DEEPSEEK_API_KEY;
+    delete process.env["DEEPSEEK_API_KEY"];
     tmpRoot = mkdtempSync(join(tmpdir(), "reasonix-code-setup-"));
   });
 
   afterEach(async () => {
-    if (savedKey !== undefined) process.env.DEEPSEEK_API_KEY = savedKey;
+    if (savedKey !== undefined) process.env["DEEPSEEK_API_KEY"] = savedKey;
     rmSync(tmpRoot, { recursive: true, force: true });
   });
 

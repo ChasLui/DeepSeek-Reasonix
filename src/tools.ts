@@ -24,49 +24,50 @@ const TOOL_ALIAS_MAP = new Map<string, string>([["Task", "spawn_subagent"]]);
 export const PREFIX_MAX_TIER = 1;
 
 export interface ToolCallContext {
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
   /** Inject a mock PauseGate for tests. When absent, tools use the singleton. */
-  confirmationGate?: PauseGate;
+  confirmationGate?: PauseGate | undefined;
   /** Session-scoped read-dedup state (loop-owned). Present iff dedup is live for this session. */
-  readDedup?: ReadDedupState;
+  readDedup?: ReadDedupState | undefined;
   /** Session-scoped file content cache (loop-owned). */
-  fileCache?: FileReadCache;
+  fileCache?: FileReadCache | undefined;
   /** Session-scoped tree-sitter parse cache (loop-owned). */
-  parseCache?: ParseTreeCache;
+  parseCache?: ParseTreeCache | undefined;
   /** Session-scoped web_fetch response cache (loop-owned). */
-  webFetchCache?: WebFetchCache;
+  webFetchCache?: WebFetchCache | undefined;
   /** Token budget the dispatcher will truncate this result to — read_file uses it to refuse dedup on bodies that won't survive intact. */
-  maxResultTokens?: number;
+  maxResultTokens?: number | undefined;
 }
 
-export interface ToolDefinition<A = any, R = any> {
+export interface ToolDefinition<A = Record<string, unknown>, R = unknown> {
   name: string;
-  description?: string;
-  parameters?: JSONSchema;
+  description?: string | undefined;
+  parameters?: JSONSchema | undefined;
   /** Safe in plan mode — registry refuses non-readonly calls when `planMode` is on. */
-  readOnly?: boolean;
+  readOnly?: boolean | undefined;
   /** Per-args check; takes precedence over `readOnly`. e.g. `run_command` + allowlisted argv. */
-  readOnlyCheck?: (args: A) => boolean;
+  readOnlyCheck?: ((args: A) => boolean | undefined) | undefined;
   /** Safe to dispatch concurrently with other parallel-safe calls in the same turn. Default false — opt-in only. */
-  parallelSafe?: boolean;
+  parallelSafe?: boolean | undefined;
   /** Excluded from repeat-loop storm accounting; use only for cheap, state-inspection tools. */
-  stormExempt?: boolean;
+  stormExempt?: boolean | undefined;
   /** Skip the dispatch-time validate→repair gate; the tool's own runtime sanitizer is authoritative. Used by tools that intentionally accept mixed-shape arrays and drop bad entries themselves (plan, choice, todo). */
-  lenientArgs?: boolean;
+  lenientArgs?: boolean | undefined;
   /** Tiered exposure (FR-005): 0/undefined = always in prefix, 1 = warm, 2 = deferred (catalog-only). filteredSpecs(maxTier) drops anything above maxTier. */
-  tier?: number;
-  fn: (args: A, ctx?: ToolCallContext) => R | Promise<R>;
+  tier?: number | undefined;
+  fn(args: A, ctx?: ToolCallContext): R | Promise<R>;
 }
 
-interface InternalTool extends ToolDefinition {
+type InternalTool = Omit<ToolDefinition<Record<string, unknown>, unknown>, "fn"> & {
+  fn: (args: Record<string, unknown>, ctx?: ToolCallContext) => unknown | Promise<unknown>;
   /** Set when schema is deep (>2 levels) or wide (>10 leaves) — DeepSeek V3/R1 drop args otherwise. */
-  flatSchema?: JSONSchema;
-}
+  flatSchema?: JSONSchema | undefined;
+};
 
 export interface ToolRegistryOptions {
   /** Auto-flatten + re-nest at dispatch; default true. */
-  autoFlatten?: boolean;
-  toonMode?: ToonMode;
+  autoFlatten?: boolean | undefined;
+  toonMode?: ToonMode | undefined;
 }
 
 export type ToolCallAuditEvent = {
@@ -157,7 +158,9 @@ export class ToolRegistry {
 
   register<A, R>(def: ToolDefinition<A, R>): this {
     if (!def.name) throw new Error("tool requires a name");
-    const internal: InternalTool = { ...(def as ToolDefinition) };
+    const internal: InternalTool = {
+      ...(def as ToolDefinition<Record<string, unknown>, unknown>),
+    };
     if (this._autoFlatten && def.parameters) {
       const decision = analyzeSchema(def.parameters);
       if (decision.shouldFlatten) {
@@ -249,19 +252,19 @@ export class ToolRegistry {
     name: string,
     argumentsRaw: string | Record<string, unknown>,
     opts: {
-      signal?: AbortSignal;
-      maxResultChars?: number;
-      maxResultTokens?: number;
+      signal?: AbortSignal | undefined;
+      maxResultChars?: number | undefined;
+      maxResultTokens?: number | undefined;
       /** Inject a mock PauseGate for tests. */
-      confirmationGate?: PauseGate;
+      confirmationGate?: PauseGate | undefined;
       /** Session-scoped read-dedup state; forwarded to the tool fn's ctx. */
-      readDedup?: ReadDedupState;
+      readDedup?: ReadDedupState | undefined;
       /** Session-scoped file content cache; forwarded to the tool fn's ctx. */
-      fileCache?: FileReadCache;
+      fileCache?: FileReadCache | undefined;
       /** Session-scoped tree-sitter parse cache; forwarded to the tool fn's ctx. */
-      parseCache?: ParseTreeCache;
+      parseCache?: ParseTreeCache | undefined;
       /** Session-scoped web_fetch response cache; forwarded to the tool fn's ctx. */
-      webFetchCache?: WebFetchCache;
+      webFetchCache?: WebFetchCache | undefined;
     } = {},
   ): Promise<string> {
     const originalName = name;
@@ -438,7 +441,7 @@ export class ToolRegistry {
       }
       finalResult = clipped;
     } catch (err) {
-      const e = err as Error & { toToolResult?: () => unknown };
+      const e = err as Error & { toToolResult?: (() => unknown) | undefined };
       // Errors may opt into a richer tool-result shape by implementing
       // `toToolResult()`. Used by `PlanProposedError` to smuggle the
       // submitted plan text out to the UI without stuffing it into the
@@ -565,9 +568,9 @@ function rejectedReason(name: string, result: string): string | null {
   try {
     const parsed = decodeToolResultObject(result);
     if (!parsed) return null;
-    const reason = parsed.rejectedReason;
+    const reason = parsed["rejectedReason"];
     if (typeof reason === "string" && reason) return reason;
-    const error = parsed.error;
+    const error = parsed["error"];
     if (typeof error === "string") return plainTextRejectedReason(name, error);
     return null;
   } catch {

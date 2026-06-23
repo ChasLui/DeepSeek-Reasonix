@@ -11,12 +11,10 @@ import {
   parseAtQuery,
   rankPickerCandidates,
 } from "../../at-mentions.js";
-import { getOrCreateDeepSeekClient } from "../../client-singleton.js";
 import { pickPrimaryBalance } from "../../client.js";
 import { codeSystemPrompt } from "../../code/prompt.js";
 import { buildCodeToolset } from "../../code/setup.js";
 import {
-  type DesktopOpenTab,
   type EditMode,
   isPlausibleKey,
   loadApiKey,
@@ -32,7 +30,6 @@ import {
   loadWorkspaceDir,
   pushRecentWorkspace,
   readConfig,
-  resolveBudgetWindows,
   resolveSessionToolset,
   saveApiKey,
   saveBaseUrl,
@@ -66,7 +63,7 @@ import {
   setDesktopQQEnabled,
 } from "../../desktop/qq-settings.js";
 import { loadDotenv } from "../../env.js";
-import { type CacheFirstLoop, ImmutablePrefix, PREFIX_MAX_TIER } from "../../index.js";
+import type { CacheFirstLoop } from "../../index.js";
 import { parseMcpSpec } from "../../mcp/spec.js";
 import {
   deleteSession,
@@ -80,12 +77,8 @@ import {
 import { openMemoryStore } from "../../memory/user.js";
 import { QQChannel } from "../../qq/channel.js";
 import { SkillStore } from "../../skills.js";
-import { resolveCatalogSkills } from "../../skills.js";
-import { getDb } from "../../storage/db.js";
 import { countTokensBounded } from "../../tokenizer.js";
 import type { ChoiceOption } from "../../tools/choice.js";
-import { activateToolTiering } from "../../tools/tiering.js";
-import { applySessionToolset } from "../../tools/toolset.js";
 import type { ChatMessage } from "../../types.js";
 import { VERSION } from "../../version.js";
 import { canonicalPresetName, resolvePreset } from "../ui/presets.js";
@@ -93,9 +86,9 @@ import { type McpRuntime, createMcpRuntime } from "./mcp-runtime.js";
 
 export interface DesktopOptions {
   model: string;
-  budgetUsd?: number;
+  budgetUsd?: number | undefined;
   /** Root directory the agent's filesystem tools operate inside. Defaults to cwd. */
-  dir?: string;
+  dir?: string | undefined;
 }
 
 type InMessage = { tabId?: string } & (
@@ -114,21 +107,21 @@ type InMessage = { tabId?: string } & (
   | { cmd: "settings_get" }
   | {
       cmd: "settings_save";
-      reasoningEffort?: "high" | "max";
-      editMode?: EditMode;
-      budgetUsd?: number | null;
-      baseUrl?: string;
-      workspaceDir?: string;
-      preset?: "auto" | "flash" | "pro";
-      editor?: string;
+      reasoningEffort?: "high" | "max" | undefined;
+      editMode?: EditMode | undefined;
+      budgetUsd?: number | null | undefined;
+      baseUrl?: string | undefined;
+      workspaceDir?: string | undefined;
+      preset?: "auto" | "flash" | "pro" | undefined;
+      editor?: string | undefined;
     }
   | { cmd: "qq_status_get" }
   | { cmd: "qq_connect" }
   | { cmd: "qq_disconnect" }
   | {
       cmd: "qq_config_save";
-      appId?: string;
-      appSecret?: string;
+      appId?: string | undefined;
+      appSecret?: string | undefined;
       sandbox: boolean;
     }
   | { cmd: "mention_query"; query: string; nonce: number }
@@ -160,26 +153,26 @@ interface SettingsEvent {
   reasoningEffort: "high" | "max";
   editMode: EditMode;
   budgetUsd: number | null;
-  baseUrl?: string;
-  apiKeyPrefix?: string;
+  baseUrl?: string | undefined;
+  apiKeyPrefix?: string | undefined;
   workspaceDir: string;
   recentWorkspaces: string[];
   model: string;
   preset: "auto" | "flash" | "pro";
-  editor?: string;
+  editor?: string | undefined;
   version: string;
 }
 
 interface QQSettingsEvent {
   type: "$qq_settings";
-  appId?: string;
-  appSecret?: string;
+  appId?: string | undefined;
+  appSecret?: string | undefined;
   sandbox: boolean;
   enabled: boolean;
   configured: boolean;
   runtimeState: "disconnected" | "connecting" | "connected" | "failed";
-  lastError?: string;
-  appIdPreview?: string;
+  lastError?: string | undefined;
+  appIdPreview?: string | undefined;
   access: string;
 }
 
@@ -194,8 +187,8 @@ interface PlanRequiredEvent {
   type: "$plan_required";
   id: number;
   plan: string;
-  steps?: unknown[];
-  summary?: string;
+  steps?: unknown[] | undefined;
+  summary?: string | undefined;
 }
 
 interface SessionsEvent {
@@ -222,7 +215,7 @@ interface TabOpenedEvent {
   type: "$tab_opened";
   workspaceDir: string;
   /** True when the frontend should focus this tab (user-opened, or the restored focused tab). */
-  active?: boolean;
+  active?: boolean | undefined;
 }
 
 interface TabClosedEvent {
@@ -237,8 +230,8 @@ type LoadedSegment =
       callId: string;
       name: string;
       args: string;
-      result?: string;
-      ok?: boolean;
+      result?: string | undefined;
+      ok?: boolean | undefined;
     };
 
 type LoadedMessage =
@@ -296,16 +289,16 @@ interface PlanStepLite {
   id: string;
   title: string;
   action: string;
-  risk?: "low" | "med" | "high";
+  risk?: "low" | "med" | "high" | undefined;
 }
 
 interface CheckpointRequiredEvent {
   type: "$checkpoint_required";
   id: number;
   stepId: string;
-  title?: string;
+  title?: string | undefined;
   result: string;
-  notes?: string;
+  notes?: string | undefined;
   completed: number;
   total: number;
 }
@@ -315,15 +308,15 @@ interface RevisionRequiredEvent {
   id: number;
   reason: string;
   remainingSteps: PlanStepLite[];
-  summary?: string;
+  summary?: string | undefined;
 }
 
 interface StepCompletedEvent {
   type: "$step_completed";
   stepId: string;
-  title?: string;
+  title?: string | undefined;
   result: string;
-  notes?: string;
+  notes?: string | undefined;
 }
 
 interface PlanClearedEvent {
@@ -337,10 +330,10 @@ interface McpSpecInfo {
   name: string | null;
   transport: "stdio" | "sse" | "streamable-http";
   summary: string;
-  parseError?: string;
+  parseError?: string | undefined;
   status: McpSpecStatus;
-  statusReason?: string;
-  toolCount?: number;
+  statusReason?: string | undefined;
+  toolCount?: number | undefined;
 }
 
 interface McpSpecsEvent {
@@ -353,7 +346,7 @@ interface CtxBreakdownEvent {
   type: "$ctx_breakdown";
   reservedTokens: number;
   /** Current log token count (real-time) — sent after /compact to refresh the meter. */
-  logTokens?: number;
+  logTokens?: number | undefined;
 }
 
 interface MemoryEntryInfo {
@@ -373,7 +366,7 @@ interface SkillInfo {
   scope: "project" | "custom" | "global" | "builtin";
   path: string;
   runAs: "inline" | "subagent";
-  model?: string;
+  model?: string | undefined;
 }
 
 interface SkillsEvent {
@@ -391,7 +384,7 @@ interface JobInfoPayload {
   exitCode: number | null;
   startedAt: number;
   outputTail: string;
-  spawnError?: string;
+  spawnError?: string | undefined;
 }
 
 interface JobsEvent {
@@ -401,7 +394,7 @@ interface JobsEvent {
 
 const desktopQqRuntimeSnapshot: {
   runtimeState: "disconnected" | "connecting" | "connected" | "failed";
-  lastError?: string;
+  lastError?: string | undefined;
 } = {
   runtimeState: "disconnected",
 };
@@ -461,7 +454,7 @@ export function writeAllSync(
   fd: number,
   buffer: Buffer,
   opts: {
-    write?: SyncWriter;
+    write?: SyncWriter | undefined;
     wait?: () => void;
   } = {},
 ): void {
@@ -961,41 +954,13 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
 
   function setQQRuntimeState(
     runtimeState: "disconnected" | "connecting" | "connected" | "failed",
-    lastError?: string,
+    lastError?: string | undefined,
   ): void {
     qqRuntime.runtimeState = runtimeState;
     qqRuntime.lastError = lastError;
     desktopQqRuntimeSnapshot.runtimeState = runtimeState;
     desktopQqRuntimeSnapshot.lastError = lastError;
     broadcastQQSettings();
-  }
-
-  function sendQQInfo(message: string): void {
-    const tab = activeDesktopTab();
-    if (tab) {
-      emit(
-        {
-          type: "status",
-          id: Date.now(),
-          ts: new Date().toISOString(),
-          turn: 0,
-          text: message,
-        },
-        tab.id,
-      );
-    }
-    void qqRuntime.channel?.sendResponse(message).catch((err) => {
-      const active = activeDesktopTab();
-      if (active) {
-        emit(
-          {
-            type: "$error",
-            message: `qq send failed: ${(err as Error).message}`,
-          },
-          active.id,
-        );
-      }
-    });
   }
 
   function parseIndexedChoice(text: string): number {
@@ -1092,8 +1057,8 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
       case "choice": {
         const payload =
           (interaction.payload as {
-            options?: ChoiceOption[];
-            allowCustom?: boolean;
+            options?: ChoiceOption[] | undefined;
+            allowCustom?: boolean | undefined;
           }) ?? {};
         const options = payload.options ?? [];
         const pickedIndex = parseIndexedChoice(text);
@@ -1302,7 +1267,7 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
       modelId: tab.currentModel,
     });
     if (loadApiKey()) {
-      process.env.DEEPSEEK_API_KEY = loadApiKey();
+      process.env["DEEPSEEK_API_KEY"] = loadApiKey();
       try {
         // Daemon-only: open the tab's loop session in the daemon; confirmations
         // re-raise on this process's local PauseGate so the existing confirm UI works.
@@ -1685,9 +1650,9 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
       if (req.kind === "plan_checkpoint") {
         const payload = req.payload as {
           stepId: string;
-          title?: string;
+          title?: string | undefined;
           result: string;
-          notes?: string;
+          notes?: string | undefined;
         };
         if (tab) tab.completedStepIds.add(payload.stepId);
         emit(
@@ -1764,8 +1729,8 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
     if (req.kind === "plan_proposed") {
       const payload = req.payload as {
         plan: string;
-        steps?: PlanStepLite[];
-        summary?: string;
+        steps?: PlanStepLite[] | undefined;
+        summary?: string | undefined;
       };
       if (tab) {
         tab.completedStepIds.clear();
@@ -1787,9 +1752,9 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
     if (req.kind === "plan_checkpoint") {
       const payload = req.payload as {
         stepId: string;
-        title?: string;
+        title?: string | undefined;
         result: string;
-        notes?: string;
+        notes?: string | undefined;
       };
       if (tab) tab.completedStepIds.add(payload.stepId);
       emit(
@@ -1822,7 +1787,7 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
       const payload = req.payload as {
         reason: string;
         remainingSteps: PlanStepLite[];
-        summary?: string;
+        summary?: string | undefined;
       };
       emit(
         {
@@ -1855,8 +1820,8 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
   // composer disabled, so users can't send a message before the runtime
   // exists. emitBalance was already fire-and-forget.
   function bootstrapTab(
-    initialDir?: string,
-    restore?: { session?: string; active?: boolean },
+    initialDir?: string | undefined,
+    restore?: { session?: string | undefined; active?: boolean | undefined },
   ): Tab {
     const tab = createTabSkeleton(initialDir);
     // Reopen the conversation the tab had, if its jsonl is still readable.
@@ -2026,7 +1991,7 @@ export async function desktopCommand(opts: DesktopOptions): Promise<void> {
       }
       try {
         saveApiKey(key);
-        process.env.DEEPSEEK_API_KEY = key;
+        process.env["DEEPSEEK_API_KEY"] = key;
         for (const tab of tabs.values()) {
           // Skeleton tabs still mid-bootstrap pick up the new key inside
           // initTabToolset's tail when buildCodeToolset settles — don't

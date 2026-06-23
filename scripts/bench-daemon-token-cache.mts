@@ -4,7 +4,7 @@
 // workspace produce byte-identical prefixes and (b) the daemon prefix is
 // byte-identical to an in-process buildSession (NF-005) — both required for the
 // KV-cache prefix to actually hit on every turn after the first.
-// Run: npx tsx scripts/bench-daemon-token-cache.mts [workspaceRoot]
+// Run: pnpm exec tsx scripts/bench-daemon-token-cache.mts [workspaceRoot]
 
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";

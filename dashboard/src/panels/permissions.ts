@@ -1,3 +1,4 @@
+import type { VNode } from "preact";
 import { useCallback, useState } from "preact/hooks";
 import { api } from "../lib/api.js";
 import { html } from "../lib/html.js";
@@ -29,7 +30,7 @@ function groupByVerb(list: string[]): [string, string[]][] {
   return [...groups.entries()];
 }
 
-export function PermissionsPanel() {
+export function PermissionsPanel(): VNode | null {
   useLang();
   const { data, error, loading, refresh } = usePoll<PermissionsData>("/permissions", 5000);
   const [draft, setDraft] = useState("");
@@ -46,7 +47,8 @@ export function PermissionsPanel() {
         method: "POST",
         body: { prefix },
       });
-      if (res.alreadyPresent) setFeedback({ kind: "info", text: t("permissions.alreadyIn", { prefix }) });
+      if (res.alreadyPresent)
+        setFeedback({ kind: "info", text: t("permissions.alreadyIn", { prefix }) });
       else setFeedback({ kind: "ok", text: t("permissions.added", { prefix }) });
       setDraft("");
       await refresh();
@@ -98,37 +100,42 @@ export function PermissionsPanel() {
 
   if (loading && !data)
     return html`<div class="card" style="color:var(--fg-3)">${t("permissions.loading")}</div>`;
-  if (error) return html`<div class="card accent-err">${t("common.loadingFailed", { name: "permissions", error: error.message })}</div>`;
+  if (error)
+    return html`<div class="card accent-err">
+      ${t("common.loadingFailed", { name: "permissions", error: error.message })}
+    </div>`;
   if (!data) return null;
   const p = data;
 
   const feedbackPill = feedback
     ? html`<span
         class=${`pill ${feedback.kind === "err" ? "err" : feedback.kind === "ok" ? "ok" : "warn"}`}
-      >${feedback.text}</span>`
+        >${feedback.text}</span
+      >`
     : null;
 
   return html`
     <div style="display:flex;flex-direction:column;gap:14px">
-      ${
-        p.editMode === "yolo"
-          ? html`<div class="card accent-warn">
-              <div class="card-h"><span class="title" style="color:var(--c-warn)">${t("permissions.yoloTitle")}</span></div>
-              <div class="card-b">
-                ${t("permissions.yoloDesc")}
-              </div>
-            </div>`
-          : null
-      }
+      ${p.editMode === "yolo"
+        ? html`<div class="card accent-warn">
+            <div class="card-h">
+              <span class="title" style="color:var(--c-warn)">${t("permissions.yoloTitle")}</span>
+            </div>
+            <div class="card-b">${t("permissions.yoloDesc")}</div>
+          </div>`
+        : null}
 
       <div class="chips">
-        <span class="chip-f static active">${t("permissions.project")} <span class="ct">${p.project.length}</span></span>
-        <span class="chip-f static">${t("permissions.builtin")} <span class="ct">${p.builtin.length}</span></span>
+        <span class="chip-f static active"
+          >${t("permissions.project")} <span class="ct">${p.project.length}</span></span
+        >
+        <span class="chip-f static"
+          >${t("permissions.builtin")} <span class="ct">${p.builtin.length}</span></span
+        >
       </div>
 
-      ${
-        p.currentCwd
-          ? html`
+      ${p.currentCwd
+        ? html`
             <div class="card">
               <div class="card-h">
                 <span class="title">${t("permissions.addPrefix")}</span>
@@ -146,32 +153,34 @@ export function PermissionsPanel() {
                   disabled=${busy}
                   style="flex:1"
                 />
-                <button class="primary" onClick=${add} disabled=${busy || !draft.trim()}>${t("common.add")}</button>
+                <button class="primary" onClick=${add} disabled=${busy || !draft.trim()}>
+                  ${t("common.add")}
+                </button>
                 <button
                   class="danger"
                   onClick=${clearAll}
                   disabled=${busy || p.project.length === 0}
-                >${t("permissions.clearAll")}</button>
+                >
+                  ${t("permissions.clearAll")}
+                </button>
               </div>
               ${feedbackPill ? html`<div style="margin-top:8px">${feedbackPill}</div>` : null}
             </div>
           `
-          : html`
+        : html`
             <div class="card accent-warn">
-              <div class="card-b">
-                ${t("permissions.standaloneWarning")}
-              </div>
+              <div class="card-b">${t("permissions.standaloneWarning")}</div>
             </div>
-          `
-      }
+          `}
 
-      <h3 style="margin:6px 0 0;font-family:var(--font-mono);font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.1em">
+      <h3
+        style="margin:6px 0 0;font-family:var(--font-mono);font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.1em"
+      >
         ${t("permissions.projectAllowlist", { count: p.project.length })}
       </h3>
-      ${
-        p.project.length === 0
-          ? html`<div class="card" style="color:var(--fg-3)">${t("permissions.nothingStored")}</div>`
-          : html`
+      ${p.project.length === 0
+        ? html`<div class="card" style="color:var(--fg-3)">${t("permissions.nothingStored")}</div>`
+        : html`
             <div class="card" style="padding:0;overflow:hidden">
               <table class="tbl">
                 <thead>
@@ -188,15 +197,15 @@ export function PermissionsPanel() {
                         <td class="dim">${i + 1}</td>
                         <td><code class="mono">${prefix}</code></td>
                         <td>
-                          ${
-                            p.currentCwd
-                              ? html`<button
-                                  class="danger"
-                                  onClick=${() => remove(prefix)}
-                                  disabled=${busy}
-                                >${t("common.remove")}</button>`
-                              : null
-                          }
+                          ${p.currentCwd
+                            ? html`<button
+                                class="danger"
+                                onClick=${() => remove(prefix)}
+                                disabled=${busy}
+                              >
+                                ${t("common.remove")}
+                              </button>`
+                            : null}
                         </td>
                       </tr>
                     `,
@@ -204,10 +213,11 @@ export function PermissionsPanel() {
                 </tbody>
               </table>
             </div>
-          `
-      }
+          `}
 
-      <h3 style="margin:6px 0 0;font-family:var(--font-mono);font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.1em">
+      <h3
+        style="margin:6px 0 0;font-family:var(--font-mono);font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.1em"
+      >
         ${t("permissions.builtinTitle", { count: p.builtin.length })}
       </h3>
       <div class="card" style="font-family:var(--font-mono);font-size:11.5px;line-height:1.8">

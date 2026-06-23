@@ -12,13 +12,13 @@ export interface DiffSide {
 
 export interface TurnPair {
   turn: number;
-  aAssistant?: TranscriptRecord;
-  bAssistant?: TranscriptRecord;
+  aAssistant?: TranscriptRecord | undefined;
+  bAssistant?: TranscriptRecord | undefined;
   aTools: TranscriptRecord[];
   bTools: TranscriptRecord[];
   kind: "match" | "diverge" | "only_in_a" | "only_in_b";
   /** When kind === "diverge", a short one-liner pointing at what differs. */
-  divergenceNote?: string;
+  divergenceNote?: string | undefined;
 }
 
 export interface DiffReport {
@@ -157,7 +157,7 @@ function levenshtein(a: string, b: string): number {
 }
 
 interface TurnGroup {
-  assistant?: TranscriptRecord;
+  assistant?: TranscriptRecord | undefined;
   tools: TranscriptRecord[];
 }
 
@@ -175,7 +175,7 @@ function groupByTurn(records: TranscriptRecord[]): Map<number, TurnGroup> {
 
 export interface RenderOptions {
   /** Monochrome output (for file redirection or piping). Defaults to true. */
-  monochrome?: boolean;
+  monochrome?: boolean | undefined;
 }
 
 export function renderSummaryTable(report: DiffReport, _opts: RenderOptions = {}): string {

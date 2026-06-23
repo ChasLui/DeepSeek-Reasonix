@@ -27,9 +27,9 @@ import {
 
 export interface McpClientOptions {
   transport: McpTransport;
-  clientInfo?: McpClientInfo;
+  clientInfo?: McpClientInfo | undefined;
   /** Per-request timeout. Default 60s. */
-  requestTimeoutMs?: number;
+  requestTimeoutMs?: number | undefined;
 }
 
 interface PendingRequest {
@@ -132,7 +132,7 @@ export class McpClient {
   /** Abort sends `notifications/cancelled` and rejects immediately; late server responses are dropped. */
   async callTool(
     name: string,
-    args?: Record<string, unknown>,
+    args?: Record<string, unknown> | undefined,
     opts: { onProgress?: McpProgressHandler; signal?: AbortSignal } = {},
   ): Promise<CallToolResult> {
     this.assertInitialized();

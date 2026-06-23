@@ -64,9 +64,9 @@ export interface PostUsageDecision {
   ctxMax: number;
   ratio: number;
   /** Token budget for the recent tail when kind === "fold"; smaller in the aggressive band. */
-  tailBudget?: number;
+  tailBudget?: number | undefined;
   /** True when this fold is in the 70-85% band — used in user-facing messaging. */
-  aggressive?: boolean;
+  aggressive?: boolean | undefined;
 }
 
 export interface PreflightDecision {
@@ -105,11 +105,15 @@ function extractPinnedSkills(head: ChatMessage[]): {
 type FoldSummary = { content: string; reasoningContent: string };
 
 export class ContextManager {
+  private deps: ContextManagerDeps;
+
   // Opt-in in-memory fold-summary cache (Q-2 / scheme 7): content-addressed by
   // head role+content so a same-process repeat fold reuses the flash summary.
   // Memory-only (C-001), default off — REASONIX_FOLD_CACHE=1.
   private readonly foldCache = new LRUCache<string, FoldSummary>({ max: 32 });
-  constructor(private deps: ContextManagerDeps) {}
+  constructor(deps: ContextManagerDeps) {
+    this.deps = deps;
+  }
 
   /** Real-time token count of the current log — used by Desktop to refresh the
    *  context meter after /compact when no API usage event is available. */
@@ -311,7 +315,7 @@ export class ContextManager {
   // same-process repeat fold of identical head turns reuses the flash summary.
   // Off by default — fold is single-directional, so repeats are rare.
   private async summarizeForFoldCached(messagesToSummarize: ChatMessage[]): Promise<FoldSummary> {
-    if (process.env.REASONIX_FOLD_CACHE !== "1") {
+    if (process.env["REASONIX_FOLD_CACHE"] !== "1") {
       return this.summarizeForFold(messagesToSummarize);
     }
     const basis = JSON.stringify(messagesToSummarize.map((m) => [m.role, m.content ?? ""]));

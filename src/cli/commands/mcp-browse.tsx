@@ -191,7 +191,7 @@ function McpBrowseApp() {
             const pop = e.popularity !== undefined ? ` · ${e.popularity.toLocaleString()}` : "";
             return (
               <Box key={e.name}>
-                <Text color={active ? "cyan" : undefined}>{active ? "▸ " : "  "}</Text>
+                <Text {...(active ? { color: "cyan" } : {})}>{active ? "▸ " : "  "}</Text>
                 <Text bold={active}>{e.name.padEnd(40).slice(0, 40)}</Text>
                 <Text dimColor>{` ${tag}${pop}`}</Text>
               </Box>

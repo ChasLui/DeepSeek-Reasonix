@@ -65,7 +65,7 @@ interface CliOptions extends ProbeOptions {
 }
 
 function usage(): string {
-  return `Usage: npx tsx scripts/probe-code-rel-adoption.mts [options]
+  return `Usage: pnpm exec tsx scripts/probe-code-rel-adoption.mts [options]
 
 Options:
   --dir <path>             Session directory (default: REASONIX_SESSIONS_DIR or ~/.reasonix/sessions)
@@ -103,7 +103,7 @@ function parseCli(argv: string[]): CliOptions {
     } else if (arg === "--include-subagents") {
       opts.includeSubagents = true;
     } else if (arg === "--all") {
-      opts.limit = undefined;
+      delete opts.limit;
     } else if (arg === "--dir") {
       opts.dir = requireValue(argv, ++i, "--dir");
     } else if (arg === "--source") {
@@ -308,15 +308,15 @@ function matchesSource(entry: string, source: SourceKind): boolean {
 
 function messageToolNames(value: unknown): string[] {
   if (!isRecord(value)) return [];
-  const toolCalls = toolNamesFromCalls(value.tool_calls ?? value.toolCalls);
+  const toolCalls = toolNamesFromCalls(value["tool_calls"] ?? value["toolCalls"]);
   if (toolCalls.length > 0) return toolCalls;
-  return toolNamesFromContent(value.content);
+  return toolNamesFromContent(value["content"]);
 }
 
 function eventToolNames(value: unknown): string[] {
   if (!isRecord(value)) return [];
-  if (value.type !== "tool.call") return [];
-  return typeof value.name === "string" && value.name.length > 0 ? [value.name] : [];
+  if (value["type"] !== "tool.call") return [];
+  return typeof value["name"] === "string" && value["name"].length > 0 ? [value["name"]] : [];
 }
 
 function toolNamesFromCalls(value: unknown): string[] {
@@ -331,10 +331,10 @@ function toolNamesFromCalls(value: unknown): string[] {
 
 function toolNameFromCall(value: unknown): string | null {
   if (!isRecord(value)) return null;
-  if (typeof value.name === "string" && value.name.length > 0) return value.name;
-  if (!isRecord(value.function)) return null;
-  return typeof value.function.name === "string" && value.function.name.length > 0
-    ? value.function.name
+  if (typeof value["name"] === "string" && value["name"].length > 0) return value["name"];
+  if (!isRecord(value["function"])) return null;
+  return typeof value["function"]["name"] === "string" && value["function"]["name"].length > 0
+    ? value["function"]["name"]
     : null;
 }
 
@@ -342,8 +342,8 @@ function toolNamesFromContent(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   const names: string[] = [];
   for (const item of value) {
-    if (!isRecord(item) || item.type !== "tool_use") continue;
-    if (typeof item.name === "string" && item.name.length > 0) names.push(item.name);
+    if (!isRecord(item) || item["type"] !== "tool_use") continue;
+    if (typeof item["name"] === "string" && item["name"].length > 0) names.push(item["name"]);
   }
   return names;
 }
@@ -365,7 +365,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function defaultSessionsDir(): string {
-  return process.env.REASONIX_SESSIONS_DIR ?? sessionsDir();
+  return process.env["REASONIX_SESSIONS_DIR"] ?? sessionsDir();
 }
 
 function expandHome(path: string): string {

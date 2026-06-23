@@ -9,8 +9,8 @@ export type McpLifecycleEvent =
       state: "connected";
       name: string;
       tools: number;
-      resources?: number;
-      prompts?: number;
+      resources?: number | undefined;
+      prompts?: number | undefined;
       ms: number;
     }
   | { state: "failed"; name: string; reason: string }

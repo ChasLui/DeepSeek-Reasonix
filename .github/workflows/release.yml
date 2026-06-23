@@ -51,11 +51,14 @@ jobs:
             echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
+          cache: pnpm
 
       - name: Setup Rust (${{ matrix.target.rust }})
         uses: dtolnay/rust-toolchain@stable
@@ -80,21 +83,17 @@ jobs:
             patchelf
 
       - name: Install root deps
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Sync desktop version from tag
         run: node scripts/sync-desktop-version.mjs "${{ steps.tag.outputs.name }}"
 
       - name: Build CLI bundle (dist/)
-        run: npm run build
-
-      - name: Install desktop deps
-        working-directory: desktop
-        run: npm ci
+        run: pnpm run build
 
       - name: Download bundled Node runtime
         working-directory: desktop
-        run: npm run bundle:node
+        run: pnpm run bundle:node
 
       - name: Verify bundled Node is universal (macOS)
         if: startsWith(matrix.target.os, 'macos-')
@@ -109,7 +108,7 @@ jobs:
         working-directory: desktop
         shell: bash
         run: |
-          npm run build
+          pnpm run build
           test -f dist/index.html
           ls dist/assets/*.js >/dev/null
 

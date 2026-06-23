@@ -17,7 +17,7 @@ const origEnv = { ...process.env };
 beforeEach(async () => {
   workspace = await fs.mkdtemp(join(os.tmpdir(), "reasonix-compact-e2e-"));
   teeDir = await fs.mkdtemp(join(os.tmpdir(), "reasonix-tee-e2e-"));
-  process.env.REASONIX_TEE = teeDir;
+  process.env["REASONIX_TEE"] = teeDir;
   resetTeeCache();
   resetCompactors();
   _resetDefaultsRegistered();
@@ -73,7 +73,7 @@ describe("run_command end-to-end compaction", () => {
     for (let i = 0; i < 60; i++) {
       await fs.writeFile(join(workspace, `file${i}.ts`), "x");
     }
-    process.env.REASONIX_COMPACT = "0";
+    process.env["REASONIX_COMPACT"] = "0";
     const reg = new ToolRegistry();
     registerShellTools(reg, { rootDir: workspace, allowAll: true });
     const out = await dispatch(reg, "run_command", { command: "ls" });

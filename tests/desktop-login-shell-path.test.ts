@@ -8,8 +8,8 @@ import {
 } from "../src/desktop/login-shell-path.js";
 
 const originalPlatform = process.platform;
-const originalPath = process.env.PATH;
-const originalShell = process.env.SHELL;
+const originalPath = process.env["PATH"];
+const originalShell = process.env["SHELL"];
 
 function setPlatform(p: NodeJS.Platform): void {
   Object.defineProperty(process, "platform", { value: p, configurable: true });
@@ -23,8 +23,8 @@ describe("desktop login-shell PATH (#1252)", () => {
   afterEach(() => {
     resetLoginShellPathCache();
     Object.defineProperty(process, "platform", { value: originalPlatform, configurable: true });
-    process.env.PATH = originalPath;
-    process.env.SHELL = originalShell;
+    process.env["PATH"] = originalPath;
+    process.env["SHELL"] = originalShell;
   });
 
   it("resolveLoginShellPath returns null on Windows (no-op there)", () => {
@@ -34,10 +34,10 @@ describe("desktop login-shell PATH (#1252)", () => {
 
   it("augmentProcessPath is a no-op on Windows", () => {
     setPlatform("win32");
-    process.env.PATH = "C:\\bar";
+    process.env["PATH"] = "C:\\bar";
     const result = augmentProcessPath();
     expect(result.added).toEqual([]);
-    expect(process.env.PATH).toBe("C:\\bar");
+    expect(process.env["PATH"]).toBe("C:\\bar");
   });
 
   it("resolveLoginShellPath returns null when the shell probe times out", () => {
@@ -45,18 +45,18 @@ describe("desktop login-shell PATH (#1252)", () => {
       // Behaviour exercised in test above; the actual probe path doesn't run on win32.
       return;
     }
-    process.env.SHELL = "/bin/sh";
+    process.env["SHELL"] = "/bin/sh";
     const out = resolveLoginShellPath({ timeoutMs: 1 });
     expect(out === null || out === "" || typeof out === "string").toBe(true);
   });
 
   it("augmentProcessPath is idempotent — re-running adds nothing", () => {
     setPlatform("linux");
-    process.env.PATH = "/already:/seen";
+    process.env["PATH"] = "/already:/seen";
     resetLoginShellPathCache();
     augmentProcessPath();
-    const after1 = process.env.PATH;
+    const after1 = process.env["PATH"];
     augmentProcessPath();
-    expect(process.env.PATH).toBe(after1);
+    expect(process.env["PATH"]).toBe(after1);
   });
 });

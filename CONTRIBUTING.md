@@ -9,8 +9,8 @@ PRs are welcome, but read this first so the round-trip is short.
 ```sh
 git clone https://github.com/esengine/reasonix
 cd reasonix
-npm install
-npm run dev          # tsx src/cli/index.ts — live source
+pnpm install
+pnpm run dev         # tsx src/cli/index.ts — live source
 ```
 
 Node ≥ 22. No global install needed during development.
@@ -30,7 +30,7 @@ For stack, layout, scripts, see [`REASONIX.md`](./REASONIX.md).
 ## Code rules
 
 These are enforced by review and (where possible) by
-`tests/comment-policy.test.ts` — which runs under `npm run verify`
+`tests/comment-policy.test.ts` — which runs under `pnpm run verify`
 and gates pre-push.
 
 ### Comments — default is none
@@ -60,7 +60,7 @@ clearer (rename, extract, simplify) before any comment is added.
 
 ### TypeScript
 
-- Strict mode. No `any` without a `// biome-ignore` and a reason.
+- Strict mode. No `any` without a scoped lint suppression and a reason.
 - Prefer narrow types over option bags; if a function takes 5+
   optional flags, split the responsibilities.
 - Don't re-export types just so two files can share them — move the
@@ -118,7 +118,7 @@ wrapper — don't fork a local table.
 ## PR expectations
 
 - Branch off `main`. One logical change per PR.
-- `npm run verify` must pass locally (lint + typecheck + tests +
+- `pnpm run verify` must pass locally (lint + typecheck + tests +
   comment-policy gate). Pre-push hook runs this; CI runs it on
   Node 22.
 - Don't touch `CHANGELOG.md` — release notes are written by the

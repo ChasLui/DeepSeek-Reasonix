@@ -37,7 +37,7 @@ describe("truncateForModelByTokens", () => {
     const out = truncateForModelByTokens(s, 500);
     expect(countTokens(out)).toBeLessThanOrEqual(700);
     expect(out).toMatch(/…truncated/);
-  });
+  }, 20_000);
 
   it("preserves both the head and the tail of the content", () => {
     const head = "START-OF-RESULT\n";

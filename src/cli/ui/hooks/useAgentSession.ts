@@ -5,7 +5,7 @@ export interface UseAgentSessionInput {
   readonly sessionId: string | undefined;
   readonly model: string;
   readonly workspace: string;
-  readonly branch?: string;
+  readonly branch?: string | undefined;
 }
 
 export function useAgentSession({

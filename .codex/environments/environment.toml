@@ -10,17 +10,18 @@ name = "reasonix"
 
 [setup]
 # Runs once when a new worktree is created. Keep it idempotent.
-# `npm ci` enforces package-lock.json; falls back to `npm install` if the
-# lockfile is out of sync (e.g. on a feature branch with new deps).
+# `pnpm install --frozen-lockfile` enforces pnpm-lock.yaml; falls back to
+# `pnpm install` if the lockfile is out of sync (e.g. on a feature branch with
+# new deps).
 script = """
 set -euo pipefail
 corepack enable >/dev/null 2>&1 || true
-if [ -f package-lock.json ]; then
-  npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+if [ -f pnpm-lock.yaml ]; then
+  pnpm install --frozen-lockfile || pnpm install
 else
-  npm install --no-audit --no-fund
+  pnpm install
 fi
-# Pre-warm the dashboard vendor copy used by `npm run build` outputs.
+# Pre-warm the dashboard vendor copy used by `pnpm run build` outputs.
 node scripts/copy-dashboard-vendor-css.mjs >/dev/null 2>&1 || true
 """
 
@@ -73,44 +74,44 @@ exit 0
 [[actions]]
 name = "Dev"
 icon = "run"
-command = "npm run dev"
+command = "pnpm run dev"
 
 [[actions]]
 name = "Chat"
 icon = "chat"
-command = "npm run chat"
+command = "pnpm run chat"
 
 [[actions]]
 name = "Verify"
 icon = "check"
-command = "npm run verify"
+command = "pnpm run verify"
 
 [[actions]]
 name = "Test"
 icon = "test"
-command = "npm run test"
+command = "pnpm run test"
 
 [[actions]]
 name = "Lint"
 icon = "lint"
-command = "npm run lint"
+command = "pnpm run lint"
 
 [[actions]]
 name = "Typecheck"
 icon = "check"
-command = "npm run typecheck"
+command = "pnpm run typecheck"
 
 [[actions]]
 name = "Build"
 icon = "build"
-command = "npm run build"
+command = "pnpm run build"
 
 [[actions]]
 name = "Desktop dev"
 icon = "run"
-command = "npm --prefix desktop run dev"
+command = "pnpm --dir desktop run dev"
 
 [[actions]]
 name = "Tauri"
 icon = "run"
-command = "npm --prefix desktop run tauri -- dev"
+command = "pnpm --dir desktop run tauri -- dev"

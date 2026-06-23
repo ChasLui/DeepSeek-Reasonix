@@ -56,7 +56,7 @@ describe("ToolRegistry", () => {
     reg.register({ name: "noop", fn: () => "ok" });
     // bare `]` is rejected by strict parse AND jsonrepair throws → no rescue.
     const out = await reg.dispatch("noop", "]");
-    expect(parseToolResult(out).error).toMatch(/invalid tool arguments JSON/);
+    expect(parseToolResult(out)["error"]).toMatch(/invalid tool arguments JSON/);
   });
 
   it("emits OpenAI-shaped specs", () => {
@@ -289,7 +289,7 @@ describe("ToolRegistry", () => {
       });
       reg.setPlanMode(true);
       const out = await reg.dispatch("edit_file", '{"path":"x"}');
-      expect(parseToolResult(out).error).toMatch(/unavailable in plan mode/);
+      expect(parseToolResult(out)["error"]).toMatch(/unavailable in plan mode/);
       expect(interceptorCalled).toBe(false);
     });
 
@@ -349,9 +349,9 @@ describe("ToolRegistry", () => {
       const first = parseToolResult(await reg.dispatch("multi_edit", '{"edits":[]}'));
       const second = parseToolResult(await reg.dispatch("multi_edit", '{"edits":[]}'));
 
-      expect(first.consecutiveInterceptorRejection).toBeUndefined();
-      expect(second.consecutiveInterceptorRejection).toBe(true);
-      expect(second.error).toMatch(/do not retry identical args/);
+      expect(first["consecutiveInterceptorRejection"]).toBeUndefined();
+      expect(second["consecutiveInterceptorRejection"]).toBe(true);
+      expect(second["error"]).toMatch(/do not retry identical args/);
     });
 
     it("sharpens repeated lifecycle gate rejections when JSON key order changes", async () => {
@@ -367,11 +367,11 @@ describe("ToolRegistry", () => {
         await reg.dispatch("run_command", '{"cwd":"/repo","command":"rm -rf dist"}'),
       );
 
-      expect(first.rejectedReason).toBe("engineering-lifecycle");
-      expect(first.consecutiveInterceptorRejection).toBeUndefined();
-      expect(second.rejectedReason).toBe("engineering-lifecycle");
-      expect(second.consecutiveInterceptorRejection).toBe(true);
-      expect(second.error).toMatch(/do not retry identical args/);
+      expect(first["rejectedReason"]).toBe("engineering-lifecycle");
+      expect(first["consecutiveInterceptorRejection"]).toBeUndefined();
+      expect(second["rejectedReason"]).toBe("engineering-lifecycle");
+      expect(second["consecutiveInterceptorRejection"]).toBe(true);
+      expect(second["error"]).toMatch(/do not retry identical args/);
     });
 
     it("sharpens repeated lifecycle gate rejections for high-risk call corpus", async () => {
@@ -399,10 +399,10 @@ describe("ToolRegistry", () => {
         const first = parseToolResult(await reg.dispatch(item.name, rawArgs));
         const second = parseToolResult(await reg.dispatch(item.name, rawArgs));
 
-        expect(first.rejectedReason).toBe("engineering-lifecycle");
-        expect(first.consecutiveInterceptorRejection).toBeUndefined();
-        expect(second.rejectedReason).toBe("engineering-lifecycle");
-        expect(second.consecutiveInterceptorRejection).toBe(true);
+        expect(first["rejectedReason"]).toBe("engineering-lifecycle");
+        expect(first["consecutiveInterceptorRejection"]).toBeUndefined();
+        expect(second["rejectedReason"]).toBe("engineering-lifecycle");
+        expect(second["consecutiveInterceptorRejection"]).toBe(true);
       }
     });
 
@@ -411,7 +411,7 @@ describe("ToolRegistry", () => {
       reg.register({ name: "edit_file", fn: () => "should not run" });
       reg.setToolInterceptor((name, args) => {
         if (name !== "edit_file") return null;
-        return `User rejected this edit to ${String(args.path)}. Don't retry the same SEARCH/REPLACE; either try a different approach or ask the user what they want instead.`;
+        return `User rejected this edit to ${String(args["path"])}. Don't retry the same SEARCH/REPLACE; either try a different approach or ask the user what they want instead.`;
       });
 
       const rawArgs = JSON.stringify({
@@ -423,10 +423,10 @@ describe("ToolRegistry", () => {
       const second = parseToolResult(await reg.dispatch("edit_file", rawArgs));
 
       expect(first).toMatch(/User rejected this edit to src\/app\.ts/);
-      expect(second.rejectedReason).toBe("edit-gate");
-      expect(second.consecutiveInterceptorRejection).toBe(true);
-      expect(second.error).toMatch(/do not retry identical args/);
-      expect(second.error).toMatch(/different edit/);
+      expect(second["rejectedReason"]).toBe("edit-gate");
+      expect(second["consecutiveInterceptorRejection"]).toBe(true);
+      expect(second["error"]).toMatch(/do not retry identical args/);
+      expect(second["error"]).toMatch(/different edit/);
     });
 
     it("surfaces interceptor throws as structured errors", async () => {
@@ -436,7 +436,7 @@ describe("ToolRegistry", () => {
         throw new Error("boom");
       });
       const out = await reg.dispatch("edit_file", "{}");
-      expect(parseToolResult(out).error).toMatch(/interceptor failed — boom/);
+      expect(parseToolResult(out)["error"]).toMatch(/interceptor failed — boom/);
     });
   });
 
@@ -476,8 +476,8 @@ describe("ToolRegistry", () => {
       });
       const out = await reg.dispatch("read_file", "{}");
       const parsed = parseToolResult(out);
-      expect(parsed.error).toMatch(/argument validation failed/);
-      expect(parsed.error).toMatch(/path: expected string, got undefined/);
+      expect(parsed["error"]).toMatch(/argument validation failed/);
+      expect(parsed["error"]).toMatch(/path: expected string, got undefined/);
     });
 
     it("lets the tool fn handle empty string — JSON Schema required only checks presence, not emptiness", async () => {
@@ -573,9 +573,9 @@ describe("ToolRegistry", () => {
       const reg = readFileReg();
       const out = await reg.dispatch("read_file", "{}");
       const parsed = parseToolResult(out);
-      expect(parsed.error).toMatch(/argument validation failed/);
-      expect(parsed.error).toMatch(/path: expected string, got undefined/);
-      expect(parsed.consecutiveMalformed).toBeUndefined();
+      expect(parsed["error"]).toMatch(/argument validation failed/);
+      expect(parsed["error"]).toMatch(/path: expected string, got undefined/);
+      expect(parsed["consecutiveMalformed"]).toBeUndefined();
     });
 
     it("2nd consecutive identical malformed call short-circuits with a sharper error", async () => {
@@ -583,8 +583,8 @@ describe("ToolRegistry", () => {
       await reg.dispatch("read_file", "{}");
       const out = await reg.dispatch("read_file", "{}");
       const parsed = parseToolResult(out);
-      expect(parsed.consecutiveMalformed).toBe(true);
-      expect(parsed.error).toMatch(/DO NOT retry with identical args/);
+      expect(parsed["consecutiveMalformed"]).toBe(true);
+      expect(parsed["error"]).toMatch(/DO NOT retry with identical args/);
     });
 
     it("a successful call between two malformed ones clears the streak", async () => {
@@ -593,7 +593,7 @@ describe("ToolRegistry", () => {
       await reg.dispatch("read_file", '{"path": "ok.txt"}'); // success — clears
       const out = await reg.dispatch("read_file", "{}"); // 1st-again, NOT 2nd-consecutive
       const parsed = parseToolResult(out);
-      expect(parsed.consecutiveMalformed).toBeUndefined();
+      expect(parsed["consecutiveMalformed"]).toBeUndefined();
     });
 
     it("different malformed args to the same tool do not trip the guard", async () => {
@@ -610,7 +610,7 @@ describe("ToolRegistry", () => {
       await reg.dispatch("edit", '{"path": "x"}'); // missing body
       const out = await reg.dispatch("edit", '{"body": "y"}'); // missing path — different shape
       const parsed = parseToolResult(out);
-      expect(parsed.consecutiveMalformed).toBeUndefined();
+      expect(parsed["consecutiveMalformed"]).toBeUndefined();
     });
 
     it("invalid JSON, identical twice, also short-circuits", async () => {
@@ -619,8 +619,8 @@ describe("ToolRegistry", () => {
       await reg.dispatch("read_file", "]");
       const out = await reg.dispatch("read_file", "]");
       const parsed = parseToolResult(out);
-      expect(parsed.consecutiveMalformed).toBe(true);
-      expect(parsed.error).toMatch(/invalid tool arguments JSON/);
+      expect(parsed["consecutiveMalformed"]).toBe(true);
+      expect(parsed["error"]).toMatch(/invalid tool arguments JSON/);
     });
 
     it("per-tool tracking — malformed read_file does not affect a separate edit_file tool", async () => {
@@ -646,7 +646,7 @@ describe("ToolRegistry", () => {
       await reg.dispatch("read_file", "{}");
       const out = await reg.dispatch("edit_file", "{}"); // first time for edit_file
       const parsed = parseToolResult(out);
-      expect(parsed.consecutiveMalformed).toBeUndefined();
+      expect(parsed["consecutiveMalformed"]).toBeUndefined();
     });
   });
 
@@ -664,7 +664,7 @@ describe("ToolRegistry", () => {
       const writeSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
       try {
         const out = await reg.dispatch("buggy_tool", "{}");
-        expect(parseToolResult(out).error).toMatch(/unavailable in plan mode/);
+        expect(parseToolResult(out)["error"]).toMatch(/unavailable in plan mode/);
         const writes = writeSpy.mock.calls.map((c) => String(c[0]));
         expect(
           writes.some((w) => w.includes("readOnlyCheck for buggy_tool threw: check is buggy")),

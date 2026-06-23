@@ -1097,7 +1097,7 @@ export const EN: TranslationSchema = {
       clearedNone: "▸ project allowlist was already empty — nothing changed.",
       cleared: "▸ cleared {count} project allowlist entr{plural}.",
       usage:
-        'usage: /permissions [list]                   show current state\n       /permissions add <prefix>            persist (e.g. "npm run build")\n       /permissions remove <prefix-or-N>    drop one entry\n       /permissions clear confirm           wipe every project entry',
+        'usage: /permissions [list]                   show current state\n       /permissions add <prefix>            persist (e.g. "pnpm run build")\n       /permissions remove <prefix-or-N>    drop one entry\n       /permissions clear confirm           wipe every project entry',
       modeYolo:
         "▸ edit mode: YOLO  — every shell command auto-runs, allowlist is bypassed. /mode review to re-enable prompts.",
       modeAuto:

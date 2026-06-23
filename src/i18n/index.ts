@@ -77,10 +77,10 @@ export function tObj<T>(path: string): T {
 /** Simple t() — nested keys (e.g. "common.error") + param replacement (e.g. "{code}"). */
 export function t(path: string, params?: Record<string, string | number>): string {
   const parts = path.split(".");
-  let val: any = translations[currentLang] || translations.EN;
+  let val: unknown = translations[currentLang] || translations.EN;
 
   for (const part of parts) {
-    val = val?.[part];
+    val = (val as Record<string, unknown> | undefined)?.[part];
     if (val === undefined) break;
   }
 
@@ -88,7 +88,7 @@ export function t(path: string, params?: Record<string, string | number>): strin
   if (val === undefined && currentLang !== "EN") {
     val = translations.EN;
     for (const part of parts) {
-      val = val?.[part];
+      val = (val as Record<string, unknown> | undefined)?.[part];
       if (val === undefined) break;
     }
   }

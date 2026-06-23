@@ -9,9 +9,9 @@ const FRAMES = {
 };
 
 export interface SpinnerProps {
-  kind?: keyof typeof FRAMES;
-  color?: string;
-  bold?: boolean;
+  kind?: keyof typeof FRAMES | undefined;
+  color?: string | undefined;
+  bold?: boolean | undefined;
 }
 
 export function Spinner({ kind = "circle", color, bold }: SpinnerProps): React.ReactElement {
@@ -20,7 +20,7 @@ export function Spinner({ kind = "circle", color, bold }: SpinnerProps): React.R
   const frame = tick % frames.length;
 
   return (
-    <Text bold={bold} color={color}>
+    <Text {...(bold !== undefined ? { bold } : {})} {...(color !== undefined ? { color } : {})}>
       {frames[frame]}
     </Text>
   );

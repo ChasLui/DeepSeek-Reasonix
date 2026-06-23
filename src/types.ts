@@ -1,10 +1,10 @@
 export interface JSONSchema {
-  type?: string;
-  properties?: Record<string, JSONSchema>;
-  items?: JSONSchema;
-  required?: string[];
-  description?: string;
-  enum?: unknown[];
+  type?: string | undefined;
+  properties?: Record<string, JSONSchema> | undefined;
+  items?: JSONSchema | undefined;
+  required?: readonly string[] | undefined;
+  description?: string | undefined;
+  enum?: unknown[] | undefined;
   [k: string]: unknown;
 }
 
@@ -12,7 +12,7 @@ export interface ToolFunctionSpec {
   name: string;
   description: string;
   parameters: JSONSchema;
-  strict?: boolean;
+  strict?: boolean | undefined;
 }
 
 export interface ToolSpec {
@@ -21,8 +21,8 @@ export interface ToolSpec {
 }
 
 export interface ToolCall {
-  id?: string;
-  type?: "function";
+  id?: string | undefined;
+  type?: "function" | undefined;
   function: {
     name: string;
     arguments: string;
@@ -33,26 +33,26 @@ export type Role = "system" | "user" | "assistant" | "tool";
 
 export interface ChatMessage {
   role: Role;
-  content?: string | null;
-  name?: string;
-  prefix?: boolean;
-  tool_call_id?: string;
-  tool_calls?: ToolCall[];
+  content?: string | null | undefined;
+  name?: string | undefined;
+  prefix?: boolean | undefined;
+  tool_call_id?: string | undefined;
+  tool_calls?: ToolCall[] | undefined;
   /** Must round-trip in tool-loop continuations — thinking mode 400s without it. */
-  reasoning_content?: string | null;
+  reasoning_content?: string | null | undefined;
 }
 
 export interface CompletionTokensDetails {
-  reasoning_tokens?: number;
+  reasoning_tokens?: number | undefined;
 }
 
 export interface RawUsage {
-  prompt_tokens?: number;
-  completion_tokens?: number;
-  total_tokens?: number;
-  prompt_cache_hit_tokens?: number;
-  prompt_cache_miss_tokens?: number;
-  completion_tokens_details?: CompletionTokensDetails;
+  prompt_tokens?: number | undefined;
+  completion_tokens?: number | undefined;
+  total_tokens?: number | undefined;
+  prompt_cache_hit_tokens?: number | undefined;
+  prompt_cache_miss_tokens?: number | undefined;
+  completion_tokens_details?: CompletionTokensDetails | undefined;
 }
 
 export type ToolChoice =
@@ -62,41 +62,41 @@ export type ToolChoice =
   | { type: "function"; function: { name: string } };
 
 export interface StreamOptions {
-  include_usage?: boolean;
+  include_usage?: boolean | undefined;
 }
 
 export interface ChatRequestOptions {
   model: string;
   messages: ChatMessage[];
-  tools?: ToolSpec[];
-  toolChoice?: ToolChoice;
-  toolsStrict?: boolean;
-  temperature?: number;
-  maxTokens?: number;
-  stop?: string | string[];
-  stream?: boolean;
-  signal?: AbortSignal;
+  tools?: ToolSpec[] | undefined;
+  toolChoice?: ToolChoice | undefined;
+  toolsStrict?: boolean | undefined;
+  temperature?: number | undefined;
+  maxTokens?: number | undefined;
+  stop?: string | string[] | undefined;
+  stream?: boolean | undefined;
+  signal?: AbortSignal | undefined;
   /** DeepSeek response_format — use { type: "json_object" } to force valid JSON. */
   responseFormat?: { type: "json_object" | "text" };
-  streamOptions?: StreamOptions;
-  user?: string;
-  logprobs?: boolean;
-  topLogprobs?: number;
-  thinking?: "enabled" | "disabled";
-  reasoningEffort?: "high" | "max";
+  streamOptions?: StreamOptions | undefined;
+  user?: string | undefined;
+  logprobs?: boolean | undefined;
+  topLogprobs?: number | undefined;
+  thinking?: "enabled" | "disabled" | undefined;
+  reasoningEffort?: "high" | "max" | undefined;
 }
 
 export interface FimCompletionOptions {
   model: string;
   prompt: string;
-  suffix?: string;
-  echo?: boolean;
-  logprobs?: number;
-  maxTokens?: number;
-  stop?: string | string[];
-  temperature?: number;
-  topP?: number;
-  signal?: AbortSignal;
+  suffix?: string | undefined;
+  echo?: boolean | undefined;
+  logprobs?: number | undefined;
+  maxTokens?: number | undefined;
+  stop?: string | string[] | undefined;
+  temperature?: number | undefined;
+  topP?: number | undefined;
+  signal?: AbortSignal | undefined;
 }
 
 export type PrefixAssistantMessage = ChatMessage & {

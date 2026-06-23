@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { tildeify } from "../src/tildeify.js";
 
+function testHome(): string {
+  return process.env["HOME"] ?? process.env["USERPROFILE"] ?? "/home/test";
+}
+
 describe("tildeify", () => {
   it("returns ~ for the home directory itself", () => {
-    const home = process.env.HOME ?? process.env.USERPROFILE ?? "/home/test";
+    const home = testHome();
     expect(tildeify(home)).toBe("~");
   });
 
   it("replaces home prefix with ~", () => {
-    const home = process.env.HOME ?? process.env.USERPROFILE ?? "/home/test";
+    const home = testHome();
     expect(tildeify(`${home}/projects/foo`)).toBe("~/projects/foo");
   });
 
@@ -18,7 +22,7 @@ describe("tildeify", () => {
   });
 
   it("handles trailing slashes on home", () => {
-    const home = process.env.HOME ?? process.env.USERPROFILE ?? "/home/test";
+    const home = testHome();
     expect(tildeify(`${home}//projects`)).toBe("~/projects");
   });
 });

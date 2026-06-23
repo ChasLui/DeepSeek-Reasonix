@@ -5,7 +5,7 @@ export interface GoldenCase {
   query: string;
   expectedTool: string;
   source: "builtin" | "mcp" | "skill";
-  note?: string;
+  note?: string | undefined;
 }
 
 /** ≥20 query→tool pairs for recall@k. */

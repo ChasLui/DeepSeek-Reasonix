@@ -22,7 +22,7 @@ export interface EngineeringLifecycleSnapshot {
 }
 
 export interface EngineeringLifecycleOptions {
-  mode?: EngineeringLifecycleMode;
+  mode?: EngineeringLifecycleMode | undefined;
 }
 
 const SAFE_TOOL_NAMES = new Set([
@@ -75,15 +75,15 @@ export function isHighRiskLifecycleToolCall(name: string, args: Record<string, u
   if (HIGH_RISK_TOOL_NAMES.has(name)) return true;
   if (SAFE_TOOL_NAMES.has(name)) return false;
   if (name === "write_file") {
-    const path = typeof args.path === "string" ? args.path : "";
+    const path = typeof args["path"] === "string" ? args["path"] : "";
     return isPackageOrConfigPath(path);
   }
   if (name === "edit_file") {
-    const path = typeof args.path === "string" ? args.path : "";
+    const path = typeof args["path"] === "string" ? args["path"] : "";
     return isPackageOrConfigPath(path);
   }
   if (name === "run_command") {
-    const command = typeof args.command === "string" ? args.command : "";
+    const command = typeof args["command"] === "string" ? args["command"] : "";
     return isHighRiskCommand(command);
   }
   return false;
@@ -92,7 +92,7 @@ export function isHighRiskLifecycleToolCall(name: string, args: Record<string, u
 export function isLifecycleMutationToolCall(name: string, args: Record<string, unknown>): boolean {
   if (MUTATION_TOOL_NAMES.has(name)) return true;
   if (name === "run_command") {
-    const command = typeof args.command === "string" ? args.command : "";
+    const command = typeof args["command"] === "string" ? args["command"] : "";
     return isHighRiskCommand(command);
   }
   return false;
@@ -236,9 +236,9 @@ export class EngineeringLifecycleRuntime {
   }
 
   private guardStepCompletion(args: Record<string, unknown>): string | null {
-    const stepId = typeof args.stepId === "string" ? args.stepId.trim() : "";
+    const stepId = typeof args["stepId"] === "string" ? args["stepId"].trim() : "";
     const step = this._planSteps.find((s) => s.id === stepId);
-    const evidence = Array.isArray(args.evidence) ? (args.evidence as StepEvidence[]) : [];
+    const evidence = Array.isArray(args["evidence"]) ? (args["evidence"] as StepEvidence[]) : [];
     const evidenceRequired =
       this._mutatedSinceLastStep ||
       step?.risk === "med" ||

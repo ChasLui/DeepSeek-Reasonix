@@ -266,7 +266,7 @@ export interface ChainResult {
   output: string;
   timedOut: boolean;
   /** Pre-truncation combined output; only set when truncation actually kicked in. */
-  rawOutput?: string;
+  rawOutput?: string | undefined;
 }
 
 interface ChainGroup {
@@ -294,7 +294,7 @@ export interface RunChainOptions {
   cwd: string;
   timeoutSec: number;
   maxOutputChars: number;
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 }
 
 export async function runChain(chain: CommandChain, opts: RunChainOptions): Promise<ChainResult> {
@@ -346,7 +346,7 @@ interface PipeGroupOptions {
   cwd: string;
   timeoutMs: number;
   buf: OutputBuffer;
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 }
 
 interface SegmentStdio {
@@ -515,9 +515,13 @@ function toBuf(chunk: Buffer | string): Buffer {
 }
 
 class OutputBuffer {
+  private readonly cap: number;
+
   private chunks: Buffer[] = [];
   private bytes = 0;
-  constructor(private readonly cap: number) {}
+  constructor(cap: number) {
+    this.cap = cap;
+  }
   push(b: Buffer): void {
     if (this.bytes >= this.cap) return;
     const remaining = this.cap - this.bytes;

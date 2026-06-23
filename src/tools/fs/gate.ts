@@ -6,7 +6,7 @@ import * as pathMod from "node:path";
 
 export interface GateOptions {
   /** When true, skip symlink-traversal detection. Default false (deny). */
-  allowSymlinks?: boolean;
+  allowSymlinks?: boolean | undefined;
 }
 
 /** Resolve `abs` under `root`, rejecting symlink traversal (unless allowed); returns the

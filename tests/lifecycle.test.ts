@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest";
 import { EngineeringLifecycleRuntime, isHighRiskLifecycleToolCall } from "../src/code/lifecycle.js";
 import { ImmutablePrefix } from "../src/memory/runtime.js";
 
+function guardToolCall(
+  lifecycle: EngineeringLifecycleRuntime,
+  name: string,
+  args: Record<string, unknown>,
+): string | null | undefined {
+  return lifecycle.guardToolCall(name, args) as string | null | undefined;
+}
+
 describe("engineering lifecycle high-risk tool detection", () => {
   it("treats read-only exploration as safe", () => {
     expect(isHighRiskLifecycleToolCall("read_file", { path: "src/index.ts" })).toBe(false);
@@ -43,14 +51,14 @@ describe("EngineeringLifecycleRuntime", () => {
 
     expect(lifecycle.snapshot().mode).toBe("off");
     expect(lifecycle.snapshot().state).toBe("idle");
-    expect(lifecycle.guardToolCall("multi_edit", { edits: [] })).toBeNull();
+    expect(guardToolCall(lifecycle, "multi_edit", { edits: [] })).toBeNull();
   });
 
   it("blocks high-risk mutations before an approved plan", () => {
     const lifecycle = new EngineeringLifecycleRuntime({ mode: "strict" });
     lifecycle.observeUserPrompt("Refactor the shell and filesystem tool gates");
 
-    const out = lifecycle.guardToolCall("multi_edit", {
+    const out = guardToolCall(lifecycle, "multi_edit", {
       edits: [
         { path: "src/a.ts", search: "a", replace: "b" },
         { path: "src/b.ts", search: "a", replace: "b" },
@@ -69,12 +77,12 @@ describe("EngineeringLifecycleRuntime", () => {
     const lifecycle = new EngineeringLifecycleRuntime({ mode: "strict" });
     lifecycle.observeUserPrompt("Refactor the shell and filesystem tool gates");
 
-    expect(lifecycle.guardToolCall("delete_file", { path: "src/old.ts" })).not.toBeNull();
+    expect(guardToolCall(lifecycle, "delete_file", { path: "src/old.ts" })).not.toBeNull();
 
     lifecycle.setMode("off");
 
     expect(lifecycle.snapshot()).toMatchObject({ mode: "off", state: "idle" });
-    expect(lifecycle.guardToolCall("delete_file", { path: "src/old.ts" })).toBeNull();
+    expect(guardToolCall(lifecycle, "delete_file", { path: "src/old.ts" })).toBeNull();
   });
 
   it("allows high-risk mutations after plan approval and then requires step evidence", () => {
@@ -90,7 +98,7 @@ describe("EngineeringLifecycleRuntime", () => {
     ]);
 
     expect(
-      lifecycle.guardToolCall("multi_edit", {
+      guardToolCall(lifecycle, "multi_edit", {
         edits: [
           { path: "src/a.ts", search: "a", replace: "b" },
           { path: "src/b.ts", search: "a", replace: "b" },
@@ -98,7 +106,7 @@ describe("EngineeringLifecycleRuntime", () => {
       }),
     ).toBeNull();
 
-    const rejected = lifecycle.guardToolCall("mark_step_complete", {
+    const rejected = guardToolCall(lifecycle, "mark_step_complete", {
       stepId: "step-1",
       result: "Refactored the gate path.",
     });
@@ -109,7 +117,7 @@ describe("EngineeringLifecycleRuntime", () => {
     expect(parsed.error.length).toBeLessThan(180);
 
     expect(
-      lifecycle.guardToolCall("mark_step_complete", {
+      guardToolCall(lifecycle, "mark_step_complete", {
         stepId: "step-1",
         result: "Refactored the gate path.",
         evidence: [{ kind: "verification", summary: "npm test tests/lifecycle.test.ts passed" }],
@@ -136,7 +144,7 @@ describe("EngineeringLifecycleRuntime", () => {
       "▸ edit blocks: 1/1 applied\n  ✓ created     src/format.ts",
     );
 
-    const rejected = lifecycle.guardToolCall("mark_step_complete", {
+    const rejected = guardToolCall(lifecycle, "mark_step_complete", {
       stepId: "step-1",
       result: "Created src/format.ts.",
     });
@@ -163,7 +171,7 @@ describe("EngineeringLifecycleRuntime", () => {
     );
 
     expect(
-      lifecycle.guardToolCall("mark_step_complete", {
+      guardToolCall(lifecycle, "mark_step_complete", {
         stepId: "step-1",
         result: "No code was changed.",
       }),
@@ -218,7 +226,7 @@ describe("EngineeringLifecycleRuntime", () => {
       { id: "step-2", title: "Repair tests", action: "Update focused tests.", risk: "low" },
     ]);
 
-    const rejected = lifecycle.guardToolCall("mark_step_complete", {
+    const rejected = guardToolCall(lifecycle, "mark_step_complete", {
       stepId: "step-2",
       result: "Updated tests after revision.",
     });
@@ -242,7 +250,7 @@ describe("EngineeringLifecycleRuntime", () => {
     lifecycle.recordCheckpointReached();
 
     expect(lifecycle.snapshot().state).toBe("checkpoint");
-    const rejected = lifecycle.guardToolCall("delete_file", { path: "src/old-format.ts" });
+    const rejected = guardToolCall(lifecycle, "delete_file", { path: "src/old-format.ts" });
     expect(rejected).not.toBeNull();
     expect(JSON.parse(rejected!).state).toBe("checkpoint");
 
@@ -266,7 +274,7 @@ describe("EngineeringLifecycleRuntime", () => {
       completedStepIds: [],
       mutatedSinceLastStep: false,
     });
-    expect(lifecycle.guardToolCall("delete_file", { path: "src/old-format.ts" })).not.toBeNull();
+    expect(guardToolCall(lifecycle, "delete_file", { path: "src/old-format.ts" })).not.toBeNull();
   });
 
   it("does not mutate the immutable prefix as lifecycle state changes", () => {
@@ -278,7 +286,7 @@ describe("EngineeringLifecycleRuntime", () => {
     lifecycle.recordPlanApproved([
       { id: "step-1", title: "Do work", action: "Do high risk work.", risk: "high" },
     ]);
-    lifecycle.guardToolCall("delete_file", { path: "src/old.ts" });
+    guardToolCall(lifecycle, "delete_file", { path: "src/old.ts" });
 
     expect(prefix.verifyFingerprint()).toBe(before);
   });

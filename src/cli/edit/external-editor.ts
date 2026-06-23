@@ -12,7 +12,7 @@ export interface OpenEditorResult {
   /** Final buffer contents. On `missing` / `failed`, this is the original `initial` (caller restores composer state). */
   content: string;
   /** Human-readable detail — surface to the user on failed / missing. */
-  detail?: string;
+  detail?: string | undefined;
 }
 
 /** $VISUAL beats $EDITOR per traditional Unix precedence; $GIT_EDITOR wins because users who set it are explicit about their tool of choice. */

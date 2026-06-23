@@ -12,10 +12,10 @@ export interface RecordViewProps {
    * keep long tool results from dominating the pane. Passes through
    * untouched when undefined.
    */
-  compact?: boolean;
+  compact?: boolean | undefined;
 }
 
-export function RecordView({ rec, compact = false }: RecordViewProps) {
+export function RecordView({ rec, compact = false }: RecordViewProps): React.ReactElement | null {
   const toolArgsMax = compact ? 120 : 200;
   const toolContentMax = compact ? 200 : 400;
 
@@ -110,7 +110,11 @@ export function RecordView({ rec, compact = false }: RecordViewProps) {
   );
 }
 
-function CacheBadge({ usage }: { usage: NonNullable<TranscriptRecord["usage"]> }) {
+function CacheBadge({
+  usage,
+}: {
+  usage: NonNullable<TranscriptRecord["usage"]>;
+}): React.ReactElement | null {
   const hit = usage.prompt_cache_hit_tokens ?? 0;
   const miss = usage.prompt_cache_miss_tokens ?? 0;
   const total = hit + miss;

@@ -12,7 +12,7 @@ export function AgentStoreProvider({
   children,
 }: {
   session: SessionInfo;
-  initialCards?: ReadonlyArray<Card>;
+  initialCards?: ReadonlyArray<Card> | undefined;
   children: React.ReactNode;
 }): React.ReactElement {
   // initialCards captured at first mount — parent uses `key=session` to force a fresh provider on switch.

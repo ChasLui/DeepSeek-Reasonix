@@ -8,8 +8,8 @@ import type { ApiResult } from "../router.js";
 import { readRecentHookRuns } from "./hooks-events.js";
 
 interface SaveBody {
-  scope?: unknown;
-  hooks?: unknown;
+  scope?: unknown | undefined;
+  hooks?: unknown | undefined;
 }
 
 function parseBody(raw: string): SaveBody {

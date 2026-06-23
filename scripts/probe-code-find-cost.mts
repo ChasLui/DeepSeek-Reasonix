@@ -134,7 +134,7 @@ function run(): void {
   const opts = parseCli(process.argv.slice(2));
   if (opts.help) {
     process.stdout.write(
-      "Usage: npx tsx scripts/probe-code-find-cost.mts [--dir <path>] [--all] [--limit n] [--json]\n",
+      "Usage: pnpm exec tsx scripts/probe-code-find-cost.mts [--dir <path>] [--all] [--limit n] [--json]\n",
     );
     return;
   }

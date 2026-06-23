@@ -1,4 +1,4 @@
-import { memo, useState, type ReactNode } from "react";
+import { memo, useState, type MemoExoticComponent, type ReactElement, type ReactNode } from "react";
 import { I } from "../icons";
 import { Markdown } from "../Markdown";
 import { t, useLang } from "../i18n";
@@ -28,7 +28,7 @@ export function Card({
   compact?: boolean;
   children: ReactNode;
   headRight?: ReactNode;
-}) {
+}): ReactElement {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className={compact ? "card is-compact" : "card"} data-tone={tone} data-open={open}>
@@ -70,15 +70,28 @@ export type PlanItem = {
   note?: string;
 };
 
-function derivePlanBadge(items: PlanItem[]): { state: "running" | "done" | "failed" | "waiting" | "blocked"; label: string } {
-  if (items.some((x) => x.status === "failed")) return { state: "failed", label: t("planBadge.failed") };
-  if (items.some((x) => x.status === "blocked")) return { state: "blocked", label: t("planBadge.blocked") };
-  if (items.some((x) => x.status === "active")) return { state: "running", label: t("planBadge.running") };
-  if (items.length > 0 && items.every((x) => x.status === "done")) return { state: "done", label: t("planBadge.done") };
+function derivePlanBadge(items: PlanItem[]): {
+  state: "running" | "done" | "failed" | "waiting" | "blocked";
+  label: string;
+} {
+  if (items.some((x) => x.status === "failed"))
+    return { state: "failed", label: t("planBadge.failed") };
+  if (items.some((x) => x.status === "blocked"))
+    return { state: "blocked", label: t("planBadge.blocked") };
+  if (items.some((x) => x.status === "active"))
+    return { state: "running", label: t("planBadge.running") };
+  if (items.length > 0 && items.every((x) => x.status === "done"))
+    return { state: "done", label: t("planBadge.done") };
   return { state: "waiting", label: t("planBadge.pending") };
 }
 
-function StatusIcon({ state, label }: { state: "running" | "done" | "failed" | "waiting" | "blocked"; label: string }) {
+function StatusIcon({
+  state,
+  label,
+}: {
+  state: "running" | "done" | "failed" | "waiting" | "blocked";
+  label: string;
+}): ReactElement {
   switch (state) {
     case "running":
       return <span className="spin-meta" role="img" aria-label={label} title={label} />;
@@ -93,7 +106,13 @@ function StatusIcon({ state, label }: { state: "running" | "done" | "failed" | "
   }
 }
 
-export function PlanCardView({ items, title }: { items: PlanItem[]; title?: string }) {
+export function PlanCardView({
+  items,
+  title,
+}: {
+  items: PlanItem[];
+  title?: string;
+}): ReactElement {
   useLang();
   const resolvedTitle = title ?? t("cards.planDefaultTitle");
   const done = items.filter((x) => x.status === "done").length;
@@ -127,7 +146,9 @@ export function PlanCardView({ items, title }: { items: PlanItem[]; title?: stri
                 </div>
               ) : null}
             </div>
-            <span className="stat">{it.status === "active" ? <span className="spin" /> : null}</span>
+            <span className="stat">
+              {it.status === "active" ? <span className="spin" /> : null}
+            </span>
           </li>
         ))}
       </ul>
@@ -149,7 +170,7 @@ export function ReasoningCard({
   tokens?: number;
   elapsed?: string;
   model?: string;
-}) {
+}): ReactElement {
   useLang();
   return (
     <Card
@@ -226,7 +247,7 @@ export function ShellCard({
   onApprove?: () => void;
   onReject?: () => void;
   onAlwaysAllow?: () => void;
-}) {
+}): ReactElement {
   useLang();
   const tone: Tone = state === "failed" ? "danger" : state === "done" ? "success" : "warning";
   return (
@@ -318,7 +339,7 @@ export function ToolCard({
   result?: string;
   ok?: boolean;
   durationMs?: number;
-}) {
+}): ReactElement {
   useLang();
   const running = result === undefined;
   const tone: Tone = running ? "default" : ok === false ? "danger" : "success";
@@ -389,7 +410,7 @@ export function DiffCard({
   applied?: boolean;
   onApply?: () => void;
   onDiscard?: () => void;
-}) {
+}): ReactElement {
   useLang();
   const adds = lines.filter((x) => x.t === "add").length;
   const rms = lines.filter((x) => x.t === "rm").length;
@@ -461,7 +482,15 @@ export function DiffCard({
 
 // ---- Error ----
 
-export function ErrorCard({ message, hint, code }: { message: string; hint?: ReactNode; code?: string }) {
+export function ErrorCard({
+  message,
+  hint,
+  code,
+}: {
+  message: string;
+  hint?: ReactNode;
+  code?: string;
+}): ReactElement {
   useLang();
   return (
     <Card
@@ -483,7 +512,13 @@ export function ErrorCard({ message, hint, code }: { message: string; hint?: Rea
 
 export type SearchHit = { url: string; title: string; snippet: string };
 
-export function WebSearchCard({ query, results }: { query: string; results: SearchHit[] }) {
+export function WebSearchCard({
+  query,
+  results,
+}: {
+  query: string;
+  results: SearchHit[];
+}): ReactElement {
   useLang();
   return (
     <Card
@@ -494,7 +529,9 @@ export function WebSearchCard({ query, results }: { query: string; results: Sear
       meta={
         <>
           <span>"{query}"</span>
-          <span className="pill-tag ok">{results.length} {t("cards.hits")}</span>
+          <span className="pill-tag ok">
+            {results.length} {t("cards.hits")}
+          </span>
         </>
       }
     >
@@ -531,7 +568,7 @@ export function SubagentCard({
   name: string;
   children: SubAgentChild[];
   status: "running" | "done" | "failed";
-}) {
+}): ReactElement {
   useLang();
   const done = children.filter((c) => c.status === "done").length;
   return (
@@ -581,7 +618,7 @@ export function SubagentCard({
 
 export type MemRow = { scope: string; txt: string };
 
-export function MemoryCard({ rows }: { rows: MemRow[] }) {
+export function MemoryCard({ rows }: { rows: MemRow[] }): ReactElement {
   useLang();
   return (
     <Card
@@ -589,7 +626,11 @@ export function MemoryCard({ rows }: { rows: MemRow[] }) {
       icon={<I.bookmark size={12} />}
       kind="memory"
       name={t("cards.memoryName")}
-      meta={<span>+ {rows.length} {t("cards.memoryCountSuffix")}</span>}
+      meta={
+        <span>
+          + {rows.length} {t("cards.memoryCountSuffix")}
+        </span>
+      }
     >
       <div className="mem">
         {rows.map((m, i) => (
@@ -613,7 +654,7 @@ export function AttachCard({
   filename: string;
   meta: string;
   preview?: string;
-}) {
+}): ReactElement {
   useLang();
   return (
     <Card
@@ -651,7 +692,7 @@ export function MetricStrip({
   outputTokens?: number;
   costLabel?: string;
   elapsed?: string;
-}) {
+}): ReactElement {
   return (
     <div className="metric-strip">
       {cacheHit !== undefined ? (
@@ -700,7 +741,7 @@ export function Checkpoint({
   hash: string;
   label: string;
   onRewind?: () => void;
-}) {
+}): ReactElement {
   useLang();
   return (
     <div className="checkpoint">
@@ -719,10 +760,14 @@ export function Checkpoint({
 
 // ---- Plain text block (assistant content via markdown) ----
 
-export const AssistantText = memo(function AssistantText({ text }: { text: string }) {
-  return (
-    <div className="msg-text">
-      <Markdown source={text} />
-    </div>
-  );
-});
+type AssistantTextProps = { text: string };
+
+export const AssistantText: MemoExoticComponent<(props: AssistantTextProps) => ReactElement> = memo(
+  function AssistantText({ text }: AssistantTextProps): ReactElement {
+    return (
+      <div className="msg-text">
+        <Markdown source={text} />
+      </div>
+    );
+  },
+);

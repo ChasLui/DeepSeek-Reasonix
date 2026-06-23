@@ -1,11 +1,11 @@
 import { LRUCache } from "lru-cache";
 
 export interface FileCacheStat {
-  dev?: number;
-  ino?: number;
+  dev?: number | undefined;
+  ino?: number | undefined;
   mtimeMs: number;
   size: number;
-  ctimeMs?: number;
+  ctimeMs?: number | undefined;
 }
 
 export interface FileCacheEntry {
@@ -23,9 +23,9 @@ export interface FileCacheStats {
 }
 
 export interface FileReadCacheOptions {
-  maxEntries?: number;
-  maxSizeBytes?: number;
-  entrySizeLimitBytes?: number;
+  maxEntries?: number | undefined;
+  maxSizeBytes?: number | undefined;
+  entrySizeLimitBytes?: number | undefined;
 }
 
 interface StoredFileCacheEntry extends FileCacheEntry {
@@ -50,7 +50,7 @@ export class FileReadCache {
       readPositiveIntEnv("REASONIX_FILE_CACHE_BYTES") ??
       opts.maxSizeBytes ??
       DEFAULT_MAX_SIZE_BYTES;
-    this.disabled = process.env.REASONIX_FILE_CACHE === "0";
+    this.disabled = process.env["REASONIX_FILE_CACHE"] === "0";
     this.entrySizeLimitBytes = opts.entrySizeLimitBytes ?? DEFAULT_ENTRY_SIZE_LIMIT_BYTES;
     this.cache = new LRUCache<string, StoredFileCacheEntry>({
       max: opts.maxEntries ?? DEFAULT_MAX_ENTRIES,
@@ -59,7 +59,7 @@ export class FileReadCache {
       dispose: (entry, key, reason) => {
         this.removePathKey(entry.absPath, key);
         if (reason === "evict" || reason === "expire") this.evictions++;
-        if (process.env.REASONIX_CACHE_DEBUG === "1") {
+        if (process.env["REASONIX_CACHE_DEBUG"] === "1") {
           process.stderr.write(`file-cache evict ${entry.absPath} (${reason})\n`);
         }
       },

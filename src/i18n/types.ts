@@ -78,7 +78,7 @@ export interface TranslationSchema {
     tipEditBindings: {
       topic: string;
       sections: ReadonlyArray<{
-        title?: string;
+        title?: string | undefined;
         rows: ReadonlyArray<{ key: string; text: string }>;
       }>;
       footer: string;
@@ -86,7 +86,7 @@ export interface TranslationSchema {
     tipMouseClipboard: {
       topic: string;
       sections: ReadonlyArray<{
-        title?: string;
+        title?: string | undefined;
         rows: ReadonlyArray<{ key: string; text: string }>;
       }>;
       footer: string;
@@ -168,9 +168,9 @@ export interface TranslationSchema {
   slash: {
     [key: string]: {
       description: string;
-      argsHint?: string;
-      success?: string;
-      unsupported?: string;
+      argsHint?: string | undefined;
+      success?: string | undefined;
+      unsupported?: string | undefined;
     };
   };
   app: {

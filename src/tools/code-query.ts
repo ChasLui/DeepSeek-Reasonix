@@ -19,7 +19,7 @@ import type { ToolCallContext, ToolRegistry } from "../tools.js";
 
 export interface CodeQueryToolOpts {
   rootDir: string;
-  codeRelationsEnabled?: boolean;
+  codeRelationsEnabled?: boolean | undefined;
 }
 
 const UNSUPPORTED =
@@ -140,7 +140,7 @@ export function registerCodeQueryTools(registry: ToolRegistry, opts: CodeQueryTo
     },
     fn: async (
       args: { symbol: string; relation: string; scope?: string },
-      ctx?: ToolCallContext,
+      ctx?: ToolCallContext | undefined,
     ) => {
       try {
         const relation = args.relation as "callers" | "callees" | "importers" | "imports";
@@ -239,12 +239,12 @@ export function registerCodeQueryTools(registry: ToolRegistry, opts: CodeQueryTo
     fn: async (
       args: {
         symbol: string;
-        direction?: string;
-        maxDepth?: number;
-        minConfidence?: "AMBIGUOUS" | "INFERRED" | "EXTRACTED";
-        scope?: string;
+        direction?: string | undefined;
+        maxDepth?: number | undefined;
+        minConfidence?: "AMBIGUOUS" | "INFERRED" | "EXTRACTED" | undefined;
+        scope?: string | undefined;
       },
-      ctx?: ToolCallContext,
+      ctx?: ToolCallContext | undefined,
     ) => {
       try {
         return JSON.stringify(

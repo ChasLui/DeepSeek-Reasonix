@@ -22,11 +22,25 @@ async function importCli(argv: string[]) {
   await import("../src/cli/index.ts");
 }
 
+function rmTestDir(path: string): void {
+  try {
+    rmSync(path, {
+      recursive: true,
+      force: true,
+      maxRetries: process.platform === "win32" ? 1 : 5,
+      retryDelay: process.platform === "win32" ? 25 : 50,
+    });
+  } catch (err) {
+    if (process.platform === "win32" && (err as NodeJS.ErrnoException).code === "EBUSY") return;
+    throw err;
+  }
+}
+
 describe("bare CLI routing", () => {
   let home: string;
   let cwd: string;
-  const origHome = process.env.HOME;
-  const origUserProfile = process.env.USERPROFILE;
+  const origHome = process.env["HOME"];
+  const origUserProfile = process.env["USERPROFILE"];
   const origArgv = process.argv;
   const origCwd = process.cwd();
   let stderr: ReturnType<typeof vi.spyOn>;
@@ -38,8 +52,8 @@ describe("bare CLI routing", () => {
     // normalise here too or the toHaveBeenCalledWith({ dir: cwd, ... }) assertions
     // compare mismatched paths.
     cwd = realpathSync(mkdtempSync(join(tmpdir(), "reasonix-cli-cwd-")));
-    process.env.HOME = home;
-    process.env.USERPROFILE = home;
+    process.env["HOME"] = home;
+    process.env["USERPROFILE"] = home;
     process.chdir(cwd);
     codeCommand.mockClear();
     codeRemoteCommand.mockClear();
@@ -52,19 +66,19 @@ describe("bare CLI routing", () => {
     stderr.mockRestore();
     process.chdir(origCwd);
     process.argv = origArgv;
-    rmSync(home, { recursive: true, force: true });
-    rmSync(cwd, { recursive: true, force: true });
+    rmTestDir(home);
+    rmTestDir(cwd);
     if (origHome === undefined) {
       // biome-ignore lint/performance/noDelete: env restoration needs absence, not "undefined"
-      delete process.env.HOME;
+      delete process.env["HOME"];
     } else {
-      process.env.HOME = origHome;
+      process.env["HOME"] = origHome;
     }
     if (origUserProfile === undefined) {
       // biome-ignore lint/performance/noDelete: env restoration needs absence, not "undefined"
-      delete process.env.USERPROFILE;
+      delete process.env["USERPROFILE"];
     } else {
-      process.env.USERPROFILE = origUserProfile;
+      process.env["USERPROFILE"] = origUserProfile;
     }
   });
 

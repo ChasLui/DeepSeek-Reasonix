@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactElement } from "react";
 import type { SessionFile, Settings, UsageStats } from "../App";
 import { t, useLang } from "../i18n";
 import { I } from "../icons";
@@ -23,7 +23,7 @@ export function ContextPanel({
   mcpBridged: boolean;
   sessionFiles: SessionFile[];
   memory: MemoryEntryInfo[];
-}) {
+}): ReactElement {
   useLang();
   const [tab, setTab] = useState<Tab>("files");
   const reserved = usage.reservedTokens;
@@ -58,8 +58,7 @@ export function ContextPanel({
           <div className="h">
             <span>{t("contextPanel.contextTokens")}</span>
             <span className="right">
-              {(reserved + used + cached).toLocaleString()} /{" "}
-              {CONTEXT_MAX_TOKENS.toLocaleString()}
+              {(reserved + used + cached).toLocaleString()} / {CONTEXT_MAX_TOKENS.toLocaleString()}
             </span>
           </div>
           <div className="meter">
@@ -154,13 +153,7 @@ function CtxFiles({ files }: { files: SessionFile[] }) {
                 <span className="nm">{n.name}/</span>
               </div>
             ) : (
-              <div
-                className="node"
-                key={n.key}
-                data-d={n.depth}
-                data-kind="file"
-                title={n.name}
-              >
+              <div className="node" key={n.key} data-d={n.depth} data-kind="file" title={n.name}>
                 <span className="ico">
                   <I.file size={12} />
                 </span>
@@ -168,7 +161,11 @@ function CtxFiles({ files }: { files: SessionFile[] }) {
                 <span
                   className="dot"
                   data-s={n.status}
-                  title={n.status === "m" ? t("contextPanel.fileModified") : t("contextPanel.fileInContext")}
+                  title={
+                    n.status === "m"
+                      ? t("contextPanel.fileModified")
+                      : t("contextPanel.fileInContext")
+                  }
                 />
               </div>
             ),
@@ -253,7 +250,9 @@ function CtxMemory({ entries }: { entries: MemoryEntryInfo[] }) {
           {entries.map((m) => (
             <div className="mem-row" key={`${m.scope}/${m.name}`}>
               <span className="scope" data-s={m.scope}>
-                {m.scope === "project" ? t("contextPanel.scopeProject") : t("contextPanel.scopeGlobal")}
+                {m.scope === "project"
+                  ? t("contextPanel.scopeProject")
+                  : t("contextPanel.scopeGlobal")}
               </span>
               <span className="txt">{m.description || m.name}</span>
             </div>
@@ -271,13 +270,23 @@ function CtxRules({ settings }: { settings: Settings | null }) {
       ? [{ p: "*", allow: true, desc: t("contextPanel.ruleYolo") }]
       : editMode === "auto"
         ? [
-            { p: "read_file, list_directory, search_files, *", allow: true, desc: t("contextPanel.ruleReadOnly") },
-            { p: "run_command (allowlist)", allow: true, desc: t("contextPanel.ruleShellAllowlist") },
-            { p: "edit_file, write_file, run_command (other)", allow: false, desc: t("contextPanel.ruleWritesAsk") },
+            {
+              p: "read_file, list_directory, search_files, *",
+              allow: true,
+              desc: t("contextPanel.ruleReadOnly"),
+            },
+            {
+              p: "run_command (allowlist)",
+              allow: true,
+              desc: t("contextPanel.ruleShellAllowlist"),
+            },
+            {
+              p: "edit_file, write_file, run_command (other)",
+              allow: false,
+              desc: t("contextPanel.ruleWritesAsk"),
+            },
           ]
-        : [
-            { p: "*", allow: false, desc: t("contextPanel.ruleReview") },
-          ];
+        : [{ p: "*", allow: false, desc: t("contextPanel.ruleReview") }];
   return (
     <div className="ctx-block">
       <div className="h">

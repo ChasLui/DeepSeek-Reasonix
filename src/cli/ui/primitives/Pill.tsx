@@ -8,7 +8,7 @@ export interface PillProps {
   label: string;
   bg: string;
   fg: string;
-  bold?: boolean;
+  bold?: boolean | undefined;
 }
 
 export function Pill({ label, bg, fg, bold = true }: PillProps): React.ReactElement {

@@ -4,10 +4,11 @@ import type { SlashHandler } from "../dispatch.js";
 const sessions: SlashHandler = () => ({ openSessionsPicker: true });
 
 const title: SlashHandler = (_args, _loop, ctx) => {
-  if (!ctx.generateSessionTitle || !ctx.postInfo) {
+  const generateSessionTitle = ctx.generateSessionTitle;
+  if (!generateSessionTitle || !ctx.postInfo) {
     return { info: t("handlers.sessions.titleUnavailable") };
   }
-  void ctx.generateSessionTitle().then(
+  void generateSessionTitle().then(
     (info) => ctx.postInfo?.(info),
     (err) =>
       ctx.postInfo?.(

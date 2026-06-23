@@ -8,7 +8,6 @@ import {
   NeedsConfirmationError,
   detectShellOperator,
   formatCommandResult,
-  hasSensitivePathArgs,
   injectPowerShellUtf8,
   isAllowed,
   isCommandAllowed,
@@ -38,9 +37,9 @@ class AutoGate extends PauseGate {
     super();
     this._choice = choice;
   }
-  override ask(_opts: { kind: string; payload?: unknown }): Promise<ConfirmationChoice> {
-    return Promise.resolve(this._choice);
-  }
+  override ask: PauseGate["ask"] = async () => {
+    return this._choice as never;
+  };
 }
 
 describe("tokenizeCommand", () => {
@@ -278,10 +277,11 @@ describe("isAllowed", () => {
       expect(isAllowed("npx eslint src")).toBe(true);
       expect(isAllowed("npx eslint --fix src")).toBe(false);
       expect(isAllowed("npx eslint --fix-dry-run src")).toBe(false);
-      expect(isAllowed("npx biome check src")).toBe(true);
-      expect(isAllowed("npx biome check --write src")).toBe(false);
-      expect(isAllowed("npx biome check --apply src")).toBe(false);
-      expect(isAllowed("npx biome check --apply-unsafe src")).toBe(false);
+      expect(isAllowed("npx oxlint src")).toBe(true);
+      expect(isAllowed("npx oxlint --fix src")).toBe(false);
+      expect(isAllowed("npx oxlint --fix-suggestions src")).toBe(false);
+      expect(isAllowed("npx oxlint --fix-dangerously src")).toBe(false);
+      expect(isAllowed("npx oxfmt --check src")).toBe(true);
       expect(isAllowed("ruff check src")).toBe(true);
       expect(isAllowed("ruff check --fix src")).toBe(false);
       expect(isAllowed("ruff check --unsafe-fixes src")).toBe(false);
@@ -545,12 +545,12 @@ describe("registerShellTools — dispatch integration", () => {
         await registry.dispatch(item.name, rawArgs, { confirmationGate: gate }),
       );
 
-      expect(first).toMatch(new RegExp(`user denied: ${String(item.args.command)}`));
+      expect(first).toMatch(new RegExp(`user denied: ${String(item.args["command"])}`));
       expect(first).toMatch(/too risky/);
-      expect(second.rejectedReason).toBe("shell-gate");
-      expect(second.consecutiveInterceptorRejection).toBe(true);
-      expect(second.error).toMatch(/do not retry identical args/);
-      expect(second.error).toMatch(/allowlisted/);
+      expect(second["rejectedReason"]).toBe("shell-gate");
+      expect(second["consecutiveInterceptorRejection"]).toBe(true);
+      expect(second["error"]).toMatch(/do not retry identical args/);
+      expect(second["error"]).toMatch(/allowlisted/);
     }
   });
 
@@ -819,7 +819,7 @@ describe("resolveExecutable", () => {
     const hits = new Set(["C:\\tools\\npm.CMD"]);
     const out = resolveExecutable("npm", {
       platform: "win32",
-      env: { Path: "C:\\tools", pathext: ".CMD" },
+      env: { Path: "C:\\tools", pathext: ".CMD" } as { PATH?: string; PATHEXT?: string },
       pathDelimiter: ";",
       isFile: (p) => hits.has(p),
     });
@@ -1055,9 +1055,9 @@ describe("normalizeWindowsEnvVars", () => {
       { platform: "win32" },
     );
 
-    expect(out.PATH).toBeUndefined();
-    expect(out.Path).toBe("C:\\Users\\me\\bin;C:\\Windows\\System32;C:\\Program Files\\Go\\bin");
-    expect(out.Foo).toBe("bar");
+    expect(out["PATH"]).toBeUndefined();
+    expect(out["Path"]).toBe("C:\\Users\\me\\bin;C:\\Windows\\System32;C:\\Program Files\\Go\\bin");
+    expect(out["Foo"]).toBe("bar");
   });
 
   it("also normalizes PATHEXT casing variants", () => {
@@ -1069,7 +1069,7 @@ describe("normalizeWindowsEnvVars", () => {
       { platform: "win32" },
     );
 
-    expect(out.PATHEXT).toBe(".EXE;.CMD;.BAT");
+    expect(out["PATHEXT"]).toBe(".EXE;.CMD;.BAT");
   });
 });
 

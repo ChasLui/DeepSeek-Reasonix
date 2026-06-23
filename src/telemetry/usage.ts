@@ -28,7 +28,7 @@ export interface UsageRecord {
   model: string;
   promptTokens: number;
   completionTokens: number;
-  reasoningTokens?: number;
+  reasoningTokens?: number | undefined;
   cacheHitTokens: number;
   cacheMissTokens: number;
   /** Total cost of the turn in USD. */
@@ -36,13 +36,13 @@ export interface UsageRecord {
   /** What the same turn would have cost at Claude Sonnet 4.6 rates. */
   claudeEquivUsd: number;
   /** Resolved absolute workspace root the turn ran in. Absent on legacy records and on entry points with no workspace context — those rows can't back a per-workspace budget. */
-  workspace?: string;
+  workspace?: string | undefined;
   /** Absent on legacy records — treat as "turn" when missing. */
-  kind?: "turn" | "subagent";
+  kind?: "turn" | "subagent" | undefined;
   /** Present when `kind === "subagent"`. Attribution metadata for the /stats roll-up. */
   subagent?: {
     /** Skill that spawned it, when the spawn came from a `runAs: subagent` skill. */
-    skillName?: string;
+    skillName?: string | undefined;
     /** First ~60 chars of the task prompt — enough context to recognize a run, never the full text. */
     taskPreview: string;
     /** Tool calls the child loop dispatched before returning. */
@@ -57,12 +57,12 @@ export interface AppendUsageInput {
   model: string;
   usage: Usage;
   /** Override the timestamp (tests). */
-  now?: number;
+  now?: number | undefined;
   /** Workspace root the turn ran in. Resolved to an absolute path before write so the per-workspace budget gate can match it exactly. Omit when there's no workspace context. */
-  workspace?: string;
+  workspace?: string | undefined;
   /** When appending a subagent summary row, set `kind: "subagent"` and populate `subagent`. */
-  kind?: "turn" | "subagent";
-  subagent?: UsageRecord["subagent"];
+  kind?: "turn" | "subagent" | undefined;
+  subagent?: UsageRecord["subagent"] | undefined;
 }
 
 /** Returns the record so tests can assert cost fields without re-reading the store. */
@@ -159,9 +159,9 @@ function addToBucket(b: UsageBucket, r: UsageRecord): void {
 
 export interface AggregateOptions {
   /** Override `Date.now()` for deterministic tests. */
-  now?: number;
+  now?: number | undefined;
   /** When set, only records whose `workspace` matches (resolved-equal) are counted — the per-workspace budget gate's scoping. Legacy/no-workspace rows are excluded. */
-  workspace?: string;
+  workspace?: string | undefined;
 }
 
 export interface UsageAggregate {
@@ -176,7 +176,7 @@ export interface UsageAggregate {
   /** Latest record's ts, or `null` when the log is empty. */
   lastSeen: number | null;
   /** Undefined when no subagent records exist; counts spawns, not internal child-loop turns. */
-  subagents?: SubagentAggregate;
+  subagents?: SubagentAggregate | undefined;
 }
 
 /** Rolled-up view of all `kind: "subagent"` records. */

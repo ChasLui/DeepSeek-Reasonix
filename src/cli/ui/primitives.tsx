@@ -40,13 +40,13 @@ export function Bar({
 }: {
   ratio: number;
   color: string;
-  cells?: number;
-  dim?: boolean;
+  cells?: number | undefined;
+  dim?: boolean | undefined;
 }): React.ReactElement {
   const filled = Math.max(0, Math.min(cells, Math.round(ratio * cells)));
   return (
     <Text>
-      <Text color={color} dimColor={dim}>
+      <Text color={color} {...(dim !== undefined ? { dimColor: dim } : {})}>
         {"▰".repeat(filled)}
       </Text>
       <Text dimColor>{"▱".repeat(cells - filled)}</Text>
@@ -69,7 +69,7 @@ export function ContextCell({
   ratio: number;
   promptTokens: number;
   ctxMax: number;
-  showBar?: boolean;
+  showBar?: boolean | undefined;
 }): React.ReactElement {
   if (promptTokens === 0) {
     return (

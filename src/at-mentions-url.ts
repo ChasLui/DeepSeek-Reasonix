@@ -1,7 +1,7 @@
 /** @url mentions — async sibling of @path. Fetches each URL once and inlines under "Referenced URLs". */
 
 /** Trailing punctuation stripped separately — URLs legitimately contain `,` `.` `)` in query strings. */
-export const AT_URL_PATTERN = /(?<=^|\s)@(https?:\/\/\S+)/g;
+export const AT_URL_PATTERN: RegExp = /(?<=^|\s)@(https?:\/\/\S+)/g;
 
 /** Default cap on inlined URL body (chars). */
 export const DEFAULT_AT_URL_MAX_CHARS = 32_000;
@@ -14,29 +14,33 @@ export interface AtUrlExpansion {
   /** True if content was inlined. False = skipped (reason in `skip`). */
   ok: boolean;
   /** Page title when extractable from `<title>`. */
-  title?: string;
+  title?: string | undefined;
   /** Char count of the (post-truncation) inlined body. */
-  chars?: number;
+  chars?: number | undefined;
   /** True iff the original page exceeded `maxChars` and was clipped. */
-  truncated?: boolean;
+  truncated?: boolean | undefined;
   /** Why the mention was skipped — set when ok=false. */
-  skip?: "fetch-error" | "non-text" | "timeout" | "blocked";
+  skip?: "fetch-error" | "non-text" | "timeout" | "blocked" | undefined;
   /** Free-form error message attached to skip outcomes. */
-  error?: string;
+  error?: string | undefined;
 }
 
 export interface AtUrlOptions {
   /** Max chars of inlined body per URL. */
-  maxChars?: number;
+  maxChars?: number | undefined;
   /** Per-URL fetch timeout in ms. */
-  timeoutMs?: number;
+  timeoutMs?: number | undefined;
   fetcher?: (
     url: string,
-    opts: { maxChars?: number; timeoutMs?: number; signal?: AbortSignal },
-  ) => Promise<{ url: string; title?: string; text: string; truncated: boolean }>;
-  cache?: Map<string, AtUrlExpansion & { body?: string }>;
+    opts: {
+      maxChars?: number | undefined;
+      timeoutMs?: number | undefined;
+      signal?: AbortSignal | undefined;
+    },
+  ) => Promise<{ url: string; title?: string | undefined; text: string; truncated: boolean }>;
+  cache?: Map<string, AtUrlExpansion & { body?: string }> | undefined;
   /** Forward Esc/abort to the fetcher. */
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 }
 
 export async function expandAtUrls(

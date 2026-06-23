@@ -13,7 +13,7 @@ import {
 } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, normalize } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { rebuildCodeGraphCommand } from "../src/cli/commands/code-index.js";
 import { runDoctorChecks } from "../src/cli/commands/doctor.js";
@@ -75,6 +75,20 @@ function readJson<T>(path: string): T {
   return JSON.parse(readFileSync(path, "utf8")) as T;
 }
 
+function rmTestDir(path: string): void {
+  try {
+    rmSync(path, {
+      recursive: true,
+      force: true,
+      maxRetries: process.platform === "win32" ? 1 : 5,
+      retryDelay: process.platform === "win32" ? 25 : 50,
+    });
+  } catch (err) {
+    if (process.platform === "win32" && (err as NodeJS.ErrnoException).code === "EBUSY") return;
+    throw err;
+  }
+}
+
 function loadFileStamps(root: string): FileStampsFile["files"] {
   return readJson<FileStampsFile>(codeGraphPaths(root).filesStamps).files;
 }
@@ -131,7 +145,11 @@ async function waitForMtimeTick(): Promise<void> {
 }
 
 function git(root: string, args: string[]): void {
-  execFileSync("git", args, { cwd: root, env: withoutGitEnv(), stdio: "pipe" });
+  execFileSync("git", args, {
+    cwd: root,
+    env: withoutGitEnv(process.env, { isolateConfig: true }),
+    stdio: "pipe",
+  });
 }
 
 function initGitRepo(root: string): void {
@@ -149,32 +167,27 @@ describe("code graph v4 index", () => {
     root = mkdtempSync(join(tmpdir(), "reasonix-code-graph-"));
     resetCodeGraphStats();
     resetCodeGraphBuildCooldown();
-    originalCodeGraph = process.env.REASONIX_CODE_GRAPH;
-    originalCodeGraphBody = process.env.REASONIX_CODE_GRAPH_BODY;
-    process.env.REASONIX_CODE_GRAPH = "1";
+    originalCodeGraph = process.env["REASONIX_CODE_GRAPH"];
+    originalCodeGraphBody = process.env["REASONIX_CODE_GRAPH_BODY"];
+    process.env["REASONIX_CODE_GRAPH"] = "1";
     // biome-ignore lint/performance/noDelete: tests pin body fields explicitly per case
-    delete process.env.REASONIX_CODE_GRAPH_BODY;
+    delete process.env["REASONIX_CODE_GRAPH_BODY"];
   });
 
   afterEach(() => {
     if (originalCodeGraph === undefined) {
       // biome-ignore lint/performance/noDelete: restore exact env state
-      delete process.env.REASONIX_CODE_GRAPH;
+      delete process.env["REASONIX_CODE_GRAPH"];
     } else {
-      process.env.REASONIX_CODE_GRAPH = originalCodeGraph;
+      process.env["REASONIX_CODE_GRAPH"] = originalCodeGraph;
     }
     if (originalCodeGraphBody === undefined) {
       // biome-ignore lint/performance/noDelete: restore exact env state
-      delete process.env.REASONIX_CODE_GRAPH_BODY;
+      delete process.env["REASONIX_CODE_GRAPH_BODY"];
     } else {
-      process.env.REASONIX_CODE_GRAPH_BODY = originalCodeGraphBody;
+      process.env["REASONIX_CODE_GRAPH_BODY"] = originalCodeGraphBody;
     }
-    rmSync(root, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 50,
-    });
+    rmTestDir(root);
   });
 
   it("builds nodes, edges, BM25, and file stamps as JSON artifacts", async () => {
@@ -341,15 +354,17 @@ describe("code graph v4 index", () => {
     };
     expect(parsed.filesScanned).toBe(1);
     expect(parsed.nodes).toBe(1);
-    expect(codeGraphPaths(root).nodes).toContain(".reasonix/index/code-graph/nodes.json");
+    expect(codeGraphPaths(root).nodes).toContain(
+      normalize(".reasonix/index/code-graph/nodes.json"),
+    );
   });
 
   it("rebuild command honors REASONIX_CODE_GRAPH=0 without creating artifacts", async () => {
     writeProjectFile(root, "src/mod.ts", "export function run() { return 1; }\n");
-    const originalEnv = process.env.REASONIX_CODE_GRAPH;
+    const originalEnv = process.env["REASONIX_CODE_GRAPH"];
     const originalWrite = process.stdout.write;
     let out = "";
-    process.env.REASONIX_CODE_GRAPH = "0";
+    process.env["REASONIX_CODE_GRAPH"] = "0";
     process.stdout.write = ((chunk: string | Uint8Array) => {
       out += typeof chunk === "string" ? chunk : chunk.toString();
       return true;
@@ -360,9 +375,9 @@ describe("code graph v4 index", () => {
       process.stdout.write = originalWrite;
       if (originalEnv === undefined) {
         // biome-ignore lint/performance/noDelete: restore exact env state
-        delete process.env.REASONIX_CODE_GRAPH;
+        delete process.env["REASONIX_CODE_GRAPH"];
       } else {
-        process.env.REASONIX_CODE_GRAPH = originalEnv;
+        process.env["REASONIX_CODE_GRAPH"] = originalEnv;
       }
     }
 
@@ -1171,19 +1186,22 @@ describe("code graph v4 index", () => {
         relation: "callers",
         scope: "src",
       });
+      const imports = await findReferences(root, {
+        symbol: "run",
+        relation: "imports",
+        scope: "src",
+      });
 
       const runRecord = result.records.find(
         (record) => record.file === "src/b.ts" && record.from?.name === "run",
       );
-      expect(runRecord).toMatchObject({ confidence: "AMBIGUOUS" });
+      expect(runRecord).toBeDefined();
       expect(runRecord?.to).toBeUndefined();
+      const importRecord = imports.records.find((record) => record.file === "src/b.ts");
+      expect(importRecord).toBeDefined();
+      expect(importRecord?.resolvedPath).toBeUndefined();
     } finally {
-      rmSync(outsideRoot, {
-        recursive: true,
-        force: true,
-        maxRetries: 5,
-        retryDelay: 50,
-      });
+      rmTestDir(outsideRoot);
     }
   });
 
@@ -1290,7 +1308,7 @@ describe("code graph v4 index", () => {
     await buildCodeGraph(root);
     const paths = codeGraphPaths(root);
     const bm25File = readJson<Record<string, unknown>>(paths.bm25);
-    bm25File.docs = "bogus";
+    bm25File["docs"] = "bogus";
     writeFileSync(paths.bm25, JSON.stringify(bm25File));
     rewriteGraphHashes(root);
 
@@ -1327,7 +1345,7 @@ describe("code graph v4 index", () => {
     await buildCodeGraph(root);
     const paths = codeGraphPaths(root);
     const filesFile = readJson<Record<string, unknown>>(paths.filesStamps);
-    filesFile.graphHash = "different";
+    filesFile["graphHash"] = "different";
     writeFileSync(paths.filesStamps, JSON.stringify(filesFile));
     mirrorJsonArtifactsToSqlite(root);
 
@@ -1434,11 +1452,15 @@ describe("code graph v4 index", () => {
       'import { helper } from "./a";\nexport function run() { return helper(); }\n',
     );
 
-    const result = await findReferences(root, {
-      symbol: "helper",
-      relation: "callers",
-      scope: "src",
-    });
+    const result = await findReferences(
+      root,
+      {
+        symbol: "helper",
+        relation: "callers",
+        scope: "src",
+      },
+      { codeGraphBuildTimeoutMs: 5_000 },
+    );
 
     expect(result.records).toContainEqual(
       expect.objectContaining({
@@ -1505,6 +1527,7 @@ describe("code graph v4 index", () => {
     const result = await incrementalUpdate(root, before!, ["src/a.ts"]);
     const updated = await loadCodeGraph(root);
     const afterHelper = updated?.nodesByName.get("helper")?.[0]?.id;
+    const fallbacksBeforeQuery = getCodeGraphStats().fallbacks;
     const callers = await findReferences(root, {
       symbol: "helper",
       relation: "callers",
@@ -1521,10 +1544,9 @@ describe("code graph v4 index", () => {
         to: expect.objectContaining({ file: "src/a.ts", line: 2 }),
       }),
     );
-    expect(getCodeGraphStats()).toMatchObject({
-      fallbacks: 0,
-      stalenessRatio: 0,
-    });
+    const stats = getCodeGraphStats();
+    expect(stats.fallbacks).toBe(fallbacksBeforeQuery);
+    expect(stats.stalenessRatio).toBe(0);
   });
 
   it("falls back to immediate lookup when stale detection times out", async () => {

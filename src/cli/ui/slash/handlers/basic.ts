@@ -144,7 +144,7 @@ const keys: SlashHandler = (_args, _loop, ctx) => {
   const ref = tObj<{
     topic: string;
     sections: ReadonlyArray<{
-      title?: string;
+      title?: string | undefined;
       rows: ReadonlyArray<{ key: string; text: string }>;
     }>;
     footer: string;

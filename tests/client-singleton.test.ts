@@ -59,16 +59,18 @@ describe("getOrCreateDeepSeekClient", () => {
     }
   });
 
-  it("uses singleton only from long-session entry points", () => {
-    for (const file of [
-      "src/cli/ui/App.tsx",
-      "src/cli/commands/acp.ts",
-      "src/cli/commands/desktop.ts",
-      "src/code/setup.ts",
-    ]) {
+  it("uses singleton from in-process long-session entry points", () => {
+    for (const file of ["src/cli/ui/App.tsx", "src/cli/commands/acp.ts", "src/code/setup.ts"]) {
       expect(readFileSync(join(process.cwd(), file), "utf8")).toContain(
         "getOrCreateDeepSeekClient",
       );
     }
+  });
+
+  it("keeps daemon-backed desktop off the in-process singleton path", () => {
+    const desktop = readFileSync(join(process.cwd(), "src/cli/commands/desktop.ts"), "utf8");
+
+    expect(desktop).toContain("openDesktopDaemonSession");
+    expect(desktop).not.toContain("getOrCreateDeepSeekClient");
   });
 });

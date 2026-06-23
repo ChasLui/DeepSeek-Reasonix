@@ -1,5 +1,6 @@
 /** WorkspaceLifecycle (Slice 0) — per-workspace refcount + busy/idle bookkeeping, and its DaemonHost wiring (session/new → open, detach → close, cancel keeps the session alive). */
 
+import { tmpdir } from "node:os";
 import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AcpServer } from "../src/acp/server.js";
@@ -9,6 +10,17 @@ import { WorkspaceLifecycle } from "../src/daemon/workspace-lifecycle.js";
 
 function wait(ms = 15): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function eventually<T>(read: () => T | undefined, timeoutMs = 500): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  let value = read();
+  while (value === undefined && Date.now() < deadline) {
+    await wait();
+    value = read();
+  }
+  expect(value).not.toBeUndefined();
+  return value as T;
 }
 
 describe("WorkspaceLifecycle — refcount + closed", () => {
@@ -157,7 +169,7 @@ describe("DaemonHost — workspace lifecycle wiring", () => {
     const output = new PassThrough();
     const server = new AcpServer({ input, output });
     const host = new DaemonHost({
-      defaultDir: "/tmp",
+      defaultDir: tmpdir(),
       createSession: async (rootDir): Promise<Session> =>
         ({
           id: "sess1",
@@ -180,31 +192,32 @@ describe("DaemonHost — workspace lifecycle wiring", () => {
       jsonrpc: "2.0",
       id: 1,
       method: "session/new",
-      params: { cwd: "/tmp" },
+      params: { cwd: tmpdir() },
     });
-    await wait();
-    const roots = host.workspaceLifecycle.activeRoots();
+    const roots = await eventually(() => {
+      const active = host.workspaceLifecycle.activeRoots();
+      return active.length === 1 ? active : undefined;
+    });
     expect(roots.length).toBe(1);
-    expect(host.workspaceLifecycle.refcountOf(roots[0])).toBe(1);
+    expect(host.workspaceLifecycle.refcountOf(roots[0]!)).toBe(1);
 
     await host.detach(server);
-    expect(host.workspaceLifecycle.refcountOf(roots[0])).toBe(0);
+    expect(host.workspaceLifecycle.refcountOf(roots[0]!)).toBe(0);
     expect(closed).toEqual(roots);
     await host.closeAll();
   });
 
   it("session/cancel keeps the session alive — refcount unchanged (B2)", async () => {
-    const { host, server, send } = makeHost();
+    const { host, send } = makeHost();
     const closed: string[] = [];
     host.workspaceLifecycle.onClosed((r) => closed.push(r));
     send({
       jsonrpc: "2.0",
       id: 1,
       method: "session/new",
-      params: { cwd: "/tmp" },
+      params: { cwd: tmpdir() },
     });
-    await wait();
-    const root = host.workspaceLifecycle.activeRoots()[0];
+    const root = await eventually(() => host.workspaceLifecycle.activeRoots()[0]);
 
     send({
       jsonrpc: "2.0",

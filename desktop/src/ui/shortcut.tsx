@@ -4,7 +4,7 @@ export type ShortcutKey = "mod" | "shift" | "enter" | "tab" | "esc" | "updown" |
 
 function isMacPlatform(): boolean {
   if (typeof document === "undefined") return false;
-  return document.documentElement.dataset.platform === "macos";
+  return document.documentElement.dataset["platform"] === "macos";
 }
 
 function keyLabel(key: ShortcutKey, mac: boolean): string {

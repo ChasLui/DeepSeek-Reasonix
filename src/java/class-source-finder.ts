@@ -23,17 +23,17 @@ export type FindResult = FindResultSuccess | FindResultNotFound;
 
 export interface FindSourceOptions {
   /** Case-insensitive substring match against jar path; dramatically narrows the cache scan. */
-  jarKeyword?: string;
+  jarKeyword?: string | undefined;
 }
 
 export interface ClassSourceFinderOptions {
   projectRoot: string;
   /** Jar cache dirs. When absent, auto-detects ~/.m2/repository + ~/.gradle/caches. */
-  repoPaths?: string[];
-  javapCommand?: string;
+  repoPaths?: string[] | undefined;
+  javapCommand?: string | undefined;
   /** Cap on jars walked before bailing. */
-  maxJarScan?: number;
-  signal?: AbortSignal;
+  maxJarScan?: number | undefined;
+  signal?: AbortSignal | undefined;
 }
 
 export class ClassSourceFinder {
@@ -57,7 +57,7 @@ export class ClassSourceFinder {
         : ClassSourceFinder.defaultRepoPaths();
     this.javapCommand = options.javapCommand ?? "javap";
     this.maxJarScan = options.maxJarScan ?? 2000;
-    this.signal = options.signal;
+    if (options.signal !== undefined) this.signal = options.signal;
   }
 
   async findSource(fullyQualifiedName: string, options?: FindSourceOptions): Promise<FindResult> {
@@ -163,7 +163,7 @@ export class ClassSourceFinder {
   private async walkForJars(
     dir: string,
     out: string[],
-    keyword?: string,
+    keyword?: string | undefined,
     depth = 0,
   ): Promise<void> {
     if (depth >= ClassSourceFinder.MAX_WALK_DEPTH) return;
@@ -191,7 +191,7 @@ export class ClassSourceFinder {
   }
 
   private async decompileFromJar(
-    jarPath: string,
+    _jarPath: string,
     classBytes: Buffer,
     fqn: string,
   ): Promise<string> {

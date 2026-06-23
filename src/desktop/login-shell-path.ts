@@ -11,7 +11,7 @@ export function resolveLoginShellPath(opts: { timeoutMs?: number } = {}): string
   cached = { value: null };
   if (process.platform === "win32") return null;
 
-  const shell = process.env.SHELL || "/bin/bash";
+  const shell = process.env["SHELL"] || "/bin/bash";
   // -i forces zsh/bash to source rc files; -l also sources profile. The literal
   // `printf '__REASONIX_PATH__=%s\\n'` framing protects us from rc files that
   // print banners / completion notices on every interactive shell.
@@ -41,7 +41,7 @@ export function resolveLoginShellPath(opts: { timeoutMs?: number } = {}): string
 export function augmentProcessPath(): { added: string[] } {
   const loginPath = resolveLoginShellPath();
   if (!loginPath) return { added: [] };
-  const current = process.env.PATH ?? "";
+  const current = process.env["PATH"] ?? "";
   const seen = new Set(
     current
       .split(":")
@@ -56,7 +56,7 @@ export function augmentProcessPath(): { added: string[] } {
     additions.push(t);
   }
   if (additions.length === 0) return { added: [] };
-  process.env.PATH = additions.concat(current ? [current] : []).join(":");
+  process.env["PATH"] = additions.concat(current ? [current] : []).join(":");
   return { added: additions };
 }
 

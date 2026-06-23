@@ -44,7 +44,7 @@ export interface ApplyResult {
   path: string;
   status: ApplyStatus;
   /** Extra detail (e.g. error message) for logs. */
-  message?: string;
+  message?: string | undefined;
 }
 
 // `^` + `m` keeps a JS string containing `<<<<<<< SEARCH` from matching as a real block.

@@ -14,7 +14,7 @@ export type ApplyAppend = (target: McpServerSummary, addedTools: McpTool[]) => M
 export function kickOffMcpReconnect(
   target: McpServerSummary,
   postInfo: (text: string) => void,
-  applyAppend?: ApplyAppend,
+  applyAppend?: ApplyAppend | undefined,
 ): string {
   const beforeTools = target.report.tools.supported ? target.report.tools.items : [];
   // Only opt into "append" when the caller wired an applyAppend handler;

@@ -22,7 +22,7 @@ export type ToolConfirmationAuditEvent =
       type: "tool.confirm.deny";
       kind: "run_command" | "run_background";
       payload: { command: string };
-      denyContext?: string;
+      denyContext?: string | undefined;
     }
   | {
       type: "tool.confirm.always_allow";
@@ -58,15 +58,19 @@ interface PausePayloadMap {
     /** Directory prefix that would be persisted if the user picks "always allow". */
     allowPrefix: string;
   };
-  plan_proposed: { plan: string; steps?: unknown[]; summary?: string };
+  plan_proposed: { plan: string; steps?: unknown[] | undefined; summary?: string | undefined };
   plan_checkpoint: {
     stepId: string;
-    title?: string;
+    title?: string | undefined;
     result: string;
-    notes?: string;
-    completion?: unknown;
+    notes?: string | undefined;
+    completion?: unknown | undefined;
   };
-  plan_revision: { reason: string; remainingSteps: unknown[]; summary?: string };
+  plan_revision: {
+    reason: string;
+    remainingSteps: unknown[];
+    summary?: string | undefined;
+  };
   choice: { question: string; options: unknown[]; allowCustom: boolean };
 }
 
@@ -219,4 +223,4 @@ function safeCancelVerdict(kind: PauseKind): unknown {
 }
 
 /** Singleton shared between tools and the App. */
-export const pauseGate = new PauseGate();
+export const pauseGate: PauseGate = new PauseGate();

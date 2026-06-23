@@ -17,6 +17,7 @@ describe("memory hybrid search CLI helpers", () => {
     home = mkdtempSync(join(tmpdir(), "reasonix-memory-cli-home-"));
     projectRoot = mkdtempSync(join(tmpdir(), "reasonix-memory-cli-project-"));
     vi.stubEnv("HOME", home);
+    vi.stubEnv("USERPROFILE", home);
   });
 
   afterEach(() => {

@@ -9,7 +9,7 @@ export interface FileIdentity {
   ino: number;
   size: number;
   mtimeMs: number;
-  ctimeMs?: number;
+  ctimeMs?: number | undefined;
 }
 
 interface DedupEntry extends FileIdentity {
@@ -36,9 +36,9 @@ export interface EmittedView {
   /** Resolved output mode after read_file's branch selection. */
   mode: "range" | "head" | "tail" | "full" | "outline";
   /** Normalized range "A-B" (raw arg, pre-clamp — clamp is deterministic given content). */
-  range?: string;
-  head?: number;
-  tail?: number;
+  range?: string | undefined;
+  head?: number | undefined;
+  tail?: number | undefined;
   /** Whether aggressive stripping actually applies (level=aggressive AND supported). */
   aggressive: boolean;
   /** Per-toolset outline threshold — changes the full-vs-outline boundary. */

@@ -19,7 +19,7 @@ export interface EditConfirmProps {
 const MODAL_OVERHEAD_ROWS = 18;
 const MIN_DIFF_ROWS = 8;
 
-export function EditConfirm({ block, onChoose }: EditConfirmProps) {
+export function EditConfirm({ block, onChoose }: EditConfirmProps): React.ReactElement {
   const rows = useTotalRows();
   const allocated = useReserveRows("modal", {
     min: MODAL_OVERHEAD_ROWS + MIN_DIFF_ROWS,

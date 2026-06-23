@@ -6,13 +6,13 @@ export interface JsonRpcRequest<P = unknown> {
   jsonrpc: "2.0";
   id: JsonRpcId;
   method: string;
-  params?: P;
+  params?: P | undefined;
 }
 
 export interface JsonRpcNotification<P = unknown> {
   jsonrpc: "2.0";
   method: string;
-  params?: P;
+  params?: P | undefined;
 }
 
 export interface JsonRpcSuccess<R = unknown> {
@@ -28,7 +28,7 @@ export interface JsonRpcError {
     /** JSON-RPC standard codes: -32700 parse, -32600 invalid request, -32601 method not found, -32602 invalid params, -32603 internal. MCP also defines its own range. */
     code: number;
     message: string;
-    data?: unknown;
+    data?: unknown | undefined;
   };
 }
 
@@ -43,11 +43,11 @@ export interface McpClientInfo {
 
 export interface McpClientCapabilities {
   /** Empty object advertises support without any optional sub-features. */
-  tools?: Record<string, never>;
+  tools?: Record<string, never> | undefined;
   /** Advertised when the client can consume `resources/list` + `resources/read`. */
-  resources?: Record<string, never>;
+  resources?: Record<string, never> | undefined;
   /** Advertised when the client can consume `prompts/list` + `prompts/get`. */
-  prompts?: Record<string, never>;
+  prompts?: Record<string, never> | undefined;
   // sampling would go here — deferred.
 }
 
@@ -62,50 +62,50 @@ export interface InitializeResult {
   serverInfo: { name: string; version: string };
   capabilities: {
     tools?: { listChanged?: boolean };
-    resources?: unknown;
-    prompts?: unknown;
+    resources?: unknown | undefined;
+    prompts?: unknown | undefined;
   };
-  instructions?: string;
+  instructions?: string | undefined;
 }
 
 export interface McpToolSchema {
   /** JSON Schema — compatible with Reasonix's tools.ts JSONSchema shape. */
-  type?: string;
-  properties?: Record<string, unknown>;
-  required?: string[];
+  type?: string | undefined;
+  properties?: Record<string, unknown> | undefined;
+  required?: readonly string[] | undefined;
   [extra: string]: unknown;
 }
 
 export interface McpTool {
   name: string;
-  description?: string;
+  description?: string | undefined;
   /** MCP calls this `inputSchema`. Reasonix's `parameters` field is the same concept. */
   inputSchema: McpToolSchema;
 }
 
 export interface ListToolsResult {
   tools: McpTool[];
-  nextCursor?: string;
+  nextCursor?: string | undefined;
 }
 
 export interface CallToolParams {
   name: string;
-  arguments?: Record<string, unknown>;
+  arguments?: Record<string, unknown> | undefined;
   _meta?: { progressToken?: string | number };
 }
 
 export interface ProgressNotificationParams {
   progressToken: string | number;
   progress: number;
-  total?: number;
-  message?: string;
+  total?: number | undefined;
+  message?: string | undefined;
 }
 
 /** Values a `ProgressHandler` receives — `progressToken` is already matched away. */
 export interface McpProgressInfo {
   progress: number;
-  total?: number;
-  message?: string;
+  total?: number | undefined;
+  message?: string | undefined;
 }
 
 export type McpProgressHandler = (info: McpProgressInfo) => void;
@@ -127,25 +127,25 @@ export type McpContentBlock = McpContentBlockText | McpContentBlockImage;
 export interface CallToolResult {
   content: McpContentBlock[];
   /** True = tool raised an error; the content describes it. */
-  isError?: boolean;
+  isError?: boolean | undefined;
 }
 
 export interface McpResource {
   uri: string;
   name: string;
-  description?: string;
+  description?: string | undefined;
   /** Hint for the content type (e.g. "text/markdown"). Purely informational. */
-  mimeType?: string;
+  mimeType?: string | undefined;
 }
 
 export interface ListResourcesParams {
   /** Pagination cursor from a previous listResources response. */
-  cursor?: string;
+  cursor?: string | undefined;
 }
 
 export interface ListResourcesResult {
   resources: McpResource[];
-  nextCursor?: string;
+  nextCursor?: string | undefined;
 }
 
 export interface ReadResourceParams {
@@ -155,13 +155,13 @@ export interface ReadResourceParams {
 /** Server populates exactly one of `text` (UTF-8) or `blob` (base64) per entry. */
 export interface McpResourceContentsText {
   uri: string;
-  mimeType?: string;
+  mimeType?: string | undefined;
   text: string;
 }
 
 export interface McpResourceContentsBlob {
   uri: string;
-  mimeType?: string;
+  mimeType?: string | undefined;
   blob: string;
 }
 
@@ -173,28 +173,28 @@ export interface ReadResourceResult {
 
 export interface McpPromptArgument {
   name: string;
-  description?: string;
-  required?: boolean;
+  description?: string | undefined;
+  required?: boolean | undefined;
 }
 
 export interface McpPrompt {
   name: string;
-  description?: string;
-  arguments?: McpPromptArgument[];
+  description?: string | undefined;
+  arguments?: McpPromptArgument[] | undefined;
 }
 
 export interface ListPromptsParams {
-  cursor?: string;
+  cursor?: string | undefined;
 }
 
 export interface ListPromptsResult {
   prompts: McpPrompt[];
-  nextCursor?: string;
+  nextCursor?: string | undefined;
 }
 
 export interface GetPromptParams {
   name: string;
-  arguments?: Record<string, string>;
+  arguments?: Record<string, string> | undefined;
 }
 
 export interface McpPromptMessage {
@@ -208,7 +208,7 @@ export interface McpPromptResourceBlock {
 }
 
 export interface GetPromptResult {
-  description?: string;
+  description?: string | undefined;
   messages: McpPromptMessage[];
 }
 

@@ -1,7 +1,7 @@
 import { type WriteStream, statSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { derivePrefix } from "@reasonix/core-utils";
-import { Box, Text, useStdin, useStdout } from "ink";
+import { Box, useStdin, useStdout } from "ink";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SqliteEventSink } from "../../adapters/event-sink-sqlite.js";
 import { type AtUrlExpansion, expandAtMentions, expandAtUrls } from "../../at-mentions.js";
@@ -21,7 +21,7 @@ import {
   toWholeFileEditBlock,
 } from "../../code/edit-blocks.js";
 import { EngineeringLifecycleRuntime } from "../../code/lifecycle.js";
-import { clearPendingEdits, loadPendingEdits } from "../../code/pending-edits.js";
+import { loadPendingEdits } from "../../code/pending-edits.js";
 import {
   clearPlanState,
   loadPlanState,
@@ -58,7 +58,6 @@ import { autoResolveVerdict, shouldAutoResolveCheckpoint } from "../../core/paus
 import { formatHookOutcomeMessage, runHooks } from "../../hooks.js";
 import { t, tObj } from "../../i18n/index.js";
 import { CacheFirstLoop, ImmutablePrefix } from "../../index.js";
-import type { LoopEvent } from "../../loop.js";
 import { extractObservationFromHook } from "../../memory/observation.js";
 import {
   deleteSession,
@@ -109,7 +108,6 @@ import { openTranscriptFile } from "../../transcript/log.js";
 import { listKnownWorkspaces, rememberWorkspace } from "../../workspaces.js";
 import { openInExternalEditor } from "../edit/external-editor.js";
 import { dumpStartupProfile, markPhase } from "../startup-profile.js";
-import { AtMentionSuggestions } from "./AtMentionSuggestions.js";
 import { BootSplash } from "./BootSplash.js";
 import { CheckpointPicker } from "./CheckpointPicker.js";
 import { ChoiceConfirm, type ChoiceConfirmChoice } from "./ChoiceConfirm.js";
@@ -125,11 +123,8 @@ import { PlanConfirm, type PlanConfirmChoice } from "./PlanConfirm.js";
 import { PlanRefineInput } from "./PlanRefineInput.js";
 import { PlanReviseConfirm, type ReviseChoice } from "./PlanReviseConfirm.js";
 import { PlanReviseEditor } from "./PlanReviseEditor.js";
-import { PromptInput } from "./PromptInput.js";
 import { SessionPicker } from "./SessionPicker.js";
 import { ShellConfirm, type ShellConfirmChoice } from "./ShellConfirm.js";
-import { SlashArgPicker } from "./SlashArgPicker.js";
-import { SlashSuggestions } from "./SlashSuggestions.js";
 import { type ThemeChoice, ThemePicker } from "./ThemePicker.js";
 import { WelcomeBanner } from "./WelcomeBanner.js";
 import { WorkspacePicker } from "./WorkspacePicker.js";
@@ -166,13 +161,9 @@ import { useWorkspaceRoot } from "./hooks/useWorkspaceRoot.js";
 import { detectKeyCapabilities } from "./key-capabilities.js";
 import { useKeystroke } from "./keystroke-context.js";
 import { CardStream } from "./layout/CardStream.js";
-import { InputAreaWithHistoryHint } from "./layout/InputAreaWithHistoryHint.js";
 import { LiveExpandContext } from "./layout/LiveExpandContext.js";
-import { ModeStatusBar } from "./layout/LiveRows.js";
-import { StatusRow } from "./layout/StatusRow.js";
 import type { StatusBarConfig } from "./layout/StatusRow.js";
 import { ViewportBudgetProvider } from "./layout/viewport-budget.js";
-import { formatLoopStatus } from "./loop.js";
 import { applyMcpAppend } from "./mcp-append.js";
 import { handleMcpBrowseSlash } from "./mcp-browse.js";
 import { formatMcpLifecycleEvent } from "./mcp-lifecycle.js";
@@ -205,8 +196,7 @@ import { VerboseContext } from "./state/verbose-context.js";
 import { getStdinReader } from "./stdin-reader.js";
 import { isLegacyWindowsConsole } from "./terminal-host.js";
 import { ThemeProvider } from "./theme/context.js";
-import { listThemeNames } from "./theme/tokens.js";
-import { FG, type ThemeName } from "./theme/tokens.js";
+import type { ThemeName } from "./theme/tokens.js";
 import { TickerProvider } from "./ticker.js";
 import { handleTurnInterrupt } from "./turn-interrupt.js";
 import { useCompletionPickers } from "./useCompletionPickers.js";
@@ -217,36 +207,36 @@ import { useSubagent } from "./useSubagent.js";
 export interface AppProps {
   model: string;
   /** Preset resolved at launch; keeps flash distinct from auto when both use deepseek-v4-flash. */
-  preset?: "auto" | "flash" | "pro";
+  preset?: "auto" | "flash" | "pro" | undefined;
   /** Whether flash may auto-upgrade hard turns to pro. */
-  autoEscalate?: boolean;
+  autoEscalate?: boolean | undefined;
   system: string;
   /** Re-runs the prompt builder on /new so REASONIX.md edits don't need a restart. Must produce the same shape as `system` was built from. */
-  rebuildSystem?: () => string;
-  transcript?: string;
+  rebuildSystem?: (() => string) | undefined;
+  transcript?: string | undefined;
   /** Soft USD spend cap; undefined —no cap. See CacheFirstLoopOptions.budgetUsd. */
-  budgetUsd?: number;
-  session?: string;
+  budgetUsd?: number | undefined;
+  session?: string | undefined;
   /**
    * Pre-populated tool registry (e.g. from bridgeMcpTools()). When present,
    * its specs are folded into the ImmutablePrefix so the model sees them,
    * and its dispatch is used for tool calls —MCP tools become first-class.
    */
-  tools?: ToolRegistry;
+  tools?: ToolRegistry | undefined;
   /** Raw `--mcp` / config-derived spec strings, for `/mcp` slash display. */
-  mcpSpecs?: string[];
+  mcpSpecs?: string[] | undefined;
   /**
    * Pre-captured inspection reports for each connected MCP server,
    * collected once at chat startup. Drives the rich `/mcp` slash view
    * (tools + resources + prompts per server).
    */
-  mcpServers?: McpServerSummary[];
+  mcpServers?: McpServerSummary[] | undefined;
   /**
    * Hot-reload runtime owned by chatCommand. Lets slash + dashboard
    * trigger an add/remove round-trip after the user installs from the
    * marketplace, without restarting the process.
    */
-  mcpRuntime?: import("../commands/chat.js").McpRuntime;
+  mcpRuntime?: import("../commands/chat.js").McpRuntime | undefined;
   /**
    * Shared ref the MCP bridge's onProgress callback writes through.
    * We attach our updater to `progressSink.current` on mount so any
@@ -258,8 +248,8 @@ export interface AppProps {
       | ((info: {
           toolName: string;
           progress: number;
-          total?: number;
-          message?: string;
+          total?: number | undefined;
+          message?: string | undefined;
         }) => void)
       | null;
   };
@@ -269,27 +259,29 @@ export interface AppProps {
    * optional `jobs` registry enables /jobs + /kill slashes in the TUI
    * and the status-bar "N jobs running" indicator.
    */
-  codeMode?: {
-    rootDir: string;
-    jobs?: import("../../tools/jobs.js").JobRegistry;
-    /**
-     * `/cwd <path>` callback —re-registers every rootDir-dependent
-     * native tool against the new path. Optional: when omitted the
-     * slash command degrades to updating hook cwd / memory root only,
-     * with file/shell tools still pointing at the original root.
-     */
-    reregisterTools?: (rootDir: string) => void;
-    /**
-     * Async tail of the `/cwd` swap —re-probes the new directory for a
-     * compatible semantic index, registers `semantic_search` against it
-     * if found, unregisters the stale binding otherwise. Kept separate
-     * from `reregisterTools` so the sync FS/shell/memory re-registration
-     * isn't blocked on disk I/O.
-     */
-    reBootstrapSemantic?: (rootDir: string) => Promise<{ enabled: boolean }>;
-    /** Notify the launcher/root wrapper that the workspace root changed so session switches remount into the new root. */
-    onRootChange?: (newRoot: string) => void;
-  };
+  codeMode?:
+    | {
+        rootDir: string;
+        jobs?: import("../../tools/jobs.js").JobRegistry | undefined;
+        /**
+         * `/cwd <path>` callback —re-registers every rootDir-dependent
+         * native tool against the new path. Optional: when omitted the
+         * slash command degrades to updating hook cwd / memory root only,
+         * with file/shell tools still pointing at the original root.
+         */
+        reregisterTools?: ((rootDir: string) => void) | undefined;
+        /**
+         * Async tail of the `/cwd` swap —re-probes the new directory for a
+         * compatible semantic index, registers `semantic_search` against it
+         * if found, unregisters the stale binding otherwise. Kept separate
+         * from `reregisterTools` so the sync FS/shell/memory re-registration
+         * isn't blocked on disk I/O.
+         */
+        reBootstrapSemantic?: ((rootDir: string) => Promise<{ enabled: boolean }>) | undefined;
+        /** Notify the launcher/root wrapper that the workspace root changed so session switches remount into the new root. */
+        onRootChange?: ((newRoot: string) => void) | undefined;
+      }
+    | undefined;
   /**
    * When `true`, suppress the auto-launch of the embedded web dashboard
    * server on TUI mount. Default behavior is to boot the dashboard so
@@ -298,25 +290,25 @@ export interface AppProps {
    * `--no-dashboard` is the CLI flag that flips this on for CI / users
    * who don't want a localhost listener.
    */
-  noDashboard?: boolean;
+  noDashboard?: boolean | undefined;
   /** When true and the dashboard is enabled, open its URL in the system default browser as soon as the auto-start finishes. */
-  openDashboard?: boolean;
+  openDashboard?: boolean | undefined;
   /** Pin the dashboard to a fixed port. `undefined` keeps ephemeral assignment. */
-  dashboardPort?: number;
+  dashboardPort?: number | undefined;
   /** Dashboard bind address (#968). `undefined` keeps the default 127.0.0.1. */
-  dashboardHost?: string;
+  dashboardHost?: string | undefined;
   /** Stable dashboard URL token (#968). `undefined` mints a fresh per-boot token. */
-  dashboardToken?: string;
+  dashboardToken?: string | undefined;
   /** Mid-chat session swap — Root remounts App with the new session via key. */
-  onSwitchSession?: (name: string | undefined) => void;
+  onSwitchSession?: ((name: string | undefined) => void) | undefined;
   /** One-time startup info rows injected by chatCommand. */
-  startupInfoHints?: string[];
+  startupInfoHints?: string[] | undefined;
   /** Pre-created QQ channel (started before TUI mounts). */
-  qqChannel?: QQChannel;
+  qqChannel?: QQChannel | undefined;
   /** Ref filled by App on mount so QQ messages flow into the TUI input queue. */
-  qqSubmitRef?: { current: ((text: string) => void) | null };
+  qqSubmitRef?: { current: ((text: string) => void) | null } | undefined;
   /** Ref filled by App on mount so QQ errors appear in the TUI log. */
-  qqErrorRef?: { current: ((msg: string) => void) | null };
+  qqErrorRef?: { current: ((msg: string) => void) | null } | undefined;
 }
 
 /**
@@ -328,7 +320,7 @@ export interface AppProps {
  * Override via `REASONIX_FLUSH_MS` if you want 60Hz on a terminal you trust.
  */
 const FLUSH_INTERVAL_MS = (() => {
-  const raw = process.env.REASONIX_FLUSH_MS;
+  const raw = process.env["REASONIX_FLUSH_MS"];
   const fallback = isLegacyWindowsConsole() ? 150 : 50;
   if (!raw) return fallback;
   const parsed = Number(raw);
@@ -371,33 +363,6 @@ function HistoryTypingCapture({
   return null;
 }
 
-/**
- * Single-line status pill rendered below the modeline whenever a /loop
- * is active. Re-renders every second so the countdown ticks.
- */
-function LoopStatusRow({
-  loop,
-}: {
-  loop: {
-    prompt: string;
-    intervalMs: number;
-    nextFireAt: number;
-    iter: number;
-  };
-}) {
-  const [, setTick] = React.useState(0);
-  React.useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const nextFireMs = Math.max(0, loop.nextFireAt - Date.now());
-  return (
-    <Box>
-      <Text color="cyan">{`> ${formatLoopStatus(loop.prompt, nextFireMs, loop.iter)} - /loop stop or type to cancel`}</Text>
-    </Box>
-  );
-}
-
 function completedCountIncludingStep(
   completedStepIds: Set<string>,
   stepId: string,
@@ -408,7 +373,7 @@ function completedCountIncludingStep(
 }
 
 function lastMessageContent(
-  entries: ReadonlyArray<{ role: string; content?: string | null }>,
+  entries: ReadonlyArray<{ role: string; content?: string | null | undefined }>,
   role: "user" | "assistant",
 ): string {
   for (let i = entries.length - 1; i >= 0; i--) {
@@ -439,7 +404,7 @@ export function App(props: AppProps): React.ReactElement {
     [props.session],
   );
   const [themeName, setThemeName] = React.useState<ThemeName>(() =>
-    resolveThemePreference(loadTheme(), process.env.REASONIX_THEME),
+    resolveThemePreference(loadTheme(), process.env["REASONIX_THEME"]),
   );
   const statusBar = React.useMemo((): StatusBarConfig => {
     const cfg = readConfig().statusBar ?? {};
@@ -475,7 +440,7 @@ type AppInnerProps = AppProps & {
   themeName: ThemeName;
   setThemeName: React.Dispatch<React.SetStateAction<ThemeName>>;
   statusBar: StatusBarConfig;
-  copyModeMultiClickMs?: number;
+  copyModeMultiClickMs?: number | undefined;
 };
 
 function AppInner({
@@ -515,27 +480,11 @@ function AppInner({
     s.cards.some((c) => c.kind === "user" || c.kind === "streaming"),
   );
   const isStreaming = useAgentState((s) => s.cards.some((c) => c.kind === "streaming" && !c.done));
-  const cardCount = useAgentState((s) => s.cards.length);
-  const sessionModel = useAgentState((s) => s.session.model);
-  const ctxTokens = useAgentState((s) => s.status.promptTokens);
-  const ctxCap = useAgentState(
-    (s) => s.status.promptCap ?? DEEPSEEK_CONTEXT_TOKENS[s.session.model] ?? DEFAULT_CONTEXT_TOKENS,
-  );
-  const sessionCostUsd = useAgentState((s) => s.status.sessionCost);
-  const lastTurnCostUsd = useAgentState((s) => s.status.cost);
-  const cacheHitRatio = useAgentState((s) => s.status.cacheHit);
-  const presetForDisplay = useAgentState((s) => {
-    const p = s.status.preset;
-    return p === "auto" || p === "flash" || p === "pro" ? p : undefined;
-  });
-  const sessionInputTokens = useAgentState((s) => s.status.sessionInputTokens);
-  const sessionOutputTokens = useAgentState((s) => s.status.sessionOutputTokens);
-  const lastTurnMs = useAgentState((s) => s.status.lastTurnMs);
   const activityLabel = useActivityLabel();
   const chatScroll = useChatScrollActions();
   const composerPinned = useChatScrollState((s) => s.pinned);
   const [input, setInput] = useState("");
-  const [composerCursor, setComposerCursor] = useState(0);
+  const [, setComposerCursor] = useState(0);
   const [busy, setBusy] = useState(false);
   const [slashUsage, setSlashUsage] = useState<Readonly<Record<string, number>>>(() =>
     loadSlashUsage(),
@@ -630,10 +579,7 @@ function AppInner({
     editModeRef,
     modeFlash,
   } = useEditGate(!!codeMode);
-  const { preset, setPreset, proArmed, setProArmed, turnOnPro, setTurnOnPro } = usePresetMode(
-    model,
-    initialPreset,
-  );
+  const { setPreset, proArmed, setProArmed, setTurnOnPro } = usePresetMode(model, initialPreset);
   const engineeringLifecycleBaseModeRef = useRef<EngineeringLifecycleMode>(
     loadEngineeringLifecycleMode(),
   );
@@ -663,7 +609,7 @@ function AppInner({
   /** Result from the EditConfirm modal: choice plus optional deny context. */
   interface EditReviewResult {
     choice: EditReviewChoice;
-    denyContext?: string;
+    denyContext?: string | undefined;
   }
   const editReviewResolveRef = useRef<((r: EditReviewResult) => void) | null>(null);
   // Per-turn override: set by "apply-rest-of-turn" so subsequent edits
@@ -679,9 +625,9 @@ function AppInner({
     id: number;
     command: string;
     kind: "run_command" | "run_background";
-    cwd?: string;
-    timeoutSec?: number;
-    waitSec?: number;
+    cwd?: string | undefined;
+    timeoutSec?: number | undefined;
+    waitSec?: number | undefined;
   } | null>(null);
   /** Outside-sandbox file access the model asked for (#684). Non-null renders PathConfirm and blocks the gate behind it. */
   const [pendingPath, setPendingPath] = useState<{
@@ -709,7 +655,7 @@ function AppInner({
   const [sessionsPickerList, setSessionsPickerList] = useState<ReturnType<typeof listSessions>>(
     () => listSessionsForWorkspace(currentRootDir),
   );
-  const [sessionsPickerFocus, setSessionsPickerFocus] = useState(0);
+  const [, setSessionsPickerFocus] = useState(0);
   /** True while the WorkspacePicker is open mid-chat (triggered by bare `/cwd`). */
   const [pendingWorkspacePicker, setPendingWorkspacePicker] = useState(false);
   const [workspacePickerList, setWorkspacePickerList] = useState<
@@ -738,20 +684,20 @@ function AppInner({
     plan: string;
     mode: "refine" | "approve" | "reject";
     /** Open-questions / risks block extracted from the plan; surfaced in PlanRefineInput on refine. */
-    questions?: string;
+    questions?: string | undefined;
   } | null>(null);
   // Mid-execution pause from mark_step_complete —model finished a step
   // and the loop waits for user to pick Continue / Revise / Stop.
   const [pendingCheckpoint, setPendingCheckpoint] = useState<{
     stepId: string;
-    title?: string;
+    title?: string | undefined;
     completed: number;
     total: number;
   } | null>(null);
   // Staged entry for the Revise feedback input at a checkpoint.
   const [stagedCheckpointRevise, setStagedCheckpointRevise] = useState<{
     stepId: string;
-    title?: string;
+    title?: string | undefined;
     completed: number;
     total: number;
   } | null>(null);
@@ -762,7 +708,7 @@ function AppInner({
   const [pendingRevision, setPendingRevision] = useState<{
     reason: string;
     remainingSteps: PlanStep[];
-    summary?: string;
+    summary?: string | undefined;
   } | null>(null);
   // Branching question from `ask_choice`. Non-null mounts ChoiceConfirm;
   // user picks an option (synthetic "user picked <id>"), types a
@@ -838,13 +784,7 @@ function AppInner({
   // Ctrl+P/Ctrl+N recall over a turn-local prompt history. We don't
   // persist to disk —the session log already keeps the messages, and
   // cross-session bash-style recall would need per-project scoping.
-  const {
-    recallPrev,
-    recallNext,
-    pushHistory,
-    resetCursor,
-    history: promptHistory,
-  } = useInputRecall(setInput);
+  const { recallPrev, recallNext, pushHistory, resetCursor } = useInputRecall(setInput);
   const { setRawMode, isRawModeSupported } = useStdin();
   // Ctrl+X —hand the composer buffer to $EDITOR. Raw-mode flip lets the
   // editor own line-buffered input; result replaces the composer value.
@@ -936,16 +876,16 @@ function AppInner({
       return;
     }
     const extras: {
-      body?: string;
-      summary?: string;
-      stepCompletions?: Map<string, StepCompletion>;
+      body?: string | undefined;
+      summary?: string | undefined;
+      stepCompletions?: Map<string, StepCompletion> | undefined;
     } = {};
     if (planBodyRef.current) extras.body = planBodyRef.current;
     if (planSummaryRef.current) extras.summary = planSummaryRef.current;
     if (stepCompletionsRef.current.size > 0) extras.stepCompletions = stepCompletionsRef.current;
     savePlanState(session, steps, completedStepIdsRef.current, extras);
   }, [session]);
-  const [summary, setSummary] = useState<SessionSummary>({
+  const [, setSummary] = useState<SessionSummary>({
     turns: 0,
     totalCostUsd: 0,
     totalInputCostUsd: 0,
@@ -1067,11 +1007,7 @@ function AppInner({
   }, [loop]);
 
   const generateCurrentSessionTitle = useCallback(
-    async (seed?: {
-      userText?: string;
-      assistantText?: string;
-      auto?: boolean;
-    }) => {
+    async (seed?: { userText?: string; assistantText?: string; auto?: boolean }) => {
       if (!session || !onSwitchSession) return t("app.sessionTitleNoSession");
       const userText = seed?.userText ?? lastMessageContent(loop.log.entries, "user");
       const assistantText =
@@ -2079,7 +2015,7 @@ function AppInner({
     if (!tools || !codeMode) return;
     tools.setToolInterceptor(async (name, args) => {
       if (name !== "edit_file" && name !== "write_file") return null;
-      const rawPath = typeof args.path === "string" ? args.path : "";
+      const rawPath = typeof args["path"] === "string" ? args["path"] : "";
       if (!rawPath) return null;
 
       // Read root via ref so a workspace swap (which runs reregisterTools
@@ -2107,15 +2043,15 @@ function AppInner({
       }
       let block: EditBlock;
       if (name === "edit_file") {
-        const search = typeof args.search === "string" ? args.search : "";
-        const replace = typeof args.replace === "string" ? args.replace : "";
+        const search = typeof args["search"] === "string" ? args["search"] : "";
+        const replace = typeof args["replace"] === "string" ? args["replace"] : "";
         if (!search) return null; // let the tool fn surface the "empty search" error
         block = { path: relPath, search, replace, offset: 0 };
       } else {
         // write_file: capture the current content (if any) as SEARCH so
         // the queued block is a literal whole-file overwrite. For new
         // files SEARCH stays empty —applyEditBlock's create-new sentinel.
-        const content = typeof args.content === "string" ? args.content : "";
+        const content = typeof args["content"] === "string" ? args["content"] : "";
         block = toWholeFileEditBlock(relPath, content, rootForEdit);
       }
 
@@ -2674,7 +2610,7 @@ function AppInner({
     () => undefined,
   );
   const handleCheckpointReviseSubmitRef = useRef<
-    (feedback: string, snap: { stepId: string; title?: string }) => void
+    (feedback: string, snap: { stepId: string; title?: string | undefined }) => void
   >(() => undefined);
   const handleReviseConfirmRef = useRef<(choice: ReviseChoice | "cancel") => void | Promise<void>>(
     () => undefined,
@@ -2728,7 +2664,7 @@ function AppInner({
   const handleQQThemePick = useCallback(
     (target: ThemeChoice): string => {
       saveTheme(target);
-      const active = resolveThemePreference(target, process.env.REASONIX_THEME);
+      const active = resolveThemePreference(target, process.env["REASONIX_THEME"]);
       setThemeName(active);
       return `theme saved: ${target}\nactive now: ${active}`;
     },
@@ -3227,8 +3163,8 @@ function AppInner({
         current: {
           name: string;
           chars: number;
-          index?: number;
-          readyCount?: number;
+          index?: number | undefined;
+          readyCount?: number | undefined;
         } | null;
       } = {
         current: null,
@@ -3518,7 +3454,7 @@ function AppInner({
           void (async () => {
             try {
               const cfg = readConfig();
-              if (!cfg.memory?.autoCapture || process.env.REASONIX_MEMORY_AUTO === "0") return;
+              if (!cfg.memory?.autoCapture || process.env["REASONIX_MEMORY_AUTO"] === "0") return;
               const store = openMemoryStore({ projectRoot: currentRootDir });
               for (const outcome of stopReport.outcomes) {
                 await extractObservationFromHook(
@@ -3932,7 +3868,6 @@ function AppInner({
         if (gateId !== null) pauseGate.resolve(gateId, { type: "cancel" });
         return;
       }
-      const picked = snap.options.find((o) => o.id === choice.optionId);
       if (gateId !== null) {
         pauseGate.resolve(gateId, { type: "pick", optionId: choice.optionId });
       }
@@ -3971,9 +3906,9 @@ function AppInner({
         case "run_background": {
           const p = payload as {
             command: string;
-            cwd?: string;
-            timeoutSec?: number;
-            waitSec?: number;
+            cwd?: string | undefined;
+            timeoutSec?: number | undefined;
+            waitSec?: number | undefined;
           };
           setPendingShell({
             id: request.id,
@@ -4011,8 +3946,8 @@ function AppInner({
         case "plan_proposed": {
           const p = payload as {
             plan: string;
-            steps?: PlanStep[];
-            summary?: string;
+            steps?: PlanStep[] | undefined;
+            summary?: string | undefined;
           };
           setPendingPlan(p.plan);
           planStepsRef.current = p.steps ?? null;
@@ -4026,10 +3961,10 @@ function AppInner({
         case "plan_checkpoint": {
           const p = payload as {
             stepId: string;
-            title?: string;
+            title?: string | undefined;
             result: string;
-            notes?: string;
-            completion?: StepCompletion;
+            notes?: string | undefined;
+            completion?: StepCompletion | undefined;
           };
           if (p.completion?.kind === "step_completed") {
             pendingStepCompletionsRef.current.set(p.stepId, p.completion);
@@ -4062,7 +3997,7 @@ function AppInner({
           const p = payload as {
             reason: string;
             remainingSteps: PlanStep[];
-            summary?: string;
+            summary?: string | undefined;
           };
           setPendingRevision({
             reason: p.reason,
@@ -4206,7 +4141,7 @@ function AppInner({
 
   /** Revise feedback submitted —resolves the gate with feedback. */
   const handleCheckpointReviseSubmit = useCallback(
-    (feedback: string, snapOverride?: { stepId: string; title?: string }) => {
+    (feedback: string, snapOverride?: { stepId: string; title?: string | undefined }) => {
       const snap = snapOverride;
       setStagedCheckpointRevise(null);
       if (!snap) return;
@@ -4567,7 +4502,7 @@ function AppInner({
                       saveTheme(outcome.value);
                       const active = resolveThemePreference(
                         outcome.value,
-                        process.env.REASONIX_THEME,
+                        process.env["REASONIX_THEME"],
                       );
                       setThemeName(active);
                       log.pushInfo(`theme saved: ${outcome.value}\n  active now: ${active}`);
@@ -4693,15 +4628,15 @@ function AppInner({
                       setLiveMcpServers((prev) => replaceMcpServerSummary(prev, target, updated));
                       return updated;
                     }}
-                    reloadMcp={
-                      mcpRuntime
-                        ? async () => {
+                    {...(mcpRuntime
+                      ? {
+                          reloadMcp: async () => {
                             const r = await mcpRuntime.reloadFromConfig(loop);
                             setLiveMcpServers(r.summaries);
                             return r;
-                          }
-                        : undefined
-                    }
+                          },
+                        }
+                      : {})}
                   />
                 ) : pendingPlan ? (
                   <PlanConfirm

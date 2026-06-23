@@ -8,9 +8,9 @@ export interface CatalogEntry {
   /** npm package id (for `npx -y <pkg>`). */
   package: string;
   /** Extra args the user must supply (e.g. a directory path). */
-  userArgs?: string;
+  userArgs?: string | undefined;
   /** Notes the user needs to know — shown dimmed. */
-  note?: string;
+  note?: string | undefined;
 }
 
 // Every entry below is verified to exist on npm as of this release.

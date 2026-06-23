@@ -1,11 +1,9 @@
-import htm from "htm";
-import { Component, type ComponentChildren, h } from "preact";
+import { Component, type ComponentChildren, type VNode } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { t } from "../i18n/index.js";
 import { MODE } from "./api.js";
 import { type ErrorReport, appBus, reportAppError } from "./bus.js";
-
-const html = htm.bind(h);
+import { html } from "./html.js";
 
 const REPO_URL = "https://github.com/esengine/reasonix";
 
@@ -36,7 +34,7 @@ function buildIssueBody({ error, source, info }: ErrorReport): string {
     .join("\n");
 }
 
-export function ErrorOverlay() {
+export function ErrorOverlay(): VNode | null {
   const [err, setErr] = useState<ErrorReport | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -65,7 +63,7 @@ export function ErrorOverlay() {
 
   const issueUrl = `${REPO_URL}/issues/new?title=${encodeURIComponent(`[dashboard] ${errMsg.slice(0, 80)}`)}&body=${encodeURIComponent(buildIssueBody(err))}`;
 
-  const copyDetails = async () => {
+  const copyDetails = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(buildIssueBody(err));
       setCopied(true);
@@ -88,15 +86,11 @@ export function ErrorOverlay() {
 
         <pre class="error-overlay-trace">${stack}</pre>
 
-        ${
-          err.info
-            ? html`<div class="error-overlay-info"><strong>info:</strong> ${err.info}</div>`
-            : null
-        }
+        ${err.info
+          ? html`<div class="error-overlay-info"><strong>info:</strong> ${err.info}</div>`
+          : null}
 
-        <div class="error-overlay-help">
-          ${t("error.body")}
-        </div>
+        <div class="error-overlay-help">${t("error.body")}</div>
 
         <div class="error-overlay-actions">
           <button class="primary" onClick=${copyDetails}>
@@ -105,7 +99,9 @@ export function ErrorOverlay() {
           <a class="button" href=${issueUrl} target="_blank" rel="noopener noreferrer">
             ${t("error.reportOnGithub")}
           </a>
-          <button onClick=${() => setErr(null)} style="margin-left: auto;">${t("error.dismiss")}</button>
+          <button onClick=${() => setErr(null)} style="margin-left: auto;">
+            ${t("error.dismiss")}
+          </button>
         </div>
       </div>
     </div>
@@ -130,7 +126,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   static override getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return { caught: true, lastErr: error };
   }
-  override componentDidCatch(error: Error, info: { componentStack?: string }) {
+  override componentDidCatch(error: Error, info: { componentStack?: string }): void {
     reportAppError(error, "render", info?.componentStack ?? "");
     const attempts = (this.state.attempts ?? 0) + 1;
     if (attempts >= 3) {
@@ -139,7 +135,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     }
     setTimeout(() => this.setState({ caught: false, attempts }), 100);
   }
-  override render() {
+  override render(): ComponentChildren {
     if (this.state.caught) {
       if ((this.state.attempts ?? 0) >= 3) {
         return html`

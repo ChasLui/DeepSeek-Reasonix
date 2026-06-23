@@ -17,9 +17,9 @@ export interface CacheBreakReport {
   dropTokens: number;
   reason: string;
   reasonCategory: CacheBreakReasonCategory;
-  diffPatchPath?: string;
-  writeError?: string;
-  epochLabel?: string;
+  diffPatchPath?: string | undefined;
+  writeError?: string | undefined;
+  epochLabel?: string | undefined;
 }
 
 export type CacheBreakReasonCategory =
@@ -41,23 +41,24 @@ export interface PromptCacheStats {
   hitRatio: number;
   breaks: number;
   writeFailures: number;
-  recentBreakCategories?: ReadonlyArray<CacheBreakReasonCategory>;
-  lastBreakReason?: string;
+  recentBreakCategories?: ReadonlyArray<CacheBreakReasonCategory> | undefined;
+  lastBreakReason?: string | undefined;
 }
 
 export interface PromptCacheMonitorOptions {
-  tmpDir?: string;
-  minDropTokens?: number;
-  dropRatio?: number;
-  secretRedactor?: SecretRedactor;
+  tmpDir?: string | undefined;
+  minDropTokens?: number | undefined;
+  dropRatio?: number | undefined;
+  secretRedactor?: SecretRedactor | undefined;
+  randomBytes?: ((size: number) => Buffer) | undefined;
 }
 
 export interface PromptCacheUsage {
-  promptCacheHitTokens?: number | null;
-  prompt_cache_hit_tokens?: number | null;
-  hit?: number | null;
-  promptCacheMissTokens?: number | null;
-  prompt_cache_miss_tokens?: number | null;
+  promptCacheHitTokens?: number | null | undefined;
+  prompt_cache_hit_tokens?: number | null | undefined;
+  hit?: number | null | undefined;
+  promptCacheMissTokens?: number | null | undefined;
+  prompt_cache_miss_tokens?: number | null | undefined;
 }
 
 interface PendingEpoch {
@@ -86,6 +87,7 @@ export class PromptCacheMonitor {
   private readonly minDropTokens: number;
   private readonly dropRatio: number;
   private readonly secretRedactor: SecretRedactor;
+  private readonly randomBytes: (size: number) => Buffer;
   private readonly enabled: boolean;
   private readonly explicitDiffDir: boolean;
   private readonly fingerprint = new PromptFingerprint();
@@ -105,15 +107,16 @@ export class PromptCacheMonitor {
 
   constructor(opts: PromptCacheMonitorOptions = {}) {
     this.explicitDiffDir =
-      opts.tmpDir !== undefined || process.env.REASONIX_CACHE_BREAK_DIFF_DIR !== undefined;
+      opts.tmpDir !== undefined || process.env["REASONIX_CACHE_BREAK_DIFF_DIR"] !== undefined;
     this.tmpDir =
       opts.tmpDir ??
-      process.env.REASONIX_CACHE_BREAK_DIFF_DIR ??
+      process.env["REASONIX_CACHE_BREAK_DIFF_DIR"] ??
       join(homedir(), ".reasonix", "tmp");
     this.minDropTokens = opts.minDropTokens ?? DEFAULT_MIN_DROP_TOKENS;
     this.dropRatio = opts.dropRatio ?? DEFAULT_DROP_RATIO;
     this.secretRedactor = opts.secretRedactor ?? defaultRedactor;
-    this.enabled = process.env.REASONIX_PROMPT_CACHE_MONITOR !== "0";
+    this.randomBytes = opts.randomBytes ?? randomBytes;
+    this.enabled = process.env["REASONIX_PROMPT_CACHE_MONITOR"] !== "0";
   }
 
   recordBeforeCall(snapshot: PromptSnapshot): void {
@@ -317,7 +320,7 @@ export class PromptCacheMonitor {
     changes: PendingPromptChanges,
     messages: readonly ChatMessage[],
   ): { diffPatchPath?: string; writeError?: string } {
-    if (process.env.REASONIX_CACHE_BREAK_DIFF === "0") return {};
+    if (process.env["REASONIX_CACHE_BREAK_DIFF"] === "0") return {};
     if (isTestProcess() && !this.explicitDiffDir) return {};
     const snapshot = this.currentSnapshot;
     if (!snapshot) return {};
@@ -350,7 +353,7 @@ export class PromptCacheMonitor {
     let attempts = 0;
     for (let attempt = 1; attempt <= DIFF_WRITE_MAX_ATTEMPTS; attempt++) {
       attempts = attempt;
-      const id = randomBytes(6).toString("hex");
+      const id = this.randomBytes(6).toString("hex");
       const path = join(this.tmpDir, `cache-break-${id}.diff`);
       try {
         writeFileExclusive(path, payload);
@@ -495,5 +498,5 @@ function formatWriteError(err: unknown, attempts: number): string {
 }
 
 function isTestProcess(): boolean {
-  return process.env.NODE_ENV === "test" || process.env.VITEST_WORKER_ID !== undefined;
+  return process.env["NODE_ENV"] === "test" || process.env["VITEST_WORKER_ID"] !== undefined;
 }

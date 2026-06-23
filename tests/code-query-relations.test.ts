@@ -19,7 +19,11 @@ function writeProjectFile(root: string, path: string, content: string): void {
 }
 
 function git(root: string, args: string[]): void {
-  execFileSync("git", args, { cwd: root, env: withoutGitEnv(), stdio: "pipe" });
+  execFileSync("git", args, {
+    cwd: root,
+    env: withoutGitEnv(process.env, { isolateConfig: true }),
+    stdio: "pipe",
+  });
 }
 
 function initGitRepo(root: string): void {
@@ -48,8 +52,8 @@ describe("code relation tools", () => {
     expect(names).toContain("detect_changes");
     expect(names).toContain("impact");
     expect(registry.isParallelSafe("find_references")).toBe(false);
-    const originalCodeGraph = process.env.REASONIX_CODE_GRAPH;
-    process.env.REASONIX_CODE_GRAPH = "1";
+    const originalCodeGraph = process.env["REASONIX_CODE_GRAPH"];
+    process.env["REASONIX_CODE_GRAPH"] = "1";
     try {
       expect(registry.get("find_references")?.readOnlyCheck?.({ relation: "callers" })).toBe(false);
       expect(registry.get("find_references")?.readOnlyCheck?.({ relation: "imports" })).toBe(false);
@@ -59,9 +63,9 @@ describe("code relation tools", () => {
     } finally {
       if (originalCodeGraph === undefined) {
         // biome-ignore lint/performance/noDelete: restore exact env state
-        delete process.env.REASONIX_CODE_GRAPH;
+        delete process.env["REASONIX_CODE_GRAPH"];
       } else {
-        process.env.REASONIX_CODE_GRAPH = originalCodeGraph;
+        process.env["REASONIX_CODE_GRAPH"] = originalCodeGraph;
       }
     }
 

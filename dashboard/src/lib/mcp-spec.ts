@@ -10,7 +10,7 @@ function stringField(obj: SpecRecord, key: string): string | null {
 }
 
 function stringArgs(obj: SpecRecord): string[] {
-  const args = obj.args;
+  const args = obj["args"];
   if (!Array.isArray(args)) return [];
   return args.filter((arg): arg is string => typeof arg === "string" && arg.length > 0);
 }

@@ -14,7 +14,7 @@ const HOOK_LOG_CAP = 12;
 
 export function readRecentHookRuns(
   now: number = Date.now(),
-  _sessionsDirOverride?: string,
+  _sessionsDirOverride?: string | undefined,
 ): ReadonlyArray<HookRunRow> | null {
   const db = getDb();
   const sessions = listSessionsWithEvents(db);

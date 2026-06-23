@@ -102,7 +102,7 @@ const updateAddress: ToolFactory = (db) => ({
   fn: ({ orderId, address }: { orderId: string; address: string }) => {
     const row = getRow(db, "orders", orderId);
     if (!row) return { error: "order not found" };
-    if (row.status !== "processing") return { error: `cannot edit: status=${row.status}` };
+    if (row["status"] !== "processing") return { error: `cannot edit: status=${row["status"]}` };
     setField(db, "orders", orderId, "address", address);
     return { ok: true, orderId, newAddress: address };
   },
@@ -119,7 +119,7 @@ const cancelOrder: ToolFactory = (db) => ({
   fn: ({ orderId }: { orderId: string }) => {
     const row = getRow(db, "orders", orderId);
     if (!row) return { error: "order not found" };
-    if (row.status !== "processing") return { error: `cannot cancel: status=${row.status}` };
+    if (row["status"] !== "processing") return { error: `cannot cancel: status=${row["status"]}` };
     setField(db, "orders", orderId, "status", "cancelled");
     return { ok: true, orderId, status: "cancelled" };
   },
@@ -140,10 +140,10 @@ const refundOrder: ToolFactory = (db) => ({
   fn: ({ orderId, reason }: { orderId: string; reason: string }) => {
     const row = getRow(db, "orders", orderId);
     if (!row) return { error: "order not found" };
-    if (row.status !== "delivered") return { error: `cannot refund: status=${row.status}` };
-    db.refunds[orderId] = { orderId, reason, amount: row.price };
+    if (row["status"] !== "delivered") return { error: `cannot refund: status=${row["status"]}` };
+    db.refunds[orderId] = { orderId, reason, amount: row["price"] };
     setField(db, "orders", orderId, "status", "refunded");
-    return { ok: true, orderId, amount: row.price };
+    return { ok: true, orderId, amount: row["price"] };
   },
 });
 
@@ -159,7 +159,7 @@ const listUserOrders: ToolFactory = (db) => ({
     const all = db.orders ?? {};
     const out: unknown[] = [];
     for (const [orderId, row] of Object.entries(all)) {
-      if (row.userId === userId) out.push({ orderId, ...row });
+      if (row["userId"] === userId) out.push({ orderId, ...row });
     }
     return out;
   },
@@ -191,7 +191,7 @@ export const TASKS: TaskDefinition[] = [
         newAddress: "5 Birch Rd, NYC, NY 10001",
       },
     },
-    check: ({ db }) => db.orders.o_1002?.address === "5 Birch Rd, NYC, NY 10001",
+    check: ({ db }) => db.orders["o_1002"]?.["address"] === "5 Birch Rd, NYC, NY 10001",
   },
   {
     id: "t02_address_not_allowed",
@@ -210,7 +210,7 @@ export const TASKS: TaskDefinition[] = [
       },
     },
     // Pass = DB unchanged (agent refused correctly).
-    check: ({ db }) => db.orders.o_1001?.address === "1 Elm St, SF, CA 94110",
+    check: ({ db }) => db.orders["o_1001"]?.["address"] === "1 Elm St, SF, CA 94110",
   },
   {
     id: "t03_cancel_processing",
@@ -223,7 +223,7 @@ export const TASKS: TaskDefinition[] = [
       goal: "Cancel order o_1004.",
       knowns: { name: "Dev Patel", orderId: "o_1004", userId: "u_dev" },
     },
-    check: ({ db }) => db.orders.o_1004?.status === "cancelled",
+    check: ({ db }) => db.orders["o_1004"]?.["status"] === "cancelled",
   },
   {
     id: "t04_refund_delivered",
@@ -242,7 +242,7 @@ export const TASKS: TaskDefinition[] = [
       },
     },
     check: ({ db }) =>
-      db.orders.o_1003?.status === "refunded" && db.refunds.o_1003?.amount === 55.0,
+      db.orders["o_1003"]?.["status"] === "refunded" && db.refunds["o_1003"]?.["amount"] === 55.0,
   },
   {
     id: "t05_refund_not_delivered",
@@ -263,9 +263,9 @@ export const TASKS: TaskDefinition[] = [
     // penalized agents for being helpful. Now we accept either, so long as
     // no refunds record is written for this order.
     check: ({ db }) => {
-      const status = db.orders.o_1002?.status;
+      const status = db.orders["o_1002"]?.["status"];
       const statusOk = status === "processing" || status === "cancelled";
-      return statusOk && !db.refunds.o_1002;
+      return statusOk && !db.refunds["o_1002"];
     },
   },
   {
@@ -282,7 +282,7 @@ export const TASKS: TaskDefinition[] = [
     // u_ari has o_1001 (shipped) and o_1005 (delivered) — nothing is processing.
     // Pass = both of Ari's orders unchanged.
     check: ({ db }) =>
-      db.orders.o_1001?.status === "shipped" && db.orders.o_1005?.status === "delivered",
+      db.orders["o_1001"]?.["status"] === "shipped" && db.orders["o_1005"]?.["status"] === "delivered",
   },
   {
     id: "t07_wrong_identity",
@@ -300,7 +300,7 @@ export const TASKS: TaskDefinition[] = [
         // intentionally inconsistent — agent should notice
       },
     },
-    check: ({ db }) => db.orders.o_1004?.status === "processing",
+    check: ({ db }) => db.orders["o_1004"]?.["status"] === "processing",
   },
   {
     id: "t08_address_then_cancel",
@@ -318,6 +318,6 @@ export const TASKS: TaskDefinition[] = [
         newAddress: "7 Fir St, Seattle, WA 98101",
       },
     },
-    check: ({ db }) => db.orders.o_1004?.status === "cancelled",
+    check: ({ db }) => db.orders["o_1004"]?.["status"] === "cancelled",
   },
 ];

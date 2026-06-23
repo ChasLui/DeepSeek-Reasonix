@@ -9,7 +9,6 @@ function makeLoop(): CacheFirstLoop {
     client: new DeepSeekClient({ apiKey: "sk-test" }),
     prefix: new ImmutablePrefix({ system: "s", toolSpecs: [] }),
     tools: new ToolRegistry(),
-    maxToolIters: 1,
     stream: false,
   });
 }

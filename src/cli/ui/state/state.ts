@@ -24,26 +24,26 @@ export interface ComposerState {
 export interface StatusBar {
   mode: Mode;
   network: NetworkState;
-  networkDetail?: string;
+  networkDetail?: string | undefined;
   cost: number;
   sessionCost: number;
-  balance?: number;
-  balanceCurrency?: string;
+  balance?: number | undefined;
+  balanceCurrency?: string | undefined;
   cacheHit: number;
   /** Last-turn prompt tokens; drives the context-usage pill. */
-  promptTokens?: number;
+  promptTokens?: number | undefined;
   /** Model context-window cap (denominator for the usage pill). */
-  promptCap?: number;
+  promptCap?: number | undefined;
   /** Cumulative prompt tokens billed across the session — drives the dock "tok ↑" segment. */
   sessionInputTokens: number;
   /** Cumulative completion tokens billed across the session — drives the dock "tok ↓" segment. */
   sessionOutputTokens: number;
   /** Wall-clock ms for the most recent completed turn. */
   lastTurnMs: number;
-  countdownSeconds?: number;
+  countdownSeconds?: number | undefined;
   recording?: { sizeBytes: number; events: number; path: string };
   /** null → user is on a custom model that doesn't match any preset; pill falls back to the model id. */
-  preset?: "auto" | "flash" | "pro" | null;
+  preset?: "auto" | "flash" | "pro" | null | undefined;
   /** Bridged-MCP handshake progress. Pill is shown while ready < total. */
   mcpLoading?: { ready: number; total: number };
 }
@@ -52,7 +52,7 @@ export interface Toast {
   readonly id: string;
   readonly tone: ToastTone;
   readonly title: string;
-  readonly detail?: string;
+  readonly detail?: string | undefined;
   readonly bornAt: number;
   readonly ttlMs: number;
 }

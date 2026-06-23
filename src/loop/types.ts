@@ -21,21 +21,21 @@ export interface LoopEvent {
   turn: number;
   role: EventRole;
   content: string;
-  reasoningDelta?: string;
-  toolName?: string;
+  reasoningDelta?: string | undefined;
+  toolName?: string | undefined;
   /** Raw args JSON — needed by `reasonix diff` to explain why a tool was called. */
-  toolArgs?: string;
+  toolArgs?: string | undefined;
   /** Cumulative arguments-string length for `role === "tool_call_delta"`. */
-  toolCallArgsChars?: number;
+  toolCallArgsChars?: number | undefined;
   /** Zero-based index of the tool call this delta belongs to (multi-tool progress). */
-  toolCallIndex?: number;
+  toolCallIndex?: number | undefined;
   /** Count of tool calls whose args have parsed as valid JSON (UI progress, not dispatch gate). */
-  toolCallReadyCount?: number;
+  toolCallReadyCount?: number | undefined;
   /** Stable id for tool_start / tool pairs — also the inflight-set key. UI uses this as the card id so it can derive `running` from `loop.inflight.has(callId)` instead of trusting end-event delivery. */
-  callId?: string;
-  stats?: TurnStats;
-  repair?: RepairReport;
-  error?: string;
+  callId?: string | undefined;
+  stats?: TurnStats | undefined;
+  repair?: RepairReport | undefined;
+  error?: string | undefined;
   /** Display-only — code-mode applier MUST skip SEARCH/REPLACE in forced-summary text. */
-  forcedSummary?: boolean;
+  forcedSummary?: boolean | undefined;
 }

@@ -1,13 +1,29 @@
 import { derivePrefix } from "@reasonix/core-utils/derive-prefix";
-import { memo, useState, type ReactNode } from "react";
+import { memo, useState, type MemoExoticComponent, type ReactElement, type ReactNode } from "react";
 import { Copy } from "lucide-react";
 import { I } from "../icons";
 import { t, useLang } from "../i18n";
-import type { AssistantSegment, ActivePlan, PendingPlan, PendingCheckpoint, PendingRevision, PendingConfirm, PendingChoice, SkillOrigin } from "../App";
-import { AssistantText, PlanCardView, ReasoningCard, ShellCard, ToolCard, type PlanItem } from "./cards";
+import type {
+  AssistantSegment,
+  ActivePlan,
+  PendingPlan,
+  PendingCheckpoint,
+  PendingRevision,
+  PendingConfirm,
+  PendingChoice,
+  SkillOrigin,
+} from "../App";
+import {
+  AssistantText,
+  PlanCardView,
+  ReasoningCard,
+  ShellCard,
+  ToolCard,
+  type PlanItem,
+} from "./cards";
 import { ApprovalCard, TaskCard, type TaskStepView } from "./extra-cards";
 
-export function TurnDivider({ label }: { label: string }) {
+export function TurnDivider({ label }: { label: string }): ReactElement {
   return (
     <div className="turn-divider">
       <span>{label}</span>
@@ -16,67 +32,60 @@ export function TurnDivider({ label }: { label: string }) {
   );
 }
 
-export const UserMsg = memo(function UserMsg({
-  text,
-  time,
-  skill,
-}: {
+type UserMsgProps = {
   text: string;
   time?: string;
   skill?: SkillOrigin;
-}) {
-  useLang();
-  const [copied, setCopied] = useState(false);
-  const onCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
-    } catch {
-      /* ignore */
-    }
-  };
-  return (
-    <div className="msg user">
-      <div className="avatar">YOU</div>
-      <div className="body">
-        <div className="who">
-          <span className="name">{t("thread.you")}</span>
-          {skill ? (
-            <span className="skill-chip" title={`skill · ${skill.runAs}`}>
-              <I.zap size={10} /> /{skill.name}
-              {skill.runAs === "subagent" ? <span className="sub">{t("thread.subagent")}</span> : null}
-            </span>
-          ) : null}
-          {time ? <span className="time">{time}</span> : null}
-        </div>
-        <div className="msg-text">{text}</div>
-        <div className="msg-actions">
-          <button
-            type="button"
-            className={`copy-btn ${copied ? "done" : ""}`}
-            onClick={onCopy}
-            title={t("thread.copyMessage")}
-          >
-            <Copy size={11} />
-            {copied ? t("markdown.copied") : null}
-          </button>
+};
+
+export const UserMsg: MemoExoticComponent<(props: UserMsgProps) => ReactElement> = memo(
+  function UserMsg({ text, time, skill }: UserMsgProps): ReactElement {
+    useLang();
+    const [copied, setCopied] = useState(false);
+    const onCopy = async (): Promise<void> => {
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      } catch {
+        /* ignore */
+      }
+    };
+    return (
+      <div className="msg user">
+        <div className="avatar">YOU</div>
+        <div className="body">
+          <div className="who">
+            <span className="name">{t("thread.you")}</span>
+            {skill ? (
+              <span className="skill-chip" title={`skill · ${skill.runAs}`}>
+                <I.zap size={10} /> /{skill.name}
+                {skill.runAs === "subagent" ? (
+                  <span className="sub">{t("thread.subagent")}</span>
+                ) : null}
+              </span>
+            ) : null}
+            {time ? <span className="time">{time}</span> : null}
+          </div>
+          <div className="msg-text">{text}</div>
+          <div className="msg-actions">
+            <button
+              type="button"
+              className={`copy-btn ${copied ? "done" : ""}`}
+              onClick={onCopy}
+              title={t("thread.copyMessage")}
+            >
+              <Copy size={11} />
+              {copied ? t("markdown.copied") : null}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  );
-});
+    );
+  },
+);
 
-export const AssistantMsg = memo(function AssistantMsg({
-  segments,
-  pending,
-  model,
-  time,
-  onApproveConfirm,
-  onRejectConfirm,
-  onAlwaysAllowConfirm,
-  pendingConfirms,
-}: {
+type AssistantMsgProps = {
   segments: AssistantSegment[];
   pending: boolean;
   model?: string;
@@ -85,106 +94,123 @@ export const AssistantMsg = memo(function AssistantMsg({
   onRejectConfirm: (id: number) => void;
   onAlwaysAllowConfirm: (id: number, prefix: string) => void;
   pendingConfirms: PendingConfirm[];
-}) {
-  const [copied, setCopied] = useState(false);
-  const content = segments
-    .filter((s): s is AssistantSegment & { kind: "text" } => s.kind === "text")
-    .map((s) => s.text)
-    .join("\n\n");
-  const onCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
-    } catch {
-      /* ignore */
-    }
-  };
-  return (
-    <div className="msg assistant">
-      <div className="avatar">DS</div>
-      <div className="body">
-        <div className="who">
-          <span className="name">Reasonix</span>
-          {model ? <span className="model">{model}</span> : null}
-          {time ? <span className="time">{time}</span> : null}
-        </div>
-        {segments.map((s, i) => {
-          if (s.kind === "text") {
-            if (!s.text.trim()) return null;
-            return <AssistantText key={i} text={s.text} />;
-          }
-          if (s.kind === "reasoning") {
-            return (
-              <ReasoningCard
-                key={i}
-                text={s.text}
-                streaming={pending && i === segments.length - 1}
-              />
-            );
-          }
-          // tool segment
-          const pendingConfirm =
-            (s.name === "run_command" || s.name === "run_background") && s.result === undefined
-              ? pendingConfirms.find((c) => c.command === extractCommand(s.args))
-              : undefined;
-          if (s.name === "run_command" || s.name === "run_background") {
-            const cmd = extractCommand(s.args) ?? s.args;
-            const state: "await" | "running" | "done" | "failed" =
-              s.result === undefined
-                ? pendingConfirm
-                  ? "await"
-                  : "running"
-                : s.ok === false
-                  ? "failed"
-                  : "done";
-            return (
-              <ShellCard
-                key={i}
-                command={cmd}
-                output={s.result}
-                state={state}
-                durationMs={s.durationMs}
-                onApprove={pendingConfirm ? () => onApproveConfirm(pendingConfirm.id) : undefined}
-                onReject={pendingConfirm ? () => onRejectConfirm(pendingConfirm.id) : undefined}
-                onAlwaysAllow={
-                  pendingConfirm
-                    ? () => {
-                        onAlwaysAllowConfirm(pendingConfirm.id, derivePrefix(cmd));
-                      }
-                    : undefined
-                }
-              />
-            );
-          }
-          return (
-            <ToolCard
-              key={i}
-              name={s.name}
-              args={s.args}
-              result={s.result}
-              ok={s.ok}
-              durationMs={s.durationMs}
-            />
-          );
-        })}
-        {content ? (
-          <div className="msg-actions">
-            <button
-              type="button"
-              className={`copy-btn ${copied ? "done" : ""}`}
-              onClick={onCopy}
-              title={t("thread.copyResponse")}
-            >
-              <Copy size={11} />
-              {copied ? t("markdown.copied") : null}
-            </button>
+};
+
+export const AssistantMsg: MemoExoticComponent<(props: AssistantMsgProps) => ReactElement> = memo(
+  function AssistantMsg({
+    segments,
+    pending,
+    model,
+    time,
+    onApproveConfirm,
+    onRejectConfirm,
+    onAlwaysAllowConfirm,
+    pendingConfirms,
+  }: AssistantMsgProps): ReactElement {
+    const [copied, setCopied] = useState(false);
+    const content = segments
+      .filter((s): s is AssistantSegment & { kind: "text" } => s.kind === "text")
+      .map((s) => s.text)
+      .join("\n\n");
+    const onCopy = async (): Promise<void> => {
+      try {
+        await navigator.clipboard.writeText(content);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      } catch {
+        /* ignore */
+      }
+    };
+    return (
+      <div className="msg assistant">
+        <div className="avatar">DS</div>
+        <div className="body">
+          <div className="who">
+            <span className="name">Reasonix</span>
+            {model ? <span className="model">{model}</span> : null}
+            {time ? <span className="time">{time}</span> : null}
           </div>
-        ) : null}
+          {segments.map((s, i) => {
+            if (s.kind === "text") {
+              if (!s.text.trim()) return null;
+              return <AssistantText key={i} text={s.text} />;
+            }
+            if (s.kind === "reasoning") {
+              return (
+                <ReasoningCard
+                  key={i}
+                  text={s.text}
+                  streaming={pending && i === segments.length - 1}
+                />
+              );
+            }
+            // tool segment
+            const pendingConfirm =
+              (s.name === "run_command" || s.name === "run_background") && s.result === undefined
+                ? pendingConfirms.find((c) => c.command === extractCommand(s.args))
+                : undefined;
+            if (s.name === "run_command" || s.name === "run_background") {
+              const cmd = extractCommand(s.args) ?? s.args;
+              const state: "await" | "running" | "done" | "failed" =
+                s.result === undefined
+                  ? pendingConfirm
+                    ? "await"
+                    : "running"
+                  : s.ok === false
+                    ? "failed"
+                    : "done";
+              return (
+                <ShellCard
+                  key={i}
+                  command={cmd}
+                  state={state}
+                  {...(s.result !== undefined ? { output: s.result } : {})}
+                  {...(s.durationMs !== undefined ? { durationMs: s.durationMs } : {})}
+                  {...(pendingConfirm
+                    ? { onApprove: () => onApproveConfirm(pendingConfirm.id) }
+                    : {})}
+                  {...(pendingConfirm
+                    ? { onReject: () => onRejectConfirm(pendingConfirm.id) }
+                    : {})}
+                  {...(pendingConfirm
+                    ? {
+                        onAlwaysAllow: () => {
+                          onAlwaysAllowConfirm(pendingConfirm.id, derivePrefix(cmd));
+                        },
+                      }
+                    : {})}
+                />
+              );
+            }
+            return (
+              <ToolCard
+                key={i}
+                name={s.name}
+                args={s.args}
+                {...(s.result !== undefined ? { result: s.result } : {})}
+                {...(s.ok !== undefined ? { ok: s.ok } : {})}
+                {...(s.durationMs !== undefined ? { durationMs: s.durationMs } : {})}
+              />
+            );
+          })}
+          {content ? (
+            <div className="msg-actions">
+              <button
+                type="button"
+                className={`copy-btn ${copied ? "done" : ""}`}
+                onClick={onCopy}
+                title={t("thread.copyResponse")}
+              >
+                <Copy size={11} />
+                {copied ? t("markdown.copied") : null}
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
-    </div>
-  );
-});
+    );
+  },
+);
 
 function extractCommand(args: string): string | undefined {
   if (!args) return undefined;
@@ -203,7 +229,7 @@ export function PlanBanner({
 }: {
   plan: ActivePlan;
   onDismiss?: () => void;
-}) {
+}): ReactElement {
   useLang();
   const total = plan.steps.length || 1;
   const done = plan.completedStepIds.length;
@@ -235,7 +261,7 @@ export function PlanBanner({
   );
 }
 
-export function ActivePlanCard({ plan }: { plan: ActivePlan }) {
+export function ActivePlanCard({ plan }: { plan: ActivePlan }): ReactElement {
   useLang();
   const done = new Set(plan.completedStepIds);
   const items: PlanItem[] = plan.steps.map((s) => {
@@ -248,7 +274,7 @@ export function ActivePlanCard({ plan }: { plan: ActivePlan }) {
       status,
       text: s.title,
       tool: s.action,
-      note: s.risk ? `${t("thread.risk")}: ${s.risk}` : undefined,
+      ...(s.risk ? { note: `${t("thread.risk")}: ${s.risk}` } : {}),
     };
   });
   return <PlanCardView items={items} title={t("thread.activePlan")} />;
@@ -266,7 +292,7 @@ export function PlanApprovalCard({
   onApprove: () => void;
   onRefine: () => void;
   onCancel: () => void;
-}) {
+}): ReactElement {
   useLang();
   const stepCount = p.steps?.length ?? 0;
   const sub = stepCount > 0 ? t("thread.planStepCount", { count: stepCount }) : undefined;
@@ -275,7 +301,7 @@ export function PlanApprovalCard({
       kind={t("thread.planConfirmationKind")}
       tone="info"
       title={t("thread.startPlan")}
-      sub={sub}
+      {...(sub ? { sub } : {})}
       body={
         <>
           {p.summary ? <div style={{ marginBottom: 6 }}>{p.summary}</div> : null}
@@ -303,7 +329,7 @@ export function CheckpointApprovalCard({
   onContinue: () => void;
   onRevise: () => void;
   onStop: () => void;
-}) {
+}): ReactElement {
   useLang();
   return (
     <ApprovalCard
@@ -338,7 +364,7 @@ export function RevisionApprovalCard({
   r: PendingRevision;
   onAccept: () => void;
   onReject: () => void;
-}) {
+}): ReactElement {
   useLang();
   return (
     <ApprovalCard
@@ -350,7 +376,9 @@ export function RevisionApprovalCard({
         <>
           <div style={{ marginBottom: 8 }}>{r.reason}</div>
           {r.summary ? (
-            <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8 }}>{r.summary}</div>
+            <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8 }}>
+              {r.summary}
+            </div>
           ) : null}
           <ul style={{ margin: 0, paddingLeft: 18 }}>
             {r.remainingSteps.map((s) => (
@@ -396,7 +424,7 @@ export function ConfirmApprovalCard({
   onAllow: () => void;
   onAlwaysAllow: (prefix: string) => void;
   onDeny: () => void;
-}) {
+}): ReactElement {
   useLang();
   const isBackground = c.kind === "run_background";
   const prefix = derivePrefix(c.command);
@@ -439,7 +467,7 @@ export function PathAccessApprovalCard({
   onAllow: () => void;
   onAlwaysAllow: (prefix: string) => void;
   onDeny: () => void;
-}) {
+}): ReactElement {
   useLang();
   const isWrite = p.intent === "write";
   return (
@@ -450,10 +478,10 @@ export function PathAccessApprovalCard({
       sub={p.path}
       preview={
         <>
-          <div>{p.toolName} → {p.path}</div>
-          <div style={{ color: "var(--muted)", marginTop: 4 }}>
-            workspace: {p.sandboxRoot}
+          <div>
+            {p.toolName} → {p.path}
           </div>
+          <div style={{ color: "var(--muted)", marginTop: 4 }}>workspace: {p.sandboxRoot}</div>
         </>
       }
       meta={t("thread.riskMedium", { kind: p.intent })}
@@ -475,7 +503,7 @@ export function ChoiceApprovalCard({
   c: PendingChoice;
   onPick: (optionId: string) => void;
   onCancel: () => void;
-}) {
+}): ReactElement {
   useLang();
   return (
     <ApprovalCard
@@ -518,21 +546,20 @@ export function activePlanToTaskSteps(plan: ActivePlan): TaskStepView[] {
     state: done.has(s.id) ? "done" : i === plan.completedStepIds.length ? "running" : "queued",
     label: s.title,
     hint: s.action,
-    durationLabel: undefined,
   }));
 }
 
-export function ActivePlanTaskCard({ plan }: { plan: ActivePlan }) {
+export function ActivePlanTaskCard({ plan }: { plan: ActivePlan }): ReactElement {
   useLang();
   return (
     <TaskCard
       title={t("thread.activePlan")}
-      subtitle={plan.summary}
+      {...(plan.summary ? { subtitle: plan.summary } : {})}
       steps={activePlanToTaskSteps(plan)}
     />
   );
 }
 
-export function HeaderHint({ children }: { children: ReactNode }) {
+export function HeaderHint({ children }: { children: ReactNode }): ReactElement {
   return <div className="msg-text">{children}</div>;
 }

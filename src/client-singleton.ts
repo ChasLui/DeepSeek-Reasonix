@@ -17,7 +17,7 @@ export function _resetClientSingletonForTests(): void {
 }
 
 function clientKey(opts: DeepSeekClientOptions): string {
-  const apiKey = opts.apiKey ?? process.env.DEEPSEEK_API_KEY;
+  const apiKey = opts.apiKey ?? process.env["DEEPSEEK_API_KEY"];
   if (!apiKey) {
     return JSON.stringify({ apiKey: "", baseUrl: normalizeBaseUrl(opts.baseUrl) });
   }
@@ -25,7 +25,7 @@ function clientKey(opts: DeepSeekClientOptions): string {
 }
 
 function normalizeBaseUrl(input: string | undefined): string {
-  let url = input ?? process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com";
+  let url = input ?? process.env["DEEPSEEK_BASE_URL"] ?? "https://api.deepseek.com";
   while (url.endsWith("/")) url = url.slice(0, -1);
   return url;
 }

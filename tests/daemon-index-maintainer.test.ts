@@ -37,6 +37,7 @@ function fakeWatch() {
 }
 
 const noop = async () => {};
+const noopSemantic = async () => "built" as const;
 
 describe("IndexMaintainer — watch lifecycle", () => {
   it("starts a watcher when a workspace opens, releases it when it closes", () => {
@@ -116,7 +117,7 @@ describe("IndexMaintainer — debounce + code-graph incremental", () => {
       debounceMs: 100,
       updateGraph,
       updateLexical: noop,
-      updateSemantic: noop,
+      updateSemantic: noopSemantic,
     });
   }
 
@@ -136,8 +137,8 @@ describe("IndexMaintainer — debounce + code-graph incremental", () => {
     expect(calls).toEqual([]); // still inside the debounce window
     vi.advanceTimersByTime(50);
     expect(calls.length).toBe(1);
-    expect(calls[0].root).toBe("/a");
-    expect(calls[0].stale.sort()).toEqual(["x.ts", "y.ts"]);
+    expect(calls[0]!.root).toBe("/a");
+    expect(calls[0]!.stale.sort()).toEqual(["x.ts", "y.ts"]);
     m.dispose();
   });
 
@@ -154,7 +155,7 @@ describe("IndexMaintainer — debounce + code-graph incremental", () => {
     fw.fire("/a", "new.ts"); // rename → new path added
     vi.advanceTimersByTime(100);
     expect(calls.length).toBe(1);
-    expect(calls[0].sort()).toEqual(["new.ts", "old.ts"]);
+    expect(calls[0]!.sort()).toEqual(["new.ts", "old.ts"]);
     m.dispose();
   });
 
@@ -203,7 +204,7 @@ describe("IndexMaintainer — debounce + code-graph incremental", () => {
         throw new Error("boom");
       },
       updateLexical: noop,
-      updateSemantic: noop,
+      updateSemantic: noopSemantic,
       onError: (_r, e) => errors.push(e),
     });
     lc.onSessionOpen("/a");
@@ -233,6 +234,7 @@ describe("IndexMaintainer — throttled heavy rebuilds + idle prebuild", () => {
       },
       updateSemantic: async (r) => {
         sem.push(r);
+        return "built" as const;
       },
       now: () => 1_000_000,
     });
@@ -261,7 +263,7 @@ describe("IndexMaintainer — throttled heavy rebuilds + idle prebuild", () => {
       updateLexical: async (r) => {
         lex.push(r);
       },
-      updateSemantic: noop,
+      updateSemantic: noopSemantic,
       now: () => t,
     });
     lc.onSessionOpen("/a");
@@ -289,7 +291,7 @@ describe("IndexMaintainer — throttled heavy rebuilds + idle prebuild", () => {
       updateLexical: async (r) => {
         lex.push(r);
       },
-      updateSemantic: noop,
+      updateSemantic: noopSemantic,
       now: () => t,
     });
     lc.onSessionOpen("/a");
@@ -314,7 +316,7 @@ describe("IndexMaintainer — throttled heavy rebuilds + idle prebuild", () => {
       updateLexical: async (r) => {
         lex.push(r);
       },
-      updateSemantic: noop,
+      updateSemantic: noopSemantic,
       now: () => 1_000_000,
     });
     lc.onSessionOpen("/a"); // arms the quiet timer
@@ -349,10 +351,10 @@ describe("IndexMaintainer — throttled heavy rebuilds + idle prebuild", () => {
     ]);
     await vi.advanceTimersByTimeAsync(100); // flush → heavy runs + records duration/semantic
     const s = m.status()[0];
-    expect(s.pendingStale).toBe(0);
-    expect(s.lastHeavyMs).toBe(5000);
-    expect(typeof s.lastBuildMs).toBe("number"); // lexical rebuild duration recorded
-    expect(s.semantic).toBe("built");
+    expect(s!.pendingStale).toBe(0);
+    expect(s!.lastHeavyMs).toBe(5000);
+    expect(typeof s!.lastBuildMs).toBe("number"); // lexical rebuild duration recorded
+    expect(s!.semantic).toBe("built");
     m.dispose();
   });
 });

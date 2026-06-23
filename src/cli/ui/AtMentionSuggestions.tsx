@@ -48,13 +48,7 @@ export function AtMentionSuggestions({
   );
 }
 
-function HeaderRow({
-  state,
-  hiddenAbove,
-}: {
-  state: AtPickerState;
-  hiddenAbove: number;
-}) {
+function HeaderRow({ state, hiddenAbove }: { state: AtPickerState; hiddenAbove: number }) {
   const color = useColor();
   const total = state.entries.length;
   const lead = (

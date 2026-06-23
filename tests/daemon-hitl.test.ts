@@ -93,10 +93,11 @@ describe("daemon HITL — per-session gate routing", () => {
     const pair = bidiPair();
     const seen: Array<{ sessionId: string; cmd?: string }> = [];
     pair.client.onRequest<PermissionParams, unknown>("session/request_permission", (params) => {
-      seen.push({
-        sessionId: params.sessionId,
-        cmd: params.toolCall.rawInput.command,
-      });
+      const entry: { sessionId: string; cmd?: string } = { sessionId: params.sessionId };
+      if (params.toolCall.rawInput.command !== undefined) {
+        entry.cmd = params.toolCall.rawInput.command;
+      }
+      seen.push(entry);
       return { outcome: { outcome: "selected", optionId: "allow_once" } };
     });
     const gateA = new PauseGate();

@@ -58,16 +58,16 @@ function coerceExpires(v: unknown): MemoryEntry["expires"] | undefined {
 
 function rowToEntry(row: Record<string, unknown>): MemoryEntry {
   const entry: MemoryEntry = {
-    name: String(row.name),
-    type: String(row.type) as MemoryType,
-    scope: String(row.scope) as MemoryScope,
-    description: String(row.description),
-    body: String(row.body),
-    createdAt: String(row.created_at),
+    name: String(row["name"]),
+    type: String(row["type"]) as MemoryType,
+    scope: String(row["scope"]) as MemoryScope,
+    description: String(row["description"]),
+    body: String(row["body"]),
+    createdAt: String(row["created_at"]),
   };
-  const priority = coercePriority(row.priority);
+  const priority = coercePriority(row["priority"]);
   if (priority) entry.priority = priority;
-  const expires = coerceExpires(row.expires);
+  const expires = coerceExpires(row["expires"]);
   if (expires) entry.expires = expires;
   return entry;
 }
@@ -77,15 +77,15 @@ function rowToEntry(row: Record<string, unknown>): MemoryEntry {
 // API. Memory CONTENT lives in the `memory` table; only recovery sidecars (.access.jsonl,
 // .trash/, .observations.jsonl, .index/) stay on disk — never part of the immutable prefix.
 export class SqliteMemoryStore {
+  private readonly db: Db;
+
   private readonly projectHashValue: string;
   private readonly homeDir: string;
   private readonly projectRoot: string | undefined;
 
-  constructor(
-    private readonly db: Db,
-    projectRoot?: string,
-    homeDir?: string,
-  ) {
+  constructor(db: Db, projectRoot?: string, homeDir?: string) {
+    this.db = db;
+
     this.projectRoot = projectRoot ? resolve(projectRoot) : undefined;
     this.projectHashValue = this.projectRoot ? projectHashOf(this.projectRoot) : "";
     this.homeDir = homeDir ?? join(homedir(), ".reasonix");

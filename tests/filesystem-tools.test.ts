@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToolRegistry } from "../src/tools.js";
 import { lineDiff, registerFilesystemTools } from "../src/tools/filesystem.js";
@@ -573,9 +573,8 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
       // worker-isolated runner, the bad file is terminated and reported as
       // a regex-timeout in the footer; the remaining file still produces
       // its match.
-      const { RegexRunner, __setRegexRunnerForTesting } = await import(
-        "../src/tools/fs/regex-runner.js"
-      );
+      const { RegexRunner, __setRegexRunnerForTesting } =
+        await import("../src/tools/fs/regex-runner.js");
       __setRegexRunnerForTesting(new RegexRunner({ defaultTimeoutMs: 300 }));
       try {
         await fs.writeFile(join(root, "evil.txt"), `${"a".repeat(40)}\n`);
@@ -785,14 +784,14 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
     it("returns type + size + mtime as JSON", async () => {
       const out = await tools.dispatch("get_file_info", JSON.stringify({ path: "hello.txt" }));
       const parsed = parseToolResult(out);
-      expect(parsed.type).toBe("file");
-      expect(parsed.size).toBeGreaterThan(0);
-      expect(parsed.mtime).toMatch(/\d{4}-\d{2}-\d{2}/);
+      expect(parsed["type"]).toBe("file");
+      expect(parsed["size"]).toBeGreaterThan(0);
+      expect(parsed["mtime"]).toMatch(/\d{4}-\d{2}-\d{2}/);
     });
 
     it("reports directories", async () => {
       const out = await tools.dispatch("get_file_info", JSON.stringify({ path: "src" }));
-      expect(parseToolResult(out).type).toBe("directory");
+      expect(parseToolResult(out)["type"]).toBe("directory");
     });
   });
 

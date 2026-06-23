@@ -14,11 +14,12 @@ describe("splitQQMessage", () => {
 describe("QQChannel.sendResponse", () => {
   it("assigns incrementing msg_seq values across chunks", async () => {
     const bot = { sendPrivateMessage: vi.fn().mockResolvedValue(undefined) };
-    const channel = new QQChannel({ onSubmitMessage: () => undefined }) as QQChannel & {
+    const channel = new QQChannel({ onSubmitMessage: () => undefined }) as unknown as {
       bot: typeof bot;
       qqUserId: string;
       qqMessageId: string;
       nextOutboundMsgSeq: number;
+      sendResponse(text: string): Promise<void>;
     };
     channel.bot = bot;
     channel.qqUserId = "user-openid";
@@ -50,10 +51,11 @@ describe("QQChannel.sendResponse", () => {
     const channel = new QQChannel({
       onSubmitMessage: () => undefined,
       onError,
-    }) as QQChannel & {
+    }) as unknown as {
       bot: typeof bot;
       qqUserId: string;
       qqMessageId: string;
+      sendResponse(text: string): Promise<void>;
     };
     channel.bot = bot;
     channel.qqUserId = "user-openid";

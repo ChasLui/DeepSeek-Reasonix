@@ -2,6 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import { TOKEN, api } from "./api.js";
 
 type Listener = () => void;
+export type Translate = (path: string, params?: Record<string, string | number>) => string;
 
 export type DashboardLang = "en" | "zh-CN";
 
@@ -102,10 +103,10 @@ function get(translations: Nested | undefined, path: string): string | undefined
   return typeof val === "string" ? val : undefined;
 }
 
-export function createT(translations: Record<string, Nested>) {
+export function createT(translations: Record<string, Nested>): Translate {
   return function t(path: string, params?: Record<string, string | number>): string {
-    let val = get(translations[currentLang] ?? translations.en, path);
-    if (val === undefined) val = get(translations.en, path);
+    let val = get(translations[currentLang] ?? translations["en"], path);
+    if (val === undefined) val = get(translations["en"], path);
     if (val === undefined) return path;
     if (!params) return val;
     let result = val;

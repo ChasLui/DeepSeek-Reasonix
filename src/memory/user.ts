@@ -39,16 +39,16 @@ export interface MemoryEntry {
   /** ISO date string (YYYY-MM-DD). */
   createdAt: string;
   /** Explicit per-entry priority; absent → resolve from config default for `type`, else "medium". */
-  priority?: MemoryPriority;
+  priority?: MemoryPriority | undefined;
   /** Lifecycle hint. `project_end` → cleared by `/memory clear project`. */
-  expires?: MemoryExpires;
+  expires?: MemoryExpires | undefined;
 }
 
 export interface MemoryStoreOptions {
   /** Override `~/.reasonix` — tests set this to a tmpdir. */
-  homeDir?: string;
+  homeDir?: string | undefined;
   /** Absolute sandbox root. Required to use `scope: "project"`. */
-  projectRoot?: string;
+  projectRoot?: string | undefined;
 }
 
 export interface WriteInput {
@@ -57,8 +57,8 @@ export interface WriteInput {
   scope: MemoryScope;
   description: string;
   body: string;
-  priority?: MemoryPriority;
-  expires?: MemoryExpires;
+  priority?: MemoryPriority | undefined;
+  expires?: MemoryExpires | undefined;
 }
 
 const VALID_NAME = /^[a-zA-Z0-9_-][a-zA-Z0-9_.-]{1,38}[a-zA-Z0-9]$/;
@@ -136,7 +136,7 @@ export function applyGlobalReasonixMemory(basePrompt: string, homeDir?: string):
 /** Effective priority: entry's own field wins, else the config default for its type, else undefined. */
 export function effectivePriority(
   entry: MemoryEntry,
-  cfg?: ReasonixConfig,
+  cfg?: ReasonixConfig | undefined,
 ): MemoryPriority | undefined {
   if (entry.priority) return entry.priority;
   return memoryTypeDefaults(entry.type, cfg).priority;
@@ -170,10 +170,10 @@ function highPriorityBlock(entries: MemoryEntry[], cfg?: ReasonixConfig): string
 export function applyUserMemory(
   basePrompt: string,
   opts: {
-    homeDir?: string;
-    projectRoot?: string;
-    cfg?: ReasonixConfig;
-    toonMode?: ToonMode;
+    homeDir?: string | undefined;
+    projectRoot?: string | undefined;
+    cfg?: ReasonixConfig | undefined;
+    toonMode?: ToonMode | undefined;
   } = {},
 ): string {
   if (!memoryEnabled()) return basePrompt;

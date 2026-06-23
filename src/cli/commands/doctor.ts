@@ -53,11 +53,11 @@ export interface DoctorCheck {
 }
 
 export interface DoctorOptions {
-  json?: boolean;
+  json?: boolean | undefined;
 }
 
 export interface DoctorRunOptions {
-  promptCacheStats?: PromptCacheStats;
+  promptCacheStats?: PromptCacheStats | undefined;
 }
 
 type Level = DoctorLevel;
@@ -218,14 +218,14 @@ function checkLegacyModelConfig(): Check {
 
 function checkToolCache(): Check {
   const fileState =
-    process.env.REASONIX_FILE_CACHE === "0" ? "file-cache disabled" : "file-cache enabled";
+    process.env["REASONIX_FILE_CACHE"] === "0" ? "file-cache disabled" : "file-cache enabled";
   const parseState =
-    process.env.REASONIX_PARSE_CACHE === "0" ? "parse-cache disabled" : "parse-cache enabled";
+    process.env["REASONIX_PARSE_CACHE"] === "0" ? "parse-cache disabled" : "parse-cache enabled";
   const webFetchState =
-    process.env.REASONIX_WEB_FETCH_CACHE === "0"
+    process.env["REASONIX_WEB_FETCH_CACHE"] === "0"
       ? "web-fetch-cache disabled"
       : "web-fetch-cache enabled";
-  const debug = process.env.REASONIX_CACHE_DEBUG === "1" ? " · debug eviction logging on" : "";
+  const debug = process.env["REASONIX_CACHE_DEBUG"] === "1" ? " · debug eviction logging on" : "";
   return {
     id: "cache",
     label: "cache        ",
@@ -243,7 +243,7 @@ function checkPromptCache(stats?: PromptCacheStats): Check {
       detail: "disabled via REASONIX_PROMPT_CACHE_MONITOR=0",
     };
   }
-  if (process.env.REASONIX_PROMPT_CACHE_MONITOR === "0") {
+  if (process.env["REASONIX_PROMPT_CACHE_MONITOR"] === "0") {
     return {
       id: "prompt-cache",
       label: "prompt-cache ",
@@ -252,10 +252,10 @@ function checkPromptCache(stats?: PromptCacheStats): Check {
     };
   }
   const diffState =
-    process.env.REASONIX_CACHE_BREAK_DIFF === "0"
+    process.env["REASONIX_CACHE_BREAK_DIFF"] === "0"
       ? "diff patches off via REASONIX_CACHE_BREAK_DIFF=0"
       : "diff patches on";
-  const dir = process.env.REASONIX_CACHE_BREAK_DIFF_DIR ?? "~/.reasonix/tmp";
+  const dir = process.env["REASONIX_CACHE_BREAK_DIFF_DIR"] ?? "~/.reasonix/tmp";
   const sessionState = stats
     ? `${(stats.hitRatio * 100).toFixed(1)}% hit · ${stats.breaks} breaks${stats.lastBreakReason ? ` · last: ${stats.lastBreakReason}` : ""}`
     : "session-local stats unavailable in standalone doctor";
@@ -310,7 +310,7 @@ function promptCacheAssessmentFor(stats: PromptCacheStats | undefined): {
  * registry is intentionally skipped — surfaced here so operators don't mistake
  * the absence of compaction telemetry for a misconfiguration (R-008). */
 function checkMemoryHybridCli(): Check {
-  const killHybrid = process.env.REASONIX_HYBRID_SEARCH === "0";
+  const killHybrid = process.env["REASONIX_HYBRID_SEARCH"] === "0";
   const detail = killHybrid
     ? "disabled via REASONIX_HYBRID_SEARCH=0; CLI falls back to lexical-only"
     : "opt-in via --hybrid; bypass-compact-by-design — output walks stdout (not runCommand), Pillar 4 filter registry intentionally skipped";
@@ -324,7 +324,7 @@ function checkMemoryHybridCli(): Check {
 
 function checkMemoryObservation(): Check {
   const cfg = readConfig();
-  const kill = process.env.REASONIX_MEMORY_AUTO === "0";
+  const kill = process.env["REASONIX_MEMORY_AUTO"] === "0";
   const enabled = cfg.memory?.autoCapture === true && !kill;
   const budgets = cfg.memory?.observationBudgets;
   const recent = countRecentObservationEvents();
@@ -343,7 +343,7 @@ function checkMemoryObservation(): Check {
  * standalone `doctor` process can only report whether the layer is armed. */
 function checkReadDedup(): Check {
   const detail =
-    process.env.REASONIX_DEDUP === "0"
+    process.env["REASONIX_DEDUP"] === "0"
       ? "disabled via REASONIX_DEDUP=0"
       : !loadFilesystemDedupEnabled()
         ? "disabled via config.filesystem.dedupEnabled=false"
@@ -353,7 +353,7 @@ function checkReadDedup(): Check {
 
 function checkCodeRelations(): Check {
   const enabled = loadCodeRelationsEnabled();
-  const env = process.env.REASONIX_CODEREL?.trim();
+  const env = process.env["REASONIX_CODEREL"]?.trim();
   const detail = enabled
     ? "enabled — lightweight on-demand find_references/impact/detect_changes"
     : env
@@ -364,7 +364,7 @@ function checkCodeRelations(): Check {
 
 async function checkCodeGraph(projectRoot: string): Promise<Check> {
   const enabled = loadCodeGraphEnabled();
-  const env = process.env.REASONIX_CODE_GRAPH?.trim();
+  const env = process.env["REASONIX_CODE_GRAPH"]?.trim();
   if (!enabled) {
     const detail = env
       ? `disabled via REASONIX_CODE_GRAPH=${env}`
@@ -413,7 +413,7 @@ async function checkCodeGraph(projectRoot: string): Promise<Check> {
 
 function checkToon(): Check {
   const mode = loadToonMode();
-  const env = process.env.REASONIX_TOON?.trim();
+  const env = process.env["REASONIX_TOON"]?.trim();
   const detail =
     mode === "off"
       ? env
@@ -494,7 +494,7 @@ function checkRateLimitConfig(): Check {
 
 /** Session toolset gating — config state only (hit counts are loop-owned; doctor reports armed state + selection, not pruned tools). */
 function checkToolset(): Check {
-  if (process.env.REASONIX_TOOLGATE === "0") {
+  if (process.env["REASONIX_TOOLGATE"] === "0") {
     return {
       id: "toolset",
       label: "toolset      ",
@@ -540,7 +540,7 @@ function checkVfsLite(): Check {
       label: "vfs-lite     ",
       level: "ok",
       detail:
-        process.env.REASONIX_VFS === "0"
+        process.env["REASONIX_VFS"] === "0"
           ? "disabled via REASONIX_VFS=0"
           : "no shell commands intercepted yet (cat/head/tail/printf byte-identical)",
     };
@@ -599,7 +599,9 @@ function checkProxy(): Check[] {
       },
     ];
   }
-  const resolved = resolveNoProxy(process.env, { extraNoProxy: cfg.noProxy });
+  const resolved = resolveNoProxy(process.env, {
+    ...(cfg.noProxy !== undefined ? { extraNoProxy: cfg.noProxy } : {}),
+  });
   const total = resolved.all.length;
   const sourceSummary = [
     `defaults ${resolved.defaults.length}`,
@@ -627,7 +629,7 @@ function checkProxy(): Check[] {
   return [proxyCheck, routingCheck];
 }
 
-const TTY = process.stdout.isTTY && process.env.TERM !== "dumb";
+const TTY = process.stdout.isTTY && process.env["TERM"] !== "dumb";
 
 function color(text: string, code: string): string {
   if (!TTY) return text;
@@ -648,7 +650,7 @@ function fmtBytes(n: number): string {
 }
 
 async function checkApiKey(): Promise<Check> {
-  const fromEnv = process.env.DEEPSEEK_API_KEY;
+  const fromEnv = process.env["DEEPSEEK_API_KEY"];
   if (fromEnv) {
     return {
       id: "api-key",
@@ -717,7 +719,7 @@ async function checkConfig(): Promise<Check> {
 }
 
 async function checkApiReach(): Promise<Check> {
-  const key = process.env.DEEPSEEK_API_KEY ?? readConfig().apiKey;
+  const key = process.env["DEEPSEEK_API_KEY"] ?? readConfig().apiKey;
   if (!key) {
     return {
       id: "api-reach",
@@ -770,7 +772,7 @@ async function checkApiReach(): Promise<Check> {
 }
 
 async function checkApiPrefixReach(): Promise<Check> {
-  if (process.env.REASONIX_DOCTOR_SKIP_PREFIX_PING === "1") {
+  if (process.env["REASONIX_DOCTOR_SKIP_PREFIX_PING"] === "1") {
     return {
       id: "api-prefix",
       label: "api prefix   ",
@@ -778,7 +780,7 @@ async function checkApiPrefixReach(): Promise<Check> {
       detail: "skipped via REASONIX_DOCTOR_SKIP_PREFIX_PING=1",
     };
   }
-  const key = process.env.DEEPSEEK_API_KEY ?? readConfig().apiKey;
+  const key = process.env["DEEPSEEK_API_KEY"] ?? readConfig().apiKey;
   if (!key) {
     return {
       id: "api-prefix",
@@ -814,7 +816,10 @@ async function checkApiPrefixReach(): Promise<Check> {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 8_000);
     try {
-      await client.pingChatPrefix({ model: pingModel, signal: ctl.signal });
+      await client.pingChatPrefix({
+        ...(pingModel !== undefined ? { model: pingModel } : {}),
+        signal: ctl.signal,
+      });
     } finally {
       clearTimeout(timer);
     }
@@ -966,7 +971,7 @@ async function checkOllama(projectRoot: string): Promise<Check> {
     };
   }
   try {
-    const model = meta?.model || process.env.REASONIX_EMBED_MODEL || "nomic-embed-text";
+    const model = meta?.model || process.env["REASONIX_EMBED_MODEL"] || "nomic-embed-text";
     const status = await checkOllamaStatus(model);
     if (!status.binaryFound) {
       return {

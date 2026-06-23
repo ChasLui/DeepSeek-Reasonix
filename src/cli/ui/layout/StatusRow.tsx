@@ -57,7 +57,9 @@ function Gap(): React.ReactElement {
 
 export function StatusRow({
   statusBar = DEFAULT_STATUS_BAR_CONFIG,
-}: { statusBar?: StatusBarConfig }): React.ReactElement {
+}: {
+  statusBar?: StatusBarConfig | undefined;
+}): React.ReactElement {
   const status = useAgentState((s) => s.status);
   const session = useAgentState((s) => s.session);
   const { stdout } = useStdout();
@@ -265,13 +267,7 @@ function CtxUsagePill({
   );
 }
 
-function McpLoadingPill({
-  ready,
-  total,
-}: {
-  ready: number;
-  total: number;
-}): React.ReactElement {
+function McpLoadingPill({ ready, total }: { ready: number; total: number }): React.ReactElement {
   return (
     <>
       <Text color={TONE.brand} backgroundColor={BG} wrap="truncate">
@@ -293,8 +289,8 @@ function WalletPill({
   showBalance: showBalanceCfg,
 }: {
   sessionCostUsd: number;
-  balance?: number;
-  currency?: string;
+  balance?: number | undefined;
+  currency?: string | undefined;
   showSessionCost: boolean;
   showBalance: boolean;
 }): React.ReactElement {
@@ -336,7 +332,7 @@ function ModePill({
 }: {
   mode: Mode;
   network: NetworkState;
-  detail?: string;
+  detail?: string | undefined;
 }): React.ReactElement {
   const modeLabel = `${t("statusBar.editsLabel")}${mode}`;
   if (network === "online") {

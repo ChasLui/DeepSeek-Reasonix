@@ -20,8 +20,8 @@ export interface TurnInterruptController {
   clearIdleInput: () => boolean;
   notifyCtrlCQuitArmed: () => void;
   quitProcess: () => void;
-  now?: () => number;
-  ctrlCQuitWindowMs?: number;
+  now?: (() => number) | undefined;
+  ctrlCQuitWindowMs?: number | undefined;
 }
 
 export function handleTurnInterrupt(

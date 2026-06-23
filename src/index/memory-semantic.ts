@@ -18,7 +18,7 @@ export interface MemorySemanticHit {
 export interface MemorySemanticAddInput {
   docId: string;
   text: string;
-  embedding?: Float32Array;
+  embedding?: Float32Array | undefined;
 }
 
 interface EmbeddedMemorySemanticInput extends Omit<MemorySemanticAddInput, "embedding"> {
@@ -30,10 +30,14 @@ export type EmbedText = (text: string) => Promise<Float32Array>;
 const DATA_FILE = "embeddings.bin";
 
 export class MemorySemanticStore {
+  public readonly indexDir: string;
+
   private entries: MemorySemanticEntry[] = [];
   private dim = 0;
 
-  constructor(public readonly indexDir: string) {}
+  constructor(indexDir: string) {
+    this.indexDir = indexDir;
+  }
 
   get size(): number {
     return this.entries.length;
@@ -47,7 +51,10 @@ export class MemorySemanticStore {
     return this.entries;
   }
 
-  async add(inputs: readonly MemorySemanticAddInput[], opts: { embedText?: EmbedText } = {}) {
+  async add(
+    inputs: readonly MemorySemanticAddInput[],
+    opts: { embedText?: EmbedText } = {},
+  ): Promise<void> {
     if (inputs.length === 0) return;
     const embedText = opts.embedText ?? ((text: string) => embed(text));
     const missing = inputs.filter((input) => !input.embedding);
@@ -103,7 +110,11 @@ export class MemorySemanticStore {
     return hits.sort((a, b) => b.score - a.score || a.docId.localeCompare(b.docId)).slice(0, topK);
   }
 
-  async query(text: string, topK = 8, opts: { embedText?: EmbedText } = {}) {
+  async query(
+    text: string,
+    topK = 8,
+    opts: { embedText?: EmbedText } = {},
+  ): Promise<MemorySemanticHit[]> {
     const embedText = opts.embedText ?? ((input: string) => embed(input));
     const vector = await embedText(text);
     return this.search(vector, topK);

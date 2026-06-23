@@ -9,7 +9,7 @@ export function parseEscalationMarker(content: string): { matched: boolean; reas
   const m = NEEDS_PRO_MARKER_RE.exec(content.trimStart());
   if (!m) return { matched: false };
   const reason = m[1]?.trim();
-  return { matched: true, reason: reason || undefined };
+  return reason ? { matched: true, reason } : { matched: true };
 }
 
 /** Convenience boolean — same gate the streaming path used to call. */

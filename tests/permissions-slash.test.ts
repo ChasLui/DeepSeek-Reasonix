@@ -12,43 +12,40 @@ function makeLoop(): CacheFirstLoop {
     client: new DeepSeekClient({ apiKey: "sk-test" }),
     prefix: new ImmutablePrefix({ system: "s", toolSpecs: [] }),
     tools: new ToolRegistry(),
-    maxToolIters: 1,
     stream: false,
   });
 }
 
 describe("/permissions slash handler", () => {
   let dir: string;
-  let cfgPath: string;
   let projectRoot: string;
-  const originalHome = process.env.HOME;
-  const originalUserProfile = process.env.USERPROFILE;
+  const originalHome = process.env["HOME"];
+  const originalUserProfile = process.env["USERPROFILE"];
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "reasonix-perms-slash-"));
-    cfgPath = join(dir, "config.json");
     projectRoot = join(dir, "project");
     // Redirect ~/.reasonix → temp dir so the handler's calls (which use
     // defaultConfigPath) land in `cfgPath`. config.test.ts skips this by
     // passing `path` explicitly to every helper, but the slash handler
     // hardcodes the default — so we have to redirect HOME instead.
-    process.env.HOME = dir;
-    process.env.USERPROFILE = dir;
+    process.env["HOME"] = dir;
+    process.env["USERPROFILE"] = dir;
   });
 
   afterEach(() => {
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
     if (originalHome === undefined) {
       // biome-ignore lint/performance/noDelete: the string "undefined" leaks into process.env otherwise
-      delete process.env.HOME;
+      delete process.env["HOME"];
     } else {
-      process.env.HOME = originalHome;
+      process.env["HOME"] = originalHome;
     }
     if (originalUserProfile === undefined) {
       // biome-ignore lint/performance/noDelete: same reason
-      delete process.env.USERPROFILE;
+      delete process.env["USERPROFILE"];
     } else {
-      process.env.USERPROFILE = originalUserProfile;
+      process.env["USERPROFILE"] = originalUserProfile;
     }
   });
 
@@ -69,23 +66,23 @@ describe("/permissions slash handler", () => {
   });
 
   it("bare /permissions lists project entries with 1-based indices", () => {
-    addProjectShellAllowed(projectRoot, "npm run build", join(dir, ".reasonix", "config.json"));
+    addProjectShellAllowed(projectRoot, "pnpm run build", join(dir, ".reasonix", "config.json"));
     addProjectShellAllowed(projectRoot, "deploy.sh", join(dir, ".reasonix", "config.json"));
     const result = handleSlash("permissions", [], makeLoop(), {
       codeRoot: projectRoot,
       editMode: "review",
     });
-    expect(result.info).toMatch(/1\.\s+npm run build/);
+    expect(result.info).toMatch(/1\.\s+pnpm run build/);
     expect(result.info).toMatch(/2\.\s+deploy\.sh/);
   });
 
   it("/permissions add persists a new prefix", () => {
-    const result = handleSlash("permissions", ["add", "npm", "run", "build"], makeLoop(), {
+    const result = handleSlash("permissions", ["add", "pnpm", "run", "build"], makeLoop(), {
       codeRoot: projectRoot,
     });
-    expect(result.info).toMatch(/added.*npm run build/);
+    expect(result.info).toMatch(/added.*pnpm run build/);
     expect(loadProjectShellAllowed(projectRoot, join(dir, ".reasonix", "config.json"))).toContain(
-      "npm run build",
+      "pnpm run build",
     );
   });
 
@@ -105,13 +102,13 @@ describe("/permissions slash handler", () => {
 
   it("/permissions remove drops by exact prefix", () => {
     const cfgFile = join(dir, ".reasonix", "config.json");
-    addProjectShellAllowed(projectRoot, "npm run build", cfgFile);
+    addProjectShellAllowed(projectRoot, "pnpm run build", cfgFile);
     addProjectShellAllowed(projectRoot, "deploy.sh", cfgFile);
     const result = handleSlash("permissions", ["remove", "deploy.sh"], makeLoop(), {
       codeRoot: projectRoot,
     });
     expect(result.info).toMatch(/removed.*deploy\.sh/);
-    expect(loadProjectShellAllowed(projectRoot, cfgFile)).toEqual(["npm run build"]);
+    expect(loadProjectShellAllowed(projectRoot, cfgFile)).toEqual(["pnpm run build"]);
   });
 
   it("/permissions remove drops by 1-based project index", () => {

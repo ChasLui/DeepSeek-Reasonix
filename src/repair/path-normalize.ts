@@ -6,7 +6,7 @@ const PATH_KEYS = ["path", "source", "destination", "file_path", "filepath"] as 
 
 export interface PathNormalizeResult {
   changed: boolean;
-  note?: string;
+  note?: string | undefined;
 }
 
 export function normalizeContainerPaths(call: ToolCall): PathNormalizeResult {
@@ -38,7 +38,7 @@ function stripFromObject(obj: Record<string, unknown>): number {
       count++;
     }
   }
-  const edits = obj.edits;
+  const edits = obj["edits"];
   if (Array.isArray(edits)) {
     for (const item of edits) {
       if (item && typeof item === "object") {

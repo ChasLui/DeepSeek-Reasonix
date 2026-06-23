@@ -1,6 +1,6 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { check as checkUpdate } from "@tauri-apps/plugin-updater";
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactElement } from "react";
 import { t } from "../i18n";
 import { I } from "../icons";
 
@@ -14,7 +14,7 @@ type CheckState =
   | { kind: "outdated"; latest: string }
   | { kind: "error"; message: string };
 
-export function AboutModal({ onClose }: { onClose: () => void }) {
+export function AboutModal({ onClose }: { onClose: () => void }): ReactElement {
   const [check, setCheck] = useState<CheckState>({ kind: "idle" });
 
   const openGitHub = useCallback(() => {
@@ -41,7 +41,12 @@ export function AboutModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="about-mask" onClick={onClose}>
       <div className="about-modal" onClick={(e) => e.stopPropagation()}>
-        <button type="button" className="about-close" onClick={onClose} aria-label={t("about.close")}>
+        <button
+          type="button"
+          className="about-close"
+          onClick={onClose}
+          aria-label={t("about.close")}
+        >
           <I.x size={14} />
         </button>
         <div className="about-brand">
@@ -81,7 +86,10 @@ export function AboutModal({ onClose }: { onClose: () => void }) {
 function CheckStatus({
   check,
   onOpenReleases,
-}: { check: CheckState; onOpenReleases: () => void }) {
+}: {
+  check: CheckState;
+  onOpenReleases: () => void;
+}): ReactElement | null {
   if (check.kind === "idle" || check.kind === "checking") return null;
   if (check.kind === "up-to-date") {
     return (

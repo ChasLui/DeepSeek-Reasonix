@@ -43,7 +43,7 @@ This is where most of the actual integration risk lives.
   - At end-of-turn (just before the next assistant call), spawn one `vitest --run -t a -t b -t c` covering all collected ids.
   - Parse `--reporter=json` output, emit one `test_run` event per id.
   - On any red, revert the offending edits via the existing checkpoint mechanism (`src/checkpoints.ts`), emit a `repair` event so the storm-breaker engages.
-- `/refactor` mode — session flag in `LoopState`. When true, gate is bypassed; on session exit, run `npm run verify` (or `reasonix.config.ts`'s `verify_command`).
+- `/refactor` mode — session flag in `LoopState`. When true, gate is bypassed; on session exit, run `pnpm run verify` (or `reasonix.config.ts`'s `verify_command`).
 - `reasonix.config.ts` schema — add `verify_command` and `test_command_for(test_id)`.
 
 **Tests:**

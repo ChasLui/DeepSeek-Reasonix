@@ -42,14 +42,14 @@ export interface PlanStepListProps {
    * Map of stepId → status. Missing ids default to "pending" so a
    * plan just submitted (no completions yet) renders cleanly.
    */
-  statuses?: Map<string, StepStatus> | Record<string, StepStatus>;
+  statuses?: Map<string, StepStatus> | Record<string, StepStatus> | undefined;
   /**
    * Optional current step — rendered with the `cur` (▸) glyph in cyan
    * even when its status is still "pending", so the user sees which
    * one's about to run. If the step's status is "running" we always
    * use the cur glyph regardless of focusStepId.
    */
-  focusStepId?: string;
+  focusStepId?: string | undefined;
 }
 
 function getStatus(stepId: string, statuses: PlanStepListProps["statuses"]): StepStatus {
@@ -88,7 +88,11 @@ function riskLabel(risk: PlanStepRisk | undefined): { text: string; color: strin
   return null;
 }
 
-function PlanStepListInner({ steps, statuses, focusStepId }: PlanStepListProps) {
+function PlanStepListInner({
+  steps,
+  statuses,
+  focusStepId,
+}: PlanStepListProps): React.ReactElement | null {
   if (steps.length === 0) return null;
   const statusList = steps.map((s) => getStatus(s.id, statuses));
   const total = steps.length;
@@ -160,7 +164,8 @@ function PlanStepListInner({ steps, statuses, focusStepId }: PlanStepListProps) 
   );
 }
 
-export const PlanStepList = React.memo(PlanStepListInner);
+export const PlanStepList: React.MemoExoticComponent<typeof PlanStepListInner> =
+  React.memo(PlanStepListInner);
 
 export function riskOf(step: PlanStep): PlanStepRisk | undefined {
   return step.risk;

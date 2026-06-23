@@ -12,21 +12,16 @@ import "@fontsource/inter/700.css";
 import "katex/dist/katex.min.css";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import {
-  defaultStyleForTheme,
-  isTheme,
-  isThemeStyle,
-  themeForStyle,
-} from "./theme";
+import { defaultStyleForTheme, isTheme, isThemeStyle, themeForStyle } from "./theme";
 
 const stored = localStorage.getItem("reasonix.theme");
 const storedStyle = localStorage.getItem("reasonix.themeStyle");
 if (isThemeStyle(storedStyle)) {
-  document.documentElement.dataset.themeStyle = storedStyle;
-  document.documentElement.dataset.theme = themeForStyle(storedStyle);
+  document.documentElement.dataset["themeStyle"] = storedStyle;
+  document.documentElement.dataset["theme"] = themeForStyle(storedStyle);
 } else if (isTheme(stored)) {
-  document.documentElement.dataset.theme = stored;
-  document.documentElement.dataset.themeStyle = defaultStyleForTheme(stored);
+  document.documentElement.dataset["theme"] = stored;
+  document.documentElement.dataset["themeStyle"] = defaultStyleForTheme(stored);
 }
 
 const platform = /Mac|macOS/i.test(navigator.userAgent)
@@ -34,8 +29,8 @@ const platform = /Mac|macOS/i.test(navigator.userAgent)
   : /Windows/i.test(navigator.userAgent)
     ? "windows"
     : "default";
-document.documentElement.dataset.platform = platform;
-document.body.dataset.platform = platform;
+document.documentElement.dataset["platform"] = platform;
+document.body.dataset["platform"] = platform;
 
 const host = document.getElementById("root");
 if (!host) throw new Error("#root missing");

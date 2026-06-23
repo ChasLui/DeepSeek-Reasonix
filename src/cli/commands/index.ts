@@ -8,12 +8,12 @@ import { t } from "../../index/semantic/i18n.js";
 import { semanticPreflight } from "../../index/semantic/preflight.js";
 
 export interface IndexCommandOptions {
-  rebuild?: boolean;
-  model?: string;
-  dir?: string;
-  ollamaUrl?: string;
-  yes?: boolean;
-  lexicalOnly?: boolean;
+  rebuild?: boolean | undefined;
+  model?: string | undefined;
+  dir?: string | undefined;
+  ollamaUrl?: string | undefined;
+  yes?: boolean | undefined;
+  lexicalOnly?: boolean | undefined;
 }
 
 export async function indexCommand(opts: IndexCommandOptions = {}): Promise<void> {

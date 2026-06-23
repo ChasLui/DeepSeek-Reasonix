@@ -1,0 +1,47 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "oxc"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "error"
+  },
+  "rules": {
+    "no-accumulating-spread": "off",
+    "no-await-in-loop": "off",
+    "no-control-regex": "off",
+    "no-map-spread": "off",
+    "no-new": "off",
+    "no-shadow": "off",
+    "no-underscore-dangle": "off",
+    "no-unsafe-optional-chaining": "off",
+    "no-unused-expressions": "off",
+    "no-unused-vars": "off",
+    "no-useless-escape": "off",
+    "preserve-caught-error": "off",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-extraneous-class": "off"
+  },
+  "env": {
+    "builtin": true,
+    "node": true,
+    "vitest": true
+  },
+  "overrides": [
+    {
+      "files": ["tests/**"],
+      "rules": {
+        "typescript/no-explicit-any": "off"
+      }
+    }
+  ],
+  "ignorePatterns": [
+    "dist/**",
+    "coverage/**",
+    "node_modules/**",
+    "dashboard/dist/**",
+    "dashboard/codemirror.js",
+    "desktop/dist/**",
+    "desktop/src-tauri/target/**"
+  ]
+}

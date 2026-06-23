@@ -21,10 +21,10 @@ function pickFirstIt(file) {
 }
 
 function runOnce(file, name) {
-  const args = ["vitest", "--run", file];
+  const args = ["exec", "vitest", "--run", file];
   if (name) args.push("-t", name);
   const t0 = Date.now();
-  const res = spawnSync("npx", args, { encoding: "utf8", shell: true });
+  const res = spawnSync("pnpm", args, { encoding: "utf8", shell: true });
   const ms = Date.now() - t0;
   return { ms, ok: res.status === 0, stderr: res.stderr.slice(-400) };
 }

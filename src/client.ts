@@ -61,14 +61,28 @@ export interface JsonModeEmptyResponseInfo {
 }
 
 export class Usage {
+  public promptTokens: number;
+  public completionTokens: number;
+  public totalTokens: number;
+  public promptCacheHitTokens: number;
+  public promptCacheMissTokens: number;
+  public reasoningTokens: number;
+
   constructor(
-    public promptTokens = 0,
-    public completionTokens = 0,
-    public totalTokens = 0,
-    public promptCacheHitTokens = 0,
-    public promptCacheMissTokens = 0,
-    public reasoningTokens = 0,
-  ) {}
+    promptTokens = 0,
+    completionTokens = 0,
+    totalTokens = 0,
+    promptCacheHitTokens = 0,
+    promptCacheMissTokens = 0,
+    reasoningTokens = 0,
+  ) {
+    this.promptTokens = promptTokens;
+    this.completionTokens = completionTokens;
+    this.totalTokens = totalTokens;
+    this.promptCacheHitTokens = promptCacheHitTokens;
+    this.promptCacheMissTokens = promptCacheMissTokens;
+    this.reasoningTokens = reasoningTokens;
+  }
 
   get cacheHitRatio(): number {
     const denom = this.promptCacheHitTokens + this.promptCacheMissTokens;
@@ -116,36 +130,40 @@ export interface FimCompletionResponse {
 }
 
 interface FimCompletionRawChoice {
-  text?: string;
-  finish_reason?: string | null;
-  index?: number;
-  logprobs?: unknown | null;
+  text?: string | undefined;
+  finish_reason?: string | null | undefined;
+  index?: number | undefined;
+  logprobs?: unknown | null | undefined;
 }
 
 interface FimCompletionRawResponse {
-  choices?: FimCompletionRawChoice[];
-  usage?: RawUsage;
+  choices?: FimCompletionRawChoice[] | undefined;
+  usage?: RawUsage | undefined;
 }
 
 export interface StreamChunk {
-  contentDelta?: string;
-  reasoningDelta?: string;
+  contentDelta?: string | undefined;
+  reasoningDelta?: string | undefined;
   toolCallDelta?: {
     index: number;
-    id?: string;
-    name?: string;
-    argumentsDelta?: string;
+    id?: string | undefined;
+    name?: string | undefined;
+    argumentsDelta?: string | undefined;
   };
-  usage?: Usage;
-  finishReason?: string;
-  raw: any;
+  usage?: Usage | undefined;
+  finishReason?: string | undefined;
+  raw: unknown;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
 export interface BalanceInfo {
   currency: string;
   total_balance: string;
-  granted_balance?: string;
-  topped_up_balance?: string;
+  granted_balance?: string | undefined;
+  topped_up_balance?: string | undefined;
 }
 
 export interface UserBalance {
@@ -175,15 +193,15 @@ export interface ModelList {
 }
 
 export interface DeepSeekClientOptions {
-  apiKey?: string;
-  baseUrl?: string;
-  timeoutMs?: number;
-  fetch?: typeof fetch;
-  rateLimit?: RateLimitConfig;
-  concurrencyBucket?: ConcurrencyBucket;
+  apiKey?: string | undefined;
+  baseUrl?: string | undefined;
+  timeoutMs?: number | undefined;
+  fetch?: typeof fetch | undefined;
+  rateLimit?: RateLimitConfig | undefined;
+  concurrencyBucket?: ConcurrencyBucket | undefined;
   /** Retry configuration. Pass `{ maxAttempts: 1 }` to disable retries. */
-  retry?: RetryOptions;
-  onJsonModeEmptyResponse?: (info: JsonModeEmptyResponseInfo) => void;
+  retry?: RetryOptions | undefined;
+  onJsonModeEmptyResponse?: ((info: JsonModeEmptyResponseInfo) => void) | undefined;
 }
 
 export class DeepSeekClient {
@@ -198,14 +216,14 @@ export class DeepSeekClient {
   private nextChatRequestAt = 0;
 
   constructor(opts: DeepSeekClientOptions = {}) {
-    const apiKey = opts.apiKey ?? process.env.DEEPSEEK_API_KEY;
+    const apiKey = opts.apiKey ?? process.env["DEEPSEEK_API_KEY"];
     if (!apiKey) {
       throw new Error(
         "DEEPSEEK_API_KEY is not set. Put it in .env or pass apiKey to DeepSeekClient.",
       );
     }
     this.apiKey = apiKey;
-    let url = opts.baseUrl ?? process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com";
+    let url = opts.baseUrl ?? process.env["DEEPSEEK_BASE_URL"] ?? "https://api.deepseek.com";
     // Manual trim — `/\/+$/` is O(n²) on slash-heavy non-matches per CodeQL js/polynomial-redos.
     while (url.endsWith("/")) url = url.slice(0, -1);
     this.baseUrl = url;
@@ -261,27 +279,27 @@ export class DeepSeekClient {
       messages,
       stream,
     };
-    if (opts.tools?.length) payload.tools = this.toolsForPayload(opts);
-    if (opts.toolChoice) payload.tool_choice = opts.toolChoice;
-    if (opts.temperature !== undefined) payload.temperature = opts.temperature;
-    if (opts.maxTokens !== undefined) payload.max_tokens = opts.maxTokens;
-    if (opts.stop !== undefined) payload.stop = opts.stop;
-    if (opts.responseFormat) payload.response_format = opts.responseFormat;
-    if (stream) payload.stream_options = { include_usage: true, ...opts.streamOptions };
-    if (opts.user !== undefined) payload.user_id = opts.user;
-    if (opts.logprobs !== undefined) payload.logprobs = opts.logprobs;
-    if (opts.topLogprobs !== undefined) payload.top_logprobs = opts.topLogprobs;
+    if (opts.tools?.length) payload["tools"] = this.toolsForPayload(opts);
+    if (opts.toolChoice) payload["tool_choice"] = opts.toolChoice;
+    if (opts.temperature !== undefined) payload["temperature"] = opts.temperature;
+    if (opts.maxTokens !== undefined) payload["max_tokens"] = opts.maxTokens;
+    if (opts.stop !== undefined) payload["stop"] = opts.stop;
+    if (opts.responseFormat) payload["response_format"] = opts.responseFormat;
+    if (stream) payload["stream_options"] = { include_usage: true, ...opts.streamOptions };
+    if (opts.user !== undefined) payload["user_id"] = opts.user;
+    if (opts.logprobs !== undefined) payload["logprobs"] = opts.logprobs;
+    if (opts.topLogprobs !== undefined) payload["top_logprobs"] = opts.topLogprobs;
     // see ARCHITECTURE.md#api-surface
     if (opts.thinking && !this._isAzureEndpoint()) {
       // OpenAI-compatible / self-hosted (vLLM, SGLang) read the toggle here.
-      payload.extra_body = { thinking: { type: opts.thinking } };
+      payload["extra_body"] = { thinking: { type: opts.thinking } };
       // Native DeepSeek ignores extra_body.thinking, honoring only top-level.
       if (this._isNativeDeepSeekEndpoint()) {
-        payload.thinking = { type: opts.thinking };
+        payload["thinking"] = { type: opts.thinking };
       }
     }
     if (opts.reasoningEffort) {
-      payload.reasoning_effort = opts.reasoningEffort;
+      payload["reasoning_effort"] = opts.reasoningEffort;
     }
     return payload;
   }
@@ -293,13 +311,13 @@ export class DeepSeekClient {
       prompt: opts.prompt,
       stream: false,
     };
-    if (opts.suffix !== undefined) payload.suffix = opts.suffix;
-    if (opts.echo !== undefined) payload.echo = opts.echo;
-    if (opts.logprobs !== undefined) payload.logprobs = opts.logprobs;
-    if (opts.maxTokens !== undefined) payload.max_tokens = opts.maxTokens;
-    if (opts.stop !== undefined) payload.stop = opts.stop;
-    if (opts.temperature !== undefined) payload.temperature = opts.temperature;
-    if (opts.topP !== undefined) payload.top_p = opts.topP;
+    if (opts.suffix !== undefined) payload["suffix"] = opts.suffix;
+    if (opts.echo !== undefined) payload["echo"] = opts.echo;
+    if (opts.logprobs !== undefined) payload["logprobs"] = opts.logprobs;
+    if (opts.maxTokens !== undefined) payload["max_tokens"] = opts.maxTokens;
+    if (opts.stop !== undefined) payload["stop"] = opts.stop;
+    if (opts.temperature !== undefined) payload["temperature"] = opts.temperature;
+    if (opts.topP !== undefined) payload["top_p"] = opts.topP;
     return payload;
   }
 
@@ -391,7 +409,7 @@ export class DeepSeekClient {
       const resp = await this._fetch(`${this.baseUrl}/user/balance`, {
         method: "GET",
         headers: { Authorization: `Bearer ${this.apiKey}` },
-        signal: opts.signal,
+        ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
       });
       if (!resp.ok) return null;
       const data = (await resp.json()) as UserBalance;
@@ -408,7 +426,7 @@ export class DeepSeekClient {
       const resp = await this._fetch(`${this.baseUrl}/models`, {
         method: "GET",
         headers: { Authorization: `Bearer ${this.apiKey}` },
-        signal: opts.signal,
+        ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
       });
       if (!resp.ok) return null;
       const data = (await resp.json()) as ModelList;
@@ -456,7 +474,7 @@ export class DeepSeekClient {
       maxTokens: 1,
       temperature: 0,
       stop: ["\n"],
-      signal: opts.signal,
+      ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     });
   }
 
@@ -471,9 +489,12 @@ export class DeepSeekClient {
       opts.signal,
       this.endpoint("/beta/completions"),
       JSON.stringify(this.buildFimPayload(opts)),
-      (data: any): FimCompletionResponse => {
-        if (!Array.isArray(data?.choices)) {
-          throw new Error(`DeepSeek response missing choices array (got ${typeof data?.choices})`);
+      (data: unknown): FimCompletionResponse => {
+        const root = asRecord(data);
+        if (!Array.isArray(root["choices"])) {
+          throw new Error(
+            `DeepSeek response missing choices array (got ${typeof root["choices"]})`,
+          );
         }
         const raw = data as FimCompletionRawResponse;
         const choices = (raw.choices ?? []).map((choice, index) => ({
@@ -535,7 +556,7 @@ export class DeepSeekClient {
     signalOpt: AbortSignal | undefined,
     endpoint: string,
     body: string,
-    parse: (data: any) => T,
+    parse: (data: unknown) => T,
   ): Promise<T> {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
@@ -587,18 +608,23 @@ export class DeepSeekClient {
       opts.signal,
       this.endpoint(path),
       JSON.stringify(this.buildPayload(opts, false, path)),
-      (data: any): ChatResponse => {
-        if (!Array.isArray(data?.choices)) {
-          throw new Error(`DeepSeek response missing choices array (got ${typeof data?.choices})`);
+      (data: unknown): ChatResponse => {
+        const root = asRecord(data);
+        const choices = root["choices"];
+        if (!Array.isArray(choices)) {
+          throw new Error(`DeepSeek response missing choices array (got ${typeof choices})`);
         }
-        const firstChoice = data.choices[0] ?? {};
-        const choice = firstChoice.message ?? {};
-        this.observeJsonModeEmptyResponse(opts, firstChoice.finish_reason, choice.content);
+        const firstChoice = asRecord(choices[0]);
+        const choice = asRecord(firstChoice["message"]);
+        this.observeJsonModeEmptyResponse(opts, firstChoice["finish_reason"], choice["content"]);
         return {
-          content: choice.content ?? "",
-          reasoningContent: choice.reasoning_content ?? null,
-          toolCalls: choice.tool_calls ?? [],
-          usage: Usage.fromApi(data.usage),
+          content: typeof choice["content"] === "string" ? choice["content"] : "",
+          reasoningContent:
+            typeof choice["reasoning_content"] === "string" ? choice["reasoning_content"] : null,
+          toolCalls: Array.isArray(choice["tool_calls"])
+            ? (choice["tool_calls"] as ToolCall[])
+            : [],
+          usage: Usage.fromApi(root["usage"] as RawUsage | undefined),
           raw: data,
         };
       },

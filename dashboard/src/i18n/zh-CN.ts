@@ -381,7 +381,7 @@ export const zhCN = {
     project: "项目",
     builtin: "内置",
     addPrefix: "添加前缀",
-    addPlaceholder: '例如 "npm run build" 或 "deploy.sh"',
+    addPlaceholder: '例如 "pnpm run build" 或 "deploy.sh"',
     clearAll: "清除全部",
     alreadyIn: "{prefix} 已在列表中",
     added: "已添加：{prefix}",

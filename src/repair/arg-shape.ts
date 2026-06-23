@@ -14,7 +14,7 @@ export type RepairKind =
 
 export interface RepairOutcome {
   changed: boolean;
-  kind?: RepairKind;
+  kind?: RepairKind | undefined;
 }
 
 export type ShapeRepair = (
@@ -176,11 +176,12 @@ function getPath(root: Record<string, unknown>, path: string[]): unknown {
 
 function setPath(root: Record<string, unknown>, path: string[], value: unknown): void {
   if (path.length === 0) return;
-  let cur: any = root;
+  let cur: Record<string, unknown> | unknown[] = root;
   for (let i = 0; i < path.length - 1; i++) {
     const seg = path[i]!;
-    cur = Array.isArray(cur) ? cur[Number(seg)] : cur[seg];
-    if (cur === null || typeof cur !== "object") return;
+    const next: unknown = Array.isArray(cur) ? cur[Number(seg)] : cur[seg];
+    if (next === null || typeof next !== "object") return;
+    cur = Array.isArray(next) ? next : (next as Record<string, unknown>);
   }
   const last = path[path.length - 1]!;
   if (Array.isArray(cur)) cur[Number(last)] = value;
@@ -189,11 +190,12 @@ function setPath(root: Record<string, unknown>, path: string[], value: unknown):
 
 function deletePath(root: Record<string, unknown>, path: string[]): boolean {
   if (path.length === 0) return false;
-  let cur: any = root;
+  let cur: Record<string, unknown> | unknown[] = root;
   for (let i = 0; i < path.length - 1; i++) {
     const seg = path[i]!;
-    cur = Array.isArray(cur) ? cur[Number(seg)] : cur[seg];
-    if (cur === null || typeof cur !== "object") return false;
+    const next: unknown = Array.isArray(cur) ? cur[Number(seg)] : cur[seg];
+    if (next === null || typeof next !== "object") return false;
+    cur = Array.isArray(next) ? next : (next as Record<string, unknown>);
   }
   const last = path[path.length - 1]!;
   if (Array.isArray(cur)) return false;

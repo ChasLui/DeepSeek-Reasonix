@@ -58,8 +58,8 @@ initial_prompt: |
   and adapters/ for implementations. Tests are flat Vitest files in tests/*.test.ts.
   dashboard/ is the web dashboard and desktop/ is the Tauri app, with Rust under
   desktop/src-tauri/.
-  Use npm run verify as the normal completion gate; targeted commands include
-  npm run lint, npm run typecheck, npm run test, and npm run build.
+  Use pnpm run verify as the normal completion gate; targeted commands include
+  pnpm run lint, pnpm run typecheck, pnpm run test, and pnpm run build.
   Keep generated or local state out of edits: dist/, coverage/, .reasonix/semantic/,
   sessions/, desktop src-tauri build outputs, and Serena cache.
   Follow CONTRIBUTING.md: strict TypeScript, Biome formatting, named exports, sparse

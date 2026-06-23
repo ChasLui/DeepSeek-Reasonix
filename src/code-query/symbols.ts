@@ -25,7 +25,7 @@ export interface CodeSymbol {
   column: number;
   endLine: number;
   endColumn: number;
-  parent?: string;
+  parent?: string | undefined;
 }
 
 const TS_QUERY = `

@@ -35,13 +35,13 @@ export interface FilesystemToolsOptions {
   /** Absolute directory the tools may read/write. Paths outside this are refused. */
   rootDir: string;
   /** false → register only read-side tools. Default true. */
-  allowWriting?: boolean;
+  allowWriting?: boolean | undefined;
   /** Files at or under this size get full content; larger go to outline mode. Default 64 KiB. */
-  outlineThresholdBytes?: number;
+  outlineThresholdBytes?: number | undefined;
   /** Cap on total bytes from listing/grep tools — bounds tree-as-one-string accidents. */
-  maxListBytes?: number;
+  maxListBytes?: number | undefined;
   /** false → disable read_file's session read-dedup. Default true. (Env REASONIX_DEDUP=0 also disables, per-call.) */
-  dedupEnabled?: boolean;
+  dedupEnabled?: boolean | undefined;
 }
 
 /** 64 KiB covers ~99% of source files; larger ones (generated bundles, lockfiles, novels) outline-mode by default to keep the cache prefix slim. */
@@ -287,16 +287,16 @@ export function registerFilesystemTools(
     fn: async (
       args: {
         path: string;
-        head?: number;
-        tail?: number;
-        range?: string;
-        level?: "minimal" | "aggressive";
-        force?: boolean;
+        head?: number | undefined;
+        tail?: number | undefined;
+        range?: string | undefined;
+        level?: "minimal" | "aggressive" | undefined;
+        force?: boolean | undefined;
       },
-      ctx?: ToolCallContext,
+      ctx?: ToolCallContext | undefined,
     ) => {
       const dedupState =
-        !args.force && dedupEnabled && process.env.REASONIX_DEDUP !== "0" && ctx?.readDedup
+        !args.force && dedupEnabled && process.env["REASONIX_DEDUP"] !== "0" && ctx?.readDedup
           ? ctx.readDedup
           : null;
       // Claim the in-flight slot SYNCHRONOUSLY, before the first await, so
@@ -543,7 +543,7 @@ export function registerFilesystemTools(
     },
     fn: async (
       args: { path?: string; maxDepth?: number; include_deps?: boolean },
-      ctx?: ToolCallContext,
+      ctx?: ToolCallContext | undefined,
     ) => {
       const startAbs = await safePath(args.path ?? ".", "directory_tree", ctx);
       const maxDepth = typeof args.maxDepth === "number" ? args.maxDepth : 2;
@@ -638,7 +638,10 @@ export function registerFilesystemTools(
       searchFiles(
         { rootDir, maxListBytes, skipDirNames: SKIP_DIR_NAMES },
         await safePath(args.path ?? ".", "search_files", toolCtx),
-        { ...args, signal: toolCtx?.signal },
+        {
+          ...args,
+          ...(toolCtx?.signal !== undefined ? { signal: toolCtx.signal } : {}),
+        },
       ),
   });
 
@@ -688,12 +691,12 @@ export function registerFilesystemTools(
     fn: async (
       args: {
         pattern: string;
-        path?: string;
-        glob?: string;
-        case_sensitive?: boolean;
-        include_deps?: boolean;
-        context?: number;
-        summary_only?: boolean;
+        path?: string | undefined;
+        glob?: string | undefined;
+        case_sensitive?: boolean | undefined;
+        include_deps?: boolean | undefined;
+        context?: number | undefined;
+        summary_only?: boolean | undefined;
       },
       toolCtx,
     ) =>
@@ -749,10 +752,10 @@ export function registerFilesystemTools(
     fn: async (
       args: {
         pattern: string;
-        path?: string;
-        sort_by?: "mtime" | "name";
-        include_deps?: boolean;
-        limit?: number;
+        path?: string | undefined;
+        sort_by?: "mtime" | "name" | undefined;
+        include_deps?: boolean | undefined;
+        limit?: number | undefined;
       },
       toolCtx,
     ) =>
@@ -871,7 +874,7 @@ export function registerFilesystemTools(
     },
     fn: async (
       args: { edits: Array<{ path: string; search: string; replace: string }> },
-      ctx?: ToolCallContext,
+      ctx?: ToolCallContext | undefined,
     ) => {
       const resolved = await Promise.all(
         (args.edits ?? []).map(async (e) => ({

@@ -2,7 +2,7 @@ import type { DashboardContext } from "../context.js";
 import type { ApiResult } from "../router.js";
 
 interface SubmitBody {
-  prompt?: unknown;
+  prompt?: unknown | undefined;
 }
 
 function parseBody(raw: string): SubmitBody {
@@ -37,7 +37,10 @@ export async function handleSubmit(
   if (typeof prompt !== "string" || !prompt.trim()) {
     return { status: 400, body: { error: "prompt (non-empty string) required" } };
   }
-  const result = ctx.submitPrompt(prompt);
+  const result = ctx.submitPrompt?.(prompt);
+  if (!result) {
+    return { status: 503, body: { accepted: false, reason: "prompt submission unavailable" } };
+  }
   if (!result.accepted) {
     return {
       status: 409,

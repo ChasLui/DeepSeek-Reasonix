@@ -6,11 +6,11 @@ import { getDb } from "../../storage/db.js";
 
 export interface EventsOptions {
   name: string;
-  type?: string;
-  since?: number;
-  tail?: number;
-  json?: boolean;
-  projection?: boolean;
+  type?: string | undefined;
+  since?: number | undefined;
+  tail?: number | undefined;
+  json?: boolean | undefined;
+  projection?: boolean | undefined;
 }
 
 export function eventsCommand(opts: EventsOptions): void {
@@ -22,7 +22,6 @@ export function eventsCommand(opts: EventsOptions): void {
     console.error(`looked at: ${source}`);
     console.error("(sessions record events on their first turn — has this session run yet?)");
     process.exit(1);
-    return;
   }
 
   if (opts.type) events = events.filter((e) => e.type === opts.type);

@@ -46,36 +46,36 @@ describe("compareVersions", () => {
 });
 
 describe("isNpxInstall", () => {
-  const originalArgv1 = process.argv[1];
-  const originalUa = process.env.npm_config_user_agent;
+  const originalArgv1 = process.argv[1] ?? "";
+  const originalUa = process.env["npm_config_user_agent"];
 
   afterEach(() => {
     process.argv[1] = originalArgv1;
     if (originalUa === undefined) {
       // biome-ignore lint/performance/noDelete: restore missing env var exactly
-      delete process.env.npm_config_user_agent;
+      delete process.env["npm_config_user_agent"];
     } else {
-      process.env.npm_config_user_agent = originalUa;
+      process.env["npm_config_user_agent"] = originalUa;
     }
   });
 
   it("detects _npx path fragment", () => {
     process.argv[1] = "/Users/x/.npm/_npx/abc123/node_modules/.bin/reasonix";
     // biome-ignore lint/performance/noDelete: cover the no-env case
-    delete process.env.npm_config_user_agent;
+    delete process.env["npm_config_user_agent"];
     expect(isNpxInstall()).toBe(true);
   });
 
   it("detects npx via user-agent string", () => {
     process.argv[1] = "/usr/local/bin/reasonix";
-    process.env.npm_config_user_agent = "npx/10.2.4 npm/10.2.4 node/v20.10.0";
+    process.env["npm_config_user_agent"] = "npx/10.2.4 npm/10.2.4 node/v20.10.0";
     expect(isNpxInstall()).toBe(true);
   });
 
   it("returns false for plain global install", () => {
     process.argv[1] = "/usr/local/lib/node_modules/reasonix/dist/cli/index.js";
     // biome-ignore lint/performance/noDelete: cover the no-env case
-    delete process.env.npm_config_user_agent;
+    delete process.env["npm_config_user_agent"];
     expect(isNpxInstall()).toBe(false);
   });
 });

@@ -29,7 +29,7 @@ function resolveAssetDir(): string {
 
 const ASSET_DIR = resolveAssetDir();
 
-/** mtime-keyed cache — `npm run build` invalidates without restart. */
+/** mtime-keyed cache — `pnpm run build` invalidates without restart. */
 const fileCache = new Map<string, { body: string; mtimeMs: number }>();
 
 function loadCachedFile(path: string): string {

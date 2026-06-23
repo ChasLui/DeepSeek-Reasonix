@@ -2,7 +2,7 @@
 
 export interface CapabilityDescriptor {
   name: string;
-  description?: string;
+  description?: string | undefined;
   readOnly: boolean;
   permission: "ask" | "allow" | "deny";
 }
@@ -20,7 +20,7 @@ export type ToolDispatchOutcome =
       callId: string;
       ok: boolean;
       output: string;
-      truncated?: boolean;
+      truncated?: boolean | undefined;
       durationMs: number;
     }
   | {

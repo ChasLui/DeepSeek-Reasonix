@@ -19,7 +19,7 @@ verify the cache-hit / cost claims *without running the bench*.
 
 ```bash
 # Install and build (or run from source via tsx)
-npm install
+pnpm install
 
 # Rebuild the summary — this does NOT call the API; it reads the JSONL.
 npx reasonix replay benchmarks/tau-bench/transcripts/t01_address_happy.reasonix.r1.jsonl
@@ -43,7 +43,7 @@ Headline numbers from the committed run:
 ```bash
 export DEEPSEEK_API_KEY=sk-...
 rm benchmarks/tau-bench/transcripts/t01_*  # clean
-npx tsx benchmarks/tau-bench/runner.ts \
+pnpm exec tsx benchmarks/tau-bench/runner.ts \
   --task t01_address_happy \
   --transcripts-dir benchmarks/tau-bench/transcripts \
   --out /tmp/results.json

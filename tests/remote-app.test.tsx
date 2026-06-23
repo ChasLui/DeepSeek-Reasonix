@@ -21,6 +21,14 @@ function fakeConnect(captured: { opts?: DaemonClientOptions }) {
       newSession: async () => "sess-X",
       prompt: async () => "end_turn",
       ping: async () => ({ pid: 1, version: "x", sessions: 1 }),
+      configure: async () => undefined,
+      setBudget: async () => undefined,
+      stats: async () => ({ turns: [], totalCost: 0, aggregateCacheHitRatio: 0 }) as never,
+      retry: async () => null,
+      compact: async () => undefined,
+      chat: async () => "",
+      balance: async () => null,
+      cancel: () => undefined,
       close: () => undefined,
     };
   };

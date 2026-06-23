@@ -12,7 +12,16 @@ import {
   StopCircle,
   Trash2,
 } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type Dispatch,
+  type ReactElement,
+  type ReactNode,
+  type SetStateAction,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { t, useLang } from "./i18n";
 import { Shortcut, type ShortcutKey } from "./ui/shortcut";
 
@@ -28,7 +37,12 @@ export type Command = {
   run: () => void;
 };
 
-export function useCommandPalette(active: boolean = true) {
+export interface CommandPaletteState {
+  open: boolean;
+  setOpen: Dispatch<SetStateAction<boolean>>;
+}
+
+export function useCommandPalette(active: boolean = true): CommandPaletteState {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     // Skip in background tabs — each TabRuntime calls this hook, so without the gate Cmd+K toggles every tab's palette at once.
@@ -45,7 +59,7 @@ export function useCommandPalette(active: boolean = true) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [active]);
-  return { open, setOpen };
+  return { open: open, setOpen: setOpen };
 }
 
 export type CommandHandlers = {
@@ -181,10 +195,14 @@ const GROUP_ORDER: CommandGroup[] = ["nav", "action", "workspace", "settings"];
 
 function groupLabel(g: CommandGroup): string {
   switch (g) {
-    case "nav": return t("palette.groupNav");
-    case "action": return t("palette.groupAction");
-    case "workspace": return t("palette.groupWorkspace");
-    case "settings": return t("palette.groupSettings");
+    case "nav":
+      return t("palette.groupNav");
+    case "action":
+      return t("palette.groupAction");
+    case "workspace":
+      return t("palette.groupWorkspace");
+    case "settings":
+      return t("palette.groupSettings");
   }
 }
 
@@ -196,7 +214,7 @@ export function CommandPalette({
   open: boolean;
   onClose: () => void;
   commands: Command[];
-}) {
+}): ReactElement | null {
   useLang();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -235,14 +253,14 @@ export function CommandPalette({
       arr.push(c);
       byGroup.set(c.group, arr);
     }
-    return GROUP_ORDER
-      .map((g) => ({ group: g, items: byGroup.get(g) ?? [] }))
-      .filter((s) => s.items.length > 0);
+    return GROUP_ORDER.map((g) => ({ group: g, items: byGroup.get(g) ?? [] })).filter(
+      (s) => s.items.length > 0,
+    );
   }, [filtered]);
 
   if (!open) return null;
 
-  const run = (cmd: Command) => {
+  const run = (cmd: Command): void => {
     cmd.run();
     onClose();
   };
@@ -276,9 +294,7 @@ export function CommandPalette({
           </span>
         </div>
         <div className="cmdk-body" ref={listRef}>
-          {filtered.length === 0 ? (
-            <div className="cmdk-empty">{t("palette.empty")}</div>
-          ) : null}
+          {filtered.length === 0 ? <div className="cmdk-empty">{t("palette.empty")}</div> : null}
           {grouped.map((section) => (
             <div className="cmdk-group" key={section.group}>
               <div className="cmdk-gh">{groupLabel(section.group)}</div>
@@ -331,7 +347,11 @@ export function CommandPalette({
   );
 }
 
-export function Toast({ message }: { message: { msg: string; yolo?: boolean } | null }) {
+export function Toast({
+  message,
+}: {
+  message: { msg: string; yolo?: boolean } | null;
+}): ReactElement | null {
   if (!message) return null;
   if (message.yolo) {
     return (

@@ -6,7 +6,7 @@
 
 Reasonix is a DeepSeek-native coding agent (CLI + TUI + Tauri desktop). The architecture is **opinionated, not generic** — every abstraction exists because DeepSeek's prefix-cache mechanic or pricing demanded it. Do not generalize for "future providers"; the project explicitly rejects multi-provider support.
 
-Node ≥ 22, TS 5.6+ ES2022 ESM, Vitest, Biome, tsup. npm workspaces (`packages/core-utils` is the only sub-workspace; `desktop/` is a separate sibling project).
+Node ≥ 22, pnpm 10, TS 6 + tsgo 7 native preview, ES2022 ESM, Vitest 4, OXLint/OXFmt, Rolldown. pnpm workspaces include `packages/core-utils` and `desktop/`.
 
 ## Working mode (read before editing)
 
@@ -14,14 +14,14 @@ Four behavioral rules, derived from [Karpathy's LLM-coding pitfalls](https://git
 
 1. **Think before coding** — surface assumptions; if multiple interpretations exist, ask. Before borrowing or planning, grep the authoritative source (`docs/ARCHITECTURE.md`, current `HEAD`) — memory and prior plans drift.
 2. **Simplicity first** — minimum code that solves the actual ask. No speculative features, no "future-provider" abstractions, no error handling for impossible scenarios.
-3. **Surgical changes** — every changed line must trace to the user request. Match existing style. Don't reformat adjacent code or run bare `biome --write` (scope creep cerebrum-recorded 2026-05-25).
+3. **Surgical changes** — every changed line must trace to the user request. Match existing style. Don't reformat adjacent code or run repo-wide formatter writes (scope creep cerebrum-recorded 2026-05-25).
 4. **Goal-driven execution** — convert "fix the bug" into "write a failing test, then make it pass." For multi-step work, write the plan first with explicit verify checkpoints (`bin/plan-lint.sh` enforces this for RAL plans).
 
 Bias: **caution over speed** for anything touching `src/loop.ts`, `src/repair/`, `src/tools/`, `src/mcp/`. For trivial single-line fixes, use judgment.
 
 ## Project Structure & Module Organization
 
-Main source lives in `src/`: `src/cli/` holds CLI commands and Ink UI, `src/tools/` tool definitions, `src/mcp/` MCP clients and transports, `src/core/` the event kernel, `src/ports/` interfaces, `src/adapters/` implementations. Tests are flat Vitest files in `tests/*.test.ts`; shared helpers live in `tests/helpers/`. `dashboard/` is the web dashboard, `desktop/` the Tauri app, `benchmarks/` evaluation harnesses, `packages/*` npm workspaces. Treat `dist/`, coverage output, and `.reasonix/semantic/` as generated.
+Main source lives in `src/`: `src/cli/` holds CLI commands and Ink UI, `src/tools/` tool definitions, `src/mcp/` MCP clients and transports, `src/core/` the event kernel, `src/ports/` interfaces, `src/adapters/` implementations. Tests are flat Vitest files in `tests/*.test.ts`; shared helpers live in `tests/helpers/`. `dashboard/` is the web dashboard, `desktop/` the Tauri app, `benchmarks/` evaluation harnesses, `packages/*` pnpm workspaces. Treat `dist/`, coverage output, and `.reasonix/semantic/` as generated.
 
 ### Layout — where things live
 
@@ -46,9 +46,9 @@ Main source lives in `src/`: `src/cli/` holds CLI commands and Ink UI, `src/tool
 | `src/cli/commands/` | `chat`, `code`, `run`, `doctor`, `replay`, `stats`, `events`, `index`, `mcp`, `prune-sessions`, `update` |
 | `src/cli/ui/` | Ink TUI. `App.tsx` is the root; `slash/handlers/` is one file per topic |
 | `src/cli/ui/slash/handlers/` | Per-topic slash handlers (≤200 LOC each). Adding a slash command = one handler file + one registry line in `commands.ts` |
-| `packages/core-utils` | Shared bits used across CLI / Desktop / Dashboard / ACP (`derive-prefix`, `tildeify`, `tool-kind`, `permission-types`) — `noExternal` bundled by tsup |
+| `packages/core-utils` | Shared bits used across CLI / Desktop / Dashboard / ACP (`derive-prefix`, `tildeify`, `tool-kind`, `permission-types`) |
 | `desktop/` | Tauri 2 client (separate package, React 19, Vite) |
-| `dashboard/` | Browser SPA — built into `dashboard/dist/` by tsup, served by `src/server/` |
+| `dashboard/` | Browser SPA — built into `dashboard/dist/` by Rolldown, served by `src/server/` |
 | `benchmarks/` | τ-bench + harvest harnesses. CI smoke-tests `--dry` (no LLM calls) |
 | `tests/` | Flat Vitest layout. `tests/comment-policy.test.ts` enforces the comment rules |
 | `dist/`, `.reasonix/semantic/`, `sessions/`, `.reasonix/sessions/` | **Generated / user-private — never hand-edit** |
@@ -56,24 +56,24 @@ Main source lives in `src/`: `src/cli/` holds CLI commands and Ink UI, `src/tool
 ## Build, Test, and Development Commands
 
 ```sh
-npm install                # Node 22+ workspace deps
-npm run dev                # tsx src/cli/index.ts (live source)
-npm run chat               # tsx src/cli/index.ts chat
-npm run build              # tsup → dist/ (+ dashboard vendor css copy)
-npm run lint               # biome check src tests
-npm run lint:fix
-npm run format
-npm run typecheck          # tsc --noEmit && tsc --noEmit -p dashboard
-npm run test               # vitest run
-npm run test:watch
-npm run test:coverage      # v8, what CI runs
-npm run test:mutation      # stryker
-npm run verify             # build + lint + typecheck + test  (pre-push gate)
+pnpm install               # Node 22+ workspace deps
+pnpm run dev               # tsx src/cli/index.ts (live source)
+pnpm run chat              # tsx src/cli/index.ts chat
+pnpm run build             # Rolldown → dist/ + dashboard/dist (+ vendor css / grammars copy)
+pnpm run lint              # oxlint src tests dashboard/src desktop/src packages/core-utils/src
+pnpm run lint:fix
+pnpm run format            # oxfmt src tests dashboard/src desktop/src packages/core-utils/src
+pnpm run typecheck         # tsgo root/tests/dashboard/core-utils/desktop + declaration probes
+pnpm run test              # vitest run
+pnpm run test:watch
+pnpm run test:coverage     # v8, what CI runs
+pnpm run test:mutation     # stryker
+pnpm run verify            # build + lint + typecheck + test  (pre-push gate)
 ```
 
-Run a single test file: `npx vitest run tests/loop.test.ts`. Filter by name: `npx vitest run -t "scavenge"`. Tests live flat in `tests/**/*.test.ts(x)` (no nested mirror of `src/`), with `tests/setup-lang.ts` as global setup and `retry: 1` to absorb Windows scheduler hiccups — a real failure still re-fails on retry.
+Run a single test file: `pnpm exec vitest run tests/loop.test.ts`. Filter by name: `pnpm exec vitest run -t "scavenge"`. Tests live flat in `tests/**/*.test.ts(x)` (no nested mirror of `src/`), with `tests/setup-lang.ts` as global setup and `retry: 1` to absorb Windows scheduler hiccups — a real failure still re-fails on retry.
 
-Desktop (separate workspace, not part of root build): `cd desktop && npm install && npm run tauri dev` (or `npm run dev` / `npm run build`).
+Desktop: `pnpm --dir desktop run tauri dev` (or `pnpm --dir desktop run dev` / `pnpm --dir desktop run build`).
 
 ## Architecture — the five pillars
 
@@ -99,15 +99,15 @@ Enforcement: `bash bin/plan-lint.sh docs/plans/<plan>.md` must exit 0 (E001 file
 
 ## Coding Style & Naming Conventions
 
-Strict TypeScript, named exports, explicit `import type` for type-only imports. Biome enforces 2-space indentation, double quotes, semicolons, trailing commas, 100-column formatting. Prefer focused files with one responsibility; avoid `index.ts` barrels unless they meaningfully shrink the public surface. Comments explain non-obvious *why* only.
+Strict TypeScript, named exports, explicit `import type` for type-only imports. OXFmt/OXLint enforce 2-space indentation, double quotes, semicolons, trailing commas, and local lint rules. Prefer focused files with one responsibility; avoid `index.ts` barrels unless they meaningfully shrink the public surface. Comments explain non-obvious *why* only.
 
 ## Code rules (enforced — read `CONTRIBUTING.md`)
 
-`tests/comment-policy.test.ts` runs in `npm run verify` and **gates pre-push**.
+`tests/comment-policy.test.ts` runs in `pnpm run verify` and **gates pre-push**.
 
 - **Comments default to none.** Only when *why* is non-obvious (hidden constraint, workaround, invariant the type system can't express). No "what" comments. One line max — multi-line means the code itself needs clarification.
 - **No module-level docstrings, section banners (`// ─── helpers ───`), conversation history (`// user reported X`), or restated `@param` docs.**
-- **TypeScript strict.** `noUncheckedIndexedAccess`, `noImplicitOverride`. No `any` without a `// biome-ignore` and a reason.
+- **TypeScript strict.** `noUncheckedIndexedAccess`, `noImplicitOverride`. No `any` without a scoped lint suppression and a reason.
 - **Libraries over hand-rolled.** Visual width → `string-width`. Grapheme segmentation → `Intl.Segmenter`. Color → `theme.ts` constants, not raw hex.
 - **Error handling.** Boundary code validates (user input, network, FS). Internal code trusts. No try/catch for "internal" errors. No graceful fallback silently masking bugs — log + crash > silent wrong output.
 - **Imports.** Explicit `import type` for type-only. No barrel re-exports. Named exports only — no `export default`. Entry: `src/index.ts`.
@@ -124,11 +124,11 @@ Strict TypeScript, named exports, explicit `import type` for type-only imports. 
 
 ## Testing Guidelines
 
-Vitest 2.x with `describe`, `it`, `expect` (`globals: false` — import them). Name tests `<module>.test.ts` flat in `tests/`. Focus on regressions, invariants, edge cases, and boundary behavior — not type signatures or coverage bumps. `tests/fixtures/` and `tests/helpers/` are shared scaffolds; `tests/repair/` mirrors the repair pipeline. CI runs on Node 22 (Ubuntu + Windows), then smoke-tests the τ-bench runner with `--dry` (no `DEEPSEEK_API_KEY` needed). Run targeted tests while developing, then `npm run verify`.
+Vitest 4.x with `describe`, `it`, `expect` (`globals: false` — import them). Name tests `<module>.test.ts` flat in `tests/`. Focus on regressions, invariants, edge cases, and boundary behavior — not type signatures or coverage bumps. `tests/fixtures/` and `tests/helpers/` are shared scaffolds; `tests/repair/` mirrors the repair pipeline. CI runs on Node 22 (Ubuntu + Windows), then smoke-tests the τ-bench runner with `--dry` (no `DEEPSEEK_API_KEY` needed). Run targeted tests while developing, then `pnpm run verify`.
 
 ## Commit & Pull Request Guidelines
 
-Imperative conventional style with scopes — e.g. `fix(cli): handle empty prompt`, `feat(net): honor NO_PROXY`. One logical change per commit; separate refactors from behavior changes. PRs state what changed, why, and how to verify. Link issues, include screenshots for UI changes, ensure `npm run verify` passes, do not edit `CHANGELOG.md`, and **do not add `Co-Authored-By: Claude` trailers**.
+Imperative conventional style with scopes — e.g. `fix(cli): handle empty prompt`, `feat(net): honor NO_PROXY`. One logical change per commit; separate refactors from behavior changes. PRs state what changed, why, and how to verify. Link issues, include screenshots for UI changes, ensure `pnpm run verify` passes, do not edit `CHANGELOG.md`, and **do not add `Co-Authored-By: Claude` trailers**.
 
 ## Security & Configuration Tips
 
@@ -136,11 +136,11 @@ Keep secrets out of source. Use `.env.example` for documented variables, local `
 
 ## Things to leave alone
 
-- `dist/` — tsup output, regenerated.
+- `dist/` — Rolldown output, regenerated.
 - `.reasonix/semantic/` — auto-generated vector index.
 - `sessions/`, `.reasonix/sessions/` — user-private, gitignored.
 - `data/deepseek-tokenizer.json.gz` — shipped tokenizer asset.
-- `dashboard/codemirror.js` — vendored, biome-ignored.
+- `dashboard/codemirror.js` — vendored, formatter-ignored.
 - `CHANGELOG.md` — maintainer-only.
 
 ## h5i Integration

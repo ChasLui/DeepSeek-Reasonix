@@ -1,7 +1,7 @@
 // Daemon warm-sharing bench (deterministic, no API): the cold-start retrieval-index
 // tax a fresh CLI process pays every session vs the warm cache a long-lived daemon
 // reuses across sessions. Measures real code-graph + lexical (BM25) build/load on
-// this repo. Run: npx tsx scripts/bench-daemon-warm.mts [workspaceRoot]
+// this repo. Run: pnpm exec tsx scripts/bench-daemon-warm.mts [workspaceRoot]
 
 import { resolve } from "node:path";
 import { performance } from "node:perf_hooks";

@@ -45,8 +45,13 @@ function tool(name: string): ToolSpec {
 }
 
 function requestBody(fetchFn: ReturnType<typeof vi.fn>, call = 0): Record<string, unknown> {
-  const [, init] = fetchFn.mock.calls[call]!;
+  const [, init] = fetchFn.mock.calls[call] as unknown[];
   return JSON.parse(String((init as RequestInit).body)) as Record<string, unknown>;
+}
+
+function requestUrl(fetchFn: ReturnType<typeof vi.fn>, call = 0): string {
+  const [url] = fetchFn.mock.calls[call] as unknown[];
+  return String(url);
 }
 
 function clientFor(fetchFn: ReturnType<typeof vi.fn>, baseUrl?: string): DeepSeekClient {
@@ -100,7 +105,7 @@ describe("DeepSeekClient chat API surface", () => {
       /* drain */
     }
 
-    expect(requestBody(fetchFn).stream_options).toEqual({
+    expect(requestBody(fetchFn)["stream_options"]).toEqual({
       include_usage: false,
     });
   });
@@ -171,8 +176,7 @@ describe("DeepSeekClient chat API surface", () => {
       stop: ["```"],
     });
 
-    const [url] = fetchFn.mock.calls[0]!;
-    expect(String(url)).toBe("https://api.deepseek.com/beta/chat/completions");
+    expect(requestUrl(fetchFn)).toBe("https://api.deepseek.com/beta/chat/completions");
     expect(requestBody(fetchFn)).toMatchObject({
       stop: ["```"],
       messages: [
@@ -196,7 +200,7 @@ describe("DeepSeekClient chat API surface", () => {
 
     const body = requestBody(fetchFn);
     expect(body).toMatchObject({ thinking: { type: "disabled" } });
-    expect(body.extra_body).toMatchObject({ thinking: { type: "disabled" } });
+    expect(body["extra_body"]).toMatchObject({ thinking: { type: "disabled" } });
   });
 
   it("omits top-level thinking for non-native OpenAI-compatible endpoints", async () => {
@@ -211,7 +215,7 @@ describe("DeepSeekClient chat API surface", () => {
 
     const body = requestBody(fetchFn);
     expect(body).not.toHaveProperty("thinking");
-    expect(body.extra_body).toMatchObject({ thinking: { type: "enabled" } });
+    expect(body["extra_body"]).toMatchObject({ thinking: { type: "enabled" } });
   });
 
   it("uses the same prefix request shape for doctor prefix ping", async () => {
@@ -220,8 +224,7 @@ describe("DeepSeekClient chat API surface", () => {
 
     await client.pingChatPrefix();
 
-    const [url] = fetchFn.mock.calls[0]!;
-    expect(String(url)).toBe("https://api.deepseek.com/beta/chat/completions");
+    expect(requestUrl(fetchFn)).toBe("https://api.deepseek.com/beta/chat/completions");
     expect(requestBody(fetchFn)).toMatchObject({
       model: "deepseek-v4-flash",
       max_tokens: 1,
@@ -259,8 +262,7 @@ describe("DeepSeekClient chat API surface", () => {
       logprobs: 2,
     });
 
-    const [url] = fetchFn.mock.calls[0]!;
-    expect(String(url)).toBe("https://api.deepseek.com/beta/completions");
+    expect(requestUrl(fetchFn)).toBe("https://api.deepseek.com/beta/completions");
     expect(requestBody(fetchFn)).toMatchObject({
       model: "deepseek-v4-pro",
       prompt: "def fib(a):\n",
@@ -297,8 +299,7 @@ describe("DeepSeekClient chat API surface", () => {
       prompt: "const x = ",
     });
 
-    const [url] = fetchFn.mock.calls[0]!;
-    expect(String(url)).toBe("https://api.deepseek.com/beta/completions");
+    expect(requestUrl(fetchFn)).toBe("https://api.deepseek.com/beta/completions");
   });
 
   it("validates FIM logprobs before sending", async () => {
@@ -372,7 +373,7 @@ describe("DeepSeekClient chat API surface", () => {
     });
 
     const body = requestBody(fetchFn);
-    const messages = body.messages as Array<Record<string, unknown>>;
+    const messages = body["messages"] as Array<Record<string, unknown>>;
     expect(messages[1]).not.toHaveProperty("prefix");
     expect(messages[1]).toMatchObject({ role: "assistant", content: "draft" });
   });
@@ -389,7 +390,7 @@ describe("DeepSeekClient chat API surface", () => {
       ],
     });
 
-    const messages = requestBody(fetchFn).messages as Array<Record<string, unknown>>;
+    const messages = requestBody(fetchFn)["messages"] as Array<Record<string, unknown>>;
     expect(messages[1]).toMatchObject({ role: "assistant", prefix: true });
   });
 

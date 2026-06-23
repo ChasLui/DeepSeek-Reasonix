@@ -19,10 +19,10 @@ export interface SessionPickerProps {
   workspace: string;
   onChoose: (outcome: SessionPickerOutcome) => void;
   /** Live wallet currency from App.tsx; falls back to each session's stored `meta.balanceCurrency` per row. */
-  walletCurrency?: string;
+  walletCurrency?: string | undefined;
   /** When provided, broadcasts to the web dashboard so it can resolve via `/api/modal/resolve`. */
-  pickerPorts?: PickerBroadcastPorts;
-  onFocusChange?: (focus: number) => void;
+  pickerPorts?: PickerBroadcastPorts | undefined;
+  onFocusChange?: ((focus: number) => void) | undefined;
 }
 
 const PAGE_MARGIN = 6;
@@ -285,7 +285,7 @@ function SessionRow({
 }: {
   info: SessionInfo;
   focused: boolean;
-  walletCurrency?: string;
+  walletCurrency?: string | undefined;
 }): React.ReactElement {
   const branch = info.meta.branch ?? "main";
   const count = info.messageCount;

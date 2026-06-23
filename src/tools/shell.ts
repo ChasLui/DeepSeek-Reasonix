@@ -25,10 +25,7 @@ export {
   isDqEscape,
   tokenizeCommand,
 } from "./shell/parse.js";
-export type {
-  ResolveExecutableOptions,
-  RunCommandResult,
-} from "./shell/exec.js";
+export type { ResolveExecutableOptions, RunCommandResult } from "./shell/exec.js";
 export {
   injectPowerShellUtf8,
   killProcessTree,
@@ -44,21 +41,21 @@ export interface ShellToolsOptions {
   /** Directory to run commands in. Must be an absolute path. */
   rootDir: string;
   /** Seconds before an individual command is killed. Default: 60. */
-  timeoutSec?: number;
-  maxOutputChars?: number;
+  timeoutSec?: number | undefined;
+  maxOutputChars?: number | undefined;
   /** Getter form is load-bearing — newly-persisted "always allow" prefixes MUST take effect mid-session. */
-  extraAllowed?: readonly string[] | (() => readonly string[]);
+  extraAllowed?: readonly string[] | (() => readonly string[]) | undefined;
   /** Getter form lets `editMode === "yolo"` flip mid-session without re-registering tools. */
-  allowAll?: boolean | (() => boolean);
-  jobs?: JobRegistry;
+  allowAll?: boolean | (() => boolean) | undefined;
+  jobs?: JobRegistry | undefined;
   /** Fired after `run_background` / `stop_job` mutate the registry — used by the desktop popover for near-real-time updates without polling. */
   onJobsChanged?: () => void;
   sensitivePaths?: {
-    prefixes?: readonly string[];
-    patterns?: readonly string[];
+    prefixes?: readonly string[] | undefined;
+    patterns?: readonly string[] | undefined;
   };
   /** Per-command output compaction. Falls back to env-var-driven default when omitted. */
-  compactRuntime?: CompactorRuntime | (() => CompactorRuntime);
+  compactRuntime?: CompactorRuntime | (() => CompactorRuntime) | undefined;
 }
 
 /** Error thrown by `run_command` when the command isn't allowlisted. */
@@ -203,7 +200,11 @@ export function registerShellTools(registry: ToolRegistry, opts: ShellToolsOptio
         const gate = ctx?.confirmationGate ?? pauseGate;
         const choice = await gate.ask({
           kind: "run_background",
-          payload: { command: cmd, cwd, waitSec: args.waitSec },
+          payload: {
+            command: cmd,
+            cwd,
+            ...(args.waitSec !== undefined ? { waitSec: args.waitSec } : {}),
+          },
         });
         if (choice.type === "deny") {
           throw new Error(
@@ -253,7 +254,7 @@ export function registerShellTools(registry: ToolRegistry, opts: ShellToolsOptio
     },
     fn: async (args: { jobId: number; since?: number; tailLines?: number }) => {
       const out = jobs.read(args.jobId, {
-        since: args.since,
+        ...(args.since !== undefined ? { since: args.since } : {}),
         tailLines: args.tailLines ?? 80,
       });
       if (!out) return `job ${args.jobId}: not found (use list_jobs)`;
@@ -291,12 +292,12 @@ export function registerShellTools(registry: ToolRegistry, opts: ShellToolsOptio
     },
     fn: async (args: {
       jobId: number;
-      timeoutMs?: number;
-      waitFor?: "exit" | "output-or-exit";
+      timeoutMs?: number | undefined;
+      waitFor?: "exit" | "output-or-exit" | undefined;
     }) => {
       const out = await jobs.waitForJob(args.jobId, {
-        timeoutMs: args.timeoutMs,
-        waitFor: args.waitFor,
+        ...(args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : {}),
+        ...(args.waitFor !== undefined ? { waitFor: args.waitFor } : {}),
       });
       if (!out) return `job ${args.jobId}: not found (use list_jobs)`;
       if (out.exited) opts.onJobsChanged?.();
@@ -418,11 +419,11 @@ export function formatCommandResult(cmd: string, r: RunCommandResult): string {
 
 /** Env-driven default runtime — flipping REASONIX_COMPACT=0 disables the layer mid-session. */
 function envCompactRuntime(): CompactorRuntime {
-  const flag = process.env.REASONIX_COMPACT;
+  const flag = process.env["REASONIX_COMPACT"];
   if (flag === "0" || flag === "false") {
     return { enabled: false, exclude: new Set() };
   }
-  const excludeRaw = process.env.REASONIX_COMPACT_EXCLUDE;
+  const excludeRaw = process.env["REASONIX_COMPACT_EXCLUDE"];
   const exclude = excludeRaw
     ? new Set(
         excludeRaw

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { I } from "../icons";
 import { t, useLang } from "../i18n";
 
@@ -33,13 +33,9 @@ export function ThinkingPill({
   phase?: "queued" | "thinking" | "tool";
   label: string;
   elapsedMs: number;
-}) {
+}): ReactElement {
   const color =
-    phase === "queued"
-      ? "var(--muted)"
-      : phase === "tool"
-        ? "var(--warning)"
-        : "var(--accent)";
+    phase === "queued" ? "var(--muted)" : phase === "tool" ? "var(--warning)" : "var(--accent)";
   return (
     <div className="thinking">
       <span className="dots" style={{ color }}>
@@ -55,7 +51,7 @@ export function ThinkingPill({
   );
 }
 
-export function LiveReasoning({ lines }: { lines: string[] }) {
+export function LiveReasoning({ lines }: { lines: string[] }): ReactElement {
   useLang();
   return (
     <div className="live-reason">
@@ -82,10 +78,18 @@ export function ToolRunningCard({
   name: string;
   elapsedMs: number;
   logLines?: { text: string; tone?: "ok" | "dim" }[];
-}) {
+}): ReactElement {
   useLang();
   const ic =
-    kind === "shell" ? <I.terminal size={12} /> : kind === "fetch" ? <I.globe size={12} /> : kind === "search" ? <I.search size={12} /> : <I.wrench size={12} />;
+    kind === "shell" ? (
+      <I.terminal size={12} />
+    ) : kind === "fetch" ? (
+      <I.globe size={12} />
+    ) : kind === "search" ? (
+      <I.search size={12} />
+    ) : (
+      <I.wrench size={12} />
+    );
   return (
     <div className="skel-card">
       <div className="h">
@@ -93,7 +97,12 @@ export function ToolRunningCard({
         <span className="kind">{kind}</span>
         <span style={{ color: "var(--fg)", fontWeight: 500 }}>{name}</span>
         <span className="grow" />
-        <span className="spin-meta" role="img" aria-label={t("live.running")} title={t("live.running")} />
+        <span
+          className="spin-meta"
+          role="img"
+          aria-label={t("live.running")}
+          title={t("live.running")}
+        />
         <span className="timer">{fmtElapsed(elapsedMs)}</span>
       </div>
       {logLines && logLines.length > 0 ? (
@@ -119,7 +128,13 @@ export function ToolRunningCard({
   );
 }
 
-export function PendingUserMsg({ text, elapsedMs }: { text: string; elapsedMs: number }) {
+export function PendingUserMsg({
+  text,
+  elapsedMs,
+}: {
+  text: string;
+  elapsedMs: number;
+}): ReactElement {
   useLang();
   return (
     <div className="msg user">

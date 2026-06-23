@@ -5,9 +5,9 @@ import { StreamableHttpTransport } from "./streamable-http.js";
 
 export interface BuildTransportOptions {
   /** Stdio-only env overlay — merged over process.env. SSE/Streamable-HTTP ignore it. */
-  env?: Record<string, string>;
+  env?: Record<string, string> | undefined;
   /** SSE / Streamable-HTTP only. Ignored by stdio. */
-  headers?: Record<string, string>;
+  headers?: Record<string, string> | undefined;
 }
 
 export function buildTransportFromSpec(

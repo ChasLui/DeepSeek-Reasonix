@@ -42,16 +42,16 @@ export interface RunCommandResult {
   /** True when the process was killed for exceeding `timeoutSec`. */
   timedOut: boolean;
   /** Full decoded combined output before truncation. Set only when truncation occurred. */
-  rawOutput?: string;
+  rawOutput?: string | undefined;
 }
 
 export async function runCommand(
   cmd: string,
   opts: {
     cwd: string;
-    timeoutSec?: number;
-    maxOutputChars?: number;
-    signal?: AbortSignal;
+    timeoutSec?: number | undefined;
+    maxOutputChars?: number | undefined;
+    signal?: AbortSignal | undefined;
   },
 ): Promise<RunCommandResult> {
   const timeoutSec = opts.timeoutSec ?? DEFAULT_TIMEOUT_SEC;
@@ -69,7 +69,7 @@ export async function runCommand(
   }
   // VFS-Lite: pure-Node reimpl for byte-identical commands (cat/head/tail/printf).
   // Disabled when REASONIX_VFS=0 — env check is per-call, no module-level cache.
-  if (process.env.REASONIX_VFS !== "0" && canRunInVfs(argv)) {
+  if (process.env["REASONIX_VFS"] !== "0" && canRunInVfs(argv)) {
     const vfs = await runInVfs(cmd, { cwd: opts.cwd, rootDir: opts.cwd });
     if (vfs !== null) return vfs;
     // null = handler refused or threw → sticky-fallback to spawn below.
@@ -133,14 +133,12 @@ export async function runCommand(
     let totalBytes = 0;
     const byteCap = maxChars * 2 * 4; // worst-case 4 bytes/char for utf-8/gbk
     let timedOut = false;
-    let aborted = false;
     const killChildTree = () => killProcessTree(child);
     const killTimer = setTimeout(() => {
       timedOut = true;
       killChildTree();
     }, timeoutMs);
     const onAbort = () => {
-      aborted = true;
       killChildTree();
     };
     // Check synchronously first — if the signal aborted before listener attach
@@ -216,10 +214,10 @@ export function smartDecodeOutput(buf: Buffer): string {
 }
 
 export interface ResolveExecutableOptions {
-  platform?: NodeJS.Platform;
+  platform?: NodeJS.Platform | undefined;
   env?: { PATH?: string; PATHEXT?: string };
-  isFile?: (path: string) => boolean;
-  pathDelimiter?: string;
+  isFile?: ((path: string) => boolean | undefined) | undefined;
+  pathDelimiter?: string | undefined;
 }
 
 /** CreateProcess ignores PATHEXT — bare `npm` fails ENOENT under `shell:false` without this resolver. */
@@ -278,8 +276,8 @@ export function normalizeWindowsEnvVars(
     out[key] = value;
   }
 
-  if (pathValues.length > 0) out.Path = mergeWindowsPathLike(pathValues, ";");
-  if (pathExtValues.length > 0) out.PATHEXT = mergeWindowsPathLike(pathExtValues, ";");
+  if (pathValues.length > 0) out["Path"] = mergeWindowsPathLike(pathValues, ";");
+  if (pathExtValues.length > 0) out["PATHEXT"] = mergeWindowsPathLike(pathExtValues, ";");
 
   return out;
 }

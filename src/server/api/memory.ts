@@ -33,7 +33,7 @@ function projectMemoryDir(rootDir: string): string {
 }
 
 interface WriteBody {
-  body?: unknown;
+  body?: unknown | undefined;
 }
 
 function parseBody(raw: string): WriteBody {

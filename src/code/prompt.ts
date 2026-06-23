@@ -119,7 +119,7 @@ ${TUI_FORMATTING_RULES}
 `;
 
 /** Backward-compat — public-API const, frozen at the historical flash phrasing. Internal callers use codeSystemPrompt(rootDir, { modelId }) so the contract names the real tier (#582). */
-export const CODE_SYSTEM_PROMPT = codeSystemBase(DEFAULT_CODE_MODEL);
+export const CODE_SYSTEM_PROMPT: string = codeSystemBase(DEFAULT_CODE_MODEL);
 
 /** Stack order (stable for cache prefix): base → REASONIX.md → global → project → .gitignore. */
 const SEMANTIC_SEARCH_ROUTING = `
@@ -137,18 +137,18 @@ export interface CodeSystemPromptOptions {
   /** True when semantic_search is registered for this run. Adds an
    *  explicit routing fragment so the model picks it for intent-style
    *  queries instead of defaulting to grep. */
-  hasSemanticSearch?: boolean;
+  hasSemanticSearch?: boolean | undefined;
   /** Inline string appended after the generated code system prompt.
    *  Preserves the default prompt — this is append-only, not a replacement. */
-  systemAppend?: string;
+  systemAppend?: string | undefined;
   /** UTF-8 file contents appended after the generated code system prompt.
    *  Preserves the default prompt — this is append-only, not a replacement. */
-  systemAppendFile?: string;
+  systemAppendFile?: string | undefined;
   /** Model the loop will run on — interpolated into the escalation contract so the model can name itself correctly when asked (#582). */
-  modelId?: string;
+  modelId?: string | undefined;
   /** Back-compat no-op: lifecycle is runtime-only so strict/off do not change the cache prefix. */
-  engineeringLifecycleMode?: "off" | "strict";
-  toonMode?: ToonMode;
+  engineeringLifecycleMode?: "off" | "strict" | undefined;
+  toonMode?: ToonMode | undefined;
 }
 
 export function codeSystemPrompt(rootDir: string, opts: CodeSystemPromptOptions = {}): string {

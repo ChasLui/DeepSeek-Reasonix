@@ -35,7 +35,7 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
   // delete (not = undefined): assigning undefined to process.env stringifies to "undefined".
   // biome-ignore lint/performance/noDelete: env var must be truly removed, not set to "undefined".
-  delete process.env.REASONIX_DEDUP;
+  delete process.env["REASONIX_DEDUP"];
 });
 
 const STUB = /unchanged since an earlier read/;
@@ -140,7 +140,7 @@ describe("force + kill-switches", () => {
   });
 
   it("REASONIX_DEDUP=0 disables dedup entirely", async () => {
-    process.env.REASONIX_DEDUP = "0";
+    process.env["REASONIX_DEDUP"] = "0";
     const reg = newRegistry();
     const dedup = new ReadDedupState();
     await read(reg, dedup, { path: "a.txt" });

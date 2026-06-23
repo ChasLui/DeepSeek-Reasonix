@@ -88,9 +88,8 @@ describe("daemon launchd commands", () => {
   it("keeps launchd plist removal scoped to uninstall", async () => {
     vi.spyOn(process, "platform", "get").mockReturnValue("darwin");
     vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-    const { daemonStopCommand, daemonUninstallCommand } = await import(
-      "../src/cli/commands/daemon.js"
-    );
+    const { daemonStopCommand, daemonUninstallCommand } =
+      await import("../src/cli/commands/daemon.js");
 
     await daemonStopCommand();
     expect(rmSync).not.toHaveBeenCalled();

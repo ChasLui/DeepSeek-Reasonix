@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 export type TextScript = "latin" | "cjk" | "mixed" | "other";
 
 export interface SegmentOptions {
-  loadJieba?: () => unknown;
+  loadJieba?: (() => unknown) | undefined;
 }
 
 interface JiebaLike {
@@ -33,7 +33,7 @@ export function detectScript(text: string): TextScript {
 export function segmentCjk(text: string, opts: SegmentOptions = {}): string[] {
   const input = text.trim();
   if (!input) return [];
-  if (process.env.REASONIX_CJK_JIEBA === "0") return fallbackSegment(input);
+  if (process.env["REASONIX_CJK_JIEBA"] === "0") return fallbackSegment(input);
 
   const jieba = opts.loadJieba ? instantiateJieba(opts.loadJieba) : getCachedJieba();
   if (jieba) {
@@ -48,7 +48,7 @@ export function segmentCjk(text: string, opts: SegmentOptions = {}): string[] {
 }
 
 function getCachedJieba(): JiebaLike | null {
-  if (process.env.REASONIX_CJK_JIEBA === "0") return null;
+  if (process.env["REASONIX_CJK_JIEBA"] === "0") return null;
   if (cachedJieba === false) return null;
   if (cachedJieba) return cachedJieba;
   const loaded = instantiateJieba(() => require("@node-rs/jieba"));
@@ -66,13 +66,13 @@ function instantiateJieba(load: () => unknown): JiebaLike | null {
 
   try {
     const value = mod as {
-      default?: unknown;
-      Jieba?: new () => JiebaLike;
-      cut?: (input: string) => string[];
+      default?: unknown | undefined;
+      Jieba?: (new () => JiebaLike) | undefined;
+      cut?: ((input: string) => string[]) | undefined;
     };
     if (typeof value.cut === "function") return { cut: value.cut.bind(value) };
     if (value.default && typeof value.default === "object") {
-      const def = value.default as { cut?: (input: string) => string[] };
+      const def = value.default as { cut?: ((input: string) => string[]) | undefined };
       if (typeof def.cut === "function") return { cut: def.cut.bind(def) };
     }
     if (typeof value.Jieba === "function") return new value.Jieba();

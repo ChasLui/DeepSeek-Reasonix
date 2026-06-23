@@ -55,9 +55,9 @@ export function listUnlockedTools(db: Db, session: string): UnlockedToolRow[] {
       .map((r) => {
         const row = r as Record<string, unknown>;
         return {
-          seq: Number(row.seq),
-          source: String(row.source),
-          name: String(row.name),
+          seq: Number(row["seq"]),
+          source: String(row["source"]),
+          name: String(row["name"]),
         };
       });
   } catch {

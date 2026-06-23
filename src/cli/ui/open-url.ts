@@ -5,12 +5,12 @@ import { platform } from "node:os";
 
 export interface OpenUrlResult {
   opened: boolean;
-  reason?: "ci" | "disabled" | "spawn-failed";
+  reason?: "ci" | "disabled" | "spawn-failed" | undefined;
 }
 
 export function openUrl(url: string): OpenUrlResult {
-  if (process.env.CI) return { opened: false, reason: "ci" };
-  if (process.env.REASONIX_NO_OPEN) return { opened: false, reason: "disabled" };
+  if (process.env["CI"]) return { opened: false, reason: "ci" };
+  if (process.env["REASONIX_NO_OPEN"]) return { opened: false, reason: "disabled" };
 
   const os = platform();
   let cmd: string;

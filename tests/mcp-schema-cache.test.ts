@@ -41,14 +41,14 @@ describe("MCP tools/list schema cache", () => {
   let home: string;
 
   beforeEach(() => {
-    previousHome = process.env.REASONIX_HOME;
+    previousHome = process.env["REASONIX_HOME"];
     home = mkdtempSync(join(tmpdir(), "reasonix-cache-test-"));
-    process.env.REASONIX_HOME = home;
+    process.env["REASONIX_HOME"] = home;
   });
 
   afterEach(() => {
     if (previousHome === undefined) Reflect.deleteProperty(process.env, "REASONIX_HOME");
-    else process.env.REASONIX_HOME = previousHome;
+    else process.env["REASONIX_HOME"] = previousHome;
   });
 
   it("saves and loads a verified cache hit without env-derived filename data", () => {
@@ -56,9 +56,11 @@ describe("MCP tools/list schema cache", () => {
 
     expect(loadMcpToolCache("serena", spec(), client())).toEqual([tool]);
     expect(readdirSync(join(home, "mcp-cache"))).toEqual(["serena.json"]);
-    expect(statSync(join(home, "mcp-cache")).mode & 0o777).toBe(0o700);
-    expect(statSync(join(home, "mcp-cache", "serena.json")).mode & 0o777).toBe(0o600);
-    expect(statSync(join(home, ".cache-salt")).mode & 0o777).toBe(0o600);
+    if (process.platform !== "win32") {
+      expect(statSync(join(home, "mcp-cache")).mode & 0o777).toBe(0o700);
+      expect(statSync(join(home, "mcp-cache", "serena.json")).mode & 0o777).toBe(0o600);
+      expect(statSync(join(home, ".cache-salt")).mode & 0o777).toBe(0o600);
+    }
   });
 
   it("misses when env changes because the internal salted specHash changes", () => {
@@ -104,14 +106,14 @@ describe("MCP eager drift gate (scheme 10)", () => {
   };
 
   beforeEach(() => {
-    previousHome = process.env.REASONIX_HOME;
+    previousHome = process.env["REASONIX_HOME"];
     home = mkdtempSync(join(tmpdir(), "reasonix-eager-test-"));
-    process.env.REASONIX_HOME = home;
+    process.env["REASONIX_HOME"] = home;
   });
 
   afterEach(() => {
     if (previousHome === undefined) Reflect.deleteProperty(process.env, "REASONIX_HOME");
-    else process.env.REASONIX_HOME = previousHome;
+    else process.env["REASONIX_HOME"] = previousHome;
   });
 
   // Drift -> null is the contract that makes mcp-runtime rebuild the prefix from a

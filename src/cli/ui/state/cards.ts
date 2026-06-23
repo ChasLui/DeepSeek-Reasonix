@@ -16,22 +16,22 @@ export interface ReasoningCard extends CardBase {
   paragraphs: number;
   tokens: number;
   streaming: boolean;
-  aborted?: boolean;
+  aborted?: boolean | undefined;
   /** Snapshotted at reasoning.start so escalation mid-turn doesn't relabel completed reasoning. */
-  model?: string;
+  model?: string | undefined;
   /** Stamped at reasoning.end. Drives the duration badge on the settled header. */
-  endedAt?: number;
+  endedAt?: number | undefined;
 }
 
 export interface StreamingCard extends CardBase {
   readonly kind: "streaming";
   text: string;
   done: boolean;
-  aborted?: boolean;
+  aborted?: boolean | undefined;
   /** Snapshotted at streaming.start so escalation mid-turn doesn't relabel completed output. */
-  model?: string;
+  model?: string | undefined;
   /** Stamped at streaming.end. */
-  endedAt?: number;
+  endedAt?: number | undefined;
 }
 
 export interface ToolCard extends CardBase {
@@ -40,21 +40,21 @@ export interface ToolCard extends CardBase {
   readonly args: unknown;
   output: string;
   done: boolean;
-  exitCode?: number;
+  exitCode?: number | undefined;
   elapsedMs: number;
   retry?: { attempt: number; max: number };
-  aborted?: boolean;
+  aborted?: boolean | undefined;
   /** Set when dispatch refused the call (e.g. plan-mode bounce). UI swaps spinner for a red "rejected" badge and hides the verbose error body. */
-  rejected?: boolean;
+  rejected?: boolean | undefined;
 }
 
 export interface TaskStep {
   readonly id: string;
   readonly title: string;
   status: "queued" | "running" | "done" | "failed";
-  elapsedMs?: number;
-  toolName?: string;
-  detail?: string;
+  elapsedMs?: number | undefined;
+  toolName?: string | undefined;
+  detail?: string | undefined;
 }
 
 export interface TaskCard extends CardBase {
@@ -96,8 +96,8 @@ export interface ErrorCard extends CardBase {
   readonly kind: "error";
   readonly title: string;
   readonly message: string;
-  readonly stack?: string;
-  retries?: number;
+  readonly stack?: string | undefined;
+  retries?: number | undefined;
 }
 
 export interface WarnCard extends CardBase {
@@ -105,7 +105,7 @@ export interface WarnCard extends CardBase {
   readonly title: string;
   readonly message: string;
   /** Optional right-aligned meta (e.g. "notion · 8.4s elapsed"). */
-  readonly detail?: string;
+  readonly detail?: string | undefined;
 }
 
 export interface UsageCard extends CardBase {
@@ -115,12 +115,12 @@ export interface UsageCard extends CardBase {
   readonly cacheHit: number;
   readonly cost: number;
   readonly sessionCost: number;
-  readonly balance?: number;
-  readonly balanceCurrency?: string;
+  readonly balance?: number | undefined;
+  readonly balanceCurrency?: string | undefined;
   /** Wall-clock for the turn — surfaced as `· 1.2s` in the header meta. */
-  readonly elapsedMs?: number;
+  readonly elapsedMs?: number | undefined;
   /** Auto-emitted per-turn cards render as a single dim row; /cost emits the full breakdown. */
-  readonly compact?: boolean;
+  readonly compact?: boolean | undefined;
 }
 
 export interface MemoryEntry {
@@ -142,7 +142,7 @@ export interface SubAgentCard extends CardBase {
   status: "running" | "done" | "failed";
   children: Card[];
   /** Tool names the subagent has access to — surfaced as a "Tools  ..." row in the header block. */
-  tools?: ReadonlyArray<string>;
+  tools?: ReadonlyArray<string> | undefined;
 }
 
 export interface SearchHit {
@@ -176,7 +176,7 @@ export interface LiveCard extends CardBase {
   readonly variant: LiveKind;
   readonly text: string;
   readonly tone: "ok" | "warn" | "err" | "info" | "brand" | "accent" | "ghost";
-  readonly meta?: string;
+  readonly meta?: string | undefined;
 }
 
 export interface CtxCard extends CardBase {
@@ -199,7 +199,7 @@ export interface TipRow {
 
 export interface TipSection {
   /** Subsection heading (rendered above its rows). Omit for single-section tips. */
-  readonly title?: string;
+  readonly title?: string | undefined;
   readonly rows: ReadonlyArray<TipRow>;
 }
 
@@ -207,7 +207,7 @@ export interface TipCard extends CardBase {
   readonly kind: "tip";
   readonly topic: string;
   readonly sections: ReadonlyArray<TipSection>;
-  readonly footer?: string;
+  readonly footer?: string | undefined;
   readonly oneTime: boolean;
 }
 

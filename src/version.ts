@@ -11,7 +11,7 @@ const REGISTRY_URL = "https://registry.npmjs.org/reasonix/latest";
 /** TTL for the on-disk cache entry. 24h keeps noise low; users who
  * want a fresh check can run `reasonix update` which passes
  * `force: true`. */
-export const LATEST_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+export const LATEST_CACHE_TTL_MS: number = 24 * 60 * 60 * 1000;
 
 /** Network timeout. Short — we never block the UI waiting on this. */
 export const LATEST_FETCH_TIMEOUT_MS = 2_000;
@@ -76,17 +76,17 @@ function writeCache(entry: VersionCacheEntry, homeDirOverride?: string): void {
 
 export interface GetLatestVersionOptions {
   /** Ignore the cached entry and always fetch fresh. Used by `reasonix update`. */
-  force?: boolean;
+  force?: boolean | undefined;
   /** Registry URL override (tests). */
-  registryUrl?: string;
+  registryUrl?: string | undefined;
   /** Home-directory override (tests). */
-  homeDir?: string;
+  homeDir?: string | undefined;
   /** Fetch implementation override (tests). Defaults to `globalThis.fetch`. */
-  fetchImpl?: typeof fetch;
+  fetchImpl?: typeof fetch | undefined;
   /** TTL override (tests). */
-  ttlMs?: number;
+  ttlMs?: number | undefined;
   /** Network timeout override (tests). */
-  timeoutMs?: number;
+  timeoutMs?: number | undefined;
 }
 
 /** Returns null on failure; cache only writes on success so bad responses can't poison it. */
@@ -145,7 +145,7 @@ export function detectInstallSource(bin?: string): InstallSource {
   const norm = raw.replace(/\\/g, "/").toLowerCase();
   if (/\/_npx\//.test(norm)) return "npx";
   if (/\/\.pnpm\//.test(norm) && /dlx/i.test(norm)) return "npx";
-  const ua = (process.env.npm_config_user_agent ?? "").toLowerCase();
+  const ua = (process.env["npm_config_user_agent"] ?? "").toLowerCase();
   if (ua.includes("npx/")) return "npx";
   if (/\/\.bun\//.test(norm) || /\/bun\/install\//.test(norm)) return "bun";
   if (/\/pnpm\/global\//.test(norm) || /\/pnpm\/[^/]+\/node_modules\//.test(norm)) return "pnpm";

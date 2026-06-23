@@ -13,9 +13,9 @@ import type { ToolRegistry } from "../tools.js";
 
 export interface MemoryToolsOptions {
   /** Sandbox root for the `project` scope. Omit for chat mode. */
-  projectRoot?: string;
+  projectRoot?: string | undefined;
   /** Override `~/.reasonix` (tests). */
-  homeDir?: string;
+  homeDir?: string | undefined;
 }
 
 export function registerMemoryTools(
@@ -89,8 +89,8 @@ export function registerMemoryTools(
       name: string;
       description: string;
       content: string;
-      priority?: MemoryPriority;
-      expires?: MemoryExpires;
+      priority?: MemoryPriority | undefined;
+      expires?: MemoryExpires | undefined;
     }) => {
       if (args.scope === "project" && !hasProject) {
         return JSON.stringify({

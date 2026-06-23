@@ -121,8 +121,10 @@ describe("storage/usage-repo", () => {
     const db = getDb(dbPath);
     // crash-safety is PARITY with JSONL, not a win (NF-002/NF-003): the file is
     // not corrupt and committed rows survive; we make no power-loss claim.
-    expect(String(db.prepare("PRAGMA integrity_check").get()?.integrity_check)).toBe("ok");
-    expect(Number(db.prepare("SELECT count(*) c FROM usage").get()?.c)).toBeGreaterThanOrEqual(0);
+    expect(String(db.prepare("PRAGMA integrity_check").get()?.["integrity_check"])).toBe("ok");
+    expect(Number(db.prepare("SELECT count(*) c FROM usage").get()?.["c"])).toBeGreaterThanOrEqual(
+      0,
+    );
   });
 
   it("concurrent multi-process writers lose no rows (SC-006)", async () => {
@@ -144,6 +146,6 @@ describe("storage/usage-repo", () => {
     expect(codes.every((c) => c === 0)).toBe(true);
 
     const db = getDb(dbPath);
-    expect(Number(db.prepare("SELECT count(*) c FROM usage").get()?.c)).toBe(procs * perProc);
+    expect(Number(db.prepare("SELECT count(*) c FROM usage").get()?.["c"])).toBe(procs * perProc);
   });
 });

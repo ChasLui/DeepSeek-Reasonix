@@ -4,7 +4,7 @@ import { recordToonEncode, recordToonEncodeFallback } from "./stats.js";
 export { TOON_ENCODE_OPTIONS, encodeToonPayload } from "./codec.js";
 
 export interface ToonResultOptions {
-  mode?: ToonMode;
+  mode?: ToonMode | undefined;
 }
 
 export function serializeToolResult(value: unknown, opts: ToonResultOptions = {}): string {

@@ -12,9 +12,9 @@ import { loadDotenv } from "../../env.js";
 
 export interface CommitOptions {
   /** Override the default model (deepseek-v4-flash). */
-  model?: string;
+  model?: string | undefined;
   /** Skip the confirmation step — useful in scripts where the diff has been pre-reviewed. */
-  yes?: boolean;
+  yes?: boolean | undefined;
 }
 
 const DEFAULT_MODEL = "deepseek-v4-flash";
@@ -168,7 +168,7 @@ async function promptChoice(): Promise<"accept" | "regen" | "edit" | "cancel"> {
 }
 
 function editInExternal(initial: string): string | null {
-  const editor = process.env.GIT_EDITOR ?? process.env.VISUAL ?? process.env.EDITOR;
+  const editor = process.env["GIT_EDITOR"] ?? process.env["VISUAL"] ?? process.env["EDITOR"];
   if (!editor) {
     process.stderr.write(
       "reasonix commit: no $EDITOR / $VISUAL / $GIT_EDITOR set — can't open editor. Pick [a]ccept and `git commit --amend` afterwards.\n",
@@ -241,7 +241,7 @@ export async function commitCommand(opts: CommitOptions = {}): Promise<void> {
   loadDotenv();
   dieIfNotGitRepo();
 
-  const apiKey = loadApiKey() ?? process.env.DEEPSEEK_API_KEY;
+  const apiKey = loadApiKey() ?? process.env["DEEPSEEK_API_KEY"];
   if (!apiKey) {
     process.stderr.write(
       "reasonix commit: DEEPSEEK_API_KEY not set. Run `reasonix setup` to save one, or export it.\n",

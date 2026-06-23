@@ -20,14 +20,14 @@ export interface Scrollback {
   pushError(title: string, message: string, stack?: string): string;
   pushInfo(
     text: string,
-    tone?: "info" | "ok" | "warn" | "err" | "ghost" | "brand" | "accent",
+    tone?: "info" | "ok" | "warn" | "err" | "ghost" | "brand" | "accent" | undefined,
   ): string;
   /** Structured onboarding-tip card — replaces multi-line TIP strings stuffed into pushInfo. */
   pushTip(args: {
     topic: string;
     sections: ReadonlyArray<TipSection>;
-    footer?: string;
-    oneTime?: boolean;
+    footer?: string | undefined;
+    oneTime?: boolean | undefined;
   }): string;
   /** Emits a `ctxPressure` live card when usedTokens crosses 80% (warn) or 95% (err) of ctxMax. */
   pushCtxPressureIfHigh(usedTokens: number, ctxMax: number): void;
@@ -44,9 +44,9 @@ export interface Scrollback {
     cacheHit: number;
     cost: number;
     sessionCost: number;
-    balance?: number;
-    balanceCurrency?: string;
-    elapsedMs?: number;
+    balance?: number | undefined;
+    balanceCurrency?: string | undefined;
+    elapsedMs?: number | undefined;
   }): string;
   showPlan(args: {
     title: string;

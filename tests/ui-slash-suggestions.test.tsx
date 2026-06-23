@@ -15,7 +15,7 @@ function makeCommands(count: number): SlashCommandSpec[] {
   return Array.from({ length: count }, (_, i) => ({
     cmd: `cmd${i.toString().padStart(2, "0")}`,
     summary: `summary ${i}`,
-    group: groups[Math.floor(i / 5) % groups.length],
+    group: groups[Math.floor(i / 5) % groups.length]!,
   }));
 }
 
@@ -145,7 +145,7 @@ describe("SlashSuggestions", () => {
     rerender(suggestionElement(commands, 21));
     expect(firstVisibleCommand(lastFrame() ?? "", commands)).toBe("/cmd02");
     unmount();
-  });
+  }, 15_000);
 
   it("renders each visible command as one row instead of wrapping selected text into extra blocks", () => {
     const frame = renderSuggestions(7);

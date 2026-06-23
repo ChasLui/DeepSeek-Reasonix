@@ -21,8 +21,8 @@ export class StormBreaker {
   constructor(
     windowSize = 6,
     threshold = 3,
-    isMutating?: IsMutating,
-    isStormExempt?: IsStormExempt,
+    isMutating?: IsMutating | undefined,
+    isStormExempt?: IsStormExempt | undefined,
   ) {
     this.windowSize = windowSize;
     this.threshold = threshold;

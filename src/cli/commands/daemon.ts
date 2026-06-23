@@ -37,37 +37,37 @@ import { VERSION } from "../../version.js";
 import { resolveDir } from "./acp.js";
 
 export interface DaemonRunOptions {
-  dir?: string;
-  model?: string;
-  budgetUsd?: number;
-  yolo?: boolean;
-  mcpSpecs?: string[];
-  mcpPrefix?: string;
-  socketPath?: string;
+  dir?: string | undefined;
+  model?: string | undefined;
+  budgetUsd?: number | undefined;
+  yolo?: boolean | undefined;
+  mcpSpecs?: string[] | undefined;
+  mcpPrefix?: string | undefined;
+  socketPath?: string | undefined;
   /** Idle-shutdown window in ms. Flag wins over REASONIX_DAEMON_IDLE_MS; 0/absent stays up forever. */
-  idleMs?: number;
+  idleMs?: number | undefined;
   /** Loopback HTTP status port (GET /health, /status). Flag > REASONIX_DAEMON_HTTP_PORT; absent disables. */
-  httpPort?: number;
+  httpPort?: number | undefined;
   /** Enable Pillar 5 background index maintenance. Flag > REASONIX_BG_INDEX; opt-in (watchers + rebuilds cost CPU/IO). */
-  backgroundIndex?: boolean;
+  backgroundIndex?: boolean | undefined;
 }
 
 /** Flag > env > disabled. Non-positive / malformed → disabled (stay up). */
 function resolveIdleMs(flag: number | undefined): number | undefined {
-  const raw = flag ?? Number.parseInt(process.env.REASONIX_DAEMON_IDLE_MS ?? "", 10);
+  const raw = flag ?? Number.parseInt(process.env["REASONIX_DAEMON_IDLE_MS"] ?? "", 10);
   return Number.isFinite(raw) && raw > 0 ? raw : undefined;
 }
 
 /** Flag > env > disabled. Out-of-range → disabled. */
 function resolveHttpPort(flag: number | undefined): number | undefined {
-  const raw = flag ?? Number.parseInt(process.env.REASONIX_DAEMON_HTTP_PORT ?? "", 10);
+  const raw = flag ?? Number.parseInt(process.env["REASONIX_DAEMON_HTTP_PORT"] ?? "", 10);
   return Number.isInteger(raw) && raw >= 0 && raw <= 65535 ? raw : undefined;
 }
 
 /** Flag > env. Pillar 5 background indexing — opt-in (fs watchers + background rebuilds cost CPU/IO). */
 function resolveBackgroundIndex(flag: boolean | undefined): boolean {
   if (flag !== undefined) return flag;
-  return /^(1|true|yes|on)$/i.test(process.env.REASONIX_BG_INDEX ?? "");
+  return /^(1|true|yes|on)$/i.test(process.env["REASONIX_BG_INDEX"] ?? "");
 }
 
 function clearStaleSocket(socketPath: string): void {
@@ -85,7 +85,7 @@ function clearStaleSocket(socketPath: string): void {
 export async function daemonRunCommand(opts: DaemonRunOptions): Promise<void> {
   loadDotenv();
   const key = loadApiKey();
-  if (key) process.env.DEEPSEEK_API_KEY = key;
+  if (key) process.env["DEEPSEEK_API_KEY"] = key;
 
   const socketPath = opts.socketPath ?? daemonSocketPath();
   // Under systemd socket activation the socket is created + owned by systemd;
@@ -151,8 +151,8 @@ export async function daemonRunCommand(opts: DaemonRunOptions): Promise<void> {
 
 export interface RunRemoteOptions {
   task: string;
-  cwd?: string;
-  socketPath?: string;
+  cwd?: string | undefined;
+  socketPath?: string | undefined;
 }
 
 function renderRemoteEvent(ev: LoopEvent): void {
@@ -205,8 +205,8 @@ export async function runRemoteCommand(opts: RunRemoteOptions): Promise<void> {
 }
 
 export interface AttachOptions {
-  cwd?: string;
-  socketPath?: string;
+  cwd?: string | undefined;
+  socketPath?: string | undefined;
 }
 
 /** Interactive multi-turn thin client over the daemon: renders the kernel-event stream and resolves confirmations on the same readline (no stdin contention). */

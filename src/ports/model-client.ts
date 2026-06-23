@@ -3,16 +3,16 @@
 import type { ChatRequestOptions, RawUsage } from "../types.js";
 
 export interface ModelStreamChunk {
-  contentDelta?: string;
-  reasoningDelta?: string;
+  contentDelta?: string | undefined;
+  reasoningDelta?: string | undefined;
   toolCallDelta?: {
     index: number;
-    id?: string;
-    name?: string;
-    argumentsDelta?: string;
+    id?: string | undefined;
+    name?: string | undefined;
+    argumentsDelta?: string | undefined;
   };
-  usage?: RawUsage;
-  finishReason?: string;
+  usage?: RawUsage | undefined;
+  finishReason?: string | undefined;
 }
 
 export interface ModelClient {

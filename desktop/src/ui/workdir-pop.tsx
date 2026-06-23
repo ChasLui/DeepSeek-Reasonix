@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { I } from "../icons";
 import { t, useLang } from "../i18n";
 import { Shortcut } from "./shortcut";
@@ -21,7 +21,7 @@ export function WorkdirPop({
   anchor?: Anchor;
   onPick: (path: string) => void;
   onBrowse: () => void;
-}) {
+}): ReactElement | null {
   useLang();
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);

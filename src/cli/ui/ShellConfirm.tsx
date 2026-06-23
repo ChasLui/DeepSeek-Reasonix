@@ -21,13 +21,13 @@ export interface ShellConfirmProps {
   /** Prefix that would be persisted if the user picks "always allow". */
   allowPrefix: string;
   /** `run_background` returns early; `run_command` blocks the TUI. */
-  kind?: "run_command" | "run_background";
+  kind?: "run_command" | "run_background" | undefined;
   /** Working directory the command will run in — surfaced as an info row. */
-  cwd?: string;
+  cwd?: string | undefined;
   /** run_command timeout in seconds — surfaced as "timeout 120s". */
-  timeoutSec?: number;
+  timeoutSec?: number | undefined;
   /** run_background startup wait in seconds — surfaced as "wait 3s". */
-  waitSec?: number;
+  waitSec?: number | undefined;
   onChoose: (choice: ShellConfirmChoice, denyContext?: string) => void;
 }
 
@@ -57,7 +57,7 @@ export function ShellConfirm({
   timeoutSec,
   waitSec,
   onChoose,
-}: ShellConfirmProps) {
+}: ShellConfirmProps): React.ReactElement {
   useReserveRows("modal", { min: 8, max: 14 });
   const totalRows = useTotalRows();
   const maxCommandLines = Math.max(MIN_COMMAND_LINES, totalRows - CHROME_ROWS);
@@ -152,10 +152,10 @@ function InfoRows({
   waitSec,
   kind,
 }: {
-  cwd?: string;
-  timeoutSec?: number;
-  waitSec?: number;
-  kind?: "run_command" | "run_background";
+  cwd?: string | undefined;
+  timeoutSec?: number | undefined;
+  waitSec?: number | undefined;
+  kind?: "run_command" | "run_background" | undefined;
 }): React.ReactElement | null {
   const rows: Array<{ label: string; value: string }> = [];
   if (cwd) rows.push({ label: t("shellConfirm.cwdLabel"), value: tildeify(cwd) });

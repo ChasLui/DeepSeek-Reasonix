@@ -10,24 +10,24 @@ export interface SelectItem<V extends string = string> {
   value: V;
   label: string;
   /** Optional descriptive text rendered dimmed. */
-  hint?: string;
+  hint?: string | undefined;
   /** Disabled rows render dimmed and are skipped on nav. */
-  disabled?: boolean;
+  disabled?: boolean | undefined;
 }
 
 export interface SingleSelectProps<V extends string> {
   items: SelectItem<V>[];
-  initialValue?: V;
+  initialValue?: V | undefined;
   onSubmit: (value: V) => void;
-  onCancel?: () => void;
+  onCancel?: (() => void) | undefined;
   /** Fired when Tab is pressed on the currently highlighted item. */
-  onTab?: (value: V) => void;
+  onTab?: ((value: V) => void) | undefined;
   /** Optional dim footer beneath the list. */
-  footer?: string;
+  footer?: string | undefined;
   /** Render item hints on the same row as the label instead of a second row. */
-  inlineHints?: boolean;
+  inlineHints?: boolean | undefined;
   /** Ignore matching keystrokes so an enclosing component can own them. */
-  ignoreKey?: (ev: KeyEvent) => boolean;
+  ignoreKey?: ((ev: KeyEvent) => boolean | undefined) | undefined;
 }
 
 export function SingleSelect<V extends string>({
@@ -39,7 +39,7 @@ export function SingleSelect<V extends string>({
   footer,
   inlineHints = false,
   ignoreKey,
-}: SingleSelectProps<V>) {
+}: SingleSelectProps<V>): React.ReactElement {
   const color = useColor();
   const initialIndex = Math.max(
     0,
@@ -87,15 +87,15 @@ export function SingleSelect<V extends string>({
 
 export interface MultiSelectProps<V extends string> {
   items: SelectItem<V>[];
-  initialSelected?: V[];
+  initialSelected?: V[] | undefined;
   onSubmit: (values: V[]) => void;
-  onCancel?: () => void;
+  onCancel?: (() => void) | undefined;
   /** Footer hint under the list — e.g. "[Space] toggle · [Enter] confirm". */
-  footer?: string;
+  footer?: string | undefined;
   /** Render item hints on the same row as the label instead of a second row. */
-  inlineHints?: boolean;
+  inlineHints?: boolean | undefined;
   /** Ignore matching keystrokes so an enclosing component can own them. */
-  ignoreKey?: (ev: KeyEvent) => boolean;
+  ignoreKey?: ((ev: KeyEvent) => boolean | undefined) | undefined;
 }
 
 export function MultiSelect<V extends string>({
@@ -106,7 +106,7 @@ export function MultiSelect<V extends string>({
   footer,
   inlineHints = false,
   ignoreKey,
-}: MultiSelectProps<V>) {
+}: MultiSelectProps<V>): React.ReactElement {
   const color = useColor();
   const [index, setIndex] = useState(() => {
     const first = items.findIndex((i) => !i.disabled);
@@ -173,14 +173,19 @@ function SelectRow<V extends string>({
   active: boolean;
   marker: string;
   color: UiColor;
-  inlineHint?: boolean;
+  inlineHint?: boolean | undefined;
 }) {
   const rowColor = item.disabled ? color.info : active ? color.primary : undefined;
   const labelText = `${marker} ${item.label}`;
   if (inlineHint) {
     return (
       <Box flexDirection="row" flexWrap="nowrap" minHeight={1}>
-        <Text color={rowColor} bold={active} dimColor={item.disabled} wrap="truncate">
+        <Text
+          {...(rowColor !== undefined ? { color: rowColor } : {})}
+          bold={active}
+          {...(item.disabled !== undefined ? { dimColor: item.disabled } : {})}
+          wrap="truncate"
+        >
           {labelText}
         </Text>
         {item.hint ? <Text dimColor wrap="truncate">{`  ${item.hint}`}</Text> : null}
@@ -190,7 +195,11 @@ function SelectRow<V extends string>({
   return (
     <Box flexDirection="column">
       <Box>
-        <Text color={rowColor} bold={active} dimColor={item.disabled}>
+        <Text
+          {...(rowColor !== undefined ? { color: rowColor } : {})}
+          bold={active}
+          {...(item.disabled !== undefined ? { dimColor: item.disabled } : {})}
+        >
           {labelText}
         </Text>
       </Box>

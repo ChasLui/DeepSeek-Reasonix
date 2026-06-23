@@ -38,13 +38,13 @@ export interface RunOptions {
   task: string;
   model: string;
   system: string;
-  budgetUsd?: number;
+  budgetUsd?: number | undefined;
   /** JSONL transcript path — lets `reasonix replay` / `diff` audit this run. */
-  transcript?: string;
+  transcript?: string | undefined;
   /** Zero or more MCP server specs. Each: `"name=cmd args..."` or `"cmd args..."`. */
-  mcp?: string[];
+  mcp?: string[] | undefined;
   /** Global prefix — only honored when a single anonymous server is given. */
-  mcpPrefix?: string;
+  mcpPrefix?: string | undefined;
 }
 
 async function ensureApiKey(): Promise<string> {
@@ -80,7 +80,7 @@ async function ensureApiKey(): Promise<string> {
 export async function runCommand(opts: RunOptions): Promise<void> {
   loadDotenv();
   const apiKey = await ensureApiKey();
-  process.env.DEEPSEEK_API_KEY = apiKey;
+  process.env["DEEPSEEK_API_KEY"] = apiKey;
 
   // Optional MCP setup — mirrors chat's flow. Must happen before loop
   // construction so the tools make it into the prefix.

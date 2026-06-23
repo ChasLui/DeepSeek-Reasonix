@@ -15,7 +15,22 @@ export interface LineCommentDraft {
   editingId?: string;
 }
 
-export function useLineComments() {
+export interface LineCommentsState {
+  comments: LineComment[];
+  draft: LineCommentDraft | null;
+  addComment: (file: string, lineNumber: number, content: string) => void;
+  updateComment: (id: string, content: string) => void;
+  deleteComment: (id: string) => void;
+  startDraft: (file: string, lineNumber: number) => void;
+  editComment: (id: string, content: string) => void;
+  cancelDraft: () => void;
+  setDraftContent: (content: string) => void;
+  submitDraft: () => void;
+  commentsForFile: (file: string) => LineComment[];
+  commentsForLine: (file: string, lineNumber: number) => LineComment[];
+}
+
+export function useLineComments(): LineCommentsState {
   const [comments, setComments] = useState<LineComment[]>([]);
   const [draft, setDraft] = useState<LineCommentDraft | null>(null);
 
@@ -37,12 +52,15 @@ export function useLineComments() {
     setDraft({ file, lineNumber, content: "" });
   }, []);
 
-  const editComment = useCallback((id: string, content: string) => {
-    const comment = comments.find((c) => c.id === id);
-    if (comment) {
-      setDraft({ file: comment.file, lineNumber: comment.lineNumber, content, editingId: id });
-    }
-  }, [comments]);
+  const editComment = useCallback(
+    (id: string, content: string) => {
+      const comment = comments.find((c) => c.id === id);
+      if (comment) {
+        setDraft({ file: comment.file, lineNumber: comment.lineNumber, content, editingId: id });
+      }
+    },
+    [comments],
+  );
 
   const cancelDraft = useCallback(() => {
     setDraft(null);
@@ -69,22 +87,23 @@ export function useLineComments() {
   );
 
   const commentsForLine = useCallback(
-    (file: string, lineNumber: number) => comments.filter((c) => c.file === file && c.lineNumber === lineNumber),
+    (file: string, lineNumber: number) =>
+      comments.filter((c) => c.file === file && c.lineNumber === lineNumber),
     [comments],
   );
 
   return {
-    comments,
-    draft,
-    addComment,
-    updateComment,
-    deleteComment,
-    startDraft,
-    editComment,
-    cancelDraft,
-    setDraftContent,
-    submitDraft,
-    commentsForFile,
-    commentsForLine,
+    comments: comments,
+    draft: draft,
+    addComment: addComment,
+    updateComment: updateComment,
+    deleteComment: deleteComment,
+    startDraft: startDraft,
+    editComment: editComment,
+    cancelDraft: cancelDraft,
+    setDraftContent: setDraftContent,
+    submitDraft: submitDraft,
+    commentsForFile: commentsForFile,
+    commentsForLine: commentsForLine,
   };
 }

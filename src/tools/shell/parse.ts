@@ -58,7 +58,8 @@ export const BUILTIN_ALLOWLIST: ReadonlyArray<string> = [
   "npm run lint",
   "npm run typecheck",
   "npx tsc --noEmit",
-  "npx biome check",
+  "npx oxlint",
+  "npx oxfmt --check",
   "npx eslint",
   "npx prettier --check",
   "ruff",
@@ -176,7 +177,7 @@ const RISKY_ARGS: Readonly<Record<string, ReadonlyArray<string>>> = nullPrototyp
   tree: ["-o"],
   // Auto-fix mutates source files.
   "npx eslint": ["--fix", "--fix-dry-run"],
-  "npx biome check": ["--write", "--apply", "--apply-unsafe"],
+  "npx oxlint": ["--fix", "--fix-suggestions", "--fix-dangerously"],
   ruff: ["--fix", "--unsafe-fixes", "format"],
 });
 
@@ -276,10 +277,10 @@ export function hasSensitivePathArgs(
 export function isAllowed(
   cmd: string,
   extra: readonly string[] = [],
-  projectRoot?: string,
+  projectRoot?: string | undefined,
   sensitivePathConfig?: {
-    prefixes?: readonly string[];
-    patterns?: readonly string[];
+    prefixes?: readonly string[] | undefined;
+    patterns?: readonly string[] | undefined;
   },
 ): boolean {
   let argv: string[];
@@ -324,10 +325,10 @@ export function isAllowed(
 export function isCommandAllowed(
   cmd: string,
   extra: readonly string[] = [],
-  projectRoot?: string,
+  projectRoot?: string | undefined,
   sensitivePathConfig?: {
-    prefixes?: readonly string[];
-    patterns?: readonly string[];
+    prefixes?: readonly string[] | undefined;
+    patterns?: readonly string[] | undefined;
   },
 ): boolean {
   let chain: CommandChain | null;

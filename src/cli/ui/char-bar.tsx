@@ -27,18 +27,18 @@ export interface CharBarProps {
   /** 0–100 (clamped). Negative or NaN → 0; >100 → 100. */
   pct: number;
   /** Cell count. Default 24. Min 4 enforced so the bar is at least readable. */
-  width?: number;
+  width?: number | undefined;
   /** Filled-cell COLOR. Defaults to brand cyan. */
-  color?: string;
+  color?: string | undefined;
   /** Empty-cell COLOR. Defaults to dim slate. */
-  emptyColor?: string;
+  emptyColor?: string | undefined;
   /**
    * Whether to render the percentage label after the bar. Off when the
    * caller wants to put its own meta after (e.g. "12 of 30 done").
    */
-  showLabel?: boolean;
+  showLabel?: boolean | undefined;
   /** Optional label override (default: "{pct}%"). */
-  label?: string;
+  label?: string | undefined;
 }
 
 /**
@@ -75,14 +75,14 @@ export interface StackedSegment {
   pct: number;
   color: string;
   /** Optional label (used by legend renderer; not rendered in the bar). */
-  label?: string;
+  label?: string | undefined;
 }
 
 export interface StackedCharBarProps {
   segments: readonly StackedSegment[];
-  width?: number;
+  width?: number | undefined;
   /** Color of the trailing "free / unused" cells. */
-  emptyColor?: string;
+  emptyColor?: string | undefined;
 }
 
 /**

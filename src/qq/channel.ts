@@ -34,7 +34,7 @@ function pickNaturalSplit(candidate: string): number {
   return candidate.length;
 }
 
-export function splitQQMessage(text: string, maxBytes = QQ_MAX_CHUNK_BYTES): string[] {
+export function splitQQMessage(text: string, maxBytes: number = QQ_MAX_CHUNK_BYTES): string[] {
   const chunks: string[] = [];
   let remaining = text;
   while (remaining.length > 0) {
@@ -52,6 +52,11 @@ export function splitQQMessage(text: string, maxBytes = QQ_MAX_CHUNK_BYTES): str
 }
 
 export class QQChannel {
+  private callbacks: {
+    onSubmitMessage: (text: string) => void;
+    onError?: ((msg: string) => void) | undefined;
+  };
+
   private bot: QQBot | null = null;
   private qqUserId: string | null = null;
   private qqMessageId: string | null = null;
@@ -63,12 +68,12 @@ export class QQChannel {
   private lockAcquired = false;
   private nextOutboundMsgSeq = 1;
 
-  constructor(
-    private callbacks: {
-      onSubmitMessage: (text: string) => void;
-      onError?: (msg: string) => void;
-    },
-  ) {}
+  constructor(callbacks: {
+    onSubmitMessage: (text: string) => void;
+    onError?: ((msg: string) => void) | undefined;
+  }) {
+    this.callbacks = callbacks;
+  }
 
   private rememberMessage(id: string): boolean {
     if (this.processedMsgIds.has(id)) return false;

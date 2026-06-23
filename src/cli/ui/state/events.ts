@@ -1,4 +1,185 @@
 import { z } from "zod";
+import type { LanguageCode } from "../../../i18n/types.js";
+import type { Mode, NetworkState, ToastTone } from "./state.js";
+
+type CardIdValue = string;
+type Direction = "next" | "prev" | "first" | "last";
+type ComposerPicker = "slash" | "mention" | "history" | "slasharg";
+type PlanStepStatus = "queued" | "running" | "done" | "failed" | "blocked" | "skipped";
+type PlanVariant = "active" | "resumed" | "replay";
+type CheckLevel = "ok" | "info" | "warn" | "fail";
+type LiveVariant =
+  | "thinking"
+  | "undo"
+  | "ctxPressure"
+  | "aborted"
+  | "retry"
+  | "checkpoint"
+  | "stepProgress"
+  | "mcpEvent"
+  | "sessionOp";
+type LiveTone = "ok" | "warn" | "err" | "info" | "brand" | "accent" | "ghost";
+
+interface UsagePayload {
+  prompt: number;
+  reason: number;
+  output: number;
+  cacheHit: number;
+  cost: number;
+}
+
+interface SessionPatch {
+  cost?: number | undefined;
+  sessionCost?: number | undefined;
+  balance?: number | undefined;
+  balanceCurrency?: string | undefined;
+  cacheHit?: number | undefined;
+}
+
+interface PlanStepPayload {
+  id: string;
+  title: string;
+  status: PlanStepStatus;
+}
+
+interface UsageTokensPayload {
+  prompt: number;
+  reason: number;
+  output: number;
+  promptCap: number;
+}
+
+interface DoctorCheckPayload {
+  label: string;
+  level: CheckLevel;
+  detail: string;
+}
+
+interface TopToolPayload {
+  name: string;
+  tokens: number;
+  turn: number;
+}
+
+interface TipSectionPayload {
+  title?: string | undefined;
+  rows: Array<{ key: string; text: string }>;
+}
+
+export type AgentEvent =
+  | { type: "user.submit"; text: string }
+  | { type: "turn.start"; turnId: string }
+  | { type: "turn.thinking" }
+  | { type: "reasoning.start"; id: CardIdValue; model?: string | undefined }
+  | { type: "reasoning.chunk"; id: CardIdValue; text: string }
+  | {
+      type: "reasoning.end";
+      id: CardIdValue;
+      paragraphs: number;
+      tokens: number;
+      aborted?: boolean | undefined;
+    }
+  | { type: "streaming.start"; id: CardIdValue; model?: string | undefined }
+  | { type: "streaming.chunk"; id: CardIdValue; text: string }
+  | { type: "streaming.end"; id: CardIdValue; aborted?: boolean | undefined }
+  | { type: "tool.start"; id: CardIdValue; name: string; args: unknown }
+  | { type: "tool.chunk"; id: CardIdValue; text: string }
+  | {
+      type: "tool.end";
+      id: CardIdValue;
+      output?: string | undefined;
+      exitCode?: number | undefined;
+      elapsedMs: number;
+      aborted?: boolean | undefined;
+    }
+  | { type: "tool.retry"; id: CardIdValue; attempt: number; max: number }
+  | { type: "turn.abort" }
+  | {
+      type: "turn.end";
+      usage: UsagePayload;
+      promptCap?: number | undefined;
+      elapsedMs?: number | undefined;
+      sessionCacheHit?: number | undefined;
+    }
+  | { type: "mode.change"; mode: Mode }
+  | { type: "network.change"; state: NetworkState; detail?: string | undefined }
+  | { type: "session.update"; patch: SessionPatch }
+  | { type: "session.model.change"; model: string }
+  | { type: "session.preset.change"; preset: "auto" | "flash" | "pro" | null }
+  | { type: "mcp.loading"; ready: number; total: number }
+  | { type: "focus.move"; direction: Direction }
+  | { type: "focus.set"; cardId: CardIdValue | null }
+  | { type: "card.toggle"; cardId: CardIdValue }
+  | { type: "composer.input"; value: string }
+  | { type: "composer.cursor"; index: number }
+  | { type: "composer.history"; direction: "older" | "newer" }
+  | { type: "picker.open"; kind: ComposerPicker }
+  | { type: "picker.close" }
+  | {
+      type: "toast.show";
+      tone: ToastTone;
+      title: string;
+      detail?: string | undefined;
+      ttlMs: number;
+    }
+  | { type: "toast.hide"; id: string }
+  | { type: "session.reset" }
+  | { type: "session.fork"; cardId: CardIdValue }
+  | { type: "session.workspace.change"; id: string; workspace: string }
+  | { type: "language.change"; lang: LanguageCode }
+  | {
+      type: "plan.show";
+      id: CardIdValue;
+      title: string;
+      steps: PlanStepPayload[];
+      variant: PlanVariant;
+    }
+  | { type: "plan.step.complete"; stepId: string }
+  | { type: "plan.drop" }
+  | {
+      type: "usage.show";
+      id: CardIdValue;
+      turn: number;
+      tokens: UsageTokensPayload;
+      cacheHit: number;
+      cost: number;
+      sessionCost: number;
+      balance?: number | undefined;
+      balanceCurrency?: string | undefined;
+      elapsedMs?: number | undefined;
+    }
+  | { type: "doctor.show"; id: CardIdValue; checks: DoctorCheckPayload[] }
+  | {
+      type: "ctx.show";
+      id: CardIdValue;
+      text: string;
+      systemTokens: number;
+      toolsTokens: number;
+      logTokens: number;
+      inputTokens: number;
+      ctxMax: number;
+      toolsCount: number;
+      logMessages: number;
+      topTools: TopToolPayload[];
+    }
+  | {
+      type: "live.show";
+      id: CardIdValue;
+      ts: number;
+      variant: LiveVariant;
+      tone: LiveTone;
+      text: string;
+      meta?: string | undefined;
+    }
+  | {
+      type: "tip.show";
+      id: CardIdValue;
+      ts: number;
+      topic: string;
+      sections: TipSectionPayload[];
+      footer?: string | undefined;
+      oneTime: boolean;
+    };
 
 const cardId = z.string().min(1);
 const ts = z.number().int().nonnegative();
@@ -212,7 +393,7 @@ const sessionWorkspaceChange = z.object({
 
 const languageChange = z.object({
   type: z.literal("language.change"),
-  lang: z.string(),
+  lang: z.union([z.literal("EN"), z.literal("zh-CN")]),
 });
 
 const planShow = z.object({
@@ -323,7 +504,7 @@ const tipShow = z.object({
   oneTime: z.boolean(),
 });
 
-export const AgentEventSchema = z.discriminatedUnion("type", [
+export const AgentEventSchema: z.ZodType<AgentEvent> = z.discriminatedUnion("type", [
   userSubmit,
   turnStart,
   turnThinking,
@@ -368,8 +549,6 @@ export const AgentEventSchema = z.discriminatedUnion("type", [
   doctorShow,
   usageShow,
 ]);
-
-export type AgentEvent = z.infer<typeof AgentEventSchema>;
 
 export function parseEvent(raw: unknown): AgentEvent | null {
   const result = AgentEventSchema.safeParse(raw);

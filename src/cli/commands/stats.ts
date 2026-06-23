@@ -19,9 +19,9 @@ import {
 
 export interface StatsOptions {
   /** Optional transcript path. Absent → dashboard mode. */
-  transcript?: string;
+  transcript?: string | undefined;
   /** Inject a fixed timestamp (tests) so rolling windows are deterministic. */
-  now?: number;
+  now?: number | undefined;
 }
 
 export interface DashboardCacheStats {
@@ -103,13 +103,15 @@ function dashboard(opts: StatsOptions): void {
     return;
   }
 
-  const agg = aggregateUsage(records, { now: opts.now });
+  const agg = aggregateUsage(records, {
+    ...(opts.now !== undefined ? { now: opts.now } : {}),
+  });
   console.log(renderDashboard(agg, path, undefined, undefined, memoryStats));
   const windows = resolveBudgetWindows();
   if (windows.length > 0) {
     console.log("");
     const statuses = checkBudgetWindows(records, windows, {
-      now: opts.now,
+      ...(opts.now !== undefined ? { now: opts.now } : {}),
       workspace: process.cwd(),
     });
     for (const s of statuses) {
@@ -125,9 +127,9 @@ function dashboard(opts: StatsOptions): void {
 export function renderDashboard(
   agg: UsageAggregate,
   logPath: string,
-  cacheStats?: DashboardCacheStats,
-  promptCacheStats?: PromptCacheStats,
-  memoryStats?: DashboardMemoryStats,
+  cacheStats?: DashboardCacheStats | undefined,
+  promptCacheStats?: PromptCacheStats | undefined,
+  memoryStats?: DashboardMemoryStats | undefined,
 ): string {
   const lines: string[] = [];
   const size = formatLogSize(logPath);
@@ -184,9 +186,9 @@ function renderPromptCacheLine(agg: UsageAggregate, stats?: PromptCacheStats): s
 
 function renderToolCacheLine(stats?: DashboardCacheStats): string {
   if (!stats) {
-    const file = process.env.REASONIX_FILE_CACHE === "0" ? "off" : "on";
-    const parse = process.env.REASONIX_PARSE_CACHE === "0" ? "off" : "on";
-    const web = process.env.REASONIX_WEB_FETCH_CACHE === "0" ? "off" : "on";
+    const file = process.env["REASONIX_FILE_CACHE"] === "0" ? "off" : "on";
+    const parse = process.env["REASONIX_PARSE_CACHE"] === "0" ? "off" : "on";
+    const web = process.env["REASONIX_WEB_FETCH_CACHE"] === "0" ? "off" : "on";
     return `tool cache:      file=${file} parse=${parse} web-fetch=${web} (session-local hit rates are shown in /status)`;
   }
   const fileTotal = stats.fileCache.hits + stats.fileCache.misses;

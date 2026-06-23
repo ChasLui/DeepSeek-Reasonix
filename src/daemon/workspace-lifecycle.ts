@@ -15,9 +15,12 @@ export class WorkspaceLifecycle {
   private readonly openedCbs: RootCallback[] = [];
   private readonly closedCbs: RootCallback[] = [];
   private readonly idleCbs: RootCallback[] = [];
+  private readonly quietMs: number;
 
   /** @param quietMs idle window in ms; 0 disables `idle` emission entirely. */
-  constructor(private readonly quietMs = 0) {}
+  constructor(quietMs = 0) {
+    this.quietMs = quietMs;
+  }
 
   /** Subscribe to "a root's first session opened" (refcount 0→1). Returns an unsubscribe. */
   onOpened(cb: RootCallback): () => void {

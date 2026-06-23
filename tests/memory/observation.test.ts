@@ -21,6 +21,7 @@ describe("hook-driven memory observation", () => {
     home = mkdtempSync(join(tmpdir(), "reasonix-observation-home-"));
     projectRoot = mkdtempSync(join(tmpdir(), "reasonix-observation-project-"));
     vi.stubEnv("HOME", home);
+    vi.stubEnv("USERPROFILE", home);
     store = openMemoryStore({ homeDir: home, projectRoot });
   });
 

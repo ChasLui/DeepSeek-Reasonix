@@ -17,7 +17,7 @@ export interface CheckpointPickerProps {
   checkpoints: ReadonlyArray<CheckpointMeta>;
   workspace: string;
   onChoose: (outcome: CheckpointPickerOutcome) => void;
-  pickerPorts?: PickerBroadcastPorts;
+  pickerPorts?: PickerBroadcastPorts | undefined;
 }
 
 const PAGE_MARGIN = 6;

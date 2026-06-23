@@ -202,13 +202,13 @@ function graphHashPayload(
     throw new Error(`invalid code graph ${key}`);
   }
   const value = parsed as Record<string, unknown>;
-  if (typeof value.graphHash !== "string" || value.graphHash.length === 0) {
+  if (typeof value["graphHash"] !== "string" || value["graphHash"].length === 0) {
     throw new Error(`missing code graph ${key} hash`);
   }
   const payload = Object.fromEntries(
     Object.entries(value).filter(([entryKey]) => entryKey !== "graphHash"),
   );
-  return { graphHash: value.graphHash, payload: JSON.stringify(payload) };
+  return { graphHash: value["graphHash"], payload: JSON.stringify(payload) };
 }
 
 function assertMatchingGraphHashes(parts: readonly GraphHashPayload[]): void {
@@ -229,10 +229,10 @@ function parseEdges(raw: string): {
   const parsed: unknown = JSON.parse(raw);
   if (!parsed || typeof parsed !== "object") throw new Error("invalid code graph edges");
   const value = parsed as {
-    version?: unknown;
-    edges?: unknown;
-    imports?: unknown;
-    unresolvedRefs?: unknown;
+    version?: unknown | undefined;
+    edges?: unknown | undefined;
+    imports?: unknown | undefined;
+    unresolvedRefs?: unknown | undefined;
   };
   if (value.version !== CODE_GRAPH_VERSION || !Array.isArray(value.edges)) {
     throw new Error("unsupported code graph edges");

@@ -104,7 +104,7 @@ function resolveDashboardHost(
 ): string | undefined {
   const fromFlag = flagValue?.trim();
   if (fromFlag) return fromFlag;
-  const fromEnv = process.env.REASONIX_DASHBOARD_HOST?.trim();
+  const fromEnv = process.env["REASONIX_DASHBOARD_HOST"]?.trim();
   if (fromEnv) return fromEnv;
   if (noConfig) return undefined;
   const fromCfg = readConfig().dashboard?.host;
@@ -113,7 +113,7 @@ function resolveDashboardHost(
 
 /** Resolution order: REASONIX_DASHBOARD_TOKEN env → config.dashboard.token → undefined (server mints a fresh per-boot token). Min 16 chars; shorter values are dropped with a warning to avoid trivially-guessable tokens. */
 function resolveDashboardToken(noConfig: boolean): string | undefined {
-  const fromEnv = process.env.REASONIX_DASHBOARD_TOKEN?.trim();
+  const fromEnv = process.env["REASONIX_DASHBOARD_TOKEN"]?.trim();
   const fromCfg = noConfig ? undefined : readConfig().dashboard?.token?.trim();
   const candidate = fromEnv || fromCfg;
   if (!candidate) return undefined;
@@ -620,9 +620,8 @@ mcp
   .description(t("ui.mcpInspectDescription"))
   .option("--json", t("ui.jsonHintReport"))
   .action(async (spec: string, opts) => {
-    const { formatMcpInspectFailure, mcpInspectCommand } = await import(
-      "./commands/mcp-inspect.js"
-    );
+    const { formatMcpInspectFailure, mcpInspectCommand } =
+      await import("./commands/mcp-inspect.js");
     try {
       await mcpInspectCommand({ spec, json: !!opts.json });
     } catch (err) {
@@ -742,12 +741,12 @@ program
   )
   .action(
     async (opts: {
-      rebuild?: boolean;
-      model?: string;
-      dir?: string;
-      ollamaUrl?: string;
-      yes?: boolean;
-      lexicalOnly?: boolean;
+      rebuild?: boolean | undefined;
+      model?: string | undefined;
+      dir?: string | undefined;
+      ollamaUrl?: string | undefined;
+      yes?: boolean | undefined;
+      lexicalOnly?: boolean | undefined;
     }) => {
       const { indexCommand } = await import("./commands/index.js");
       await indexCommand(opts);

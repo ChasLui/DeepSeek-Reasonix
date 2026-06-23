@@ -13,6 +13,8 @@ function safeParse(raw: string): unknown {
 }
 
 export class RemoteLoop {
+  private readonly daemon: DaemonClient;
+  public readonly sessionId: string;
   budgetUsd: number | null;
   readonly prefix: { system: string; toolSpecs: unknown };
   readonly client: {
@@ -25,11 +27,14 @@ export class RemoteLoop {
   private logTokens: number;
 
   constructor(
-    private readonly daemon: DaemonClient,
-    readonly sessionId: string,
-    private model: string,
+    daemon: DaemonClient,
+    sessionId: string,
+    _model: string,
     snapshot: DaemonSessionStats,
   ) {
+    this.daemon = daemon;
+    this.sessionId = sessionId;
+
     this.budgetUsd = snapshot.budgetUsd;
     this.logTokens = snapshot.logTokens;
     this.prefix = {
@@ -82,7 +87,6 @@ export class RemoteLoop {
   }
 
   configure(opts: { reasoningEffort?: "high" | "max"; model?: string }): void {
-    if (opts.model) this.model = opts.model;
     void this.daemon
       .configure(this.sessionId, opts)
       .then(() => this.refresh())

@@ -4,33 +4,33 @@ import { compareVersions } from "../../version.js";
 
 export interface FeedbackDiagnosticInput {
   version: string;
-  latestVersion?: string | null;
+  latestVersion?: string | null | undefined;
   platform: string;
   osRelease: string;
-  termProgram?: string;
-  term?: string;
-  colorTerm?: string;
-  inWindowsTerminal?: boolean;
-  inTmux?: boolean;
-  inSsh?: boolean;
-  wslDistro?: string;
-  cols?: number;
-  rows?: number;
+  termProgram?: string | undefined;
+  term?: string | undefined;
+  colorTerm?: string | undefined;
+  inWindowsTerminal?: boolean | undefined;
+  inTmux?: boolean | undefined;
+  inSsh?: boolean | undefined;
+  wslDistro?: string | undefined;
+  cols?: number | undefined;
+  rows?: number | undefined;
   nodeVersion: string;
   locale: string;
-  theme?: string;
+  theme?: string | undefined;
   model: string;
-  reasoningEffort?: string;
-  editMode?: string;
-  planMode?: boolean;
-  mcpServerCount?: number;
-  sessionId?: string;
+  reasoningEffort?: string | undefined;
+  editMode?: string | undefined;
+  planMode?: boolean | undefined;
+  mcpServerCount?: number | undefined;
+  sessionId?: string | undefined;
 }
 
-const FEEDBACK_ISSUE_BASE = "https://github.com/esengine/DeepSeek-Reasonix/issues/new";
+const FEEDBACK_ISSUE_BASE = "https://github.com/esengine/DeepSeek-Reasonix/issues/new" as const;
 
 /** Bare URL used as a fallback when query-pre-fill isn't possible (only really if the body somehow blew past URL limits). */
-export const FEEDBACK_ISSUE_URL = FEEDBACK_ISSUE_BASE;
+export const FEEDBACK_ISSUE_URL: typeof FEEDBACK_ISSUE_BASE = FEEDBACK_ISSUE_BASE;
 
 /** GitHub safely accepts ~7000 chars in the body query param — well above our ~300-char diagnostic, but cap defensively. */
 const FEEDBACK_BODY_QUERY_LIMIT = 6000;

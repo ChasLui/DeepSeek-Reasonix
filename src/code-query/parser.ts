@@ -28,7 +28,7 @@ const EXT_TO_GRAMMAR: Record<string, GrammarName> = nullPrototype({
 });
 
 export interface ParserOptions {
-  grammarDir?: string;
+  grammarDir?: string | undefined;
 }
 
 export interface ParseCacheStat {
@@ -51,14 +51,14 @@ export interface ParseCacheStats {
 }
 
 export interface ParseTreeCacheOptions {
-  maxEntries?: number;
-  maxSizeBytes?: number;
+  maxEntries?: number | undefined;
+  maxSizeBytes?: number | undefined;
 }
 
 export interface ParseSourceOptions extends ParserOptions {
-  parseCache?: ParseTreeCache;
-  stat?: ParseCacheStat;
-  sha256?: string;
+  parseCache?: ParseTreeCache | undefined;
+  stat?: ParseCacheStat | undefined;
+  sha256?: string | undefined;
 }
 
 let parserInitPromise: Promise<void> | null = null;
@@ -156,7 +156,7 @@ export class ParseTreeCache {
   private readonly disabled: boolean;
 
   constructor(opts: ParseTreeCacheOptions = {}) {
-    this.disabled = process.env.REASONIX_PARSE_CACHE === "0";
+    this.disabled = process.env["REASONIX_PARSE_CACHE"] === "0";
     this.cache = new LRUCache<string, StoredTree>({
       max: opts.maxEntries ?? DEFAULT_PARSE_CACHE_ENTRIES,
       maxSize: opts.maxSizeBytes ?? DEFAULT_PARSE_CACHE_BYTES,
@@ -165,7 +165,7 @@ export class ParseTreeCache {
         this.removePathKey(entry.key.absPath, key);
         entry.tree.delete();
         if (reason === "evict" || reason === "expire") this.evictions++;
-        if (process.env.REASONIX_CACHE_DEBUG === "1") {
+        if (process.env["REASONIX_CACHE_DEBUG"] === "1") {
           process.stderr.write(`parse-cache evict ${entry.key.absPath} (${reason})\n`);
         }
       },

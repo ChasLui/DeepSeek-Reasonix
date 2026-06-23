@@ -14,7 +14,8 @@ import { migrate } from "./schema.js";
 // type-only import above is erased at build yet keeps db.ts the sole node:sqlite
 // textual reference (C-001).
 const nodeRequire = createRequire(import.meta.url);
-const { DatabaseSync } = nodeRequire("node:sqlite") as typeof import("node:sqlite");
+const sqliteModule = nodeRequire("node:sqlite") as typeof import("node:sqlite");
+const DatabaseSync: typeof import("node:sqlite").DatabaseSync = sqliteModule.DatabaseSync;
 
 const BUSY_RETRY_MAX = 5;
 const BUSY_RETRY_BASE_MS = 10;

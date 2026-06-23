@@ -40,18 +40,18 @@ tests/mcp-sse.test.ts — in-process http.Server fake for SSE
 
 ## What's NOT here (yet)
 
-| feature | status | note |
-|---|---|---|
-| CLI wiring (`reasonix chat --mcp <cmd>`) | ✅ shipped | see Usage below |
-| Bundled demo server | ✅ shipped | `examples/mcp-server-demo.ts`, exposes echo/add/get_time |
-| Real-subprocess integration test | ✅ shipped | `tests/mcp-integration.test.ts` |
-| Resources / `resources/list` / `resources/read` | deferred | Reasonix doesn't surface resources today |
-| Prompts / `prompts/list` | deferred | ditto |
-| Progress notifications | deferred | long-running tool support comes with the CLI work |
-| Streaming results | deferred | current shape returns one CallToolResult per call |
-| SSE transport | ✅ shipped | `src/mcp/sse.ts` — pass `http(s)://…` to `--mcp` |
-| Streamable HTTP (2025-03-26 spec) | deferred | waiting for a real server to validate against |
-| MCP server that Reasonix exposes | never | out of scope — Reasonix is a client |
+| feature                                         | status     | note                                                     |
+| ----------------------------------------------- | ---------- | -------------------------------------------------------- |
+| CLI wiring (`reasonix chat --mcp <cmd>`)        | ✅ shipped | see Usage below                                          |
+| Bundled demo server                             | ✅ shipped | `examples/mcp-server-demo.ts`, exposes echo/add/get_time |
+| Real-subprocess integration test                | ✅ shipped | `tests/mcp-integration.test.ts`                          |
+| Resources / `resources/list` / `resources/read` | deferred   | Reasonix doesn't surface resources today                 |
+| Prompts / `prompts/list`                        | deferred   | ditto                                                    |
+| Progress notifications                          | deferred   | long-running tool support comes with the CLI work        |
+| Streaming results                               | deferred   | current shape returns one CallToolResult per call        |
+| SSE transport                                   | ✅ shipped | `src/mcp/sse.ts` — pass `http(s)://…` to `--mcp`         |
+| Streamable HTTP (2025-03-26 spec)               | deferred   | waiting for a real server to validate against            |
+| MCP server that Reasonix exposes                | never      | out of scope — Reasonix is a client                      |
 
 ## Usage (CLI)
 

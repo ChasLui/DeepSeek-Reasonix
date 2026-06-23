@@ -30,7 +30,7 @@ export interface SlashArgPickerProps {
    * When the completer is `"path"`, carries the rich entries (with `isDir`)
    * so the picker can render a trailing `/` on directories.
    */
-  pathCandidates?: readonly AtPickerEntry[] | null;
+  pathCandidates?: readonly AtPickerEntry[] | null | undefined;
 }
 
 /**

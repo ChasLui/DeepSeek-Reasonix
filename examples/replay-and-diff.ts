@@ -6,7 +6,7 @@
  * reconstructs the v0.1 cache-hit / cost numbers offline.
  *
  * Run from the repo root:
- *   npx tsx examples/replay-and-diff.ts
+ *   pnpm exec tsx examples/replay-and-diff.ts
  *
  * Anything you can do with `reasonix replay` / `reasonix diff` is available
  * here as a function you can drive from your own scripts (CI gates, eval

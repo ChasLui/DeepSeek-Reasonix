@@ -98,7 +98,7 @@ export interface SubagentInnerSummary {
   glyph: string;
   color: string;
   label: string;
-  meta?: string;
+  meta?: string | undefined;
 }
 
 export interface SubagentActivity {
@@ -109,9 +109,9 @@ export interface SubagentActivity {
   task: string;
   iter: number;
   elapsedMs: number;
-  skillName?: string;
-  model?: string;
-  phase?: "exploring" | "summarising";
+  skillName?: string | undefined;
+  model?: string | undefined;
+  phase?: "exploring" | "summarising" | undefined;
   lastInner: SubagentInnerSummary | null;
 }
 

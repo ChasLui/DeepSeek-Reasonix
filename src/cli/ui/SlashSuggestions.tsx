@@ -14,9 +14,9 @@ export interface SlashSuggestionsProps {
   matches: SlashCommandSpec[] | null;
   selectedIndex: number;
   /** True when input is a bare `/` — render section headers + advanced footer. */
-  groupMode?: boolean;
+  groupMode?: boolean | undefined;
   /** Count of hidden `advanced` commands; rendered as a footer hint when groupMode is true. */
-  advancedHidden?: number;
+  advancedHidden?: number | undefined;
 }
 
 function groupLabel(group: SlashGroup): string {

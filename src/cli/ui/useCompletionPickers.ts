@@ -30,7 +30,7 @@ export interface UseCompletionPickersParams {
   models: string[] | null;
   mcpServers: McpServerSummary[] | undefined;
   /** Cross-session slash invocation counts — used to sort suggestions by frequency. */
-  slashUsage?: Readonly<Record<string, number>>;
+  slashUsage?: Readonly<Record<string, number>> | undefined;
 }
 
 export interface AtPickerEntry {
@@ -42,7 +42,7 @@ export interface AtPickerEntry {
   dirSuffix: string;
   isDir: boolean;
   /** Synthetic parent-nav entry (#1019) — always drills regardless of pick action so Enter doesn't commit "@<parent> " as a literal mention. */
-  synthetic?: "parent";
+  synthetic?: "parent" | undefined;
 }
 
 export type AtPickerState =
@@ -515,6 +515,7 @@ function useStreamingSearch(
           hitsRef.current.push(e);
           if (hitsRef.current.length >= SEARCH_RESULT_CAP * 8) return false;
           scheduleFlush();
+          return undefined;
         },
         onProgress: (n) => {
           scannedRef.current = n;

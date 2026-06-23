@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import type { PlanConfirmChoice } from "../cli/ui/PlanConfirm.js";
 import type { ReviseChoice } from "../cli/ui/PlanReviseConfirm.js";
 import type { ThemeChoice } from "../cli/ui/ThemePicker.js";
 import type { SlashResult } from "../cli/ui/slash/types.js";
 import { listThemeNames } from "../cli/ui/theme/tokens.js";
 import { type CheckpointMeta, fmtAgo, restoreCheckpoint } from "../code/checkpoints.js";
-import { loadQQConfig, resolveThemePreference, saveQQConfig } from "../config.js";
+import { loadQQConfig, saveQQConfig } from "../config.js";
 import { t } from "../i18n/index.js";
 import { type SessionInfo, freshSessionName } from "../memory/session.js";
 import { withoutLegacyModelIds } from "../model-aliases.js";
@@ -48,11 +47,11 @@ interface QQSlashInteractionState {
 
 interface PendingQQConnectSetup {
   step: QQSetupStep;
-  appId?: string;
-  appSecret?: string;
+  appId?: string | undefined;
+  appSecret?: string | undefined;
   sandbox: boolean;
-  ownerOpenId?: string;
-  allowlist?: readonly string[];
+  ownerOpenId?: string | undefined;
+  allowlist?: readonly string[] | undefined;
   resolve: (message: string) => void;
   reject: (error: Error) => void;
   promise: Promise<string>;
@@ -65,18 +64,18 @@ interface QQLogger {
 
 interface UseQQChannelArgs {
   codeMode: boolean;
-  initialChannel?: QQChannel;
+  initialChannel?: QQChannel | undefined;
   log: QQLogger;
   setQueuedSubmit: (text: string) => void;
-  qqSubmitRef?: { current: ((text: string) => void) | null };
-  qqErrorRef?: { current: ((msg: string) => void) | null };
-  sessionName?: string | null;
+  qqSubmitRef?: { current: ((text: string) => void) | null } | undefined;
+  qqErrorRef?: { current: ((msg: string) => void) | null } | undefined;
+  sessionName?: string | null | undefined;
   currentRootDir: string;
   pendingGateIdRef: { current: number | null };
   completedStepIdsRef: { current: Set<string> };
   planStepsRef: { current: PlanStep[] | null };
-  onCreateSession?: (name: string) => void;
-  onSelectSession?: (name: string) => void;
+  onCreateSession?: ((name: string) => void) | undefined;
+  onSelectSession?: ((name: string) => void) | undefined;
   onModelPick: (target: string) => string;
   onThemePick: (target: ThemeChoice) => string;
   onShellConfirmRef: {
@@ -98,7 +97,7 @@ interface UseQQChannelArgs {
     current: (choice: "continue" | "revise" | "stop") => void;
   };
   onCheckpointReviseRef: {
-    current: (feedback: string, snap: { stepId: string; title?: string }) => void;
+    current: (feedback: string, snap: { stepId: string; title?: string | undefined }) => void;
   };
   onPlanRevisionRef: {
     current: (choice: ReviseChoice | "cancel") => void;
@@ -111,6 +110,33 @@ interface UseQQChannelArgs {
         | { type: "cancel" },
     ) => void;
   };
+}
+
+export interface UseQQChannelValue {
+  channelRef: React.MutableRefObject<QQChannel | null>;
+  connect: (args: readonly string[]) => Promise<string>;
+  disconnect: () => Promise<string>;
+  status: () => string;
+  sendInfo: (message: string) => void;
+  sendText: (message: string) => void;
+  resetInteractions: () => void;
+  clearSlashInteraction: () => void;
+  canBypassBusy: (queuedSubmit: string) => boolean;
+  consumeSlashReply: (text: string) => boolean;
+  consumePauseReply: (text: string) => boolean;
+  beginSessionsPicker: (sessions: SessionInfo[]) => void;
+  beginCheckpointPicker: (checkpoints: CheckpointMeta[]) => void;
+  beginModelPicker: (models: string[]) => void;
+  beginThemePicker: (themes: ThemeChoice[]) => void;
+  notifyTerminalOnly: (message: string) => void;
+  noteTurnFromQQ: (fromQQ: boolean) => void;
+  maybeSendFinalReply: (lastAssistantText: string) => void;
+  clearTurnReply: () => void;
+  handlePauseRequest: (kind: string, payload: Record<string, unknown>) => void;
+  buildModelChoices: (models: string[] | null | undefined) => string[];
+  buildThemeChoices: () => ThemeChoice[];
+  parseSubmit: (raw: string) => { handled: boolean; fromQQ: boolean; text: string } | null;
+  handleRemoteSlashResult: (args: RemoteSlashHandlingArgs) => boolean;
 }
 
 interface RemoteSlashHandlingArgs {
@@ -198,7 +224,7 @@ export function useQQChannel({
   onCheckpointReviseRef,
   onPlanRevisionRef,
   onChoiceResolveRef,
-}: UseQQChannelArgs) {
+}: UseQQChannelArgs): UseQQChannelValue {
   const channelRef = useRef<QQChannel | null>(initialChannel ?? null);
   const interactionRef = useRef<QQInteractionState>({ kind: null, payload: null });
   const slashInteractionRef = useRef<QQSlashInteractionState>({ kind: null, payload: null });
@@ -229,8 +255,8 @@ export function useQQChannel({
       appSecret: string;
       sandbox: boolean;
       enabled: boolean;
-      ownerOpenId?: string;
-      allowlist?: readonly string[];
+      ownerOpenId?: string | undefined;
+      allowlist?: readonly string[] | undefined;
     }) => {
       saveQQConfig({
         appId: config.appId,
@@ -255,8 +281,8 @@ export function useQQChannel({
       appId: string;
       appSecret: string;
       sandbox: boolean;
-      ownerOpenId?: string;
-      allowlist?: readonly string[];
+      ownerOpenId?: string | undefined;
+      allowlist?: readonly string[] | undefined;
     }) => {
       if (!appId || !appSecret) {
         throw new Error(t("handlers.qq.credentialsRequired"));
@@ -314,11 +340,11 @@ export function useQQChannel({
       ownerOpenId,
       allowlist,
     }: {
-      appId?: string;
-      appSecret?: string;
+      appId?: string | undefined;
+      appSecret?: string | undefined;
       sandbox: boolean;
-      ownerOpenId?: string;
-      allowlist?: readonly string[];
+      ownerOpenId?: string | undefined;
+      allowlist?: readonly string[] | undefined;
     }): Promise<string> => {
       const current = pendingConnectSetupRef.current;
       if (current) {
@@ -517,7 +543,6 @@ export function useQQChannel({
 
   const consumeSlashReply = useCallback(
     (text: string): boolean => {
-      const lowerText = text.toLowerCase();
       const pickedIndex = parseIndexedChoice(text);
       switch (slashInteractionRef.current.kind) {
         case "sessions_picker": {
@@ -666,8 +691,8 @@ export function useQQChannel({
         case "choice": {
           const payload =
             (interaction.payload as {
-              options?: ChoiceOption[];
-              allowCustom?: boolean;
+              options?: ChoiceOption[] | undefined;
+              allowCustom?: boolean | undefined;
             }) ?? {};
           const options = payload.options ?? [];
           const pickedIndex = parseIndexedChoice(text);

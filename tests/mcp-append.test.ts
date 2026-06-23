@@ -151,9 +151,9 @@ describe("applyMcpAppend", () => {
     // The owning list now points at the new summary
     expect(next).toHaveLength(1);
     expect(next[0]).toBe(updated);
-    expect(next[0].toolCount).toBe(1);
+    expect(next[0]!.toolCount).toBe(1);
     // The original list and server are untouched
     expect(servers[0]).toBe(server);
-    expect(servers[0].toolCount).toBe(0);
+    expect(servers[0]!.toolCount).toBe(0);
   });
 });

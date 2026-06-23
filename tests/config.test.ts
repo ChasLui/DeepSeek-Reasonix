@@ -20,8 +20,6 @@ import {
   loadEditMode,
   loadEngineeringLifecycleMode,
   loadFilesystemOutlineThresholdBytes,
-  loadIndexConfig,
-  loadIndexUserConfig,
   loadPricingOverride,
   loadProjectPathAllowed,
   loadProjectShellAllowed,
@@ -52,7 +50,6 @@ import {
   saveBaseUrl,
   saveDesktopOpenTabs,
   saveEditMode,
-  saveIndexConfig,
   saveReasoningEffort,
   saveSemanticEmbeddingConfig,
   saveTheme,
@@ -64,67 +61,67 @@ import {
 describe("config", () => {
   let dir: string;
   let path: string;
-  const originalEnv = process.env.DEEPSEEK_API_KEY;
-  const originalSearch = process.env.REASONIX_SEARCH;
-  const originalBaseUrl = process.env.DEEPSEEK_BASE_URL;
-  const originalCodeRel = process.env.REASONIX_CODEREL;
-  const originalCodeGraph = process.env.REASONIX_CODE_GRAPH;
-  const originalCodeGraphBody = process.env.REASONIX_CODE_GRAPH_BODY;
+  const originalEnv = process.env["DEEPSEEK_API_KEY"];
+  const originalSearch = process.env["REASONIX_SEARCH"];
+  const originalBaseUrl = process.env["DEEPSEEK_BASE_URL"];
+  const originalCodeRel = process.env["REASONIX_CODEREL"];
+  const originalCodeGraph = process.env["REASONIX_CODE_GRAPH"];
+  const originalCodeGraphBody = process.env["REASONIX_CODE_GRAPH_BODY"];
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "reasonix-test-"));
     path = join(dir, "config.json");
     // biome-ignore lint/performance/noDelete: the string "undefined" leaks into process.env otherwise
-    delete process.env.DEEPSEEK_API_KEY;
+    delete process.env["DEEPSEEK_API_KEY"];
     // biome-ignore lint/performance/noDelete: same reason
-    delete process.env.REASONIX_SEARCH;
+    delete process.env["REASONIX_SEARCH"];
     // biome-ignore lint/performance/noDelete: same reason
-    delete process.env.DEEPSEEK_BASE_URL;
+    delete process.env["DEEPSEEK_BASE_URL"];
     // biome-ignore lint/performance/noDelete: same reason
-    delete process.env.REASONIX_CODEREL;
+    delete process.env["REASONIX_CODEREL"];
     // biome-ignore lint/performance/noDelete: same reason
-    delete process.env.REASONIX_CODE_GRAPH;
+    delete process.env["REASONIX_CODE_GRAPH"];
     // biome-ignore lint/performance/noDelete: same reason
-    delete process.env.REASONIX_CODE_GRAPH_BODY;
+    delete process.env["REASONIX_CODE_GRAPH_BODY"];
   });
 
   afterEach(() => {
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
     if (originalEnv === undefined) {
       // biome-ignore lint/performance/noDelete: same reason as beforeEach
-      delete process.env.DEEPSEEK_API_KEY;
+      delete process.env["DEEPSEEK_API_KEY"];
     } else {
-      process.env.DEEPSEEK_API_KEY = originalEnv;
+      process.env["DEEPSEEK_API_KEY"] = originalEnv;
     }
     if (originalSearch === undefined) {
       // biome-ignore lint/performance/noDelete: same reason
-      delete process.env.REASONIX_SEARCH;
+      delete process.env["REASONIX_SEARCH"];
     } else {
-      process.env.REASONIX_SEARCH = originalSearch;
+      process.env["REASONIX_SEARCH"] = originalSearch;
     }
     if (originalBaseUrl === undefined) {
       // biome-ignore lint/performance/noDelete: same reason
-      delete process.env.DEEPSEEK_BASE_URL;
+      delete process.env["DEEPSEEK_BASE_URL"];
     } else {
-      process.env.DEEPSEEK_BASE_URL = originalBaseUrl;
+      process.env["DEEPSEEK_BASE_URL"] = originalBaseUrl;
     }
     if (originalCodeRel === undefined) {
       // biome-ignore lint/performance/noDelete: same reason
-      delete process.env.REASONIX_CODEREL;
+      delete process.env["REASONIX_CODEREL"];
     } else {
-      process.env.REASONIX_CODEREL = originalCodeRel;
+      process.env["REASONIX_CODEREL"] = originalCodeRel;
     }
     if (originalCodeGraph === undefined) {
       // biome-ignore lint/performance/noDelete: same reason
-      delete process.env.REASONIX_CODE_GRAPH;
+      delete process.env["REASONIX_CODE_GRAPH"];
     } else {
-      process.env.REASONIX_CODE_GRAPH = originalCodeGraph;
+      process.env["REASONIX_CODE_GRAPH"] = originalCodeGraph;
     }
     if (originalCodeGraphBody === undefined) {
       // biome-ignore lint/performance/noDelete: same reason
-      delete process.env.REASONIX_CODE_GRAPH_BODY;
+      delete process.env["REASONIX_CODE_GRAPH_BODY"];
     } else {
-      process.env.REASONIX_CODE_GRAPH_BODY = originalCodeGraphBody;
+      process.env["REASONIX_CODE_GRAPH_BODY"] = originalCodeGraphBody;
     }
   });
 
@@ -199,7 +196,7 @@ describe("config", () => {
 
   it("loadApiKey prefers env var over config file", () => {
     saveApiKey("sk-fromfile1234567890ab", path);
-    process.env.DEEPSEEK_API_KEY = "sk-fromenv1234567890abcd";
+    process.env["DEEPSEEK_API_KEY"] = "sk-fromenv1234567890abcd";
     expect(loadApiKey(path)).toBe("sk-fromenv1234567890abcd");
   });
 
@@ -232,12 +229,12 @@ describe("config", () => {
 
   it("loadBaseUrl prefers env var over config", () => {
     saveBaseUrl("https://from-config.example.com", path);
-    process.env.DEEPSEEK_BASE_URL = "https://from-env.example.com";
+    process.env["DEEPSEEK_BASE_URL"] = "https://from-env.example.com";
     try {
       expect(loadBaseUrl(path)).toBe("https://from-env.example.com");
     } finally {
       // biome-ignore lint/performance/noDelete: restore exact env state
-      delete process.env.DEEPSEEK_BASE_URL;
+      delete process.env["DEEPSEEK_BASE_URL"];
     }
   });
 
@@ -365,22 +362,22 @@ describe("config", () => {
   });
 
   it("searchEnabled honours REASONIX_SEARCH=off/false/0", () => {
-    process.env.REASONIX_SEARCH = "off";
+    process.env["REASONIX_SEARCH"] = "off";
     expect(searchEnabled(path)).toBe(false);
-    process.env.REASONIX_SEARCH = "false";
+    process.env["REASONIX_SEARCH"] = "false";
     expect(searchEnabled(path)).toBe(false);
-    process.env.REASONIX_SEARCH = "0";
+    process.env["REASONIX_SEARCH"] = "0";
     expect(searchEnabled(path)).toBe(false);
   });
 
   it("searchEnabled stays true for unrelated env values", () => {
-    process.env.REASONIX_SEARCH = "on";
+    process.env["REASONIX_SEARCH"] = "on";
     expect(searchEnabled(path)).toBe(true);
   });
 
   it("env off beats config true", () => {
     writeConfig({ apiKey: "sk-test123abcdefghijkl", search: true }, path);
-    process.env.REASONIX_SEARCH = "off";
+    process.env["REASONIX_SEARCH"] = "off";
     expect(searchEnabled(path)).toBe(false);
   });
 

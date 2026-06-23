@@ -4,11 +4,11 @@ import { type Token, type Tokens, marked } from "marked";
 import { decodeHtmlEntities } from "./html-entities.js";
 
 export interface InlineStyle {
-  bold?: boolean;
-  italic?: boolean;
-  strike?: boolean;
-  code?: boolean;
-  link?: string;
+  bold?: boolean | undefined;
+  italic?: boolean | undefined;
+  strike?: boolean | undefined;
+  code?: boolean | undefined;
+  link?: string | undefined;
   fileRef?: { path: string; line?: number; lineEnd?: number };
 }
 
@@ -26,7 +26,7 @@ export type MdLine =
       ordered: boolean;
       index: number;
       depth: number;
-      task?: "todo" | "done";
+      task?: "todo" | "done" | undefined;
       spans: InlineSpan[];
     }
   | { kind: "code"; lang: string; text: string }

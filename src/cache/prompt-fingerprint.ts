@@ -21,7 +21,11 @@ export interface PendingPromptChanges {
 }
 
 export class PromptFingerprint {
-  constructor(private readonly toolSchemaIndex = new ToolSchemaIndex()) {}
+  private readonly toolSchemaIndex: ToolSchemaIndex;
+
+  constructor(toolSchemaIndex: ToolSchemaIndex = new ToolSchemaIndex()) {
+    this.toolSchemaIndex = toolSchemaIndex;
+  }
 
   snapshot(prefix: ImmutablePrefix): PromptSnapshot {
     const tools = prefix.tools();

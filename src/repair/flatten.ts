@@ -82,11 +82,11 @@ function collect(
 }
 
 function setByPath(target: Record<string, unknown>, path: string[], value: unknown): void {
-  let cur: any = target;
+  let cur: Record<string, unknown> = target;
   for (let i = 0; i < path.length - 1; i++) {
     const key = path[i]!;
-    if (typeof cur[key] !== "object" || cur[key] === null) cur[key] = {};
-    cur = cur[key];
+    if (typeof cur[key] !== "object" || cur[key] === null || Array.isArray(cur[key])) cur[key] = {};
+    cur = cur[key] as Record<string, unknown>;
   }
   cur[path[path.length - 1]!] = value;
 }

@@ -22,14 +22,19 @@ export interface ChoiceConfirmProps {
 const CUSTOM_VALUE = "__custom__";
 const CANCEL_VALUE = "__cancel__";
 
-function ChoiceConfirmInner({ question, options, allowCustom, onChoose }: ChoiceConfirmProps) {
+function ChoiceConfirmInner({
+  question,
+  options,
+  allowCustom,
+  onChoose,
+}: ChoiceConfirmProps): React.ReactElement {
   const optionRows = options.length + (allowCustom ? 1 : 0) + 1; // +1 for cancel
   useReserveRows("modal", { min: 6, max: Math.max(10, optionRows + 6) });
 
   const items: Array<{ value: string; label: string; hint?: string }> = options.map((opt) => ({
     value: opt.id,
     label: `${opt.id} · ${opt.title}`,
-    hint: opt.summary,
+    ...(opt.summary !== undefined ? { hint: opt.summary } : {}),
   }));
   if (allowCustom) {
     items.push({
@@ -60,4 +65,5 @@ function ChoiceConfirmInner({ question, options, allowCustom, onChoose }: Choice
   );
 }
 
-export const ChoiceConfirm = React.memo(ChoiceConfirmInner);
+export const ChoiceConfirm: React.MemoExoticComponent<typeof ChoiceConfirmInner> =
+  React.memo(ChoiceConfirmInner);

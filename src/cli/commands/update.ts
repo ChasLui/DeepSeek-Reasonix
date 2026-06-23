@@ -19,7 +19,7 @@ export interface UpdatePlan {
   action: UpdateAction;
   /** Human-readable summary; the CLI prints this verbatim. */
   message: string;
-  command?: string[];
+  command?: string[] | undefined;
 }
 
 export interface PlanUpdateInput {
@@ -27,7 +27,7 @@ export interface PlanUpdateInput {
   latest: string;
   installSource: InstallSource;
   /** Pin npm to this prefix so nvm/fnm can't redirect the install. */
-  npmPrefix?: string | null;
+  npmPrefix?: string | null | undefined;
 }
 
 export const MANUAL_UPDATE_COMMANDS: readonly string[] = [
@@ -98,19 +98,19 @@ function buildUpdateCommand(
 
 export interface UpdateCommandOptions {
   /** Skip spawning the package manager; print the decision only. */
-  dryRun?: boolean;
+  dryRun?: boolean | undefined;
   /** Test seam: override the registry lookup. Returns null = offline. */
-  fetchLatest?: () => Promise<string | null>;
+  fetchLatest?: (() => Promise<string | null>) | undefined;
   /** Test seam: override the install-source detector. */
-  detectSource?: () => InstallSource;
+  detectSource?: (() => InstallSource) | undefined;
   /** Test seam: override the npm prefix detector. */
-  detectPrefix?: () => string | null;
+  detectPrefix?: (() => string | null) | undefined;
   /** Test seam: override the spawner. Must return exit code. */
-  spawnInstall?: (argv: string[]) => Promise<number>;
+  spawnInstall?: ((argv: string[]) => Promise<number>) | undefined;
   /** Test seam: stdout writer. */
-  write?: (msg: string) => void;
+  write?: ((msg: string) => void) | undefined;
   /** Test seam: process exit — tests don't want to tear down vitest. */
-  exit?: (code: number) => void;
+  exit?: ((code: number) => void) | undefined;
 }
 
 function defaultSpawn(argv: string[]): Promise<number> {

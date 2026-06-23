@@ -33,7 +33,7 @@ function blockComments(src: string): Array<{ start: number; lines: number; body:
   const lines = src.split("\n");
   let i = 0;
   while (i < lines.length) {
-    const line = lines[i];
+    const line = lines[i] ?? "";
     const open = line.indexOf("/*");
     const before = open === -1 ? "" : line.slice(0, open);
     if (open !== -1 && before.indexOf("//") === -1 && !/["'`]/.test(before)) {
@@ -46,11 +46,11 @@ function blockComments(src: string): Array<{ start: number; lines: number; body:
         continue;
       }
       let j = i + 1;
-      while (j < lines.length && lines[j].indexOf("*/") === -1) {
-        buf.push(lines[j]);
+      while (j < lines.length && (lines[j] ?? "").indexOf("*/") === -1) {
+        buf.push(lines[j] ?? "");
         j++;
       }
-      if (j < lines.length) buf.push(lines[j]);
+      if (j < lines.length) buf.push(lines[j] ?? "");
       out.push({ start: startLine, lines: j - i + 1, body: buf.join("\n") });
       i = j + 1;
       continue;
@@ -185,11 +185,11 @@ describe("comment policy (CLAUDE.md)", () => {
 
 function commentText(line: string): string | null {
   const m = line.match(/(?:^|\s)\/\/(.*)$/);
-  if (m) return m[1];
+  if (m) return m[1] ?? "";
   const m2 = line.match(/\/\*+(.*?)\*?\/?$/);
-  if (m2) return m2[1];
+  if (m2) return m2[1] ?? "";
   const m3 = line.match(/^\s*\*\s?(.*)$/);
-  if (m3) return m3[1];
+  if (m3) return m3[1] ?? "";
   return null;
 }
 

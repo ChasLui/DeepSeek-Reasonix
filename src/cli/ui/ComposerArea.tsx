@@ -34,8 +34,8 @@ export interface ComposerAreaProps {
   modeFlash: boolean;
   planMode: boolean;
   undoArmed: boolean;
-  jobs?: JobRegistry;
-  activeLoop?: Parameters<typeof LoopStatusRow>[0]["loop"] | null;
+  jobs?: JobRegistry | undefined;
+  activeLoop?: LoopStatus | null | undefined;
   statusBar: StatusBarConfig;
 
   // ── prompt ───────────────────────────────────────────────────────
@@ -115,7 +115,7 @@ export const ComposerArea: React.FC<ComposerAreaProps> = React.memo(
     slashArgMatches,
     slashArgSelected,
   }) => {
-    const inputArea = (
+    const inputArea: React.ReactElement = (
       <Box flexDirection="column" flexShrink={0} flexWrap="nowrap">
         <Box flexDirection="column" flexShrink={0} flexWrap="nowrap">
           {slashMatches !== null ? (
@@ -173,11 +173,7 @@ ComposerArea.displayName = "ComposerArea";
 
 // ── Loop status row (moved from App.tsx) ──────────────────────────
 
-function LoopStatusRow({
-  loop,
-}: {
-  loop: { prompt: string; intervalMs: number; nextFireAt: number; iter: number };
-}) {
+function LoopStatusRow({ loop }: { loop: LoopStatus }): React.ReactElement {
   const [, setTick] = React.useState(0);
   React.useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
@@ -191,4 +187,11 @@ function LoopStatusRow({
       </Text>
     </Box>
   );
+}
+
+interface LoopStatus {
+  prompt: string;
+  intervalMs: number;
+  nextFireAt: number;
+  iter: number;
 }

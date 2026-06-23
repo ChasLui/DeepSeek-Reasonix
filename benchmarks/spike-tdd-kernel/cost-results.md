@@ -9,7 +9,7 @@ This makes sense once you reason about where the new tokens land: they sit *insi
 `benchmarks/spike-tdd-kernel/cost.mjs`. Two synthetic 4-turn agent transcripts, identical except that variant B's `edit_file` tool_result carries the RFC's proposed footer:
 
 ```
-[test_run] test_id="…" status="pass" duration_ms=1873 command="npx vitest …"
+[test_run] test_id="…" status="pass" duration_ms=1873 command="pnpm exec vitest …"
 [edit_claim] test_id="…" edit_target="src/util/slugify.ts" satisfied=true
 ```
 

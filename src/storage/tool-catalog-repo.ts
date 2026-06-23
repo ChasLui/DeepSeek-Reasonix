@@ -13,7 +13,7 @@ export interface ToolCatalogRow {
   /** 0 = essential/常驻, 1 = warm, 2 = deferred. */
   tier: number;
   /** Packed Float32 vector, or null when not yet computed. */
-  embedding?: Float32Array | null;
+  embedding?: Float32Array | null | undefined;
 }
 
 const UPSERT_SQL =
@@ -58,18 +58,18 @@ export function upsertToolCatalog(db: Db, rows: readonly ToolCatalogRow[]): void
 }
 
 export interface ListFilter {
-  source?: string;
-  tier?: number;
+  source?: string | undefined;
+  tier?: number | undefined;
 }
 
 function rowToCatalog(row: Record<string, unknown>): ToolCatalogRow {
   return {
-    source: String(row.source),
-    name: String(row.name),
-    description: String(row.description),
-    paramsJson: String(row.params_json),
-    tier: Number(row.tier),
-    embedding: unpackEmbedding(row.embedding),
+    source: String(row["source"]),
+    name: String(row["name"]),
+    description: String(row["description"]),
+    paramsJson: String(row["params_json"]),
+    tier: Number(row["tier"]),
+    embedding: unpackEmbedding(row["embedding"]),
   };
 }
 
@@ -104,7 +104,7 @@ export function getToolEmbedding(db: Db, source: string, name: string): Float32A
     const row = db
       .prepare("SELECT embedding FROM tool_catalog WHERE source = ? AND name = ?")
       .get(source, name) as Record<string, unknown> | undefined;
-    return row ? unpackEmbedding(row.embedding) : null;
+    return row ? unpackEmbedding(row["embedding"]) : null;
   } catch {
     return null;
   }
@@ -137,7 +137,7 @@ export function countToolCatalogBySource(db: Db): Map<string, number> {
       .prepare("SELECT source, COUNT(*) AS n FROM tool_catalog GROUP BY source")
       .all()) {
       const r = row as Record<string, unknown>;
-      out.set(String(r.source), Number(r.n));
+      out.set(String(r["source"]), Number(r["n"]));
     }
   } catch {
     /* fail soft */

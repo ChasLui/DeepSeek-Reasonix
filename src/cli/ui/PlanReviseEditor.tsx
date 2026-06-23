@@ -10,7 +10,7 @@ import { FG, TONE } from "./theme/tokens.js";
 export interface PlanReviseEditorProps {
   steps: PlanStep[];
   /** stepId set the model has already marked done — those rows render `[✓]` and are not editable. */
-  completedStepIds?: Set<string>;
+  completedStepIds?: Set<string> | undefined;
   onAccept: (revised: PlanStep[], skippedIds: ReadonlyArray<string>) => void;
   onCancel: () => void;
 }

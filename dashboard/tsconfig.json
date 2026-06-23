@@ -4,6 +4,7 @@
     "rootDir": ".",
     "outDir": "dist",
     "noEmit": true,
+    "isolatedDeclarations": false,
     "declaration": false,
     "declarationMap": false,
     "lib": ["ES2023", "DOM", "DOM.Iterable"],

@@ -7,6 +7,8 @@ import {
   createContext,
   isValidElement,
   memo,
+  type MemoExoticComponent,
+  type Provider,
   type ReactElement,
   type ReactNode,
   useContext,
@@ -34,7 +36,7 @@ async function openWithEditor(
 
 type WorkspaceCtx = { dir?: string; editor?: string };
 const WorkspaceContext = createContext<WorkspaceCtx>({});
-export const WorkspaceProvider = WorkspaceContext.Provider;
+export const WorkspaceProvider: Provider<WorkspaceCtx> = WorkspaceContext.Provider;
 
 function resolveAgainstWorkspace(rel: string, ws: string | undefined): string {
   if (!ws) return rel;
@@ -67,6 +69,10 @@ const EXACT_FILE_REF_RE = new RegExp(`^(${FILE_REF_SOURCE})${LINE_REF_SOURCE}$`)
 
 type ParsedFileRef = { path: string; line?: string };
 
+function fileRef(path: string, line: string | undefined): ParsedFileRef {
+  return line ? { path, line } : { path };
+}
+
 function firstLine(line?: string): number | undefined {
   if (!line) return undefined;
   const parsed = Number.parseInt(line.split(/[:-]/)[0] ?? line, 10);
@@ -77,7 +83,7 @@ function parseFileRef(value: string): ParsedFileRef | null {
   const trimmed = value.trim();
   const m = EXACT_FILE_REF_RE.exec(trimmed);
   if (!m) return null;
-  return { path: m[1]!, line: m[2] };
+  return fileRef(m[1]!, m[2]);
 }
 
 function decodeMaybeUri(value: string): string {
@@ -107,7 +113,7 @@ function parseFileHref(value: string): ParsedFileRef | null {
   const clean = decoded.split("#")[0]!.split("?")[0]!;
   const parsed = parseFileRef(clean);
   if (!parsed) return null;
-  return { ...parsed, line: parsed.line ?? hashLine };
+  return fileRef(parsed.path, parsed.line ?? hashLine);
 }
 
 function FilePill({ path, line }: { path: string; line?: string }) {
@@ -178,7 +184,7 @@ function splitFilePaths(text: string): ReactNode[] | string {
     const line = m[3];
     const pillStart = m.index + prefix.length;
     if (pillStart > last) out.push(text.slice(last, pillStart));
-    out.push(<FilePill key={`fp-${pillStart}`} path={path} line={line} />);
+    out.push(<FilePill key={`fp-${pillStart}`} path={path} {...(line ? { line } : {})} />);
     last = pillStart + path.length + (line ? line.length + 1 : 0);
     m = FILE_PATH_RE.exec(text);
   }
@@ -205,48 +211,55 @@ function withFilePills(children: ReactNode): ReactNode {
   });
 }
 
-export const Markdown = memo(function Markdown({ source }: { source: string }) {
-  return (
-    <div className="markdown">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
-        rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
-        components={{
-          pre: ({ children }) => {
-            const codeEl = Children.toArray(children).find(
-              (c): c is ReactElement<{ className?: string; children?: ReactNode }> =>
-                isValidElement(c) && c.type === "code",
-            );
-            if (!codeEl) return <pre>{children}</pre>;
-            const text = String(codeEl.props.children ?? "").replace(/\n$/, "");
-            const lang = /language-([\w-]+)/.exec(codeEl.props.className ?? "")?.[1] ?? "text";
-            return <CodeBlock lang={lang} text={text} />;
-          },
-          code: ({ className, children }) => {
-            const text = String(children ?? "");
-            const parsed = !className ? parseFileRef(text.trim()) : null;
-            if (parsed) return <FilePill path={parsed.path} line={parsed.line} />;
-            return <code className={className}>{children}</code>;
-          },
-          a: ({ href, children }) => <SafeLink href={href}>{children}</SafeLink>,
-          p: ({ children }) => <p>{withFilePills(children)}</p>,
-          li: ({ children }) => <li>{withFilePills(children)}</li>,
-          td: ({ children }) => <td>{withFilePills(children)}</td>,
-        }}
-      >
-        {source}
-      </ReactMarkdown>
-    </div>
-  );
-});
+type MarkdownProps = { source: string };
 
-function SafeLink({ href, children }: { href?: string; children: ReactNode }) {
+export const Markdown: MemoExoticComponent<(props: MarkdownProps) => ReactElement> = memo(
+  function Markdown({ source }: MarkdownProps): ReactElement {
+    return (
+      <div className="markdown">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
+          rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
+          components={{
+            pre: ({ children }) => {
+              const codeEl = Children.toArray(children).find(
+                (c): c is ReactElement<{ className?: string; children?: ReactNode }> =>
+                  isValidElement(c) && c.type === "code",
+              );
+              if (!codeEl) return <pre>{children}</pre>;
+              const text = String(codeEl.props.children ?? "").replace(/\n$/, "");
+              const lang = /language-([\w-]+)/.exec(codeEl.props.className ?? "")?.[1] ?? "text";
+              return <CodeBlock lang={lang} text={text} />;
+            },
+            code: ({ className, children }) => {
+              const text = String(children ?? "");
+              const parsed = !className ? parseFileRef(text.trim()) : null;
+              if (parsed)
+                return (
+                  <FilePill path={parsed.path} {...(parsed.line ? { line: parsed.line } : {})} />
+                );
+              return <code className={className}>{children}</code>;
+            },
+            a: ({ href, children }) => <SafeLink {...(href ? { href } : {})}>{children}</SafeLink>,
+            p: ({ children }) => <p>{withFilePills(children)}</p>,
+            li: ({ children }) => <li>{withFilePills(children)}</li>,
+            td: ({ children }) => <td>{withFilePills(children)}</td>,
+          }}
+        >
+          {source}
+        </ReactMarkdown>
+      </div>
+    );
+  },
+);
+
+function SafeLink({ href, children }: { href?: string; children: ReactNode }): ReactElement {
   useLang();
   const ctx = useContext(WorkspaceContext);
   const [done, setDone] = useState(false);
   const scheme = href ? protocolScheme(href) : null;
   const isExternal = !!scheme && scheme !== "file";
-  const onClick = async (e: React.MouseEvent) => {
+  const onClick = async (e: React.MouseEvent): Promise<void> => {
     e.preventDefault();
     if (!href) return;
     if (isExternal) {
@@ -293,10 +306,10 @@ function SafeLink({ href, children }: { href?: string; children: ReactNode }) {
   );
 }
 
-function CodeBlock({ lang, text }: { lang: string; text: string }): ReactNode {
+function CodeBlock({ lang, text }: { lang: string; text: string }): ReactElement {
   useLang();
   const [copied, setCopied] = useState(false);
-  const onCopy = async () => {
+  const onCopy = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);

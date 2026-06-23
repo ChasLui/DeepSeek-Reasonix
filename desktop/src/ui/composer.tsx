@@ -1,6 +1,7 @@
 import {
   type ChangeEvent,
   type KeyboardEvent,
+  type ReactElement,
   type RefObject,
   useEffect,
   useMemo,
@@ -27,7 +28,12 @@ const PRESET_INFO: Record<PresetName, PresetEntry> = {
 };
 
 const MODE_INFO: ModeEntry[] = [
-  { k: "review", label: "editMode.review", icon: <I.shield size={11} />, hint: "editMode.reviewHint" },
+  {
+    k: "review",
+    label: "editMode.review",
+    icon: <I.shield size={11} />,
+    hint: "editMode.reviewHint",
+  },
   { k: "auto", label: "editMode.auto", icon: <I.zap size={11} />, hint: "editMode.autoHint" },
   { k: "yolo", label: "editMode.yolo", icon: <I.warn size={11} />, hint: "editMode.yoloHint" },
 ];
@@ -38,7 +44,7 @@ export function ModeSwitch({
 }: {
   mode: EditMode;
   onChange: (m: EditMode) => void;
-}) {
+}): ReactElement {
   return (
     <div className="mode-switch" data-mode={mode}>
       {MODE_INFO.map((m) => (
@@ -72,14 +78,9 @@ export type MentionItem = {
   desc?: string;
 };
 
-export type Chip =
-  | { kind: "at"; label: string }
-  | { kind: "slash"; label: string };
+export type Chip = { kind: "at"; label: string } | { kind: "slash"; label: string };
 
-type Popup =
-  | { kind: "slash"; query: string }
-  | { kind: "at"; query: string; nonce: number }
-  | null;
+type Popup = { kind: "slash"; query: string } | { kind: "at"; query: string; nonce: number } | null;
 
 function slashIcon(cmd: string) {
   const m: Record<string, React.ReactNode> = {
@@ -167,7 +168,7 @@ export function Composer({
   /** Called when the user presses Enter while busy with a non-empty draft. Owns clearing the draft. */
   onQueueWhileBusy?: (text: string) => void;
   onDequeueSend?: (index: number) => void;
-}) {
+}): ReactElement {
   const [chips, setChips] = useState<Chip[]>([]);
   const [popup, setPopup] = useState<Popup>(null);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -188,10 +189,7 @@ export function Composer({
   useEffect(() => {
     if (!modelMenuOpen) return;
     const onDown = (e: MouseEvent) => {
-      if (
-        modelWrapRef.current &&
-        !modelWrapRef.current.contains(e.target as Node)
-      ) {
+      if (modelWrapRef.current && !modelWrapRef.current.contains(e.target as Node)) {
         setModelMenuOpen(false);
       }
     };
@@ -204,16 +202,17 @@ export function Composer({
       const picked = await openFileDialog({
         multiple: false,
         directory: false,
-        defaultPath: workspaceDir,
-        filters:
-          filter === "image"
-            ? [
+        ...(workspaceDir ? { defaultPath: workspaceDir } : {}),
+        ...(filter === "image"
+          ? {
+              filters: [
                 {
                   name: t("composer.imageFilterName"),
                   extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg"],
                 },
-              ]
-            : undefined,
+              ],
+            }
+          : {}),
       });
       if (typeof picked !== "string" || !picked) return;
       const rel =
@@ -256,8 +255,7 @@ export function Composer({
     return base;
   }, [popup, mentionResults]);
 
-  const items =
-    popup?.kind === "slash" ? slashItems : popup?.kind === "at" ? atItems : [];
+  const items = popup?.kind === "slash" ? slashItems : popup?.kind === "at" ? atItems : [];
 
   useEffect(() => {
     setActiveIdx(0);
@@ -333,9 +331,7 @@ export function Composer({
       }
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        setActiveIdx((i) =>
-          items.length ? (i - 1 + items.length) % items.length : 0,
-        );
+        setActiveIdx((i) => (items.length ? (i - 1 + items.length) % items.length : 0));
         return;
       }
       if (e.key === "Escape") {
@@ -419,9 +415,7 @@ export function Composer({
               <span className="composer-busy-status">
                 <span className="composer-busy-pip" />
                 <span className="composer-busy-label">{busyLabel}</span>
-                <span className="composer-busy-time">
-                  {fmtElapsed(busyElapsedMs ?? 0)}
-                </span>
+                <span className="composer-busy-time">{fmtElapsed(busyElapsedMs ?? 0)}</span>
               </span>
               <span className="grow" />
               <ModeSwitch mode={editMode} onChange={onEditModeChange} />
@@ -454,17 +448,11 @@ export function Composer({
             <div className="composer-tags">
               {chips.map((c, i) => (
                 <span key={i} className={`chip ${c.kind}`}>
-                  {c.kind === "slash" ? (
-                    <I.slash size={11} />
-                  ) : (
-                    <I.at size={11} />
-                  )}
+                  {c.kind === "slash" ? <I.slash size={11} /> : <I.at size={11} />}
                   <span>{c.label}</span>
                   <span
                     className="x"
-                    onClick={() =>
-                      setChips((cs) => cs.filter((_, j) => j !== i))
-                    }
+                    onClick={() => setChips((cs) => cs.filter((_, j) => j !== i))}
                   >
                     <I.x size={10} />
                   </span>
@@ -629,11 +617,7 @@ function Popup({
     <div className="popup" onMouseDown={(e) => e.preventDefault()}>
       <div className="ph">
         <span className="tok">{kind === "slash" ? "/" : "@"}</span>
-        <span>
-          {kind === "slash"
-            ? t("composer.slashHeader")
-            : t("composer.atHeader")}
-        </span>
+        <span>{kind === "slash" ? t("composer.slashHeader") : t("composer.atHeader")}</span>
         <span className="grow" />
         <span style={{ cursor: "pointer" }} onClick={onClose}>
           <I.x size={11} />
@@ -680,9 +664,7 @@ function Popup({
                 </>
               )}
             </div>
-            <span className="kb">
-              {kind === "slash" ? ((it as SlashCmd).kb ?? "") : ""}
-            </span>
+            <span className="kb">{kind === "slash" ? ((it as SlashCmd).kb ?? "") : ""}</span>
           </div>
         ))}
       </div>
@@ -701,13 +683,7 @@ function Popup({
   );
 }
 
-function ModelMenu({
-  current,
-  onPick,
-}: {
-  current: PresetName;
-  onPick: (p: PresetName) => void;
-}) {
+function ModelMenu({ current, onPick }: { current: PresetName; onPick: (p: PresetName) => void }) {
   const order: PresetName[] = ["auto", "flash", "pro"];
   return (
     <div
@@ -726,12 +702,7 @@ function ModelMenu({
       </div>
       <div className="popup-list">
         {order.map((p) => (
-          <div
-            key={p}
-            className="popup-item"
-            data-active={p === current}
-            onClick={() => onPick(p)}
-          >
+          <div key={p} className="popup-item" data-active={p === current} onClick={() => onPick(p)}>
             <span className="ico">
               <I.brain size={12} />
             </span>

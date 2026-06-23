@@ -1,3 +1,4 @@
+import type { VNode } from "preact";
 import { memo } from "preact/compat";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import {
@@ -17,7 +18,7 @@ import {
 } from "../components/chat-internals.js";
 import { MODE, TOKEN, api } from "../lib/api.js";
 import { appBus, showToast } from "../lib/bus.js";
-import { fmtCost, fmtUsd } from "../lib/format.js";
+import { fmtCost } from "../lib/format.js";
 import { html } from "../lib/html.js";
 import { t, useLang } from "../i18n/index.js";
 
@@ -93,17 +94,12 @@ interface OverviewLite {
   cockpit?: { recentPlans?: ReadonlyArray<RailPlan> | null };
 }
 
-interface SubmitResponse {
-  reply?: ChatMsg;
-  error?: string;
-}
-
 interface SettingsPatch {
   preset?: string;
   reasoningEffort?: string;
 }
 
-export function ChatPanel() {
+export function ChatPanel(): VNode {
   useLang();
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [streaming, setStreaming] = useState<StreamingState | null>(null);
@@ -411,7 +407,9 @@ export function ChatPanel() {
   }, []);
 
   if (bootError) {
-    return html`<div class="notice err">${t("common.loadingFailed", { name: "chat", error: bootError })}</div>`;
+    return html`<div class="notice err">
+      ${t("common.loadingFailed", { name: "chat", error: bootError })}
+    </div>`;
   }
 
   /** Suppresses scroll listener during programmatic auto-snap so it doesn't re-arm shouldAutoScroll. */
@@ -513,138 +511,136 @@ export function ChatPanel() {
     <div class="chat-shell">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
         <div class="chips" style="padding:0">
-          <span class="chip-f static active">${MODE === "attached" ? t("chat.modeMirror") : t("chat.modeView")}</span>
+          <span class="chip-f static active"
+            >${MODE === "attached" ? t("chat.modeMirror") : t("chat.modeView")}</span
+          >
         </div>
         <div class="header-pickers" style="margin-left:auto">
-          ${
-            effort
-              ? html`
-              <div class="mode-picker" title=${t("chat.effortTitle")}>
-                ${["high", "max"].map(
-                  (e) => html`
-                  <button
-                    key=${e}
-                    class="mode-btn ${effort === e ? "active accent" : ""}"
-                    onClick=${() => setSetting("reasoningEffort", e)}
-                    title=${e === "max" ? t("chat.effortMaxTitle") : t("chat.effortHighTitle")}
-                  >${e}</button>
-                `,
-                )}
-              </div>
-            `
-              : null
-          }
-          ${
-            preset
-              ? html`
-              <div class="mode-picker" title=${t("chat.presetTitle")}>
-                ${(() => {
-                  // Anything that isn't one of the three new presets
-                  // (including legacy fast/smart/max from old configs)
-                  // highlights as `auto` — the safe default. User can
-                  // re-pick explicitly if they want flash or pro.
-                  const KNOWN = ["auto", "flash", "pro"];
-                  const canonical = KNOWN.includes(preset) ? preset : "auto";
-                  return ["auto", "flash", "pro"].map(
-                    (p) => html`
+          ${effort
+            ? html`
+                <div class="mode-picker" title=${t("chat.effortTitle")}>
+                  ${["high", "max"].map(
+                    (e) => html`
                       <button
-                        key=${p}
-                        class="mode-btn ${canonical === p ? "active accent" : ""}"
-                        onClick=${() => setSetting("preset", p)}
-                        title=${
-                          p === "auto"
+                        key=${e}
+                        class="mode-btn ${effort === e ? "active accent" : ""}"
+                        onClick=${() => setSetting("reasoningEffort", e)}
+                        title=${e === "max" ? t("chat.effortMaxTitle") : t("chat.effortHighTitle")}
+                      >
+                        ${e}
+                      </button>
+                    `,
+                  )}
+                </div>
+              `
+            : null}
+          ${preset
+            ? html`
+                <div class="mode-picker" title=${t("chat.presetTitle")}>
+                  ${(() => {
+                    // Anything that isn't one of the three new presets
+                    // (including legacy fast/smart/max from old configs)
+                    // highlights as `auto` — the safe default. User can
+                    // re-pick explicitly if they want flash or pro.
+                    const KNOWN = ["auto", "flash", "pro"];
+                    const canonical = KNOWN.includes(preset) ? preset : "auto";
+                    return ["auto", "flash", "pro"].map(
+                      (p) => html`
+                        <button
+                          key=${p}
+                          class="mode-btn ${canonical === p ? "active accent" : ""}"
+                          onClick=${() => setSetting("preset", p)}
+                          title=${p === "auto"
                             ? t("chat.presetAutoTitle")
                             : p === "flash"
                               ? t("chat.presetFlashTitle")
-                              : t("chat.presetProTitle")
-                        }
-                      >${p}</button>
+                              : t("chat.presetProTitle")}
+                        >
+                          ${p}
+                        </button>
+                      `,
+                    );
+                  })()}
+                </div>
+              `
+            : null}
+          ${editMode
+            ? html`
+                <div class="mode-picker" title=${t("chat.editGateTitle")}>
+                  ${["review", "auto", "yolo"].map(
+                    (m) => html`
+                      <button
+                        key=${m}
+                        class="mode-btn ${editMode === m ? "active" : ""} ${m === "yolo"
+                          ? "yolo"
+                          : ""}"
+                        onClick=${() => setEditMode(m)}
+                        title=${m === "review"
+                          ? t("chat.editReviewTitle")
+                          : m === "auto"
+                            ? t("chat.editAutoTitle")
+                            : t("chat.editYoloTitle")}
+                      >
+                        ${m}
+                      </button>
                     `,
-                  );
-                })()}
-              </div>
-            `
-              : null
-          }
-          ${
-            editMode
-              ? html`
-              <div class="mode-picker" title=${t("chat.editGateTitle")}>
-                ${["review", "auto", "yolo"].map(
-                  (m) => html`
-                  <button
-                    key=${m}
-                    class="mode-btn ${editMode === m ? "active" : ""} ${m === "yolo" ? "yolo" : ""}"
-                    onClick=${() => setEditMode(m)}
-                    title=${
-                      m === "review"
-                        ? t("chat.editReviewTitle")
-                        : m === "auto"
-                          ? t("chat.editAutoTitle")
-                          : t("chat.editYoloTitle")
-                    }
-                  >${m}</button>
-                `,
-                )}
-              </div>
-            `
-              : null
-          }
+                  )}
+                </div>
+              `
+            : null}
         </div>
       </div>
 
-      ${
-        !busy && statusLine
-          ? html`<div class="chat-status"><span class="muted">${statusLine}</span></div>`
-          : null
-      }
-      ${
-        semanticIndex === false && !semanticBannerDismissed
-          ? html`<div class="chat-banner">
-              <span class="chat-banner-icon">≈</span>
-              <span class="chat-banner-text">
-                <strong>${t("chat.semanticBanner")}</strong>
-                <span class="muted">
-                  ${t("chat.semanticBannerDesc")}
-                </span>
-              </span>
-              <button
-                class="primary"
-                onClick=${() => appBus.dispatchEvent(new CustomEvent("navigate-tab", { detail: { tabId: "semantic" } }))}
-              >${t("chat.semanticBannerBtn")}</button>
-              <button
-                class="chat-banner-close"
-                onClick=${() => setSemanticBannerDismissed(true)}
-                title=${t("chat.semanticBannerDismiss")}
-              >×</button>
-            </div>`
-          : null
-      }
+      ${!busy && statusLine
+        ? html`<div class="chat-status"><span class="muted">${statusLine}</span></div>`
+        : null}
+      ${semanticIndex === false && !semanticBannerDismissed
+        ? html`<div class="chat-banner">
+            <span class="chat-banner-icon">≈</span>
+            <span class="chat-banner-text">
+              <strong>${t("chat.semanticBanner")}</strong>
+              <span class="muted"> ${t("chat.semanticBannerDesc")} </span>
+            </span>
+            <button
+              class="primary"
+              onClick=${() =>
+                appBus.dispatchEvent(
+                  new CustomEvent("navigate-tab", { detail: { tabId: "semantic" } }),
+                )}
+            >
+              ${t("chat.semanticBannerBtn")}
+            </button>
+            <button
+              class="chat-banner-close"
+              onClick=${() => setSemanticBannerDismissed(true)}
+              title=${t("chat.semanticBannerDismiss")}
+            >
+              ×
+            </button>
+          </div>`
+        : null}
       ${error ? html`<div class="notice err">${error}</div>` : null}
-
-      ${
-        modal
-          ? modal.kind === "shell"
-            ? html`<${ShellModal} modal=${modal} onResolve=${resolveModal} />`
-            : modal.kind === "choice"
-              ? html`<${ChoiceModal} modal=${modal} onResolve=${resolveModal} />`
-              : modal.kind === "plan"
-                ? html`<${PlanModal} modal=${modal} onResolve=${resolveModal} />`
-                : modal.kind === "edit-review"
-                  ? html`<${EditReviewModal} modal=${modal} onResolve=${resolveModal} />`
-                  : modal.kind === "workspace"
-                    ? html`<${WorkspaceModal} modal=${modal} onResolve=${resolveModal} />`
-                    : modal.kind === "checkpoint"
-                      ? html`<${CheckpointModal} modal=${modal} onResolve=${resolveModal} />`
-                      : modal.kind === "revision"
-                        ? html`<${RevisionModal} modal=${modal} onResolve=${resolveModal} />`
-                        : modal.kind === "picker"
-                          ? html`<${PickerModal} modal=${modal} onResolve=${resolveModal} />`
-                          : modal.kind === "viewer"
-                            ? html`<${ViewerModal} modal=${modal} onResolve=${resolveModal} />`
-                            : null
-          : null
-      }
+      ${modal
+        ? modal.kind === "shell"
+          ? html`<${ShellModal} modal=${modal} onResolve=${resolveModal} />`
+          : modal.kind === "choice"
+            ? html`<${ChoiceModal} modal=${modal} onResolve=${resolveModal} />`
+            : modal.kind === "plan"
+              ? html`<${PlanModal} modal=${modal} onResolve=${resolveModal} />`
+              : modal.kind === "edit-review"
+                ? html`<${EditReviewModal} modal=${modal} onResolve=${resolveModal} />`
+                : modal.kind === "workspace"
+                  ? html`<${WorkspaceModal} modal=${modal} onResolve=${resolveModal} />`
+                  : modal.kind === "checkpoint"
+                    ? html`<${CheckpointModal} modal=${modal} onResolve=${resolveModal} />`
+                    : modal.kind === "revision"
+                      ? html`<${RevisionModal} modal=${modal} onResolve=${resolveModal} />`
+                      : modal.kind === "picker"
+                        ? html`<${PickerModal} modal=${modal} onResolve=${resolveModal} />`
+                        : modal.kind === "viewer"
+                          ? html`<${ViewerModal} modal=${modal} onResolve=${resolveModal} />`
+                          : null
+        : null}
 
       <div class="chat-body">
         <div class="chat-main">
@@ -658,18 +654,16 @@ export function ChatPanel() {
             onClear=${clearScrollback}
           />
 
-          ${
-            busy
-              ? html`<${InFlightRow}
-                  streaming=${streaming}
-                  activeTool=${activeTool}
-                  startedAt=${turnStartedAt}
-                  statusLine=${statusLine}
-                  onAbort=${abort}
-                  tick=${nowTick}
-                />`
-              : null
-          }
+          ${busy
+            ? html`<${InFlightRow}
+                streaming=${streaming}
+                activeTool=${activeTool}
+                startedAt=${turnStartedAt}
+                statusLine=${statusLine}
+                onAbort=${abort}
+                tick=${nowTick}
+              />`
+            : null}
           <${ChatStatusBar} stats=${stats} model=${overviewModel} />
         </div>
 
@@ -829,11 +823,15 @@ const ChatInput = memo(function ChatInput({
 
   return html`
     <div class="chat-input-area" style="position:relative">
-      ${
-        popoverKind && popoverItems.length > 0
-          ? html`
-            <div class="popover" style="position:absolute;bottom:calc(100% + 6px);left:0;width:380px;max-height:280px;overflow-y:auto;z-index:10">
-              <div class="popover-h">${popoverKind === "slash" ? t("chat.slashCommands") : t("chat.projectFiles")}</div>
+      ${popoverKind && popoverItems.length > 0
+        ? html`
+            <div
+              class="popover"
+              style="position:absolute;bottom:calc(100% + 6px);left:0;width:380px;max-height:280px;overflow-y:auto;z-index:10"
+            >
+              <div class="popover-h">
+                ${popoverKind === "slash" ? t("chat.slashCommands") : t("chat.projectFiles")}
+              </div>
               ${popoverItems.map(
                 (it, i) => html`
                   <div
@@ -852,8 +850,7 @@ const ChatInput = memo(function ChatInput({
               )}
             </div>
           `
-          : null
-      }
+        : null}
       <textarea
         placeholder=${busy ? t("chat.placeholderBusy") : t("chat.placeholder")}
         value=${input}
@@ -865,12 +862,12 @@ const ChatInput = memo(function ChatInput({
         disabled=${busy}
         rows="2"
       ></textarea>
-      <div style="display: flex; flex-direction: column; gap: 6px; align-self: stretch; justify-content: flex-end;">
-        <button
-          class="primary"
-          onClick=${send}
-          disabled=${busy || !input.trim()}
-        >${t("chat.send")}</button>
+      <div
+        style="display: flex; flex-direction: column; gap: 6px; align-self: stretch; justify-content: flex-end;"
+      >
+        <button class="primary" onClick=${send} disabled=${busy || !input.trim()}>
+          ${t("chat.send")}
+        </button>
         <div style="display: flex; gap: 6px;">
           <button onClick=${onNew} title=${t("chat.newTitle")}>${t("chat.new")}</button>
           <button onClick=${onClear} title=${t("chat.clearTitle")}>${t("chat.clear")}</button>
@@ -902,19 +899,17 @@ const ChatFeed = memo(function ChatFeed({ messages, streaming, innerRef }: ChatF
     : messages;
   return html`
     <div class="chat-feed" ref=${innerRef}>
-      ${
-        allMessages.length === 0
-          ? html`<div class="chat-empty">${t("chat.noConversation")}</div>`
-          : allMessages.map(
-              (m) => html`
-                <${ChatMessage}
-                  key=${m.id}
-                  msg=${m}
-                  streaming=${Boolean(streaming && streaming.id === m.id)}
-                />
-              `,
-            )
-      }
+      ${allMessages.length === 0
+        ? html`<div class="chat-empty">${t("chat.noConversation")}</div>`
+        : allMessages.map(
+            (m) => html`
+              <${ChatMessage}
+                key=${m.id}
+                msg=${m}
+                streaming=${Boolean(streaming && streaming.id === m.id)}
+              />
+            `,
+          )}
     </div>
   `;
 });
@@ -937,37 +932,55 @@ const SideRail = memo(function SideRail({ stats, budgetUsd, activePlan }: SideRa
   return html`
     <aside class="chat-rail">
       ${activePlan ? html`<${ActivePlanCard} plan=${activePlan} />` : null}
-      ${
-        stats
-          ? html`
+      ${stats
+        ? html`
             <div class="rail-card">
               <div class="rh">${t("chat.railSession")}</div>
-              <div class="rail-kv"><span class="k">${t("chat.railTurns")}</span><span class="v">${stats.turns.toLocaleString()}</span></div>
-              <div class="rail-kv"><span class="k">${t("chat.railPromptTok")}</span><span class="v">${stats.lastPromptTokens.toLocaleString()}</span></div>
-              <div class="rail-kv"><span class="k">${t("chat.railCost")}</span><span class="v">${fmtCost(stats.totalCostUsd, walletCurrency)}</span></div>
+              <div class="rail-kv">
+                <span class="k">${t("chat.railTurns")}</span
+                ><span class="v">${stats.turns.toLocaleString()}</span>
+              </div>
+              <div class="rail-kv">
+                <span class="k">${t("chat.railPromptTok")}</span
+                ><span class="v">${stats.lastPromptTokens.toLocaleString()}</span>
+              </div>
+              <div class="rail-kv">
+                <span class="k">${t("chat.railCost")}</span
+                ><span class="v">${fmtCost(stats.totalCostUsd, walletCurrency)}</span>
+              </div>
               <div class="progress-row" style="margin-top:8px">
                 <span class="lbl">${t("chat.railCacheHit")}</span>
-                <div class=${`progress ${cacheTone}`}><div class="progress-fill" style=${`width:${cachePct}%`}></div></div>
+                <div class=${`progress ${cacheTone}`}>
+                  <div class="progress-fill" style=${`width:${cachePct}%`}></div>
+                </div>
                 <span class="v">${cachePct.toFixed(1)}%</span>
               </div>
             </div>
           `
-          : null
-      }
-      ${
-        showBudget
-          ? html`
+        : null}
+      ${showBudget
+        ? html`
             <div class="rail-card">
               <div class="rh">${t("chat.railToolBudget")}</div>
               <div class="progress-row">
                 <span class="lbl">${t("chat.railSpend")}</span>
-                <div class=${`progress ${budgetTone}`}><div class="progress-fill" style=${`width:${Math.min(100, budgetPct)}%`}></div></div>
-                <span class="v" style=${budgetTone === "err" ? "color:var(--c-err)" : budgetTone === "warn" ? "color:var(--c-warn)" : ""}>${fmtCost(stats.totalCostUsd, walletCurrency)} / ${fmtCost(budgetUsd, walletCurrency)}</span>
+                <div class=${`progress ${budgetTone}`}>
+                  <div class="progress-fill" style=${`width:${Math.min(100, budgetPct)}%`}></div>
+                </div>
+                <span
+                  class="v"
+                  style=${budgetTone === "err"
+                    ? "color:var(--c-err)"
+                    : budgetTone === "warn"
+                      ? "color:var(--c-warn)"
+                      : ""}
+                  >${fmtCost(stats.totalCostUsd, walletCurrency)} /
+                  ${fmtCost(budgetUsd, walletCurrency)}</span
+                >
               </div>
             </div>
           `
-          : null
-      }
+        : null}
     </aside>
   `;
 });
@@ -989,8 +1002,15 @@ function ActivePlanCard({ plan }: { plan: RailPlan }) {
     <div class="rail-card">
       <div class="rh">${t("chat.railActivePlan")}</div>
       <div class="steps" style="margin-bottom:8px">${dots}</div>
-      <div class="rail-kv"><span class="k" style="font-family:var(--font-sans);color:var(--fg-1);font-size:12.5px">${plan.title}</span></div>
-      <div class="rail-kv"><span class="k">${t("chat.railProgress")}</span><span class="v">${plan.completedSteps} / ${plan.totalSteps}</span></div>
+      <div class="rail-kv">
+        <span class="k" style="font-family:var(--font-sans);color:var(--fg-1);font-size:12.5px"
+          >${plan.title}</span
+        >
+      </div>
+      <div class="rail-kv">
+        <span class="k">${t("chat.railProgress")}</span
+        ><span class="v">${plan.completedSteps} / ${plan.totalSteps}</span>
+      </div>
     </div>
   `;
 }
@@ -1061,34 +1081,32 @@ function InFlightRow({
       <span class="chat-inflight-phase">${phase}</span>
       <span class="chat-inflight-sep">·</span>
       <span class="muted">${elapsed}s</span>
-      ${
-        toolSummary
-          ? html`
+      ${toolSummary
+        ? html`
             <span class="chat-inflight-sep">·</span>
             <span class="chat-inflight-tool" title=${toolSummary}>${toolSummary}</span>
           `
-          : null
-      }
-      ${
-        !toolSummary && (textLen > 0 || reasoningLen > 0)
-          ? html`
+        : null}
+      ${!toolSummary && (textLen > 0 || reasoningLen > 0)
+        ? html`
             <span class="chat-inflight-sep">·</span>
             <span class="muted">
-              ${reasoningLen > 0 ? html`${t("chat.inflightReasoning", { count: reasoningLen.toLocaleString() })}` : null}
+              ${reasoningLen > 0
+                ? html`${t("chat.inflightReasoning", { count: reasoningLen.toLocaleString() })}`
+                : null}
               ${reasoningLen > 0 && textLen > 0 ? html`<span> · </span>` : null}
-              ${textLen > 0 ? html`${t("chat.inflightOut", { count: textLen.toLocaleString() })}` : null}
+              ${textLen > 0
+                ? html`${t("chat.inflightOut", { count: textLen.toLocaleString() })}`
+                : null}
             </span>
           `
-          : null
-      }
-      ${
-        statusLine
-          ? html`
+        : null}
+      ${statusLine
+        ? html`
             <span class="chat-inflight-sep">·</span>
             <span class="muted">${statusLine}</span>
           `
-          : null
-      }
+        : null}
       <button class="chat-inflight-abort" onClick=${onAbort}>${t("chat.abortBtn")}</button>
     </div>
   `;
@@ -1120,13 +1138,25 @@ const ChatStatusBar = memo(function ChatStatusBar({ stats, model }: ChatStatusBa
       <span class="status-item">
         <span class="status-label">${t("chat.statusCtx")}</span>
         <span class="status-bar-mini">
-          <span class="status-bar-mini-fill" style=${`width: ${Math.min(100, ctxPct).toFixed(1)}%;`}></span>
+          <span
+            class="status-bar-mini-fill"
+            style=${`width: ${Math.min(100, ctxPct).toFixed(1)}%;`}
+          ></span>
         </span>
-        <span class="muted">${stats.lastPromptTokens.toLocaleString()} / ${(stats.contextCapTokens / 1000).toFixed(0)}K</span>
+        <span class="muted"
+          >${stats.lastPromptTokens.toLocaleString()} /
+          ${(stats.contextCapTokens / 1000).toFixed(0)}K</span
+        >
       </span>
       <span class="status-item">
         <span class="status-label">${t("chat.statusCache")}</span>
-        <span class=${stats.cacheHitRatio >= 0.9 ? "status-ok" : stats.cacheHitRatio >= 0.6 ? "status-warn" : "status-err"}>
+        <span
+          class=${stats.cacheHitRatio >= 0.9
+            ? "status-ok"
+            : stats.cacheHitRatio >= 0.6
+              ? "status-warn"
+              : "status-err"}
+        >
           ${(stats.cacheHitRatio * 100).toFixed(1)}%
         </span>
       </span>
@@ -1141,16 +1171,14 @@ const ChatStatusBar = memo(function ChatStatusBar({ stats, model }: ChatStatusBa
           ${t("chat.statusTurns", { count: stats.turns, s: stats.turns === 1 ? "" : "s" })}
         </span>
       </span>
-      ${
-        balance
-          ? html`
-          <span class="status-item">
-            <span class="status-label">${t("chat.statusBalance")}</span>
-            <code>${balance.total_balance} ${balance.currency}</code>
-          </span>
-        `
-          : null
-      }
+      ${balance
+        ? html`
+            <span class="status-item">
+              <span class="status-label">${t("chat.statusBalance")}</span>
+              <code>${balance.total_balance} ${balance.currency}</code>
+            </span>
+          `
+        : null}
     </div>
   `;
 });

@@ -381,7 +381,7 @@ describe("ACP outbound requests + gate bridge", () => {
     const output = new PassThrough();
     output.on("data", () => {});
     const server = new AcpServer({ input, output });
-    const promise = server.sendRequest("never");
+    const promise = server.sendRequest("never", {});
     server.close();
     await expect(promise).rejects.toThrow(/closed/);
   });

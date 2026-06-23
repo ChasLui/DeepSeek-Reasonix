@@ -2,7 +2,7 @@ import { ClassSourceFinder } from "../java/class-source-finder.js";
 import type { ToolRegistry } from "../tools.js";
 
 export interface JavaSourceToolOptions {
-  projectRoot?: string;
+  projectRoot?: string | undefined;
 }
 
 export function registerJavaSourceTool(
@@ -52,9 +52,9 @@ export function registerJavaSourceTool(
     parallelSafe: true,
     fn: async (args: {
       className: string;
-      projectRoot?: string;
-      jarPath?: string;
-      jarKeyword?: string;
+      projectRoot?: string | undefined;
+      jarPath?: string | undefined;
+      jarKeyword?: string | undefined;
     }) => {
       const className = (args?.className ?? "").trim();
       if (!className) {

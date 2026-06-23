@@ -55,7 +55,7 @@ describe("PauseGate", () => {
 
     for (const { opts } of entries) {
       const p = gate.ask(opts as any);
-      const req = listener.mock.lastCall?.[0] as { kind: string };
+      const req = listener.mock.lastCall?.[0] as { id: number; kind: string };
       expect(req.kind).toBe(opts.kind);
       gate.resolve(req.id, { type: "run_once" } as ConfirmationChoice);
       await expect(p).resolves.toBeDefined();
@@ -149,7 +149,7 @@ describe("PauseGate", () => {
     } as ConfirmationChoice);
     await expect(deny).resolves.toEqual({ type: "deny", denyContext: "too risky" });
 
-    const always = gate.ask({ kind: "run_command", payload: { command: "npm run lint" } });
+    const always = gate.ask({ kind: "run_command", payload: { command: "pnpm run lint" } });
     gate.resolve(gate.current!.id, {
       type: "always_allow",
       prefix: "npm run",
@@ -176,7 +176,7 @@ describe("PauseGate", () => {
         {
           type: "tool.confirm.always_allow",
           kind: "run_command",
-          payload: { command: "npm run lint" },
+          payload: { command: "pnpm run lint" },
           prefix: "npm run",
         },
       ],

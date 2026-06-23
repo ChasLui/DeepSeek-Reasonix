@@ -24,12 +24,12 @@ export interface CodeGraphStats {
   cacheHits: number;
   queries: number;
   fallbacks: number;
-  lastBuildElapsedMs?: number;
-  lastBuildTimeoutMs?: number;
-  lastNodes?: number;
-  lastEdges?: number;
-  lastArtifactBytes?: number;
-  stalenessRatio?: number;
+  lastBuildElapsedMs?: number | undefined;
+  lastBuildTimeoutMs?: number | undefined;
+  lastNodes?: number | undefined;
+  lastEdges?: number | undefined;
+  lastArtifactBytes?: number | undefined;
+  stalenessRatio?: number | undefined;
 }
 
 export interface CodeGraphArtifactStats {
@@ -54,7 +54,7 @@ export function recordCodeGraphBuild(input: {
   elapsedMs: number;
   nodes: number;
   edges: number;
-  artifactBytes?: number;
+  artifactBytes?: number | undefined;
 }): void {
   stats.builds += 1;
   stats.lastBuildElapsedMs = input.elapsedMs;
@@ -70,11 +70,11 @@ export function recordCodeGraphBuildTimeout(input: { timeoutMs: number; elapsedM
 }
 
 export function recordCodeGraphLoad(input: {
-  cacheHit?: boolean;
-  nodes?: number;
-  edges?: number;
-  artifactBytes?: number;
-  stalenessRatio?: number;
+  cacheHit?: boolean | undefined;
+  nodes?: number | undefined;
+  edges?: number | undefined;
+  artifactBytes?: number | undefined;
+  stalenessRatio?: number | undefined;
 }): void {
   stats.loads += 1;
   if (input.cacheHit) stats.cacheHits += 1;
@@ -86,10 +86,10 @@ export function recordCodeGraphLoad(input: {
 
 export function recordCodeGraphQuery(
   input: {
-    fallback?: boolean;
-    nodes?: number;
-    edges?: number;
-    stalenessRatio?: number;
+    fallback?: boolean | undefined;
+    nodes?: number | undefined;
+    edges?: number | undefined;
+    stalenessRatio?: number | undefined;
   } = {},
 ): void {
   stats.queries += 1;
@@ -242,14 +242,14 @@ function parseNodesForStats(raw: string): { count: number; ids: Set<string> } {
 function parseStatsNode(raw: unknown): { id: string } {
   if (!raw || typeof raw !== "object") throw new Error("invalid code graph node");
   const node = raw as {
-    id?: unknown;
-    kind?: unknown;
-    name?: unknown;
-    qualifiedName?: unknown;
-    file?: unknown;
-    startLine?: unknown;
-    endLine?: unknown;
-    exportKind?: unknown;
+    id?: unknown | undefined;
+    kind?: unknown | undefined;
+    name?: unknown | undefined;
+    qualifiedName?: unknown | undefined;
+    file?: unknown | undefined;
+    startLine?: unknown | undefined;
+    endLine?: unknown | undefined;
+    exportKind?: unknown | undefined;
   };
   if (
     typeof node.id !== "string" ||
@@ -291,13 +291,13 @@ function parseEdgesForStats(raw: string, nodeIds: ReadonlySet<string>): number {
 function parseStatsEdge(raw: unknown, nodeIds: ReadonlySet<string>): void {
   if (!raw || typeof raw !== "object") throw new Error("invalid code graph edge");
   const edge = raw as {
-    source?: unknown;
-    target?: unknown;
-    kind?: unknown;
-    line?: unknown;
-    col?: unknown;
-    provenance?: unknown;
-    candidates?: unknown;
+    source?: unknown | undefined;
+    target?: unknown | undefined;
+    kind?: unknown | undefined;
+    line?: unknown | undefined;
+    col?: unknown | undefined;
+    provenance?: unknown | undefined;
+    candidates?: unknown | undefined;
   };
   if (
     typeof edge.source !== "string" ||
@@ -393,13 +393,13 @@ function graphHashPayload(
     throw new Error(`invalid code graph ${key}`);
   }
   const value = parsed as Record<string, unknown>;
-  if (typeof value.graphHash !== "string" || value.graphHash.length === 0) {
+  if (typeof value["graphHash"] !== "string" || value["graphHash"].length === 0) {
     throw new Error(`missing code graph ${key} hash`);
   }
   const payload = Object.fromEntries(
     Object.entries(value).filter(([entryKey]) => entryKey !== "graphHash"),
   );
-  return { graphHash: value.graphHash, payload: JSON.stringify(payload) };
+  return { graphHash: value["graphHash"], payload: JSON.stringify(payload) };
 }
 
 function assertMatchingGraphHashes(parts: readonly GraphHashPayload[]): void {

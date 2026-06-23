@@ -18,18 +18,40 @@ import { useKeystroke } from "./keystroke-context.js";
 import { COLOR } from "./theme.js";
 
 const VISIBLE_ROWS = 10;
+type MarketplaceAction = "install" | "uninstall" | "refine" | "load-more" | "cancel";
+type MarketplaceBadge = "installed" | "official" | "smithery" | "local";
+
+interface MarketplacePickerItem {
+  id: string;
+  title: string;
+  subtitle?: string | undefined;
+  badge: MarketplaceBadge;
+  meta?: string | undefined;
+}
+
+export interface MarketplacePickerSnapshot {
+  pickerKind: "mcp-marketplace";
+  title: string;
+  query: string;
+  items: MarketplacePickerItem[];
+  actions: readonly MarketplaceAction[];
+  hasMore: boolean;
+  hint: string;
+}
 
 export interface McpMarketplaceProps {
   onClose: () => void;
   /** Pushed back into the chat scrollback after install/uninstall. */
   postInfo: (text: string) => void;
   /** Optional hot-reload — present in chat session, absent in standalone CLI use. */
-  reloadMcp?: () => Promise<{
-    added: string[];
-    removed: string[];
-    failed: Array<{ spec: string; reason: string }>;
-  }>;
-  pickerPorts?: PickerBroadcastPorts;
+  reloadMcp?:
+    | (() => Promise<{
+        added: string[];
+        removed: string[];
+        failed: Array<{ spec: string; reason: string }>;
+      }>)
+    | undefined;
+  pickerPorts?: PickerBroadcastPorts | undefined;
 }
 
 interface State {
@@ -48,7 +70,7 @@ export function buildMarketplacePickerSnapshot(args: {
   query: string;
   status: string;
   hasMore: boolean;
-}) {
+}): MarketplacePickerSnapshot {
   return {
     pickerKind: "mcp-marketplace" as const,
     title: `${t("mcpMarketplace.title")} \u00b7 ${args.status}`,
@@ -102,7 +124,12 @@ function isInstalled(installedSpecs: string[], entry: RegistryEntry): string | n
   }
 }
 
-export function McpMarketplace({ onClose, postInfo, reloadMcp, pickerPorts }: McpMarketplaceProps) {
+export function McpMarketplace({
+  onClose,
+  postInfo,
+  reloadMcp,
+  pickerPorts,
+}: McpMarketplaceProps): React.ReactElement {
   const [state, setState] = useState<State>({
     handle: null,
     loading: true,
@@ -385,7 +412,7 @@ export function McpMarketplace({ onClose, postInfo, reloadMcp, pickerPorts }: Mc
             const pop = e.popularity !== undefined ? ` · ${e.popularity.toLocaleString()}` : "";
             return (
               <Box key={e.name}>
-                <Text color={active ? COLOR.brand : undefined}>{active ? "▸ " : "  "}</Text>
+                <Text {...(active ? { color: COLOR.brand } : {})}>{active ? "▸ " : "  "}</Text>
                 <Text bold={active}>{e.name.padEnd(38).slice(0, 38)}</Text>
                 <Text dimColor>{` ${tag}${pop}${installedBadge}`}</Text>
               </Box>

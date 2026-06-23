@@ -9,7 +9,7 @@ export interface PreflightOptions {
   baseUrl?: string | undefined;
   interactive: boolean;
   yesToAll: boolean;
-  log?: (line: string) => void;
+  log?: ((line: string) => void) | undefined;
 }
 
 export async function ollamaPreflight(opts: PreflightOptions): Promise<boolean> {
@@ -32,7 +32,10 @@ export async function ollamaPreflight(opts: PreflightOptions): Promise<boolean> 
       return false;
     }
     log(t("daemonStarting"));
-    const started = await startOllamaDaemon({ baseUrl: opts.baseUrl, timeoutMs: 15_000 });
+    const started = await startOllamaDaemon({
+      ...(opts.baseUrl !== undefined ? { baseUrl: opts.baseUrl } : {}),
+      timeoutMs: 15_000,
+    });
     if (!started.ready) {
       log(t("daemonStartTimeout"));
       return false;

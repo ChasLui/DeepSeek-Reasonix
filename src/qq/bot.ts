@@ -12,7 +12,7 @@ const ALLOWED_GATEWAY_HOSTS = ["api.sgroup.qq.com", "sandbox.api.sgroup.qq.com",
 interface QQBotConfig {
   appid: string;
   secret: string;
-  sandbox?: boolean;
+  sandbox?: boolean | undefined;
 }
 
 export interface C2CMessage {
@@ -118,9 +118,9 @@ export class QQBot extends EventEmitter {
 
   private async handlePayload(payload: {
     op: number;
-    d?: Record<string, unknown>;
-    s?: number;
-    t?: string;
+    d?: Record<string, unknown> | undefined;
+    s?: number | undefined;
+    t?: string | undefined;
   }) {
     switch (payload.op) {
       case 10: {
@@ -252,16 +252,16 @@ export class QQBot extends EventEmitter {
   async sendPrivateMessage(
     openid: string,
     content: string,
-    msgId?: string,
-    msgSeq?: number,
+    msgId?: string | undefined,
+    msgSeq?: number | undefined,
   ): Promise<void> {
     const token = await this.ensureToken();
     const body: Record<string, unknown> = {
       content,
       msg_type: 0,
     };
-    if (msgId) body.msg_id = msgId;
-    if (typeof msgSeq === "number" && Number.isFinite(msgSeq)) body.msg_seq = Math.trunc(msgSeq);
+    if (msgId) body["msg_id"] = msgId;
+    if (typeof msgSeq === "number" && Number.isFinite(msgSeq)) body["msg_seq"] = Math.trunc(msgSeq);
     const res = await fetch(`${this.baseUrl}/v2/users/${encodeURIComponent(openid)}/messages`, {
       method: "POST",
       headers: {

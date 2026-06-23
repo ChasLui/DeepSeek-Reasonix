@@ -1,4 +1,4 @@
-import { Box, Text, useStdout } from "ink";
+import { Text, useStdout } from "ink";
 import React from "react";
 import { clipToCells } from "../../../frame/width.js";
 import { t } from "../../../i18n/index.js";
@@ -104,9 +104,9 @@ function unwrapSubagentMarkdown(name: string, output: string): string | null {
   if (output.length === 0) return null;
   const obj = decodeToolResultObject(output);
   if (!obj) return null;
-  if (obj.success !== true) return null;
-  if (typeof obj.output !== "string") return null;
-  return obj.output;
+  if (obj["success"] !== true) return null;
+  if (typeof obj["output"] !== "string") return null;
+  return obj["output"];
 }
 
 type ToolStatus = "running" | "ok" | "rejected" | "error" | "aborted";

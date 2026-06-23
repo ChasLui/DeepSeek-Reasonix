@@ -13,7 +13,7 @@ export interface BudgetWindow {
   /** USD cap for the rolling window. <= 0 disables the guardrail. */
   capUsd: number;
   /** Absent ⟹ `global` (back-compat with single-scope configs). */
-  scope?: BudgetScope;
+  scope?: BudgetScope | undefined;
 }
 
 export interface BudgetWindowState {
@@ -87,11 +87,16 @@ export function checkBudgetWindows(
   opts: { now?: number; workspace?: string } = {},
 ): BudgetWindowState[] {
   if (windows.length === 0) return [];
-  const aggGlobal = aggregateUsage(records, { now: opts.now });
+  const aggGlobal = aggregateUsage(records, {
+    ...(opts.now !== undefined ? { now: opts.now } : {}),
+  });
   const hasWorkspace = windows.some((w) => budgetWindowScope(w) === "workspace");
   const aggWorkspace =
     hasWorkspace && opts.workspace !== undefined
-      ? aggregateUsage(records, { now: opts.now, workspace: opts.workspace })
+      ? aggregateUsage(records, {
+          ...(opts.now !== undefined ? { now: opts.now } : {}),
+          workspace: opts.workspace,
+        })
       : null;
   return windows.map((w) => {
     if (budgetWindowScope(w) === "workspace") {

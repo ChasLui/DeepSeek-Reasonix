@@ -83,12 +83,12 @@ export async function searchContent(
   startAbs: string,
   args: {
     pattern: string;
-    case_sensitive?: boolean;
-    include_deps?: boolean;
-    context?: number;
+    case_sensitive?: boolean | undefined;
+    include_deps?: boolean | undefined;
+    context?: number | undefined;
     /** Skip line content; return only "rel: N matches" per file. */
-    summary_only?: boolean;
-    signal?: AbortSignal;
+    summary_only?: boolean | undefined;
+    signal?: AbortSignal | undefined;
   },
 ): Promise<string> {
   throwIfAborted(args.signal);
@@ -200,9 +200,12 @@ export async function searchContent(
       let hits: number[];
       if (reSource !== null) {
         try {
-          hits = await getRegexRunner().testLines(text, reSource, reFlags, {
-            signal: args.signal,
-          });
+          hits = await getRegexRunner().testLines(
+            text,
+            reSource,
+            reFlags,
+            args.signal === undefined ? {} : { signal: args.signal },
+          );
         } catch (err) {
           const reason = (err as Error).message;
           // Genuine abort bubbles up; regex-timeout means this single file's

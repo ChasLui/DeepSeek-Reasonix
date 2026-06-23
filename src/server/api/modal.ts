@@ -4,12 +4,12 @@ import type { DashboardContext, PickerResolution } from "../context.js";
 import type { ApiResult } from "../router.js";
 
 interface ResolveBody {
-  kind?: unknown;
-  choice?: unknown;
-  text?: unknown;
-  action?: unknown;
-  id?: unknown;
-  query?: unknown;
+  kind?: unknown | undefined;
+  choice?: unknown | undefined;
+  text?: unknown | undefined;
+  action?: unknown | undefined;
+  id?: unknown | undefined;
+  query?: unknown | undefined;
 }
 
 function parsePickerResolution(body: ResolveBody): PickerResolution | { error: string } {
@@ -88,15 +88,15 @@ export async function handleModal(
       if (!c || typeof c !== "object") {
         return { status: 400, body: { error: "choice must be an object with a kind field" } };
       }
-      if (c.kind === "pick" && typeof c.optionId === "string") {
-        ctx.resolveChoiceConfirm({ kind: "pick", optionId: c.optionId });
+      if (c["kind"] === "pick" && typeof c["optionId"] === "string") {
+        ctx.resolveChoiceConfirm({ kind: "pick", optionId: c["optionId"] });
         return { status: 200, body: { resolved: true } };
       }
-      if (c.kind === "custom" && typeof c.text === "string") {
-        ctx.resolveChoiceConfirm({ kind: "custom", text: c.text });
+      if (c["kind"] === "custom" && typeof c["text"] === "string") {
+        ctx.resolveChoiceConfirm({ kind: "custom", text: c["text"] });
         return { status: 200, body: { resolved: true } };
       }
-      if (c.kind === "cancel") {
+      if (c["kind"] === "cancel") {
         ctx.resolveChoiceConfirm({ kind: "cancel" });
         return { status: 200, body: { resolved: true } };
       }

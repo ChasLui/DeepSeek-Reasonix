@@ -108,7 +108,7 @@ describe("run_skill tool", () => {
       const reg = new ToolRegistry();
       registerSkillTools(reg, { homeDir: home, customSkillPaths: [custom], disableBuiltins: true });
       const out = await reg.dispatch("run_skill", { name: "missing" });
-      expect(parseToolResult(out).available).toContain("custom-known");
+      expect(parseToolResult(out)["available"]).toContain("custom-known");
     } finally {
       rmSync(custom, { recursive: true, force: true });
     }
@@ -129,16 +129,16 @@ describe("run_skill tool", () => {
     registerSkillTools(reg, { homeDir: home, disableBuiltins: true });
     const out = await reg.dispatch("run_skill", { name: "nope" });
     const parsed = parseToolResult(out);
-    expect(parsed.error).toMatch(/unknown skill/);
-    expect(parsed.available).toContain("review");
-    expect(parsed.available).toContain("ship-it");
+    expect(parsed["error"]).toMatch(/unknown skill/);
+    expect(parsed["available"]).toContain("review");
+    expect(parsed["available"]).toContain("ship-it");
   });
 
   it("rejects an empty name", async () => {
     const reg = new ToolRegistry();
     registerSkillTools(reg, { homeDir: home, disableBuiltins: true });
     const out = await reg.dispatch("run_skill", { name: "" });
-    expect(parseToolResult(out).error).toMatch(/requires a 'name'/);
+    expect(parseToolResult(out)["error"]).toMatch(/requires a 'name'/);
   });
 
   it("normalizes decorated names (emoji / brackets) to the bare identifier", async () => {
@@ -175,12 +175,12 @@ describe("run_skill tool", () => {
       "You are a deep-dive agent. Investigate the task and return a one-line answer.",
     );
     const reg = new ToolRegistry();
-    let received: { skillName: string; skillBody: string; task: string } | null = null;
+    const received: Array<{ skillName: string; skillBody: string; task: string }> = [];
     registerSkillTools(reg, {
       homeDir: home,
       disableBuiltins: true,
       subagentRunner: async (skill, task) => {
-        received = { skillName: skill.name, skillBody: skill.body, task };
+        received.push({ skillName: skill.name, skillBody: skill.body, task });
         return JSON.stringify({ success: true, output: "subagent-said-this" });
       },
     });
@@ -188,11 +188,11 @@ describe("run_skill tool", () => {
       name: "deepdive",
       arguments: "find all tests that touch the loop",
     });
-    expect(received?.skillName).toBe("deepdive");
-    expect(received?.skillBody).toContain("deep-dive agent");
-    expect(received?.task).toBe("find all tests that touch the loop");
+    expect(received[0]?.skillName).toBe("deepdive");
+    expect(received[0]?.skillBody).toContain("deep-dive agent");
+    expect(received[0]?.task).toBe("find all tests that touch the loop");
     const parsed = parseToolResult(out);
-    expect(parsed.output).toBe("subagent-said-this");
+    expect(parsed["output"]).toBe("subagent-said-this");
   });
 
   it("returns a configured-error when a subagent skill fires without a runner", async () => {
@@ -209,7 +209,7 @@ describe("run_skill tool", () => {
       name: "needs-runner",
       arguments: "do the thing",
     });
-    expect(parseToolResult(out).error).toMatch(/no subagent runner is configured/);
+    expect(parseToolResult(out)["error"]).toMatch(/no subagent runner is configured/);
   });
 
   it("requires arguments for subagent skills (subagent has no other context)", async () => {
@@ -226,7 +226,7 @@ describe("run_skill tool", () => {
       subagentRunner: async () => "should-not-be-called",
     });
     const out = await reg.dispatch("run_skill", { name: "needs-args" });
-    expect(parseToolResult(out).error).toMatch(/requires 'arguments'/);
+    expect(parseToolResult(out)["error"]).toMatch(/requires 'arguments'/);
   });
 
   it("inline skills don't go through subagentRunner even when one exists", async () => {
@@ -277,12 +277,13 @@ describe("install_skill tool", () => {
       body: "Run gh pr list and group by author.",
     });
     const parsed = parseToolResult(out);
-    expect(parsed.ok).toBe(true);
-    expect(parsed.scope).toBe("project");
-    expect(parsed.runAs).toBe("inline");
-    expect(parsed.path).toContain(projectRoot);
-    expect(existsSync(parsed.path)).toBe(true);
-    const raw = readFileSync(parsed.path, "utf8");
+    expect(parsed["ok"]).toBe(true);
+    expect(parsed["scope"]).toBe("project");
+    expect(parsed["runAs"]).toBe("inline");
+    const installedPath = String(parsed["path"]);
+    expect(installedPath).toContain(projectRoot);
+    expect(existsSync(installedPath)).toBe(true);
+    const raw = readFileSync(installedPath, "utf8");
     expect(raw).toContain("name: summarize-prs");
     expect(raw).toContain("description: Summarize merged PRs from the last week");
     expect(raw).toContain("Run gh pr list");
@@ -294,11 +295,11 @@ describe("install_skill tool", () => {
     await reg.dispatch("install_skill", {
       name: "lint-fix",
       description: "Run linter and apply autofixes",
-      body: "Step 1: npm run lint --fix.",
+      body: "Step 1: pnpm run lint --fix.",
     });
     const out = await reg.dispatch("run_skill", { name: "lint-fix" });
     expect(out).toContain("# Skill: lint-fix");
-    expect(out).toContain("Step 1: npm run lint --fix");
+    expect(out).toContain("Step 1: pnpm run lint --fix");
   });
 
   it("defaults scope to global when no projectRoot is set", async () => {
@@ -310,8 +311,8 @@ describe("install_skill tool", () => {
       body: "do a thing",
     });
     const parsed = parseToolResult(out);
-    expect(parsed.scope).toBe("global");
-    expect(parsed.path).toContain(home);
+    expect(parsed["scope"]).toBe("global");
+    expect(parsed["path"]).toContain(home);
   });
 
   it("rejects scope=project when no workspace is configured", async () => {
@@ -323,7 +324,7 @@ describe("install_skill tool", () => {
       body: "z",
       scope: "project",
     });
-    expect(parseToolResult(out).error).toMatch(/requires a workspace/);
+    expect(parseToolResult(out)["error"]).toMatch(/requires a workspace/);
   });
 
   it("rejects an empty name / description / body", async () => {
@@ -332,17 +333,17 @@ describe("install_skill tool", () => {
     expect(
       parseToolResult(
         await reg.dispatch("install_skill", { name: "", description: "d", body: "b" }),
-      ).error,
+      )["error"],
     ).toMatch(/'name'/);
     expect(
       parseToolResult(
         await reg.dispatch("install_skill", { name: "ok", description: "", body: "b" }),
-      ).error,
+      )["error"],
     ).toMatch(/'description'/);
     expect(
       parseToolResult(
         await reg.dispatch("install_skill", { name: "ok", description: "d", body: "" }),
-      ).error,
+      )["error"],
     ).toMatch(/'body'/);
   });
 
@@ -354,7 +355,7 @@ describe("install_skill tool", () => {
       description: "d",
       body: "b",
     });
-    expect(parseToolResult(out).error).toMatch(/invalid skill name/);
+    expect(parseToolResult(out)["error"]).toMatch(/invalid skill name/);
   });
 
   it("refuses to overwrite an existing skill", async () => {
@@ -370,7 +371,7 @@ describe("install_skill tool", () => {
       description: "second",
       body: "second body",
     });
-    expect(parseToolResult(out).error).toMatch(/already exists/);
+    expect(parseToolResult(out)["error"]).toMatch(/already exists/);
   });
 
   it("fires onSkillInstalled with the name + scope + path", async () => {

@@ -4,7 +4,7 @@
  * Exercises: write → index regeneration → prefix assembly →
  * recall → delete → REASONIX_MEMORY=off short-circuit.
  *
- * Run: npx tsx scripts/smoke-memory.mts
+ * Run: pnpm exec tsx scripts/smoke-memory.mts
  * Exit code 0 on success, 1 on any assertion failure.
  */
 

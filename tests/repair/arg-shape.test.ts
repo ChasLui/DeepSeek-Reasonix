@@ -72,7 +72,7 @@ describe("parseStringifiedArray", () => {
       optional,
     );
     expect(r).toEqual({ changed: true, kind: "stringified-array-parsed" });
-    expect(args.tags).toEqual(["a", "b"]);
+    expect(args["tags"]).toEqual(["a", "b"]);
   });
 
   it("ignores strings that aren't bracketed", () => {
@@ -103,7 +103,7 @@ describe("parseStringifiedArray", () => {
       optional,
     );
     expect(r).toEqual({ changed: true, kind: "stringified-array-parsed" });
-    expect(args.tags).toEqual(["a", "b"]);
+    expect(args["tags"]).toEqual(["a", "b"]);
   });
 
   it("falls back to jsonrepair for unquoted-string array", () => {
@@ -114,7 +114,7 @@ describe("parseStringifiedArray", () => {
       optional,
     );
     expect(r).toEqual({ changed: true, kind: "stringified-array-parsed" });
-    expect(args.tags).toEqual(["foo", "bar"]);
+    expect(args["tags"]).toEqual(["foo", "bar"]);
   });
 });
 
@@ -127,7 +127,7 @@ describe("unwrapEmptyPlaceholderObject", () => {
       optional,
     );
     expect(r).toEqual({ changed: true, kind: "empty-placeholder-to-array" });
-    expect(args.tags).toEqual([]);
+    expect(args["tags"]).toEqual([]);
   });
 
   it("ignores non-empty object", () => {
@@ -146,7 +146,7 @@ describe("wrapBareString", () => {
     const args: Record<string, unknown> = { tags: "foo" };
     const r = wrapBareString(args, issue(["tags"], "array-expected", "array", "string"), optional);
     expect(r).toEqual({ changed: true, kind: "bare-string-wrapped" });
-    expect(args.tags).toEqual(["foo"]);
+    expect(args["tags"]).toEqual(["foo"]);
   });
 
   it("does not run when value already an array", () => {
@@ -169,7 +169,7 @@ describe("SHAPE_REPAIRS ordering", () => {
       }
     }
     expect(applied).toBe(true);
-    expect(args.tags).toEqual(["a", "b"]);
+    expect(args["tags"]).toEqual(["a", "b"]);
   });
 });
 
@@ -184,7 +184,7 @@ describe("stripNullOnOptional — array element guard (P0 #2)", () => {
       optional,
     );
     expect(r.changed).toBe(false);
-    expect((args.edits as unknown[]).length).toBe(2);
+    expect((args["edits"] as unknown[]).length).toBe(2);
   });
 });
 
@@ -197,7 +197,7 @@ describe("coerceNumericString (P1 #5)", () => {
       optional,
     );
     expect(r).toEqual({ changed: true, kind: "numeric-string-coerced" });
-    expect(args.head).toBe(50);
+    expect(args["head"]).toBe(50);
   });
 
   it("coerces '0.5' → 0.5 on type=number field", () => {
@@ -208,7 +208,7 @@ describe("coerceNumericString (P1 #5)", () => {
       optional,
     );
     expect(r).toEqual({ changed: true, kind: "numeric-string-coerced" });
-    expect(args.weight).toBe(0.5);
+    expect(args["weight"]).toBe(0.5);
   });
 
   it("refuses '0.5' on integer field", () => {
@@ -249,7 +249,7 @@ describe("unwrapDegenerateAutolinks", () => {
     };
     const r = unwrapDegenerateAutolinks(args);
     expect(r).toEqual({ changed: true, unwrapped: 1 });
-    expect(args.path).toBe("notes.md");
+    expect(args["path"]).toBe("notes.md");
   });
 
   it("tolerates whitespace in URL body AND returns whitespace-stripped text (P1 #4)", () => {
@@ -258,7 +258,7 @@ describe("unwrapDegenerateAutolinks", () => {
     };
     const r = unwrapDegenerateAutolinks(args);
     expect(r.changed).toBe(true);
-    expect(args.path).toBe("src/foo.ts");
+    expect(args["path"]).toBe("src/foo.ts");
   });
 
   it("leaves write_file.content alone even if it matches the degenerate form (P0 #1)", () => {
@@ -268,7 +268,7 @@ describe("unwrapDegenerateAutolinks", () => {
     };
     const r = unwrapDegenerateAutolinks(args);
     expect(r.changed).toBe(false);
-    expect(args.content).toBe("[LICENSE](http://LICENSE)");
+    expect(args["content"]).toBe("[LICENSE](http://LICENSE)");
   });
 
   it("leaves submit_plan.plan alone (lenient tools, non-path key)", () => {
@@ -293,7 +293,7 @@ describe("unwrapDegenerateAutolinks", () => {
     };
     const r = unwrapDegenerateAutolinks(args);
     expect(r).toEqual({ changed: true, unwrapped: 1 });
-    expect((args.edits as Array<{ path: string }>)[0]?.path).toBe("a.ts");
+    expect((args["edits"] as Array<{ path: string }>)[0]?.path).toBe("a.ts");
   });
 
   it("unwraps inside paths array elements (inherits scope from parent key)", () => {
@@ -302,7 +302,7 @@ describe("unwrapDegenerateAutolinks", () => {
     };
     const r = unwrapDegenerateAutolinks(args);
     expect(r.changed).toBe(true);
-    expect(args.paths).toEqual(["a.ts", "b.ts"]);
+    expect(args["paths"]).toEqual(["a.ts", "b.ts"]);
   });
 
   it("no-op for clean inputs", () => {

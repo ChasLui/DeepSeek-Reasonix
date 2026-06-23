@@ -3,7 +3,7 @@ import { encodeToonPayload } from "./encode-result.js";
 import { recordToonEncode, recordToonEncodeFallback } from "./stats.js";
 
 export interface ToonPromptOptions {
-  mode?: ToonMode;
+  mode?: ToonMode | undefined;
 }
 
 export function toonPrefixEnabled(mode: ToonMode | undefined): boolean {

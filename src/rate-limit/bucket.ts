@@ -26,7 +26,7 @@ export interface ConcurrencyCapSetting {
   cap: number;
   upstreamCap: number;
   source: RateLimitCapSource;
-  requestedCap?: number;
+  requestedCap?: number | undefined;
   manuallyNarrowed: boolean;
 }
 
@@ -42,10 +42,10 @@ export interface ResolvedConcurrencySettings {
 }
 
 export interface ConcurrencyBucketOptions {
-  settings?: ResolvedConcurrencySettings;
-  rateLimit?: RateLimitConfig;
+  settings?: ResolvedConcurrencySettings | undefined;
+  rateLimit?: RateLimitConfig | undefined;
   env?: Record<string, string | undefined>;
-  now?: () => number;
+  now?: (() => number) | undefined;
 }
 
 interface ModelState {
@@ -110,15 +110,25 @@ export class RateLimitEventEmitter {
 }
 
 export class ConcurrencyToken {
+  private readonly bucket: ConcurrencyBucket;
+  private readonly bucketName: RateLimitBucketName;
+  public readonly model: string;
+  public readonly queuedMs: number;
+
   private stateValue: TokenState = "acquired";
   private released = false;
 
   constructor(
-    private readonly bucket: ConcurrencyBucket,
-    private readonly bucketName: RateLimitBucketName,
-    readonly model: string,
-    readonly queuedMs: number,
-  ) {}
+    bucket: ConcurrencyBucket,
+    bucketName: RateLimitBucketName,
+    model: string,
+    queuedMs: number,
+  ) {
+    this.bucket = bucket;
+    this.bucketName = bucketName;
+    this.model = model;
+    this.queuedMs = queuedMs;
+  }
 
   get state(): TokenState {
     return this.stateValue;
@@ -150,16 +160,28 @@ export class ConcurrencyToken {
 }
 
 class Semaphore {
+  private capValue: number;
+  private readonly queueMaxDepth: number;
+  private readonly now: () => number;
+  private readonly emitQueued: (model: string, depth: number, estimatedWaitMs: number) => void;
+  private readonly emitAcquired: (model: string, queuedMs: number) => void;
+
   private queue: QueueEntry[] = [];
   private inUseCount = 0;
 
   constructor(
-    private capValue: number,
-    private readonly queueMaxDepth: number,
-    private readonly now: () => number,
-    private readonly emitQueued: (model: string, depth: number, estimatedWaitMs: number) => void,
-    private readonly emitAcquired: (model: string, queuedMs: number) => void,
-  ) {}
+    capValue: number,
+    queueMaxDepth: number,
+    now: () => number,
+    emitQueued: (model: string, depth: number, estimatedWaitMs: number) => void,
+    emitAcquired: (model: string, queuedMs: number) => void,
+  ) {
+    this.capValue = capValue;
+    this.queueMaxDepth = queueMaxDepth;
+    this.now = now;
+    this.emitQueued = emitQueued;
+    this.emitAcquired = emitAcquired;
+  }
 
   get cap(): number {
     return this.capValue;
@@ -270,7 +292,7 @@ class Semaphore {
 }
 
 export class ConcurrencyBucket {
-  readonly events = new RateLimitEventEmitter();
+  readonly events: RateLimitEventEmitter = new RateLimitEventEmitter();
   private readonly settings: ResolvedConcurrencySettings;
   private readonly now: () => number;
   private readonly semaphores = new Map<RateLimitBucketName, Semaphore>();
@@ -283,7 +305,7 @@ export class ConcurrencyBucket {
 
   async acquire(
     model: string,
-    signal?: AbortSignal,
+    signal?: AbortSignal | undefined,
     giveupMs: number = this.settings.queueGiveupMs,
   ): Promise<ConcurrencyToken> {
     const bucketName = bucketForModel(model);
@@ -453,7 +475,7 @@ export function bucketForModel(model: string): RateLimitBucketName {
 }
 
 export function resolveConcurrencySettings(
-  rateLimit?: RateLimitConfig,
+  rateLimit?: RateLimitConfig | undefined,
   env: Record<string, string | undefined> = process.env,
 ): ResolvedConcurrencySettings {
   const caps = {
@@ -461,20 +483,20 @@ export function resolveConcurrencySettings(
     flash: resolveCap("flash", rateLimit, env),
     default: resolveCap("default", rateLimit, env),
   } satisfies Record<RateLimitBucketName, ConcurrencyCapSetting>;
-  const envAdaptive = parseBoolean(env.REASONIX_CONCURRENCY_ADAPTIVE);
+  const envAdaptive = parseBoolean(env["REASONIX_CONCURRENCY_ADAPTIVE"]);
   const configAdaptive = rateLimit?.concurrency?.adaptive;
   return {
     caps,
     adaptive: envAdaptive ?? configAdaptive ?? true,
     adaptiveSource:
       envAdaptive !== null ? "env" : configAdaptive !== undefined ? "config" : "default",
-    queueGiveupMs: positiveInteger(env.REASONIX_QUEUE_GIVEUP_MS) ?? DEFAULT_QUEUE_GIVEUP_MS,
-    queueHintMs: positiveInteger(env.REASONIX_QUEUE_HINT_MS) ?? DEFAULT_QUEUE_HINT_MS,
+    queueGiveupMs: positiveInteger(env["REASONIX_QUEUE_GIVEUP_MS"]) ?? DEFAULT_QUEUE_GIVEUP_MS,
+    queueHintMs: positiveInteger(env["REASONIX_QUEUE_HINT_MS"]) ?? DEFAULT_QUEUE_HINT_MS,
     restoreIntervalMs:
-      positiveInteger(env.REASONIX_429_RESTORE_INTERVAL_MS) ?? DEFAULT_RESTORE_INTERVAL_MS,
+      positiveInteger(env["REASONIX_429_RESTORE_INTERVAL_MS"]) ?? DEFAULT_RESTORE_INTERVAL_MS,
     throttleWindowMs:
-      positiveInteger(env.REASONIX_429_THROTTLE_WINDOW_MS) ?? DEFAULT_THROTTLE_WINDOW_MS,
-    queueMaxDepth: positiveInteger(env.REASONIX_QUEUE_MAX_DEPTH) ?? DEFAULT_QUEUE_MAX_DEPTH,
+      positiveInteger(env["REASONIX_429_THROTTLE_WINDOW_MS"]) ?? DEFAULT_THROTTLE_WINDOW_MS,
+    queueMaxDepth: positiveInteger(env["REASONIX_QUEUE_MAX_DEPTH"]) ?? DEFAULT_QUEUE_MAX_DEPTH,
   };
 }
 

@@ -74,7 +74,7 @@ describe("walkChunks excludes", () => {
         reasons[p] = r;
       },
     });
-    expect(reasons.node_modules).toBe("defaultDir");
+    expect(reasons["node_modules"]).toBe("defaultDir");
   });
 
   it("reports `tooLarge` when a file exceeds the configured limit", async () => {

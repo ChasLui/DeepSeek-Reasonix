@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { I } from "../icons";
 import { t, useLang } from "../i18n";
 
@@ -32,7 +32,7 @@ export function ApprovalCard({
   onPrimary?: () => void;
   onSecondary?: () => void;
   onTertiary?: () => void;
-}) {
+}): ReactElement {
   useLang();
   return (
     <div className="approval" data-tone={tone}>
@@ -89,7 +89,7 @@ export function TaskCard({
   title: string;
   subtitle?: string;
   steps: TaskStepView[];
-}) {
+}): ReactElement {
   useLang();
   const done = steps.filter((x) => x.state === "done").length;
   const pct = steps.length ? (done / steps.length) * 100 : 0;
@@ -130,7 +130,7 @@ export function TaskCard({
 
 // ---- Warn / Tip / Doctor ----
 
-export function WarnCard({ title, body }: { title: string; body: ReactNode }) {
+export function WarnCard({ title, body }: { title: string; body: ReactNode }): ReactElement {
   return (
     <div className="warn-card">
       <span className="ico">
@@ -156,7 +156,7 @@ export function TipCard({
   command?: string;
   sections: TipSection[];
   footer?: ReactNode;
-}) {
+}): ReactElement {
   return (
     <div className="tip-card">
       <div className="head">
@@ -184,7 +184,13 @@ export function TipCard({
 
 export type DoctorRow = { s: "ok" | "warn" | "fail"; nm: string; sub: string; v: string };
 
-export function DoctorCard({ rows, headerSubtitle }: { rows: DoctorRow[]; headerSubtitle?: string }) {
+export function DoctorCard({
+  rows,
+  headerSubtitle,
+}: {
+  rows: DoctorRow[];
+  headerSubtitle?: string;
+}): ReactElement {
   useLang();
   const c = { ok: 0, warn: 0, fail: 0 };
   for (const r of rows) c[r.s]++;
@@ -254,7 +260,7 @@ export function UsageFull({
   costLabel: string;
   balanceLabel?: string;
   range?: string;
-}) {
+}): ReactElement {
   useLang();
   const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`);
   const total = promptTokens + reasoningTokens + outputTokens + cacheHitTokens || 1;
@@ -324,7 +330,12 @@ export function UsageFull({
 
 // ---- Context window breakdown ----
 
-export type CtxPart = { k: "system" | "tools" | "log" | "input"; label: string; value: string; widthPct: number };
+export type CtxPart = {
+  k: "system" | "tools" | "log" | "input";
+  label: string;
+  value: string;
+  widthPct: number;
+};
 export type CtxTopRow = { name: string; widthPct: number; value: string };
 
 export function CtxCard({
@@ -335,7 +346,7 @@ export function CtxCard({
   totalLabel: string;
   parts: CtxPart[];
   topTools: CtxTopRow[];
-}) {
+}): ReactElement {
   useLang();
   return (
     <div className="ctx-card">
@@ -399,7 +410,7 @@ const GROUP_LABELS: Record<MemGroupKey, Parameters<typeof t>[0]> = {
   reference: "extraCards.memoryReference",
 };
 
-export function MemoryGroups({ data }: { data: MemGroups }) {
+export function MemoryGroups({ data }: { data: MemGroups }): ReactElement {
   useLang();
   const keys: MemGroupKey[] = ["user", "feedback", "project", "reference"];
   return (
@@ -431,7 +442,13 @@ export function MemoryGroups({ data }: { data: MemGroups }) {
 
 // ---- Fallback ----
 
-export function FallbackCard({ kindLabel, payload }: { kindLabel: string; payload: Record<string, string> }) {
+export function FallbackCard({
+  kindLabel,
+  payload,
+}: {
+  kindLabel: string;
+  payload: Record<string, string>;
+}): ReactElement {
   useLang();
   return (
     <div className="fallback-card">
@@ -475,7 +492,7 @@ export function LiveCard({
   body: ReactNode;
   action?: string;
   onAction?: () => void;
-}) {
+}): ReactElement {
   return (
     <span className={`live-card ${variant === "stepProgress" ? "step" : ""}`} data-v={variant}>
       <span className="lc-ico">{icon}</span>

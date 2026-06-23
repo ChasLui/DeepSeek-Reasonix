@@ -48,71 +48,73 @@ export type { McpLifecycleNotice, McpLifecycleSink, McpRuntime, ProgressInfo };
 export interface ChatOptions {
   model: string;
   /** Preset resolved at launch; keeps flash distinct from auto when both use the same model. */
-  preset?: "auto" | "flash" | "pro";
+  preset?: "auto" | "flash" | "pro" | undefined;
   /** Whether flash may auto-upgrade hard turns to pro. */
-  autoEscalate?: boolean;
+  autoEscalate?: boolean | undefined;
   system: string;
   /** Re-runs the prompt builder on /new so REASONIX.md edits don't need a restart. Should produce the same string `system` was built from. */
-  rebuildSystem?: () => string;
-  transcript?: string;
+  rebuildSystem?: (() => string) | undefined;
+  transcript?: string | undefined;
   /**
    * Soft USD cap on session spend. Undefined → no cap (default).
    * The loop warns once at 80% and refuses to start a new turn at
    * 100%. Users can bump or clear via `/budget <usd>` / `/budget off`
    * mid-session.
    */
-  budgetUsd?: number;
-  session?: string;
+  budgetUsd?: number | undefined;
+  session?: string | undefined;
   /** Zero or more MCP server specs. Each: `"name=cmd args..."` or `"cmd args..."`. */
-  mcp?: string[];
+  mcp?: string[] | undefined;
   /** Global prefix — only used when a single anonymous server is given. */
-  mcpPrefix?: string;
+  mcpPrefix?: string | undefined;
   /**
    * Pre-built ToolRegistry used as a seed. MCP bridges (if any) are
    * layered on top of whatever's already registered. Used by
    * `reasonix code` to register native filesystem tools in place of
    * the old `npx -y @modelcontextprotocol/server-filesystem` subprocess.
    */
-  seedTools?: ToolRegistry;
+  seedTools?: ToolRegistry | undefined;
   /**
    * Enable SEARCH/REPLACE edit-block processing after each assistant turn.
    * Set by `reasonix code`; plain `reasonix chat` leaves this off.
    */
-  codeMode?: {
-    rootDir: string;
-    jobs?: import("../../tools/jobs.js").JobRegistry;
-    /**
-     * `/cwd <path>` callback — re-registers every rootDir-dependent
-     * native tool against the new path. Optional so embedders that
-     * don't want live cwd switching can omit it (the slash command
-     * then falls back to non-tool updates only).
-     */
-    reregisterTools?: (rootDir: string) => void;
-    /** Async tail of `/cwd` — re-probe the new dir for a semantic index. */
-    reBootstrapSemantic?: (rootDir: string) => Promise<{ enabled: boolean }>;
-    /** Notify the launcher that the workspace root just changed — lets the rebuildSystem closure see the new dir. */
-    onRootChange?: (newRoot: string) => void;
-  };
+  codeMode?:
+    | {
+        rootDir: string;
+        jobs?: import("../../tools/jobs.js").JobRegistry | undefined;
+        /**
+         * `/cwd <path>` callback — re-registers every rootDir-dependent
+         * native tool against the new path. Optional so embedders that
+         * don't want live cwd switching can omit it (the slash command
+         * then falls back to non-tool updates only).
+         */
+        reregisterTools?: ((rootDir: string) => void) | undefined;
+        /** Async tail of `/cwd` — re-probe the new dir for a semantic index. */
+        reBootstrapSemantic?: ((rootDir: string) => Promise<{ enabled: boolean }>) | undefined;
+        /** Notify the launcher that the workspace root just changed — lets the rebuildSystem closure see the new dir. */
+        onRootChange?: ((newRoot: string) => void) | undefined;
+      }
+    | undefined;
   /** Skip the session picker — assume "Resume" (backwards-compatible auto-continue). */
-  forceResume?: boolean;
+  forceResume?: boolean | undefined;
   /** Skip the session picker — assume "New" (wipe the session file and start fresh). */
-  forceNew?: boolean;
+  forceNew?: boolean | undefined;
   /**
    * When true, suppress auto-launch of the embedded web dashboard.
    * Default behavior (false/undefined) is to boot it on mount so the
    * URL is visible in the status bar.
    */
-  noDashboard?: boolean;
+  noDashboard?: boolean | undefined;
   /** When true and the dashboard is enabled, open its URL in the system default browser as soon as the server is ready. */
-  openDashboard?: boolean;
+  openDashboard?: boolean | undefined;
   /** Pin the dashboard to a fixed port. `undefined` keeps ephemeral assignment. */
-  dashboardPort?: number;
+  dashboardPort?: number | undefined;
   /** Dashboard bind address (#968). `undefined` keeps the default 127.0.0.1. */
-  dashboardHost?: string;
+  dashboardHost?: string | undefined;
   /** Stable dashboard URL token (#968). `undefined` mints a fresh per-boot token. */
-  dashboardToken?: string;
+  dashboardToken?: string | undefined;
   /** Disable terminal mouse modes so the terminal keeps native selection and right-click behavior. */
-  noMouse?: boolean;
+  noMouse?: boolean | undefined;
 }
 
 interface RootProps extends ChatOptions {
@@ -129,7 +131,7 @@ interface RootProps extends ChatOptions {
   /** One-time startup info rows shown after App mounts. */
   startupInfoHints: string[];
   /** Pre-created QQ channel (started before TUI mounts). */
-  qqChannel?: QQChannel;
+  qqChannel?: QQChannel | undefined;
   /** App fills this ref on mount so QQ messages flow into the TUI input queue. */
   qqSubmitRef: { current: ((text: string) => void) | null };
   /** App fills this ref on mount so QQ errors appear in the TUI log. */
@@ -173,14 +175,14 @@ function Root({
       <KeystrokeProvider>
         <Setup
           onReady={(k) => {
-            process.env.DEEPSEEK_API_KEY = k;
+            process.env["DEEPSEEK_API_KEY"] = k;
             setKey(k);
           }}
         />
       </KeystrokeProvider>
     );
   }
-  process.env.DEEPSEEK_API_KEY = key;
+  process.env["DEEPSEEK_API_KEY"] = key;
 
   if (pickerOpen) {
     return (

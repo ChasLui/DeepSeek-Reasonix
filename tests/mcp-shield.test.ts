@@ -19,6 +19,7 @@ function makeJsonText(value: unknown): CallToolResult {
 
 function textOf(r: CallToolResult, idx = 0): string {
   const b = r.content[idx];
+  if (!b) throw new Error(`missing content block ${idx}`);
   if (b.type !== "text") throw new Error("not a text block");
   return b.text;
 }
@@ -44,8 +45,8 @@ describe("rule 1 — array cap", () => {
     const parsed = JSON.parse(textOf(result)) as unknown[];
     expect(parsed).toHaveLength(MAX_ARRAY_LENGTH + 1);
     const sentinel = parsed[MAX_ARRAY_LENGTH] as Record<string, unknown>;
-    expect(sentinel._truncated).toBe(true);
-    expect(sentinel._total).toBe(100);
+    expect(sentinel["_truncated"]).toBe(true);
+    expect(sentinel["_total"]).toBe(100);
   });
 
   test("array under limit passes through", () => {
@@ -67,14 +68,14 @@ describe("rule 2 — heavy-field strip", () => {
     const result = shieldMcpResult(makeJsonText(arr));
     const parsed = JSON.parse(textOf(result)) as unknown[];
     const item = parsed[0] as Record<string, unknown>;
-    expect(item.id).toBeDefined();
-    expect(item.htmlContent).toBeUndefined();
-    expect(Array.isArray(item._omitted)).toBe(true);
-    expect((item._omitted as string[]).includes("htmlContent")).toBe(true);
+    expect(item["id"]).toBeDefined();
+    expect(item["htmlContent"]).toBeUndefined();
+    expect(Array.isArray(item["_omitted"])).toBe(true);
+    expect((item["_omitted"] as string[]).includes("htmlContent")).toBe(true);
   });
 
   test("signal fields preserved even when heavy", () => {
-    const signalKey = [...SIGNAL_FIELDS][3]; // "type" — clearly a signal field
+    const signalKey = [...SIGNAL_FIELDS][3]!; // "type" — clearly a signal field
     const arr = Array.from({ length: 10 }, (_, i) => ({
       [signalKey]: `${i}-${"x".repeat(500)}`, // heavy but signal
       junkField: "y".repeat(1000), // heavy non-signal
@@ -83,7 +84,7 @@ describe("rule 2 — heavy-field strip", () => {
     const parsed = JSON.parse(textOf(result)) as unknown[];
     const item = parsed[0] as Record<string, unknown>;
     expect(item[signalKey]).toBeDefined();
-    expect(item.junkField).toBeUndefined();
+    expect(item["junkField"]).toBeUndefined();
   });
 });
 
@@ -124,7 +125,7 @@ describe("rule 4 — total size cap", () => {
       ],
     });
     expect(result.content).toHaveLength(1);
-    expect(result.content[0].type).toBe("text");
+    expect(result.content[0]?.type).toBe("text");
     expect(textOf(result)).toContain("response too large");
   });
 
@@ -160,13 +161,13 @@ describe("4-rule combined", () => {
 
 describe("kill switches", () => {
   afterEach(() => {
-    process.env.REASONIX_SHIELD = undefined;
-    process.env.REASONIX_TOON = undefined;
+    delete process.env["REASONIX_SHIELD"];
+    delete process.env["REASONIX_TOON"];
   });
 
   test("REASONIX_SHIELD=0 bypasses shield entirely", () => {
-    process.env.REASONIX_SHIELD = "0";
-    process.env.REASONIX_TOON = "off"; // prevent toon encoding from wrapping JSON
+    process.env["REASONIX_SHIELD"] = "0";
+    process.env["REASONIX_TOON"] = "off"; // prevent toon encoding from wrapping JSON
     const arr = Array.from({ length: 100 }, (_, i) => ({ id: String(i) }));
     const raw: CallToolResult = {
       content: [{ type: "text", text: JSON.stringify(arr) }],
@@ -177,7 +178,7 @@ describe("kill switches", () => {
   });
 
   test("mcpShield.enabled=false bypasses shield via opts", () => {
-    process.env.REASONIX_TOON = "off";
+    process.env["REASONIX_TOON"] = "off";
     const arr = Array.from({ length: 100 }, (_, i) => ({ id: String(i) }));
     const raw: CallToolResult = {
       content: [{ type: "text", text: JSON.stringify(arr) }],
@@ -188,7 +189,7 @@ describe("kill switches", () => {
   });
 
   test("shield active by default (no env, no opts)", () => {
-    process.env.REASONIX_TOON = "off";
+    process.env["REASONIX_TOON"] = "off";
     const arr = Array.from({ length: 100 }, (_, i) => ({ id: String(i) }));
     const raw: CallToolResult = {
       content: [{ type: "text", text: JSON.stringify(arr) }],

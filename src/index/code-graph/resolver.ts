@@ -165,7 +165,7 @@ function edge(
   ref: CodeGraphUnresolvedRef,
   target: string,
   provenance: CodeGraphEdgeProvenance,
-  candidates?: string[],
+  candidates?: string[] | undefined,
 ): CodeGraphEdge {
   return {
     source: ref.source,

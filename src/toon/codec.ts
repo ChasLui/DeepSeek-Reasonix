@@ -26,7 +26,7 @@ export function decodeStructuredPayload(value: string): unknown {
 
 export function decodeStructuredPayloadObserved(
   value: string,
-  observe?: (kind: DecodeKind) => void,
+  observe?: (kind: DecodeKind) => void | undefined,
 ): unknown {
   const trimmed = value.trim();
   if (!trimmed) return null;

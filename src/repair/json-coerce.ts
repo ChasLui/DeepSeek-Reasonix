@@ -4,7 +4,7 @@ export interface LooseParseResult {
   value: unknown;
   /** True when jsonrepair had to rewrite the input; false when strict parse already succeeded. */
   repaired: boolean;
-  note?: string;
+  note?: string | undefined;
 }
 
 export function tryParseLoose(input: string): LooseParseResult | null {

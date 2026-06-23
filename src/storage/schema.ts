@@ -121,7 +121,7 @@ export function migrate(db: Db): void {
   );
   const applied = new Set<number>();
   for (const row of db.prepare("SELECT version FROM schema_migrations").all()) {
-    applied.add(Number(row.version));
+    applied.add(Number(row["version"]));
   }
   for (const m of MIGRATIONS) {
     if (applied.has(m.version)) continue;
@@ -140,5 +140,5 @@ export function appliedVersions(db: Db): number[] {
   return db
     .prepare("SELECT version FROM schema_migrations ORDER BY version")
     .all()
-    .map((row) => Number(row.version));
+    .map((row) => Number(row["version"]));
 }

@@ -46,18 +46,18 @@ export interface WizardProps {
   /** Called once the config has been saved. */
   onComplete: (cfg: ReasonixConfig) => void;
   /** Called if the user presses Esc to abort. */
-  onCancel?: () => void;
+  onCancel?: (() => void) | undefined;
   /** Skip the API-key step if a key already exists (env or config). */
-  existingApiKey?: string;
+  existingApiKey?: string | undefined;
   /** Force the API-key step so `reasonix setup` can replace a saved key. */
-  forceApiKeyStep?: boolean;
+  forceApiKeyStep?: boolean | undefined;
   /** Verifies the submitted key before the wizard can continue. */
-  validateApiKey?: (apiKey: string) => Promise<ApiKeyValidationResult>;
+  validateApiKey?: ((apiKey: string) => Promise<ApiKeyValidationResult>) | undefined;
   /** Pre-fill selections when re-running (reconfigure flow). */
   initial?: {
-    preset?: PresetName;
-    mcp?: string[];
-    theme?: ThemeName | "auto";
+    preset?: PresetName | undefined;
+    mcp?: string[] | undefined;
+    theme?: ThemeName | "auto" | undefined;
   };
 }
 
@@ -90,19 +90,19 @@ export function Wizard({
   forceApiKeyStep = false,
   validateApiKey = validateDeepSeekApiKey,
   initial,
-}: WizardProps) {
+}: WizardProps): React.ReactElement {
   const { exit } = useApp();
   const [, setLanguageVersion] = useState(0);
   useEffect(() => onLanguageChange(() => setLanguageVersion((v) => v + 1)), []);
 
   const [previewTheme, setPreviewTheme] = useState<ThemeName>(() =>
-    resolveThemePreference(initial?.theme ?? loadTheme(), process.env.REASONIX_THEME),
+    resolveThemePreference(initial?.theme ?? loadTheme(), process.env["REASONIX_THEME"]),
   );
 
   const [step, setStep] = useState<Step>("language");
   const [data, setData] = useState<WizardData>(() => ({
     language: getLanguage(),
-    theme: resolveThemePreference(initial?.theme ?? loadTheme(), process.env.REASONIX_THEME),
+    theme: resolveThemePreference(initial?.theme ?? loadTheme(), process.env["REASONIX_THEME"]),
     apiKey: existingApiKey ?? "",
     preset: initial?.preset ?? "auto",
     selectedCatalog: deriveInitialCatalog(initial?.mcp ?? []),
@@ -114,7 +114,7 @@ export function Wizard({
     if (key.escape && step !== "saved" && onCancel) onCancel();
   });
 
-  const content = (() => {
+  const content: React.ReactElement | null = (() => {
     if (step === "language") {
       return (
         <LanguageStep
@@ -351,7 +351,7 @@ function ThemeStep({
       <Box marginTop={1} flexDirection="column">
         {THEME_NAMES.map((name, i) => (
           <Box key={name}>
-            <Text color={i === index ? theme.tone.brand : undefined}>
+            <Text {...(i === index ? { color: theme.tone.brand } : {})}>
               {i === index ? "▸ " : "  "}
             </Text>
             <Text bold={i === index} color={i === index ? theme.fg.strong : theme.fg.body}>
@@ -439,7 +439,7 @@ function ApiKeyStep({
   error,
   onError,
 }: {
-  initialValue?: string;
+  initialValue?: string | undefined;
   validateApiKey: (apiKey: string) => Promise<ApiKeyValidationResult>;
   onSubmit: (key: string) => void;
   error: string | null;
@@ -520,9 +520,9 @@ function ApiKeyStep({
 export async function validateDeepSeekApiKey(
   apiKey: string,
   opts: {
-    baseUrl?: string;
-    timeoutMs?: number;
-    fetch?: typeof fetch;
+    baseUrl?: string | undefined;
+    timeoutMs?: number | undefined;
+    fetch?: typeof fetch | undefined;
   } = {},
 ): Promise<ApiKeyValidationResult> {
   const fetchImpl = opts.fetch ?? globalThis.fetch.bind(globalThis);

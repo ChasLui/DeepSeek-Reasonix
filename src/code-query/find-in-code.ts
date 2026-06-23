@@ -11,7 +11,7 @@ export interface CodeMatch {
 }
 
 export interface FindInCodeOptions {
-  kind?: CodeMatchKind | "any";
+  kind?: CodeMatchKind | "any" | undefined;
 }
 
 const IDENTIFIER_TYPES = new Set([
