@@ -32,15 +32,15 @@ jobs:
           # right ref so the fallback is a no-op.
           ref: ${{ github.event.inputs.tag || github.ref }}
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: pnpm
           registry-url: https://registry.npmjs.org/
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
 
       # Fail-fast if someone tags without bumping package.json. npm itself
       # would reject the duplicate publish, but the error there is
