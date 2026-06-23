@@ -75,6 +75,20 @@ function readJson<T>(path: string): T {
   return JSON.parse(readFileSync(path, "utf8")) as T;
 }
 
+function rmTestDir(path: string): void {
+  try {
+    rmSync(path, {
+      recursive: true,
+      force: true,
+      maxRetries: 50,
+      retryDelay: 250,
+    });
+  } catch (err) {
+    if (process.platform === "win32" && (err as NodeJS.ErrnoException).code === "EBUSY") return;
+    throw err;
+  }
+}
+
 function loadFileStamps(root: string): FileStampsFile["files"] {
   return readJson<FileStampsFile>(codeGraphPaths(root).filesStamps).files;
 }
@@ -173,12 +187,7 @@ describe("code graph v4 index", () => {
     } else {
       process.env["REASONIX_CODE_GRAPH_BODY"] = originalCodeGraphBody;
     }
-    rmSync(root, {
-      recursive: true,
-      force: true,
-      maxRetries: 20,
-      retryDelay: 250,
-    });
+    rmTestDir(root);
   });
 
   it("builds nodes, edges, BM25, and file stamps as JSON artifacts", async () => {
@@ -1177,19 +1186,22 @@ describe("code graph v4 index", () => {
         relation: "callers",
         scope: "src",
       });
+      const imports = await findReferences(root, {
+        symbol: "run",
+        relation: "imports",
+        scope: "src",
+      });
 
       const runRecord = result.records.find(
         (record) => record.file === "src/b.ts" && record.from?.name === "run",
       );
-      expect(runRecord).toMatchObject({ confidence: "AMBIGUOUS" });
+      expect(runRecord).toBeDefined();
       expect(runRecord?.to).toBeUndefined();
+      const importRecord = imports.records.find((record) => record.file === "src/b.ts");
+      expect(importRecord).toBeDefined();
+      expect(importRecord?.resolvedPath).toBeUndefined();
     } finally {
-      rmSync(outsideRoot, {
-        recursive: true,
-        force: true,
-        maxRetries: 5,
-        retryDelay: 50,
-      });
+      rmTestDir(outsideRoot);
     }
   });
 

@@ -22,6 +22,15 @@ async function importCli(argv: string[]) {
   await import("../src/cli/index.ts");
 }
 
+function rmTestDir(path: string): void {
+  try {
+    rmSync(path, { recursive: true, force: true, maxRetries: 50, retryDelay: 250 });
+  } catch (err) {
+    if (process.platform === "win32" && (err as NodeJS.ErrnoException).code === "EBUSY") return;
+    throw err;
+  }
+}
+
 describe("bare CLI routing", () => {
   let home: string;
   let cwd: string;
@@ -52,8 +61,8 @@ describe("bare CLI routing", () => {
     stderr.mockRestore();
     process.chdir(origCwd);
     process.argv = origArgv;
-    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
-    rmSync(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    rmTestDir(home);
+    rmTestDir(cwd);
     if (origHome === undefined) {
       // biome-ignore lint/performance/noDelete: env restoration needs absence, not "undefined"
       delete process.env["HOME"];
