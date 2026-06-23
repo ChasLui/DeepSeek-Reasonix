@@ -443,7 +443,7 @@ describe("dashboard server: endpoints", () => {
   });
 
   it("GET /api/permissions lists builtin always; project list when cwd is set", async () => {
-    addProjectShellAllowed(PROJ, "npm run build", cfgPath);
+    addProjectShellAllowed(PROJ, "pnpm run build", cfgPath);
     const base = await boot({
       getCurrentCwd: () => PROJ,
       getEditMode: () => "review",
@@ -451,7 +451,7 @@ describe("dashboard server: endpoints", () => {
     const r = await call(`${base}api/permissions`, { token: TOKEN });
     expect(r.status).toBe(200);
     expect(r.body.builtin.length).toBeGreaterThan(10); // we ship 30+ builtin entries
-    expect(r.body.project).toContain("npm run build");
+    expect(r.body.project).toContain("pnpm run build");
     expect(r.body.editMode).toBe("review");
   });
 

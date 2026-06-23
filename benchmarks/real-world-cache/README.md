@@ -7,12 +7,12 @@ Used with permission, anonymized.
 
 ## The numbers
 
-| | Tokens |
-|---|---:|
-| Input — cache hit | 435,033,856 |
-| Input — cache miss | 767,616 |
-| Output | 179,763 |
-| **Day total** | **435,981,235** |
+|                    |          Tokens |
+| ------------------ | --------------: |
+| Input — cache hit  |     435,033,856 |
+| Input — cache miss |         767,616 |
+| Output             |         179,763 |
+| **Day total**      | **435,981,235** |
 
 **Cache hit ratio (input):**
 `435,033,856 / (435,033,856 + 767,616)` = **99.82%**
@@ -20,17 +20,18 @@ Used with permission, anonymized.
 ## Cost — using the prices Reasonix bills against (`src/telemetry/stats.ts`)
 
 USD per 1M tokens — `inputCacheHit / inputCacheMiss / output`:
+
 - `deepseek-v4-flash` — `0.0028 / 0.14 / 0.28`
 - `deepseek-v4-pro` — `0.003625 / 0.435 / 0.87`
 
 Assuming **v4-flash** (the project default):
 
-| | This user (99.82% hit) | Same workload, **0% cache** |
-|---|---:|---:|
-| Cache-hit input | $1.22 | — |
-| Cache-miss input | $0.11 | $61.01 |
-| Output | $0.05 | $0.05 |
-| **Total / day** | **$1.38** | **$61.06** |
+|                  | This user (99.82% hit) | Same workload, **0% cache** |
+| ---------------- | ---------------------: | --------------------------: |
+| Cache-hit input  |                  $1.22 |                           — |
+| Cache-miss input |                  $0.11 |                      $61.01 |
+| Output           |                  $0.05 |                       $0.05 |
+| **Total / day**  |              **$1.38** |                  **$61.06** |
 
 → Cache saved this user **$59.69**, or **~98%** off the un-cached baseline, on a single day.
 
@@ -39,8 +40,8 @@ On **v4-pro** (~2.4× the prefix-cache discount) the same workload would cost
 
 ## "Isn't that just DeepSeek's prefix cache?"
 
-DeepSeek's API ships prefix caching enabled by default; the *cache* is theirs,
-the *hit rate* is the client's. Same API, different clients, very different
+DeepSeek's API ships prefix caching enabled by default; the _cache_ is theirs,
+the _hit rate_ is the client's. Same API, different clients, very different
 hit rates:
 
 - DeepSeek's own web chat: 60–80% within a single conversation, drops to 0%
@@ -51,7 +52,7 @@ hit rates:
 - Cline / Continue and other XML-tool-call clients: lower still — every tool
   result inlines into the conversation, shifting bytes the cache keys on.
 
-99.82% is what falls out of these four design choices in Reasonix:
+  99.82% is what falls out of these four design choices in Reasonix:
 
 1. **`ImmutablePrefix`** (`src/memory/runtime.ts`) — system prompt + tool specs are
    frozen at session start. Same byte sequence every turn.
@@ -59,7 +60,7 @@ hit rates:
 3. **`VolatileScratch`** — chain-of-thought / per-turn scratch lives outside
    the cached prefix so it never poisons the next hit.
 4. **Auto-compact** — when context approaches the cap, older turns fold into
-   a summary message *appended* to the prefix; the prefix itself isn't
+   a summary message _appended_ to the prefix; the prefix itself isn't
    rewritten, so the cache survives the fold.
 
 DeepSeek gave us cacheable bytes. The four mechanisms above are how we keep
@@ -78,9 +79,9 @@ Two manual probes exercise DeepSeek's documented KV-cache patterns without
 entering CI:
 
 ```sh
-npx tsx benchmarks/real-world-cache/long-doc-qa.ts --turns 3
-npx tsx benchmarks/real-world-cache/multi-turn-chat.ts --turns 5
-npx tsc --noEmit -p tsconfig.benchmarks.json
+pnpm exec tsx benchmarks/real-world-cache/long-doc-qa.ts --turns 3
+pnpm exec tsx benchmarks/real-world-cache/multi-turn-chat.ts --turns 5
+pnpm exec tsgo --noEmit -p tsconfig.benchmarks.json
 ```
 
 They require `DEEPSEEK_API_KEY`; without it they print

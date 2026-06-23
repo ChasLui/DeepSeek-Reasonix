@@ -7,49 +7,49 @@ MIT 许可证。需要 Node ≥22。
 
 - **语言** — TS 5.6+，ES2022，ESM（`"type": "module"`）
 - **CLI** — Commander.js + Ink 5（React 18）TUI
-- **测试** — Vitest 2.x
-- **Lint / 格式化** — Biome 1.9（2 空格缩进、双引号、始终带分号、100 宽度）
-- **构建** — tsup（打包），`tsx`（dev 运行器）
+- **测试** — Vitest 4.x
+- **Lint / 格式化** — OXLint + OXFmt（2 空格缩进、双引号、始终带分号、100 宽度）
+- **构建** — Rolldown（打包），`tsx`（dev 运行器）
 - **MCP** — stdio + SSE 传输，测试中用进程内 fake
 
 ## 目录结构
 
-| 路径 | 内容 |
-|---|---|
-| `src/cli/` | CLI 入口 + 命令（`chat.tsx`、`code.tsx`、`diff.ts` 等）+ `ui/` 中的 Ink TUI |
-| `src/tools/` | 工具定义（filesystem、shell、MCP、plan、subagent、web、workspace） |
-| `src/mcp/` | MCP 客户端、传输（stdio、SSE）、registry、spec |
-| `src/repair/` | 工具调用修复流水线（flatten、scavenge、storm、truncation） |
-| `src/index/` | 语义向量索引 |
-| `src/code/` | SEARCH/REPLACE 编辑块解析器 + apply gate |
-| `src/core/` | 事件日志内核 —— `events.ts`（Event 联合类型）、`reducers.ts`（纯投影）、`eventize.ts` |
-| `src/ports/` | 端口接口 —— ModelClient、ToolHost、EventSink、MemoryStore、HookRunner、CheckpointStore |
-| `src/adapters/` | 端口的具体适配器（如 `event-sink-jsonl.ts`、`event-source-jsonl.ts`） |
-| `src/frame/` | 帧编译器（单元格网格 → ANSI），供 TUI 日志渲染器使用 |
-| `src/memory/` | 项目 / 会话 / 用户 / 运行时记忆存储 |
-| `src/transcript/` | Transcript 日志（写入）、diff、replay |
-| `src/telemetry/` | 用量记录 + 跨会话统计 |
-| `src/server/` | Dashboard HTTP server + REST API |
-| `tests/` | Vitest 测试，扁平的 `*.test.ts` |
-| `examples/` | `basic-chat.ts`、`mcp-server-demo.ts` 等 |
-| `benchmarks/` | Harvest + tau-bench 测试框架 |
-| `dashboard/` | 编译后的 dashboard SPA 资源 |
-| `data/` | Tokenizer 数据（`deepseek-tokenizer.json.gz`） |
-| `dist/` | 构建产物 —— **请勿编辑** |
-| `.github/` | CI + issue / PR 模板 |
+| 路径              | 内容                                                                                   |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| `src/cli/`        | CLI 入口 + 命令（`chat.tsx`、`code.tsx`、`diff.ts` 等）+ `ui/` 中的 Ink TUI            |
+| `src/tools/`      | 工具定义（filesystem、shell、MCP、plan、subagent、web、workspace）                     |
+| `src/mcp/`        | MCP 客户端、传输（stdio、SSE）、registry、spec                                         |
+| `src/repair/`     | 工具调用修复流水线（flatten、scavenge、storm、truncation）                             |
+| `src/index/`      | 语义向量索引                                                                           |
+| `src/code/`       | SEARCH/REPLACE 编辑块解析器 + apply gate                                               |
+| `src/core/`       | 事件日志内核 —— `events.ts`（Event 联合类型）、`reducers.ts`（纯投影）、`eventize.ts`  |
+| `src/ports/`      | 端口接口 —— ModelClient、ToolHost、EventSink、MemoryStore、HookRunner、CheckpointStore |
+| `src/adapters/`   | 端口的具体适配器（如 `event-sink-jsonl.ts`、`event-source-jsonl.ts`）                  |
+| `src/frame/`      | 帧编译器（单元格网格 → ANSI），供 TUI 日志渲染器使用                                   |
+| `src/memory/`     | 项目 / 会话 / 用户 / 运行时记忆存储                                                    |
+| `src/transcript/` | Transcript 日志（写入）、diff、replay                                                  |
+| `src/telemetry/`  | 用量记录 + 跨会话统计                                                                  |
+| `src/server/`     | Dashboard HTTP server + REST API                                                       |
+| `tests/`          | Vitest 测试，扁平的 `*.test.ts`                                                        |
+| `examples/`       | `basic-chat.ts`、`mcp-server-demo.ts` 等                                               |
+| `benchmarks/`     | Harvest + tau-bench 测试框架                                                           |
+| `dashboard/`      | 编译后的 dashboard SPA 资源                                                            |
+| `data/`           | Tokenizer 数据（`deepseek-tokenizer.json.gz`）                                         |
+| `dist/`           | 构建产物 —— **请勿编辑**                                                               |
+| `.github/`        | CI + issue / PR 模板                                                                   |
 
 ## 命令
 
 ```sh
-npm run build       # tsup → dist/
-npm run dev         # tsx src/cli/index.ts
-npm run chat        # tsx src/cli/index.ts chat
-npm run test        # vitest run
-npm run test:watch  # vitest
-npm run lint        # biome check src tests
-npm run lint:fix    # biome check --write src tests
-npm run format      # biome format --write src tests
-npm run typecheck   # tsc --noEmit
+pnpm run build       # rolldown → dist/
+pnpm run dev         # tsx src/cli/index.ts
+pnpm run chat        # tsx src/cli/index.ts chat
+pnpm run test        # vitest run
+pnpm run test:watch  # vitest
+pnpm run lint        # oxlint
+pnpm run lint:fix    # oxlint --fix
+pnpm run format      # oxfmt
+pnpm run typecheck   # tsgo --noEmit
 ```
 
 `prepublishOnly`：lint → typecheck → test → build。

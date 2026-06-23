@@ -9,8 +9,8 @@
  *   - showing the minimal shape of a server for folks writing their own
  *
  * Usage:
- *   npx tsx examples/mcp-server-demo.ts          # speaks MCP on stdin/stdout
- *   reasonix chat --mcp "npx tsx examples/mcp-server-demo.ts"
+ *   pnpm exec tsx examples/mcp-server-demo.ts          # speaks MCP on stdin/stdout
+ *   reasonix chat --mcp "pnpm exec tsx examples/mcp-server-demo.ts"
  *
  * Spec reference: https://spec.modelcontextprotocol.io/ (2024-11-05)
  * Only the subset this demo needs is implemented — initialize, tools/list,
@@ -91,9 +91,7 @@ function send(msg: JsonRpcSuccess | JsonRpcError | JsonRpcNotification): void {
   process.stdout.write(`${JSON.stringify(msg)}\n`);
 }
 
-async function handleRequest(
-  req: JsonRpcRequest,
-): Promise<JsonRpcSuccess | JsonRpcError | null> {
+async function handleRequest(req: JsonRpcRequest): Promise<JsonRpcSuccess | JsonRpcError | null> {
   const id = req.id ?? null;
 
   switch (req.method) {

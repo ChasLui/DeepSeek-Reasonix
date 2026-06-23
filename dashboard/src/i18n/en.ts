@@ -406,7 +406,7 @@ export const en = {
     project: "project",
     builtin: "builtin",
     addPrefix: "add a prefix",
-    addPlaceholder: 'e.g. "npm run build" or "deploy.sh"',
+    addPlaceholder: 'e.g. "pnpm run build" or "deploy.sh"',
     clearAll: "Clear all",
     alreadyIn: "{prefix} already in list",
     added: "added: {prefix}",

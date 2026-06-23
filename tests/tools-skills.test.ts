@@ -295,11 +295,11 @@ describe("install_skill tool", () => {
     await reg.dispatch("install_skill", {
       name: "lint-fix",
       description: "Run linter and apply autofixes",
-      body: "Step 1: npm run lint --fix.",
+      body: "Step 1: pnpm run lint --fix.",
     });
     const out = await reg.dispatch("run_skill", { name: "lint-fix" });
     expect(out).toContain("# Skill: lint-fix");
-    expect(out).toContain("Step 1: npm run lint --fix");
+    expect(out).toContain("Step 1: pnpm run lint --fix");
   });
 
   it("defaults scope to global when no projectRoot is set", async () => {

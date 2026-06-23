@@ -66,23 +66,23 @@ describe("/permissions slash handler", () => {
   });
 
   it("bare /permissions lists project entries with 1-based indices", () => {
-    addProjectShellAllowed(projectRoot, "npm run build", join(dir, ".reasonix", "config.json"));
+    addProjectShellAllowed(projectRoot, "pnpm run build", join(dir, ".reasonix", "config.json"));
     addProjectShellAllowed(projectRoot, "deploy.sh", join(dir, ".reasonix", "config.json"));
     const result = handleSlash("permissions", [], makeLoop(), {
       codeRoot: projectRoot,
       editMode: "review",
     });
-    expect(result.info).toMatch(/1\.\s+npm run build/);
+    expect(result.info).toMatch(/1\.\s+pnpm run build/);
     expect(result.info).toMatch(/2\.\s+deploy\.sh/);
   });
 
   it("/permissions add persists a new prefix", () => {
-    const result = handleSlash("permissions", ["add", "npm", "run", "build"], makeLoop(), {
+    const result = handleSlash("permissions", ["add", "pnpm", "run", "build"], makeLoop(), {
       codeRoot: projectRoot,
     });
-    expect(result.info).toMatch(/added.*npm run build/);
+    expect(result.info).toMatch(/added.*pnpm run build/);
     expect(loadProjectShellAllowed(projectRoot, join(dir, ".reasonix", "config.json"))).toContain(
-      "npm run build",
+      "pnpm run build",
     );
   });
 
@@ -102,13 +102,13 @@ describe("/permissions slash handler", () => {
 
   it("/permissions remove drops by exact prefix", () => {
     const cfgFile = join(dir, ".reasonix", "config.json");
-    addProjectShellAllowed(projectRoot, "npm run build", cfgFile);
+    addProjectShellAllowed(projectRoot, "pnpm run build", cfgFile);
     addProjectShellAllowed(projectRoot, "deploy.sh", cfgFile);
     const result = handleSlash("permissions", ["remove", "deploy.sh"], makeLoop(), {
       codeRoot: projectRoot,
     });
     expect(result.info).toMatch(/removed.*deploy\.sh/);
-    expect(loadProjectShellAllowed(projectRoot, cfgFile)).toEqual(["npm run build"]);
+    expect(loadProjectShellAllowed(projectRoot, cfgFile)).toEqual(["pnpm run build"]);
   });
 
   it("/permissions remove drops by 1-based project index", () => {

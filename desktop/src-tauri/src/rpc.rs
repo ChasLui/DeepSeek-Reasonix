@@ -86,7 +86,7 @@ fn resolve_cli(app: &AppHandle) -> Result<(String, Vec<String>)> {
         .into_iter()
         .find(|p| p.exists())
         .map(PathBuf::from)
-        .ok_or_else(|| anyhow!("dist/cli/index.js not found — run `npm run build` at repo root"))?;
+        .ok_or_else(|| anyhow!("dist/cli/index.js not found — run `pnpm run build` at repo root"))?;
 
     let node_path = find_real_node().context("node not found")?;
     eprintln!("[reasonix] resolved node: {}", node_path.display());

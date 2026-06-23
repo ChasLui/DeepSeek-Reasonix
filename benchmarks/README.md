@@ -9,11 +9,11 @@ tool-use eval that compares, on the same tasks:
 2. **Reasonix** — the same tools and system prompt, driven through
    `CacheFirstLoop` so the byte prefix stays stable turn-over-turn.
 
-Both modes share the same `DeepSeekClient`, so the *only* meaningful
+Both modes share the same `DeepSeekClient`, so the _only_ meaningful
 difference is prefix stability — any cache-hit / cost gap is attributable to
 Pillar 1 of the architecture, nothing else.
 
-## Scope — this is τ-bench-*lite*
+## Scope — this is τ-bench-_lite_
 
 We don't ship a full port of [Sierra's τ-bench](https://github.com/sierra-research/tau-bench)
 (airline + retail, Python). Instead:
@@ -44,23 +44,23 @@ tau-bench/
 
 ```bash
 # dry-run: no API calls, just validate the harness is wired up
-npx tsx benchmarks/tau-bench/runner.ts --dry
+pnpm exec tsx benchmarks/tau-bench/runner.ts --dry
 
 # full run: both modes, all tasks, 1 repeat
 export DEEPSEEK_API_KEY=sk-...
-npx tsx benchmarks/tau-bench/runner.ts
+pnpm exec tsx benchmarks/tau-bench/runner.ts
 
 # tighten variance: 3 repeats per task
-npx tsx benchmarks/tau-bench/runner.ts --repeats 3
+pnpm exec tsx benchmarks/tau-bench/runner.ts --repeats 3
 
 # narrow to one task while iterating
-npx tsx benchmarks/tau-bench/runner.ts --task t01_address_happy --verbose
+pnpm exec tsx benchmarks/tau-bench/runner.ts --task t01_address_happy --verbose
 
 # render the report
-npx tsx benchmarks/tau-bench/report.ts benchmarks/tau-bench/results-<date>.json
+pnpm exec tsx benchmarks/tau-bench/report.ts benchmarks/tau-bench/results-<date>.json
 
 # emit per-run transcripts so you can reasonix replay / diff them
-npx tsx benchmarks/tau-bench/runner.ts --transcripts-dir ./transcripts
+pnpm exec tsx benchmarks/tau-bench/runner.ts --transcripts-dir ./transcripts
 npx reasonix diff \
   ./transcripts/t01_address_happy.baseline.r1.jsonl \
   ./transcripts/t01_address_happy.reasonix.r1.jsonl \
@@ -78,17 +78,17 @@ economics offline.
 
 ## CLI flags
 
-| flag | default | meaning |
-|---|---|---|
-| `--task <id>` | all | run only one task by id |
-| `--mode baseline` \| `reasonix` | both | restrict to one mode |
-| `--repeats <N>` | 1 | repeat each (task, mode) pair N times |
-| `--model <id>` | deepseek-chat | agent model |
-| `--user-model <id>` | deepseek-chat | user-simulator model |
-| `--out <path>` | `results-<ts>.json` | results file path |
-| `--transcripts-dir <path>` | off | write one transcript per run for replay/diff |
-| `--dry` | off | skip the LLM; only wire-check |
-| `--verbose` \| `-v` | off | print every user / agent / tool line |
+| flag                            | default             | meaning                                      |
+| ------------------------------- | ------------------- | -------------------------------------------- |
+| `--task <id>`                   | all                 | run only one task by id                      |
+| `--mode baseline` \| `reasonix` | both                | restrict to one mode                         |
+| `--repeats <N>`                 | 1                   | repeat each (task, mode) pair N times        |
+| `--model <id>`                  | deepseek-chat       | agent model                                  |
+| `--user-model <id>`             | deepseek-chat       | user-simulator model                         |
+| `--out <path>`                  | `results-<ts>.json` | results file path                            |
+| `--transcripts-dir <path>`      | off                 | write one transcript per run for replay/diff |
+| `--dry`                         | off                 | skip the LLM; only wire-check                |
+| `--verbose` \| `-v`             | off                 | print every user / agent / tool line         |
 
 ## What a run costs
 
@@ -100,7 +100,7 @@ triples that.
 
 1. Add a `TaskDefinition` to `tau-bench/tasks.ts`. Reuse the tool factories
    defined at the top of that file, or add new ones (remember: factories so
-   tools close over the *per-run* db snapshot).
+   tools close over the _per-run_ db snapshot).
 2. Make the `check` predicate check the end-state DB, not the agent's text —
    agents phrase things differently on every run.
 3. Run `--task <your_id> --verbose` to eyeball the transcript.

@@ -20,7 +20,7 @@ function parseArgs(argv: string[]): CliArgs {
   out.input = positional[0] ?? "";
   if (!out.input) {
     throw new Error(
-      "usage: npx tsx benchmarks/tau-bench/report.ts <results.json> [--out report.md]",
+      "usage: pnpm exec tsx benchmarks/tau-bench/report.ts <results.json> [--out report.md]",
     );
   }
   return out;
@@ -149,9 +149,9 @@ This is **τ-bench-lite**, not a port of Sierra's upstream τ-bench. Specificall
 ## Reproducing
 
 1. \`export DEEPSEEK_API_KEY=sk-...\`
-2. \`npm install\`
-3. \`npx tsx benchmarks/tau-bench/runner.ts --repeats 3\`
-4. \`npx tsx benchmarks/tau-bench/report.ts benchmarks/tau-bench/results-*.json\`
+2. \`pnpm install\`
+3. \`pnpm exec tsx benchmarks/tau-bench/runner.ts --repeats 3\`
+4. \`pnpm exec tsx benchmarks/tau-bench/report.ts benchmarks/tau-bench/results-*.json\`
 `;
 }
 

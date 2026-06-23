@@ -1002,7 +1002,7 @@ export const zhCN: TranslationSchema = {
       clearedNone: "▸ 项目允许列表已为空 — 无变化。",
       cleared: "▸ 已清除 {count} 个项目允许列表条目。",
       usage:
-        '用法：/permissions [list]                   显示当前状态\n       /permissions add <prefix>            持久化（例如 "npm run build"）\n       /permissions remove <prefix-or-N>    删除一个条目\n       /permissions clear confirm           清除所有项目条目',
+        '用法：/permissions [list]                   显示当前状态\n       /permissions add <prefix>            持久化（例如 "pnpm run build"）\n       /permissions remove <prefix-or-N>    删除一个条目\n       /permissions clear confirm           清除所有项目条目',
       modeYolo:
         "▸ 编辑模式：YOLO  — 每个 shell 命令自动运行，允许列表被绕过。/mode review 重新启用提示。",
       modeAuto:
