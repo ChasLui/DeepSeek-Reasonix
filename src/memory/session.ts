@@ -44,23 +44,23 @@ export interface SessionInfo {
 }
 
 export interface SessionMeta {
-  branch?: string;
-  summary?: string;
-  totalCostUsd?: number;
-  turnCount?: number;
+  branch?: string | undefined;
+  summary?: string | undefined;
+  totalCostUsd?: number | undefined;
+  turnCount?: number | undefined;
   /** Absolute path of the workspace root the session was created/used in. */
-  workspace?: string;
+  workspace?: string | undefined;
   /** Wallet currency at last save — used to format `totalCostUsd` in the picker without re-fetching balance. */
-  balanceCurrency?: string;
+  balanceCurrency?: string | undefined;
   /** Cumulative cache hit / miss tokens across the session — survives resume so /status cache% isn't 0 on a fresh boot. */
-  cacheHitTokens?: number;
-  cacheMissTokens?: number;
+  cacheHitTokens?: number | undefined;
+  cacheMissTokens?: number | undefined;
   /** Last turn's promptTokens — lets /status render the context bar before the next turn fires. */
-  lastPromptTokens?: number;
+  lastPromptTokens?: number | undefined;
   /** True when the session filename/summary was generated from conversation content. */
-  autoTitleGenerated?: boolean;
+  autoTitleGenerated?: boolean | undefined;
   /** Import provenance for sessions copied from other tools. */
-  source?: "claude-code" | (string & {});
+  source?: "claude-code" | (string & {}) | undefined;
 }
 
 export interface ImportClaudeCodeSessionResult {
@@ -116,8 +116,8 @@ export interface SessionPreview {
 /** Resolve launch-time session: forceNew → timestamped suffix; else latest `${name}-*` if any, else base. Preview returned only on the default branch when messages exist. */
 export function resolveSession(
   sessionName: string | undefined,
-  forceNew?: boolean,
-  forceResume?: boolean,
+  forceNew?: boolean | undefined,
+  forceResume?: boolean | undefined,
 ): { resolved: string | undefined; preview: SessionPreview | undefined } {
   let resolved = sessionName;
   let preview: SessionPreview | undefined;
@@ -225,8 +225,8 @@ export function appendSessionMessage(name: string, message: ChatMessage): void {
 }
 
 export function listSessions(opts?: {
-  workspaceFilter?: string;
-  sourceFilter?: string;
+  workspaceFilter?: string | undefined;
+  sourceFilter?: string | undefined;
 }): SessionInfo[] {
   const want = opts?.workspaceFilter ? normalizeWorkspace(opts.workspaceFilter) : null;
   return listSessionMetaDb(getDb())
@@ -335,12 +335,12 @@ function normalizeClaudeMessage(raw: unknown): NormalizeMessageResult {
   const source = outer.message && typeof outer.message === "object" ? outer.message : raw;
   if (!source || typeof source !== "object") return { message: null, reason: "invalid_message" };
   const value = source as {
-    role?: unknown;
-    type?: unknown;
-    content?: unknown;
-    name?: unknown;
-    tool_call_id?: unknown;
-    tool_calls?: unknown;
+    role?: unknown | undefined;
+    type?: unknown | undefined;
+    content?: unknown | undefined;
+    name?: unknown | undefined;
+    tool_call_id?: unknown | undefined;
+    tool_calls?: unknown | undefined;
   };
   const role = normalizeRole(value.role ?? value.type);
   if (!role) return { message: null, reason: "invalid_message" };
@@ -398,11 +398,11 @@ function normalizeToolCalls(rawToolCalls: unknown, rawContent: unknown): Normali
 function normalizeToolCall(item: unknown): NonNullable<ChatMessage["tool_calls"]>[number] | null {
   if (!item || typeof item !== "object") return null;
   const value = item as {
-    id?: unknown;
-    type?: unknown;
-    name?: unknown;
-    input?: unknown;
-    function?: unknown;
+    id?: unknown | undefined;
+    type?: unknown | undefined;
+    name?: unknown | undefined;
+    input?: unknown | undefined;
+    function?: unknown | undefined;
   };
   const fn =
     value.function && typeof value.function === "object"
@@ -446,9 +446,9 @@ function stringifyToolArguments(raw: unknown): string {
 function extractSessionId(raw: unknown): string | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const value = raw as {
-    sessionId?: unknown;
-    session_id?: unknown;
-    conversationId?: unknown;
+    sessionId?: unknown | undefined;
+    session_id?: unknown | undefined;
+    conversationId?: unknown | undefined;
   };
   for (const candidate of [value.sessionId, value.session_id, value.conversationId]) {
     if (typeof candidate === "string" && candidate.trim()) return candidate.trim();

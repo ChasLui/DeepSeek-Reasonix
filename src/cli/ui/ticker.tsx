@@ -19,10 +19,10 @@ import { isLegacyWindowsConsole } from "./terminal-host.js";
  * spinners restart from frame 0 — visually identical to a fresh mount).
  */
 // Legacy conhost paints each Ink frame visibly; 8Hz spinner triggers perceptible flicker on maximized windows (#1300).
-export const FAST_TICK_MS = isLegacyWindowsConsole() ? 250 : 120;
-export const SLOW_TICK_MS = 1000;
+export const FAST_TICK_MS: number = isLegacyWindowsConsole() ? 250 : 120;
+export const SLOW_TICK_MS: number = 1000;
 /** @deprecated kept for callers that import the old name. */
-export const TICK_MS = FAST_TICK_MS;
+export const TICK_MS: number = FAST_TICK_MS;
 
 const TickerActiveContext = createContext(true);
 
@@ -33,10 +33,10 @@ export interface TickerProviderProps {
    * overlays and the idle-gate so a quiescent TUI is byte-stable
    * (cursor blink and gradient pulses don't re-render).
    */
-  disabled?: boolean;
+  disabled?: boolean | undefined;
 }
 
-export function TickerProvider({ children, disabled }: TickerProviderProps) {
+export function TickerProvider({ children, disabled }: TickerProviderProps): React.ReactElement {
   return <TickerActiveContext.Provider value={!disabled}>{children}</TickerActiveContext.Provider>;
 }
 

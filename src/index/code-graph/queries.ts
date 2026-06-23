@@ -7,7 +7,6 @@ import type {
   SymbolRef,
 } from "../../code-query/relations.js";
 import type {
-  CodeGraphEdge,
   CodeGraphEdgeProvenance,
   CodeGraphImport,
   CodeGraphNode,

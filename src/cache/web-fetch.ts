@@ -12,25 +12,25 @@ export interface WebFetchCacheStats {
 }
 
 export interface WebFetchCacheOptions {
-  ttlMs?: number;
-  staleTtlMs?: number;
-  maxEntries?: number;
-  maxSizeBytes?: number;
-  entrySizeLimitBytes?: number;
+  ttlMs?: number | undefined;
+  staleTtlMs?: number | undefined;
+  maxEntries?: number | undefined;
+  maxSizeBytes?: number | undefined;
+  entrySizeLimitBytes?: number | undefined;
 }
 
 /** Validators stored with the body so a stale entry can be revalidated cheaply. */
 export interface WebFetchValidators {
-  etag?: string;
-  lastModified?: string;
+  etag?: string | undefined;
+  lastModified?: string | undefined;
 }
 
 interface StoredWebFetchEntry {
   page: PageContent;
   sizeBytes: number;
   storedAt: number;
-  etag?: string;
-  lastModified?: string;
+  etag?: string | undefined;
+  lastModified?: string | undefined;
 }
 
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
@@ -96,7 +96,7 @@ export class WebFetchCache {
       readPositiveIntEnv("REASONIX_WEB_FETCH_CACHE_BYTES") ??
       opts.maxSizeBytes ??
       DEFAULT_MAX_SIZE_BYTES;
-    this.disabled = process.env.REASONIX_WEB_FETCH_CACHE === "0";
+    this.disabled = process.env["REASONIX_WEB_FETCH_CACHE"] === "0";
     this.entrySizeLimitBytes = opts.entrySizeLimitBytes ?? DEFAULT_ENTRY_SIZE_LIMIT_BYTES;
     this.cache = new LRUCache<string, StoredWebFetchEntry>({
       max: opts.maxEntries ?? DEFAULT_MAX_ENTRIES,
@@ -107,7 +107,7 @@ export class WebFetchCache {
       sizeCalculation: (entry) => entry.sizeBytes,
       dispose: (_entry, _key, reason) => {
         if (reason === "evict" || reason === "expire") this.evictions++;
-        if (process.env.REASONIX_CACHE_DEBUG === "1") {
+        if (process.env["REASONIX_CACHE_DEBUG"] === "1") {
           process.stderr.write(`web-fetch-cache evict (${reason})\n`);
         }
       },

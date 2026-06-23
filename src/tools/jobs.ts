@@ -68,11 +68,11 @@ export interface JobStartOptions {
   /** Absolute path to cwd for the spawned child. */
   cwd: string;
   /** Capped at 30; ready-signal match short-circuits. Default 3. */
-  waitSec?: number;
+  waitSec?: number | undefined;
   /** Signal plumbed through from the calling tool's AbortSignal. */
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
   /** Total per-job output buffer cap (bytes). Default 64 KB. */
-  maxBufferBytes?: number;
+  maxBufferBytes?: number | undefined;
 }
 
 export interface JobStartResult {
@@ -102,7 +102,7 @@ export interface JobRecord {
   /** True iff the child is still alive. */
   running: boolean;
   /** Error from spawn() itself (ENOENT, etc.) once surfaced. */
-  spawnError?: string;
+  spawnError?: string | undefined;
 }
 
 export class JobRegistry {
@@ -489,7 +489,7 @@ export interface JobReadResult {
   exitCode: number | null;
   command: string;
   pid: number | null;
-  spawnError?: string;
+  spawnError?: string | undefined;
 }
 
 export interface JobWaitResult {

@@ -207,7 +207,7 @@ describe("PromptCacheMonitor", () => {
 
   it("disables all recording and patch writes via kill switches", () => {
     const tmp = makeTmpDir();
-    process.env.REASONIX_PROMPT_CACHE_MONITOR = "0";
+    process.env["REASONIX_PROMPT_CACHE_MONITOR"] = "0";
     const disabled = new PromptCacheMonitor({ tmpDir: tmp });
 
     disabled.recordBeforeCall(snapshot("system", [tool("alpha")]));
@@ -219,7 +219,7 @@ describe("PromptCacheMonitor", () => {
     expect(readdirSync(tmp)).toEqual([]);
 
     Reflect.deleteProperty(process.env, "REASONIX_PROMPT_CACHE_MONITOR");
-    process.env.REASONIX_CACHE_BREAK_DIFF = "0";
+    process.env["REASONIX_CACHE_BREAK_DIFF"] = "0";
     const noDiff = new PromptCacheMonitor({ tmpDir: tmp });
     silenceStderr();
     noDiff.recordBeforeCall(snapshot("system", [tool("alpha")]));

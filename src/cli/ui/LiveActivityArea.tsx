@@ -17,13 +17,18 @@ import type { SubagentActivity } from "./useSubagent.js";
 // avoid a transitive import chain; the UndoBanner component enforces
 // the concrete type at the call site.
 type UndoBannerState = Parameters<typeof UndoBanner>[0]["banner"];
+type ToolProgress = {
+  progress: number;
+  total?: number | undefined;
+  message?: string | undefined;
+};
 
 // ── Props ─────────────────────────────────────────────────────────
 
 export interface LiveActivityAreaProps {
   noTakeoverOverlay: boolean;
   ongoingTool: { name: string; args?: string } | null;
-  toolProgress: { progress: number; total?: number; message?: string } | null;
+  toolProgress: ToolProgress | null;
   subagentActivities: ReadonlyArray<SubagentActivity>;
   statusLine: string | null;
   busy: boolean;

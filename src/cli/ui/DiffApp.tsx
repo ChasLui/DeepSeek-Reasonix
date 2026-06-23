@@ -24,7 +24,7 @@ export interface DiffAppProps {
   report: DiffReport;
 }
 
-export function DiffApp({ report }: DiffAppProps) {
+export function DiffApp({ report }: DiffAppProps): React.ReactElement {
   const { exit } = useApp();
   const maxIdx = Math.max(0, report.pairs.length - 1);
   // Start at the first divergence when one exists — that's the user's most

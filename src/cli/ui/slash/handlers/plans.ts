@@ -104,7 +104,7 @@ function handleDone(rest: string[], ctx: Parameters<SlashHandler>[2]): { info: s
   if (target.toLowerCase() === "all") {
     const fn = ctx.markAllPlanStepsDone;
     if (!fn) return { info: t("handlers.plans.doneUnavailable") };
-    const added = fn();
+    const added = fn() ?? 0;
     if (added === 0) return { info: t("handlers.plans.doneAllNoop") };
     return { info: t("handlers.plans.doneAllOk", { count: added }) };
   }
@@ -120,6 +120,8 @@ function handleDone(rest: string[], ctx: Parameters<SlashHandler>[2]): { info: s
       return { info: t("handlers.plans.doneNotInPlan", { id: target }) };
     case "no-plan":
       return { info: t("handlers.plans.doneNoPlan") };
+    default:
+      return { info: t("handlers.plans.doneUnavailable") };
   }
 }
 

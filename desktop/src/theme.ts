@@ -30,12 +30,12 @@ export const THEME_STYLE_THEME: Record<ThemeStyle, Theme> = {
   midnight: THEME.DARK,
 };
 
-export const THEME_STYLES = [
+export const THEME_STYLES: readonly ThemeStyle[] = [
   THEME_STYLE.GRAPHITE,
   THEME_STYLE.SANDSTONE,
   THEME_STYLE.PORCELAIN,
   THEME_STYLE.MIDNIGHT,
-] as const;
+];
 
 export function isThemeStyle(value: unknown): value is ThemeStyle {
   return (

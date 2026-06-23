@@ -18,7 +18,7 @@ export interface OpenDesktopSessionOpts {
   model: string;
   /** Re-raise a forwarded confirmation on the desktop's local gate; resolves with the chosen verdict. */
   ask: (req: PauseAskOpts) => Promise<unknown>;
-  socketPath?: string;
+  socketPath?: string | undefined;
 }
 
 /** Overall ceiling so a wedged daemon/handshake never leaves a desktop tab without `$ready`. */

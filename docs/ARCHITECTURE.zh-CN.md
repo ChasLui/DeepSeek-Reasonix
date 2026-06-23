@@ -337,7 +337,7 @@ registry 很重要。
 | `vitest` / `jest` | runner 输出 | 仅失败带堆栈 | 通过时 90-99%，失败时 70% |
 | `pytest` | session 输出 | 仅失败部分 | 85-95% |
 | `cargo-test` / `go-test` | runner 输出 | 仅失败 | 85-95% |
-| `eslint` / `biome` / `tsc` | 诊断 | 按文件分组 + 顶部规则 | 60-85% |
+| `eslint` / `oxlint` / `tsgo` | 诊断 | 按文件分组 + 顶部规则 | 60-85% |
 | `ls` / `tree` / `find` | 列表 | 扩展名计数 + 截断的开头 | 60-80% |
 
 约 50 行以下的列表直通不变 —— 压缩开销不值得为省 5 个 token 而付出。

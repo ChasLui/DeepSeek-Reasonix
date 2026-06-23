@@ -16,12 +16,12 @@ const PREVIEW_INCLUDED_CAP = 50;
 const PREVIEW_PER_REASON_CAP = 10;
 
 interface PostBody {
-  excludeDirs?: unknown;
-  excludeFiles?: unknown;
-  excludeExts?: unknown;
-  excludePatterns?: unknown;
-  respectGitignore?: unknown;
-  maxFileBytes?: unknown;
+  excludeDirs?: unknown | undefined;
+  excludeFiles?: unknown | undefined;
+  excludeExts?: unknown | undefined;
+  excludePatterns?: unknown | undefined;
+  respectGitignore?: unknown | undefined;
+  maxFileBytes?: unknown | undefined;
 }
 
 function parseBody(raw: string): PostBody {

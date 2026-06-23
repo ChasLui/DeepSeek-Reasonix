@@ -18,7 +18,10 @@ class HandlerTransport implements McpTransport {
   private readonly queue: JsonRpcMessage[] = [];
   private readonly waiters: Array<(m: JsonRpcMessage | null) => void> = [];
   private closed = false;
-  constructor(private readonly handlers: Record<string, (req: JsonRpcRequest) => JsonRpcMessage>) {}
+  private readonly handlers: Record<string, (req: JsonRpcRequest) => JsonRpcMessage>;
+  constructor(handlers: Record<string, (req: JsonRpcRequest) => JsonRpcMessage>) {
+    this.handlers = handlers;
+  }
 
   async send(msg: JsonRpcMessage): Promise<void> {
     if (this.closed) throw new Error("closed");

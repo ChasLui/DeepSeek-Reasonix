@@ -17,7 +17,7 @@ export type PlanRefineMode =
 export interface PlanRefineInputProps {
   mode: PlanRefineMode;
   /** Open-questions / risks block extracted from the plan, rendered above the input on refine. */
-  questions?: string;
+  questions?: string | undefined;
   onSubmit: (feedback: string) => void;
   onCancel: () => void;
 }
@@ -54,7 +54,12 @@ function modeMeta(mode: PlanRefineMode): ModeMeta {
   };
 }
 
-export function PlanRefineInput({ mode, questions, onSubmit, onCancel }: PlanRefineInputProps) {
+export function PlanRefineInput({
+  mode,
+  questions,
+  onSubmit,
+  onCancel,
+}: PlanRefineInputProps): React.ReactElement {
   const [value, setValue] = useState("");
 
   useKeystroke((ev) => {

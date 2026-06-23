@@ -8,7 +8,7 @@ export interface SseTransportOptions {
   /** SSE endpoint URL, e.g. `https://mcp.example.com/sse`. */
   url: string;
   /** Extra headers sent on both the SSE GET and the JSON-RPC POSTs (e.g. `Authorization`). */
-  headers?: Record<string, string>;
+  headers?: Record<string, string> | undefined;
 }
 
 export class SseTransport implements McpTransport {

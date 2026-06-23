@@ -13,7 +13,7 @@ function getTextAssistAttrs() {
 
 function isMacPlatform() {
   if (typeof document === "undefined") return false;
-  return document.documentElement.dataset.platform === "macos";
+  return document.documentElement.dataset["platform"] === "macos";
 }
 
 function applyTextAssistAttrs(element: Element) {
@@ -40,7 +40,7 @@ function applyWithin(root: ParentNode) {
   root.querySelectorAll(TEXT_INPUT_SELECTOR).forEach(applyTextAssistAttrs);
 }
 
-export function useDisableTextAssist() {
+export function useDisableTextAssist(): void {
   useEffect(() => {
     if (typeof document === "undefined" || !isMacPlatform()) return;
 

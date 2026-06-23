@@ -8,10 +8,10 @@ import { SkillStore } from "../skills.js";
 import type { ToolRegistry } from "../tools.js";
 
 export interface ScaffoldToolsOptions {
-  homeDir?: string;
-  projectRoot?: string;
+  homeDir?: string | undefined;
+  projectRoot?: string | undefined;
   /** Override config path — tests point this at a tmp file. */
-  configPath?: string;
+  configPath?: string | undefined;
 }
 
 const VALID_SKILL_NAME = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/;
@@ -72,13 +72,13 @@ export function registerScaffoldTools(
       required: ["name", "description", "body"],
     },
     fn: async (args: {
-      name?: unknown;
-      description?: unknown;
-      body?: unknown;
-      scope?: unknown;
-      allowed_tools?: unknown;
-      run_as?: unknown;
-      model?: unknown;
+      name?: unknown | undefined;
+      description?: unknown | undefined;
+      body?: unknown | undefined;
+      scope?: unknown | undefined;
+      allowed_tools?: unknown | undefined;
+      run_as?: unknown | undefined;
+      model?: unknown | undefined;
     }) => {
       const name = typeof args.name === "string" ? args.name.trim() : "";
       if (!VALID_SKILL_NAME.test(name)) {
@@ -180,12 +180,12 @@ export function registerScaffoldTools(
       required: ["name"],
     },
     fn: async (args: {
-      name?: unknown;
-      transport?: unknown;
-      command?: unknown;
-      args?: unknown;
-      url?: unknown;
-      from_catalog?: unknown;
+      name?: unknown | undefined;
+      transport?: unknown | undefined;
+      command?: unknown | undefined;
+      args?: unknown | undefined;
+      url?: unknown | undefined;
+      from_catalog?: unknown | undefined;
     }) => {
       const name = typeof args.name === "string" ? args.name.trim() : "";
       if (!VALID_SERVER_NAME.test(name)) {
@@ -250,8 +250,8 @@ interface SerializeSkillArgs {
   name: string;
   description: string;
   runAs: "inline" | "subagent";
-  allowedTools?: readonly string[];
-  model?: string;
+  allowedTools?: readonly string[] | undefined;
+  model?: string | undefined;
   body: string;
 }
 
@@ -292,11 +292,11 @@ function parseAllowedTools(raw: unknown): readonly string[] | { error: string } 
 
 interface BuildSpecInput {
   name: string;
-  transport?: string;
-  command?: string;
-  argv?: string[];
-  url?: string;
-  fromCatalog?: string;
+  transport?: string | undefined;
+  command?: string | undefined;
+  argv?: string[] | undefined;
+  url?: string | undefined;
+  fromCatalog?: string | undefined;
 }
 
 function buildSpecString(input: BuildSpecInput): { spec: string } | { error: string } {

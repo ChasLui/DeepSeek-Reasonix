@@ -4,6 +4,12 @@ import type { LoopEvent } from "../../../loop.js";
 import type { TurnTranslator } from "../state/TurnTranslator.js";
 import type { Scrollback } from "./useScrollback.js";
 
+type ToolProgress = {
+  progress: number;
+  total?: number | undefined;
+  message?: string | undefined;
+};
+
 function parseJsonOrRaw(input: string | undefined): unknown {
   if (!input) return undefined;
   try {
@@ -15,9 +21,7 @@ function parseJsonOrRaw(input: string | undefined): unknown {
 
 export interface ToolStartContext {
   setOngoingTool: Dispatch<SetStateAction<{ name: string; args?: string } | null>>;
-  setToolProgress: Dispatch<
-    SetStateAction<{ progress: number; total?: number; message?: string } | null>
-  >;
+  setToolProgress: Dispatch<SetStateAction<ToolProgress | null>>;
   toolStartedAtRef: MutableRefObject<number | null>;
   translator: TurnTranslator;
   codeModeOn: boolean;
@@ -25,7 +29,10 @@ export interface ToolStartContext {
 }
 
 export function handleToolStart(ev: LoopEvent, ctx: ToolStartContext): void {
-  ctx.setOngoingTool({ name: ev.toolName ?? "?", args: ev.toolArgs });
+  ctx.setOngoingTool({
+    name: ev.toolName ?? "?",
+    ...(ev.toolArgs !== undefined ? { args: ev.toolArgs } : {}),
+  });
   ctx.setToolProgress(null);
   ctx.toolStartedAtRef.current = Date.now();
   ctx.translator.toolStart(ev.toolName ?? "?", parseJsonOrRaw(ev.toolArgs), ev.callId);
@@ -35,9 +42,9 @@ export function handleToolStart(ev: LoopEvent, ctx: ToolStartContext): void {
   if (!ctx.codeModeOn || !ev.toolArgs) return;
   try {
     const parsed = JSON.parse(ev.toolArgs) as {
-      path?: unknown;
-      file_path?: unknown;
-      file?: unknown;
+      path?: unknown | undefined;
+      file_path?: unknown | undefined;
+      file?: unknown | undefined;
     };
     for (const k of ["path", "file_path", "file"] as const) {
       const v = parsed[k];
@@ -54,9 +61,7 @@ export function handleToolStart(ev: LoopEvent, ctx: ToolStartContext): void {
 export interface ErrorContext {
   log: Scrollback;
   setOngoingTool: Dispatch<SetStateAction<{ name: string; args?: string } | null>>;
-  setToolProgress: Dispatch<
-    SetStateAction<{ progress: number; total?: number; message?: string } | null>
-  >;
+  setToolProgress: Dispatch<SetStateAction<ToolProgress | null>>;
   toolStartedAtRef: MutableRefObject<number | null>;
   translator: TurnTranslator;
 }

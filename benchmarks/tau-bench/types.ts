@@ -2,9 +2,13 @@
 
 import type { ToolDefinition } from "../../src/index.js";
 
+export type WorldTable = Record<string, Record<string, unknown>>;
+
 /** Mutable world state — deep-cloned per run so mutations don't leak across runs. */
-export interface WorldState {
-  [table: string]: Record<string, Record<string, unknown>>;
+export interface WorldState extends Record<string, WorldTable> {
+  users: WorldTable;
+  orders: WorldTable;
+  refunds: WorldTable;
 }
 
 export interface UserPersona {

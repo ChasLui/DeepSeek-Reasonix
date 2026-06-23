@@ -23,7 +23,7 @@ import type { DashboardContext } from "../context.js";
 import type { ApiResult } from "../router.js";
 
 interface WriteBody {
-  body?: unknown;
+  body?: unknown | undefined;
 }
 
 function parseBody(raw: string): WriteBody {
@@ -49,7 +49,7 @@ function projectSkillsDir(rootDir: string): string {
 interface SkillListEntry {
   name: string;
   scope: "project" | "custom" | "global" | "builtin";
-  description?: string;
+  description?: string | undefined;
   path: string;
   size: number;
   mtime: number;
@@ -63,7 +63,7 @@ interface ResolvedSkillPath {
 }
 
 function parseFrontmatterDescription(raw: string): string | undefined {
-  const desc = parseFrontmatter(raw).data.description?.trim();
+  const desc = parseFrontmatter(raw).data["description"]?.trim();
   return desc ? desc : undefined;
 }
 

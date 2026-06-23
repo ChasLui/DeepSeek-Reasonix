@@ -15,7 +15,7 @@ export function ThemeProvider({
   name,
 }: {
   children: React.ReactNode;
-  name?: string | null;
+  name?: string | null | undefined;
 }): React.ReactElement {
   const theme = THEMES[resolveThemeName(name)];
   const restoreActiveTheme = setActiveTheme(theme);

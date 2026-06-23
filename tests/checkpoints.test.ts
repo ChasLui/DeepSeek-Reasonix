@@ -26,12 +26,12 @@ function legacyCheckpointDir(rootDir: string): string {
 }
 
 beforeEach(() => {
-  realHome = process.env.HOME;
+  realHome = process.env["HOME"];
   homeDir = mkdtempSync(join(tmpdir(), "rx-cp-home-"));
   // checkpoints.ts uses `os.homedir()` which respects HOME on Unix and
   // USERPROFILE on Windows.
-  process.env.HOME = homeDir;
-  process.env.USERPROFILE = homeDir;
+  process.env["HOME"] = homeDir;
+  process.env["USERPROFILE"] = homeDir;
   workspace = mkdtempSync(join(tmpdir(), "rx-cp-work-"));
 });
 
@@ -40,8 +40,8 @@ afterEach(() => {
   // hot-path code. Assigning `undefined` would set the literal string.
   if (realHome === undefined) {
     // biome-ignore lint/performance/noDelete: env-var cleanup in test teardown
-    delete process.env.HOME;
-  } else process.env.HOME = realHome;
+    delete process.env["HOME"];
+  } else process.env["HOME"] = realHome;
   rmSync(homeDir, { recursive: true, force: true });
   rmSync(workspace, { recursive: true, force: true });
 });

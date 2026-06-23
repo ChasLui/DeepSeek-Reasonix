@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { t } from "../i18n";
 
 const SPLASH_FLAG = "reasonix.splash.shown";
@@ -19,7 +19,7 @@ function markSplashShown() {
   }
 }
 
-export function Splash({ onDone }: { onDone: () => void }) {
+export function Splash({ onDone }: { onDone: () => void }): ReactElement {
   const [leaving, setLeaving] = useState(false);
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;

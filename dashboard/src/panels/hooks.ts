@@ -1,3 +1,4 @@
+import type { VNode } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { api } from "../lib/api.js";
 import { fmtRelativeTime } from "../lib/format.js";
@@ -46,7 +47,10 @@ function buildMatrix(data: HooksData): MatrixRow[] {
           row = { scope, command: cmd, cells: {} };
           rows.set(key, row);
         }
-        row.cells[event] = { on: true, matcher: h.matcher };
+        row.cells[event] = {
+          on: true,
+          ...(h.matcher !== undefined ? { matcher: h.matcher } : {}),
+        };
       }
     }
   }
@@ -61,7 +65,7 @@ interface HooksData {
   recentRuns?: ReadonlyArray<HookRunRow> | null;
 }
 
-export function HooksPanel() {
+export function HooksPanel(): VNode | null {
   useLang();
   const [data, setData] = useState<HooksData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -120,8 +124,15 @@ export function HooksPanel() {
   if (!data) return null;
 
   const sectionH3 = (text: string, sub?: string) => html`
-    <h3 style="margin:18px 0 8px;font-family:var(--font-mono);font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.1em">
-      ${text}${sub ? html`<span style="margin-left:10px;color:var(--fg-4);font-weight:400;text-transform:none;letter-spacing:0">${sub}</span>` : null}
+    <h3
+      style="margin:18px 0 8px;font-family:var(--font-mono);font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.1em"
+    >
+      ${text}${sub
+        ? html`<span
+            style="margin-left:10px;color:var(--fg-4);font-weight:400;text-transform:none;letter-spacing:0"
+            >${sub}</span
+          >`
+        : null}
     </h3>
   `;
 
@@ -131,9 +142,7 @@ export function HooksPanel() {
       ? data.events
       : Array.from(new Set(matrixRows.flatMap((r) => Object.keys(r.cells))));
   const visibleRows =
-    eventFilter === "all"
-      ? matrixRows
-      : matrixRows.filter((r) => r.cells[eventFilter]?.on);
+    eventFilter === "all" ? matrixRows : matrixRows.filter((r) => r.cells[eventFilter]?.on);
   const gridCols = `220px repeat(${Math.max(events.length, 1)}, minmax(0, 1fr))`;
 
   return html`
@@ -142,23 +151,28 @@ export function HooksPanel() {
         <span
           class=${`chip-f ${eventFilter === "all" ? "active" : ""}`}
           onClick=${() => setEventFilter("all")}
-        >${t("hooks.resolved")} <span class="ct">${data.resolved.length}</span></span>
+          >${t("hooks.resolved")} <span class="ct">${data.resolved.length}</span></span
+        >
         ${data.events.map(
           (ev) => html`<span
             class=${`chip-f ${eventFilter === ev ? "active" : ""}`}
             onClick=${() => setEventFilter(ev)}
-          >${ev}</span>`,
+            >${ev}</span
+          >`,
         )}
       </div>
       ${info ? html`<div><span class="pill ok">${info}</span></div>` : null}
       ${error ? html`<div class="card accent-err">${error}</div>` : null}
-
-      ${sectionH3(t("hooks.eventMatrix"), t("hooks.matrixSub", { scripts: matrixRows.length, s: matrixRows.length === 1 ? "" : "s", events: events.length }))}${
-        visibleRows.length === 0
-          ? html`<div class="card" style="color:var(--fg-3)">
-              ${t("hooks.noHooks")}
-            </div>`
-          : html`
+      ${sectionH3(
+        t("hooks.eventMatrix"),
+        t("hooks.matrixSub", {
+          scripts: matrixRows.length,
+          s: matrixRows.length === 1 ? "" : "s",
+          events: events.length,
+        }),
+      )}${visibleRows.length === 0
+        ? html`<div class="card" style="color:var(--fg-3)">${t("hooks.noHooks")}</div>`
+        : html`
             <div class="card" style="padding:10px 14px;overflow-x:auto">
               <div class="matrix" style=${`min-width:fit-content`}>
                 <div class="row h" style=${`grid-template-columns:${gridCols}`}>
@@ -169,15 +183,25 @@ export function HooksPanel() {
                   (r) => html`
                     <div class="row" style=${`grid-template-columns:${gridCols}`}>
                       <div class="cell" title=${r.command}>
-                        <span style="color:var(--fg-4);font-size:10px;margin-right:6px">${r.scope}</span>
-                        <code class="mono" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.command}</code>
+                        <span style="color:var(--fg-4);font-size:10px;margin-right:6px"
+                          >${r.scope}</span
+                        >
+                        <code
+                          class="mono"
+                          style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                          >${r.command}</code
+                        >
                       </div>
                       ${events.map((ev) => {
                         const c = r.cells[ev];
                         if (!c?.on) return html`<div class="cell off">—</div>`;
                         return html`
                           <div class="cell on" title=${c.matcher ?? ""}>
-                            ${c.matcher ? html`<span style="font-size:10px;color:var(--c-warn)">${c.matcher}</span>` : "✓"}
+                            ${c.matcher
+                              ? html`<span style="font-size:10px;color:var(--c-warn)"
+                                  >${c.matcher}</span
+                                >`
+                              : "✓"}
                           </div>
                         `;
                       })}
@@ -186,19 +210,14 @@ export function HooksPanel() {
                 )}
               </div>
             </div>
-          `
-      }
-
+          `}
       ${(["project", "global"] as const).map((scope) => {
         const meta = data[scope];
         return html`
           ${sectionH3(scope, meta.path ?? "(no path)")}
-          ${
-            scope === "project" && !meta.path
-              ? html`<div class="card" style="color:var(--fg-3)">
-                  ${t("hooks.noProject")}
-                </div>`
-              : html`
+          ${scope === "project" && !meta.path
+            ? html`<div class="card" style="color:var(--fg-3)">${t("hooks.noProject")}</div>`
+            : html`
                 <div class="card">
                   <textarea
                     style="width:100%;height:240px;background:var(--bg-input);color:var(--fg-0);border:1px solid var(--bd);border-radius:var(--r);padding:10px;font-family:var(--font-mono);font-size:12.5px;line-height:1.55;resize:vertical"
@@ -211,21 +230,18 @@ export function HooksPanel() {
                     <button class="btn primary" disabled=${busy} onClick=${() => saveScope(scope)}>
                       ${t("hooks.saveReload")}
                     </button>
-                    <button class="btn ghost" disabled=${busy} onClick=${load}>${t("hooks.discard")}</button>
+                    <button class="btn ghost" disabled=${busy} onClick=${load}>
+                      ${t("hooks.discard")}
+                    </button>
                   </div>
                 </div>
-              `
-          }
+              `}
         `;
       })}
-
       ${sectionH3(t("hooks.recentRuns"), `${data.recentRuns?.length ?? 0}`)}
-      ${
-        !data.recentRuns || data.recentRuns.length === 0
-          ? html`<div class="card" style="color:var(--fg-3)">
-              ${t("hooks.noRuns")}
-            </div>`
-          : html`
+      ${!data.recentRuns || data.recentRuns.length === 0
+        ? html`<div class="card" style="color:var(--fg-3)">${t("hooks.noRuns")}</div>`
+        : html`
             <div class="card" style="padding:0;overflow-x:auto">
               <table class="tbl" style="width:100%;font-family:var(--font-mono);font-size:11.5px">
                 <thead>
@@ -240,11 +256,16 @@ export function HooksPanel() {
                   ${data.recentRuns.map(
                     (r) => html`
                       <tr>
-                        <td style="padding:6px 12px;color:var(--fg-3)">${fmtRelativeTime(r.whenMs)}</td>
+                        <td style="padding:6px 12px;color:var(--fg-3)">
+                          ${fmtRelativeTime(r.whenMs)}
+                        </td>
                         <td style="padding:6px 12px;color:var(--fg-1)">${r.phase}</td>
                         <td style="padding:6px 12px;color:var(--fg-1)">${r.hookName}</td>
                         <td style="padding:6px 12px">
-                          <span class=${`pill ${r.outcome === "ok" ? "ok" : r.outcome === "error" ? "err" : "warn"}`}>${r.outcome}</span>
+                          <span
+                            class=${`pill ${r.outcome === "ok" ? "ok" : r.outcome === "error" ? "err" : "warn"}`}
+                            >${r.outcome}</span
+                          >
                         </td>
                       </tr>
                     `,
@@ -252,8 +273,7 @@ export function HooksPanel() {
                 </tbody>
               </table>
             </div>
-          `
-      }
+          `}
     </div>
   `;
 }

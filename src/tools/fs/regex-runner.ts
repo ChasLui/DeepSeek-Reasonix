@@ -35,12 +35,12 @@ type Pending = {
   resolve: (hits: number[]) => void;
   reject: (err: Error) => void;
   timer: NodeJS.Timeout;
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
   onAbort?: () => void;
 };
 
 export interface RegexRunnerOptions {
-  defaultTimeoutMs?: number;
+  defaultTimeoutMs?: number | undefined;
 }
 
 export class RegexRunner {
@@ -122,7 +122,7 @@ export class RegexRunner {
     });
     w.on("error", (err) => {
       if (this.worker !== w) return;
-      this.failPending(err);
+      this.failPending(err instanceof Error ? err : new Error(String(err)));
     });
     w.on("exit", () => {
       // After a deliberate terminate() we've already swapped to a new

@@ -1,3 +1,4 @@
+import type { VNode } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { t, useLang } from "../i18n/index.js";
 import { api } from "../lib/api.js";
@@ -133,7 +134,7 @@ interface UsageSummary {
   subagents?: { total: number; costUsd: number; totalDurationMs: number };
 }
 
-export function UsagePanel() {
+export function UsagePanel(): VNode | null {
   useLang();
   const { data: summary, error, loading } = usePoll<UsageSummary>("/usage", 5000);
   const [series, setSeries] = useState<UsageDay[] | null>(null);
@@ -165,24 +166,31 @@ export function UsagePanel() {
   if (loading && !summary)
     return html`<div class="card" style="color:var(--fg-3)">${t("usage.loading")}</div>`;
   if (error)
-    return html`<div class="card accent-err">${t("common.loadingFailed", { name: "usage", error: error.message })}</div>`;
+    return html`<div class="card accent-err">
+      ${t("common.loadingFailed", { name: "usage", error: error.message })}
+    </div>`;
   if (!summary) return null;
   const u = summary;
 
   const sectionH3 = (text: string) => html`
-    <h3 style="margin:18px 0 8px;font-family:var(--font-mono);font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.1em">${text}</h3>
+    <h3
+      style="margin:18px 0 8px;font-family:var(--font-mono);font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.1em"
+    >
+      ${text}
+    </h3>
   `;
 
   return html`
     <div style="display:flex;flex-direction:column;gap:6px">
       <div class="chips">
-        <span class="chip-f static active">${t("usage.records", { count: u.recordCount.toLocaleString() })}</span>
+        <span class="chip-f static active"
+          >${t("usage.records", { count: u.recordCount.toLocaleString() })}</span
+        >
         <span class="chip-f static">${u.logSize}</span>
       </div>
 
-      ${
-        series && series.length > 0
-          ? html`
+      ${series && series.length > 0
+        ? html`
             <div class="card" style="padding:18px">
               <div class="card-h">
                 <span class="title">${t("usage.dailyUsage")}</span>
@@ -191,84 +199,83 @@ export function UsagePanel() {
               <${UsageChart} days=${series} />
             </div>
           `
-          : null
-      }
-
-      ${
-        u.recordCount === 0
-          ? html`<div class="card" style="color:var(--fg-3);margin-top:8px">
-              ${t("usage.noData")}
-            </div>`
-          : html`
-              ${sectionH3(t("usage.windows"))}
-              <div class="card" style="padding:0;overflow:hidden">
-                <table class="tbl">
-                  <thead>
-                    <tr>
-                      <th>${t("usage.colWindow")}</th>
-                      <th class="num">${t("usage.colTurns")}</th>
-                      <th class="num">${t("usage.colReasoning")}</th>
-                      <th class="num">${t("usage.colCacheHit")}</th>
-                      <th class="num">${t("usage.colCost")}</th>
-                      <th class="num">${t("usage.colCacheSaved")}</th>
-                      <th class="num">${t("usage.colVsClaude")}</th>
-                      <th class="num">${t("usage.colSaved")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${u.buckets.map((b) => {
-                      const hitRatio =
-                        b.cacheHitTokens + b.cacheMissTokens > 0
-                          ? b.cacheHitTokens / (b.cacheHitTokens + b.cacheMissTokens)
-                          : 0;
-                      const claudeSavings =
-                        b.claudeEquivUsd > 0 ? 1 - b.costUsd / b.claudeEquivUsd : 0;
-                      return html`
-                        <tr>
-                          <td class="dim">${b.label}</td>
-                          <td class="num">${fmtNum(b.turns)}</td>
-                          <td class="num">${b.reasoningTokens > 0 ? fmtNum(b.reasoningTokens) : "—"}</td>
-                          <td class="num">${b.turns > 0 ? fmtPct(hitRatio) : "—"}</td>
-                          <td class="num">${b.turns > 0 ? fmtUsd(b.costUsd) : "—"}</td>
-                          <td class="num">${b.turns > 0 && b.cacheSavingsUsd > 0 ? fmtUsd(b.cacheSavingsUsd) : "—"}</td>
-                          <td class="num">${b.turns > 0 ? fmtUsd(b.claudeEquivUsd) : "—"}</td>
-                          <td class="num">${b.turns > 0 && claudeSavings > 0 ? fmtPct(claudeSavings) : "—"}</td>
-                        </tr>
-                      `;
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            `
-      }
-
-      ${
-        u.byModel.length > 0
-          ? html`
-              ${sectionH3(t("usage.mostUsed"))}
-              <div class="card" style="padding:0;overflow:hidden">
-                <table class="tbl">
-                  <thead>
-                    <tr>
-                      <th>${t("usage.colModel")}</th>
-                      <th>${t("usage.colTurns")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${u.byModel.slice(0, 5).map(
-                      (m) => html`
-                        <tr>
-                          <td><code class="mono">${m.model}</code></td>
-                          <td class="num">${fmtNum(m.turns)}</td>
-                        </tr>
-                      `,
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            `
-          : null
-      }
+        : null}
+      ${u.recordCount === 0
+        ? html`<div class="card" style="color:var(--fg-3);margin-top:8px">
+            ${t("usage.noData")}
+          </div>`
+        : html`
+            ${sectionH3(t("usage.windows"))}
+            <div class="card" style="padding:0;overflow:hidden">
+              <table class="tbl">
+                <thead>
+                  <tr>
+                    <th>${t("usage.colWindow")}</th>
+                    <th class="num">${t("usage.colTurns")}</th>
+                    <th class="num">${t("usage.colReasoning")}</th>
+                    <th class="num">${t("usage.colCacheHit")}</th>
+                    <th class="num">${t("usage.colCost")}</th>
+                    <th class="num">${t("usage.colCacheSaved")}</th>
+                    <th class="num">${t("usage.colVsClaude")}</th>
+                    <th class="num">${t("usage.colSaved")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${u.buckets.map((b) => {
+                    const hitRatio =
+                      b.cacheHitTokens + b.cacheMissTokens > 0
+                        ? b.cacheHitTokens / (b.cacheHitTokens + b.cacheMissTokens)
+                        : 0;
+                    const claudeSavings =
+                      b.claudeEquivUsd > 0 ? 1 - b.costUsd / b.claudeEquivUsd : 0;
+                    return html`
+                      <tr>
+                        <td class="dim">${b.label}</td>
+                        <td class="num">${fmtNum(b.turns)}</td>
+                        <td class="num">
+                          ${b.reasoningTokens > 0 ? fmtNum(b.reasoningTokens) : "—"}
+                        </td>
+                        <td class="num">${b.turns > 0 ? fmtPct(hitRatio) : "—"}</td>
+                        <td class="num">${b.turns > 0 ? fmtUsd(b.costUsd) : "—"}</td>
+                        <td class="num">
+                          ${b.turns > 0 && b.cacheSavingsUsd > 0 ? fmtUsd(b.cacheSavingsUsd) : "—"}
+                        </td>
+                        <td class="num">${b.turns > 0 ? fmtUsd(b.claudeEquivUsd) : "—"}</td>
+                        <td class="num">
+                          ${b.turns > 0 && claudeSavings > 0 ? fmtPct(claudeSavings) : "—"}
+                        </td>
+                      </tr>
+                    `;
+                  })}
+                </tbody>
+              </table>
+            </div>
+          `}
+      ${u.byModel.length > 0
+        ? html`
+            ${sectionH3(t("usage.mostUsed"))}
+            <div class="card" style="padding:0;overflow:hidden">
+              <table class="tbl">
+                <thead>
+                  <tr>
+                    <th>${t("usage.colModel")}</th>
+                    <th>${t("usage.colTurns")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${u.byModel.slice(0, 5).map(
+                    (m) => html`
+                      <tr>
+                        <td><code class="mono">${m.model}</code></td>
+                        <td class="num">${fmtNum(m.turns)}</td>
+                      </tr>
+                    `,
+                  )}
+                </tbody>
+              </table>
+            </div>
+          `
+        : null}
     </div>
   `;
 }

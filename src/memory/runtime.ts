@@ -3,8 +3,8 @@ import { sha256Prefix } from "../utils/sha256.js";
 
 export interface ImmutablePrefixOptions {
   system: string;
-  toolSpecs?: readonly ToolSpec[];
-  fewShots?: readonly ChatMessage[];
+  toolSpecs?: readonly ToolSpec[] | undefined;
+  fewShots?: readonly ChatMessage[] | undefined;
 }
 
 export type EpochEvent = { type: "add"; name: string } | { type: "remove"; name: string };

@@ -1,12 +1,10 @@
-import htm from "htm";
-import { h } from "preact";
+import type { VNode } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { isThirdPartyError } from "./bus-filter.js";
+import { html } from "./html.js";
 
-const html = htm.bind(h);
-
-export const appBus = new EventTarget();
-export const toastBus = new EventTarget();
+export const appBus: EventTarget = new EventTarget();
+export const toastBus: EventTarget = new EventTarget();
 
 export type ToastKind = "info" | "success" | "warn" | "error";
 
@@ -46,7 +44,7 @@ interface Toast {
   ttl: number;
 }
 
-export function ToastStack() {
+export function ToastStack(): VNode | null {
   const [toasts, setToasts] = useState<Toast[]>([]);
   useEffect(() => {
     const onToast = (ev: Event) => {

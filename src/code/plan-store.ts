@@ -1,14 +1,6 @@
 /** Persists structured plan state alongside the JSONL log; markdown body lives in the log (it was a tool result) and replays on resume. */
 
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  renameSync,
-  statSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readdirSync, renameSync, statSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { sanitizeName, sessionsDir } from "../memory/session.js";
 import type { PlanStep, StepCompletion, StepEvidence } from "../tools/plan.js";
@@ -23,11 +15,11 @@ export interface PlanStateOnDisk {
   version: 1 | 2;
   steps: PlanStep[];
   completedStepIds: string[];
-  stepCompletions?: Record<string, StepCompletion>;
+  stepCompletions?: Record<string, StepCompletion> | undefined;
   /** ISO8601 timestamp of the last write. */
   updatedAt: string;
-  body?: string;
-  summary?: string;
+  body?: string | undefined;
+  summary?: string | undefined;
 }
 
 export function planStatePath(sessionName: string): string {
@@ -49,17 +41,17 @@ export function loadPlanState(sessionName: string): PlanStateOnDisk | null {
     for (const s of parsed.steps) {
       if (!s || typeof s !== "object") continue;
       const e = s as unknown as Record<string, unknown>;
-      if (typeof e.id !== "string" || !e.id) continue;
-      if (typeof e.title !== "string" || !e.title) continue;
-      if (typeof e.action !== "string" || !e.action) continue;
-      const step: PlanStep = { id: e.id, title: e.title, action: e.action };
-      if (e.risk === "low" || e.risk === "med" || e.risk === "high") step.risk = e.risk;
-      const targets = stringList(e.targets);
+      if (typeof e["id"] !== "string" || !e["id"]) continue;
+      if (typeof e["title"] !== "string" || !e["title"]) continue;
+      if (typeof e["action"] !== "string" || !e["action"]) continue;
+      const step: PlanStep = { id: e["id"], title: e["title"], action: e["action"] };
+      if (e["risk"] === "low" || e["risk"] === "med" || e["risk"] === "high") step.risk = e["risk"];
+      const targets = stringList(e["targets"]);
       if (targets) step.targets = targets;
-      if (typeof e.acceptance === "string" && e.acceptance.trim()) {
-        step.acceptance = e.acceptance.trim();
+      if (typeof e["acceptance"] === "string" && e["acceptance"].trim()) {
+        step.acceptance = e["acceptance"].trim();
       }
-      const verification = stringList(e.verification);
+      const verification = stringList(e["verification"]);
       if (verification) step.verification = verification;
       steps.push(step);
     }
@@ -89,9 +81,12 @@ export function savePlanState(
   steps: PlanStep[],
   completedStepIds: Iterable<string>,
   extras?: {
-    body?: string;
-    summary?: string;
-    stepCompletions?: ReadonlyMap<string, StepCompletion> | Record<string, StepCompletion>;
+    body?: string | undefined;
+    summary?: string | undefined;
+    stepCompletions?:
+      | ReadonlyMap<string, StepCompletion>
+      | Record<string, StepCompletion>
+      | undefined;
   },
 ): void {
   const path = planStatePath(sessionName);
@@ -161,11 +156,11 @@ export interface PlanArchiveSummary {
   completedAt: string;
   steps: PlanStep[];
   completedStepIds: string[];
-  stepCompletions?: Record<string, StepCompletion>;
+  stepCompletions?: Record<string, StepCompletion> | undefined;
   /** Markdown body, when the archive carried it. */
-  body?: string;
+  body?: string | undefined;
   /** One-line human-friendly title, when supplied. */
-  summary?: string;
+  summary?: string | undefined;
 }
 
 export function listPlanArchives(sessionName: string): PlanArchiveSummary[] {
@@ -331,15 +326,17 @@ function sanitizeStepCompletion(raw: unknown, fallbackStepId?: string): StepComp
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
   const entry = raw as Record<string, unknown>;
   const stepId =
-    typeof entry.stepId === "string" && entry.stepId.trim()
-      ? entry.stepId.trim()
+    typeof entry["stepId"] === "string" && entry["stepId"].trim()
+      ? entry["stepId"].trim()
       : fallbackStepId?.trim();
-  const result = typeof entry.result === "string" ? entry.result.trim() : "";
+  const result = typeof entry["result"] === "string" ? entry["result"].trim() : "";
   if (!stepId || !result) return undefined;
   const completion: StepCompletion = { kind: "step_completed", stepId, result };
-  if (typeof entry.title === "string" && entry.title.trim()) completion.title = entry.title.trim();
-  if (typeof entry.notes === "string" && entry.notes.trim()) completion.notes = entry.notes.trim();
-  const evidence = sanitizeEvidenceList(entry.evidence);
+  if (typeof entry["title"] === "string" && entry["title"].trim())
+    completion.title = entry["title"].trim();
+  if (typeof entry["notes"] === "string" && entry["notes"].trim())
+    completion.notes = entry["notes"].trim();
+  const evidence = sanitizeEvidenceList(entry["evidence"]);
   if (evidence) completion.evidence = evidence;
   return completion;
 }
@@ -350,17 +347,17 @@ function sanitizeEvidenceList(raw: unknown): StepEvidence[] | undefined {
   for (const item of raw) {
     if (!item || typeof item !== "object" || Array.isArray(item)) continue;
     const entry = item as Record<string, unknown>;
-    const kind = entry.kind;
+    const kind = entry["kind"];
     if (kind !== "verification" && kind !== "diff" && kind !== "checkpoint" && kind !== "manual") {
       continue;
     }
-    const summary = typeof entry.summary === "string" ? entry.summary.trim() : "";
+    const summary = typeof entry["summary"] === "string" ? entry["summary"].trim() : "";
     if (!summary) continue;
     const evidence: StepEvidence = { kind, summary };
-    if (typeof entry.command === "string" && entry.command.trim()) {
-      evidence.command = entry.command.trim();
+    if (typeof entry["command"] === "string" && entry["command"].trim()) {
+      evidence.command = entry["command"].trim();
     }
-    const paths = stringList(entry.paths);
+    const paths = stringList(entry["paths"]);
     if (paths) evidence.paths = paths;
     out.push(evidence);
   }

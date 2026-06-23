@@ -16,8 +16,8 @@ export type RequestHandler<P = unknown, R = unknown> = (params: P) => Promise<R>
 export type NotificationHandler<P = unknown> = (params: P) => Promise<void> | void;
 
 export interface AcpServerOptions {
-  input?: Readable;
-  output?: Writable;
+  input?: Readable | undefined;
+  output?: Writable | undefined;
 }
 
 interface PendingOutbound {

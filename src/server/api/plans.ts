@@ -12,7 +12,7 @@ interface PlanRow {
   /** Computed completion ratio 0..1, surfaced so the SPA doesn't redo the math. */
   completionRatio: number;
   /** Plan summary (if the archive carried one). */
-  summary?: string;
+  summary?: string | undefined;
   /** Steps + completion ids — consumers render the step list inline. */
   steps: PlanStep[];
   completedStepIds: string[];

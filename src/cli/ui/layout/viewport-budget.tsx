@@ -85,7 +85,7 @@ const BudgetContext = createContext<BudgetContextValue | null>(null);
 export interface ViewportBudgetProviderProps {
   children: React.ReactNode;
   /** Test seam — bypasses useStdout. */
-  initialRows?: number;
+  initialRows?: number | undefined;
 }
 
 export function ViewportBudgetProvider({

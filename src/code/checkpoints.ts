@@ -1,6 +1,6 @@
 /** One file per checkpoint (not jsonl) so delete/restore is cheap and a corrupt snapshot only loses itself. */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import {
@@ -104,7 +104,7 @@ export function loadCheckpoint(rootDir: string, id: string): Checkpoint | null {
 export interface CreateCheckpointOptions {
   rootDir: string;
   name: string;
-  source?: Checkpoint["source"];
+  source?: Checkpoint["source"] | undefined;
   paths: readonly string[];
 }
 

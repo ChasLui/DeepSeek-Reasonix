@@ -22,14 +22,18 @@ import {
 
 const ts = "2026-04-29T12:00:00Z";
 let nextId = 0;
-const ev = <T extends Event>(e: Omit<T, "id"> & { id?: number }): T =>
-  ({ ...e, id: e.id ?? ++nextId }) as T;
+type EventInput = Event extends infer E
+  ? E extends Event
+    ? Omit<E, "id"> & { id?: number }
+    : never
+  : never;
+const ev = (e: EventInput): Event => ({ ...e, id: e.id ?? ++nextId }) as Event;
 
 describe("conversation reducer", () => {
   it("appends user message", () => {
     const v = conversation(
       emptyConversation(),
-      ev<Event>({ type: "user.message", ts, turn: 1, text: "hi" }),
+      ev({ type: "user.message", ts, turn: 1, text: "hi" }),
     );
     expect(v.messages).toEqual([{ role: "user", content: "hi" }]);
   });
@@ -37,7 +41,7 @@ describe("conversation reducer", () => {
   it("appends assistant final with tool_calls and reasoning", () => {
     const v = conversation(
       emptyConversation(),
-      ev<Event>({
+      ev({
         type: "model.final",
         ts,
         turn: 1,
@@ -60,12 +64,12 @@ describe("conversation reducer", () => {
     let v = emptyConversation();
     v = conversation(
       v,
-      ev<Event>({ type: "tool.intent", ts, turn: 1, callId: "c1", name: "shell", args: "{}" }),
+      ev({ type: "tool.intent", ts, turn: 1, callId: "c1", name: "shell", args: "{}" }),
     );
     expect(v.pendingToolCalls).toEqual([{ callId: "c1", name: "shell" }]);
     v = conversation(
       v,
-      ev<Event>({
+      ev({
         type: "tool.result",
         ts,
         turn: 1,
@@ -83,11 +87,11 @@ describe("conversation reducer", () => {
     let v = emptyConversation();
     v = conversation(
       v,
-      ev<Event>({ type: "tool.intent", ts, turn: 1, callId: "c1", name: "shell", args: "" }),
+      ev({ type: "tool.intent", ts, turn: 1, callId: "c1", name: "shell", args: "" }),
     );
     v = conversation(
       v,
-      ev<Event>({ type: "tool.denied", ts, turn: 1, callId: "c1", reason: "permission" }),
+      ev({ type: "tool.denied", ts, turn: 1, callId: "c1", reason: "permission" }),
     );
     expect(v.pendingToolCalls).toEqual([]);
     expect(v.messages).toEqual([
@@ -97,14 +101,14 @@ describe("conversation reducer", () => {
 
   it("session.compacted REPLACES messages and clears pending", () => {
     let v = emptyConversation();
-    v = conversation(v, ev<Event>({ type: "user.message", ts, turn: 1, text: "old" }));
+    v = conversation(v, ev({ type: "user.message", ts, turn: 1, text: "old" }));
     v = conversation(
       v,
-      ev<Event>({ type: "tool.intent", ts, turn: 1, callId: "c1", name: "shell", args: "" }),
+      ev({ type: "tool.intent", ts, turn: 1, callId: "c1", name: "shell", args: "" }),
     );
     v = conversation(
       v,
-      ev<Event>({
+      ev({
         type: "session.compacted",
         ts,
         turn: 2,
@@ -124,7 +128,7 @@ describe("budget reducer", () => {
     let v = emptyBudget(10);
     v = budget(
       v,
-      ev<Event>({
+      ev({
         type: "model.final",
         ts,
         turn: 1,
@@ -141,7 +145,7 @@ describe("budget reducer", () => {
     );
     v = budget(
       v,
-      ev<Event>({
+      ev({
         type: "model.final",
         ts,
         turn: 2,
@@ -162,16 +166,10 @@ describe("budget reducer", () => {
 
   it("warned and blocked latch", () => {
     let v = emptyBudget(1);
-    v = budget(
-      v,
-      ev<Event>({ type: "policy.budget.warning", ts, turn: 1, spentUsd: 0.8, capUsd: 1 }),
-    );
-    v = budget(v, ev<Event>({ type: "user.message", ts, turn: 2, text: "ignored" }));
+    v = budget(v, ev({ type: "policy.budget.warning", ts, turn: 1, spentUsd: 0.8, capUsd: 1 }));
+    v = budget(v, ev({ type: "user.message", ts, turn: 2, text: "ignored" }));
     expect(v.warned).toBe(true);
-    v = budget(
-      v,
-      ev<Event>({ type: "policy.budget.blocked", ts, turn: 2, spentUsd: 1.05, capUsd: 1 }),
-    );
+    v = budget(v, ev({ type: "policy.budget.blocked", ts, turn: 2, spentUsd: 1.05, capUsd: 1 }));
     expect(v.blocked).toBe(true);
   });
 });
@@ -180,7 +178,7 @@ describe("plan reducer", () => {
   it("submitted populates steps as not-completed", () => {
     const v = plan(
       emptyPlan(),
-      ev<Event>({
+      ev({
         type: "plan.submitted",
         ts,
         turn: 3,
@@ -201,7 +199,7 @@ describe("plan reducer", () => {
   it("step.completed marks only the target", () => {
     let v = plan(
       emptyPlan(),
-      ev<Event>({
+      ev({
         type: "plan.submitted",
         ts,
         turn: 1,
@@ -214,7 +212,7 @@ describe("plan reducer", () => {
     );
     v = plan(
       v,
-      ev<Event>({
+      ev({
         type: "plan.step.completed",
         ts,
         turn: 2,
@@ -231,7 +229,7 @@ describe("plan reducer", () => {
   it("step.completed with unknown id is a no-op", () => {
     const before = plan(
       emptyPlan(),
-      ev<Event>({
+      ev({
         type: "plan.submitted",
         ts,
         turn: 1,
@@ -241,7 +239,7 @@ describe("plan reducer", () => {
     );
     const after = plan(
       before,
-      ev<Event>({
+      ev({
         type: "plan.step.completed",
         ts,
         turn: 2,
@@ -257,7 +255,7 @@ describe("workspace reducer", () => {
   it("file.touched upsert; same path replaces mode", () => {
     let v = workspace(
       emptyWorkspace(),
-      ev<Event>({
+      ev({
         type: "effect.file.touched",
         ts,
         turn: 1,
@@ -268,7 +266,7 @@ describe("workspace reducer", () => {
     );
     v = workspace(
       v,
-      ev<Event>({
+      ev({
         type: "effect.file.touched",
         ts,
         turn: 2,
@@ -279,7 +277,7 @@ describe("workspace reducer", () => {
     );
     v = workspace(
       v,
-      ev<Event>({
+      ev({
         type: "effect.file.touched",
         ts,
         turn: 2,
@@ -295,7 +293,7 @@ describe("workspace reducer", () => {
   it("checkpoint.created sets lastCheckpointId", () => {
     const v = workspace(
       emptyWorkspace(),
-      ev<Event>({
+      ev({
         type: "checkpoint.created",
         ts,
         turn: 1,
@@ -314,36 +312,36 @@ describe("capabilities reducer", () => {
   it("register / re-register replaces; remove drops", () => {
     let v = capabilities(
       emptyCapabilities(),
-      ev<Event>({ type: "capability.registered", ts, turn: 1, name: "shell", permission: "ask" }),
+      ev({ type: "capability.registered", ts, turn: 1, name: "shell", permission: "ask" }),
     );
     v = capabilities(
       v,
-      ev<Event>({ type: "capability.registered", ts, turn: 1, name: "shell", permission: "allow" }),
+      ev({ type: "capability.registered", ts, turn: 1, name: "shell", permission: "allow" }),
     );
     v = capabilities(
       v,
-      ev<Event>({ type: "capability.registered", ts, turn: 1, name: "fs", permission: "ask" }),
+      ev({ type: "capability.registered", ts, turn: 1, name: "fs", permission: "ask" }),
     );
     expect(v.tools).toEqual([
       { name: "shell", permission: "allow" },
       { name: "fs", permission: "ask" },
     ]);
-    v = capabilities(v, ev<Event>({ type: "capability.removed", ts, turn: 2, name: "shell" }));
+    v = capabilities(v, ev({ type: "capability.removed", ts, turn: 2, name: "shell" }));
     expect(v.tools).toEqual([{ name: "fs", permission: "ask" }]);
   });
 });
 
 describe("status reducer", () => {
   it("status sets text; primary event clears it", () => {
-    let v = status(emptyStatus(), ev<Event>({ type: "status", ts, turn: 1, text: "harvesting" }));
+    let v = status(emptyStatus(), ev({ type: "status", ts, turn: 1, text: "harvesting" }));
     expect(v.current).toBe("harvesting");
-    v = status(v, ev<Event>({ type: "model.delta", ts, turn: 1, channel: "content", text: "x" }));
+    v = status(v, ev({ type: "model.delta", ts, turn: 1, channel: "content", text: "x" }));
     expect(v.current).toBeNull();
   });
 
   it("non-primary event preserves status", () => {
-    let v = status(emptyStatus(), ev<Event>({ type: "status", ts, turn: 1, text: "thinking" }));
-    v = status(v, ev<Event>({ type: "user.message", ts, turn: 1, text: "later" }));
+    let v = status(emptyStatus(), ev({ type: "status", ts, turn: 1, text: "thinking" }));
+    v = status(v, ev({ type: "user.message", ts, turn: 1, text: "later" }));
     expect(v.current).toBe("thinking");
   });
 });
@@ -352,21 +350,21 @@ describe("sessionMeta reducer", () => {
   it("session.opened sets name + openedAt; turn tracks max", () => {
     let v = sessionMeta(
       emptySessionMeta(),
-      ev<Event>({ type: "session.opened", ts, turn: 5, name: "wip", resumedFromTurn: 4 }),
+      ev({ type: "session.opened", ts, turn: 5, name: "wip", resumedFromTurn: 4 }),
     );
     expect(v.name).toBe("wip");
     expect(v.openedAt).toBe(ts);
     expect(v.currentTurn).toBe(5);
-    v = sessionMeta(v, ev<Event>({ type: "user.message", ts, turn: 7, text: "q" }));
+    v = sessionMeta(v, ev({ type: "user.message", ts, turn: 7, text: "q" }));
     expect(v.currentTurn).toBe(7);
-    v = sessionMeta(v, ev<Event>({ type: "user.message", ts, turn: 6, text: "stale" }));
+    v = sessionMeta(v, ev({ type: "user.message", ts, turn: 6, text: "stale" }));
     expect(v.currentTurn).toBe(7);
   });
 
   it("error event records lastError", () => {
     const v = sessionMeta(
       emptySessionMeta(),
-      ev<Event>({ type: "error", ts, turn: 1, message: "boom", recoverable: true }),
+      ev({ type: "error", ts, turn: 1, message: "boom", recoverable: true }),
     );
     expect(v.lastError).toBe("boom");
   });
@@ -375,9 +373,9 @@ describe("sessionMeta reducer", () => {
 describe("replay determinism", () => {
   it("same events twice → same projections", () => {
     const events: Event[] = [
-      ev<Event>({ type: "session.opened", ts, turn: 1, name: "s", resumedFromTurn: 0 }),
-      ev<Event>({ type: "user.message", ts, turn: 1, text: "hi" }),
-      ev<Event>({
+      ev({ type: "session.opened", ts, turn: 1, name: "s", resumedFromTurn: 0 }),
+      ev({ type: "user.message", ts, turn: 1, text: "hi" }),
+      ev({
         type: "model.final",
         ts,
         turn: 1,
@@ -386,9 +384,9 @@ describe("replay determinism", () => {
         usage: { prompt_tokens: 10, completion_tokens: 5 },
         costUsd: 0.001,
       }),
-      ev<Event>({ type: "tool.intent", ts, turn: 1, callId: "c1", name: "shell", args: "{}" }),
-      ev<Event>({ type: "tool.dispatched", ts, turn: 1, callId: "c1" }),
-      ev<Event>({
+      ev({ type: "tool.intent", ts, turn: 1, callId: "c1", name: "shell", args: "{}" }),
+      ev({ type: "tool.dispatched", ts, turn: 1, callId: "c1" }),
+      ev({
         type: "tool.result",
         ts,
         turn: 1,
@@ -409,7 +407,7 @@ describe("replay determinism", () => {
   });
 
   it("apply composes all reducers", () => {
-    const e: Event = ev<Event>({
+    const e: Event = ev({
       type: "checkpoint.created",
       ts,
       turn: 1,

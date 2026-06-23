@@ -7,7 +7,7 @@ import { presetNameForSettings, resolvePreset } from "./ui/presets.js";
 
 export interface ResolvedDefaults {
   model: string;
-  preset?: "auto" | "flash" | "pro";
+  preset?: "auto" | "flash" | "pro" | undefined;
   autoEscalate: boolean;
   reasoningEffort: "high" | "max";
   mcp: string[];
@@ -15,14 +15,14 @@ export interface ResolvedDefaults {
 }
 
 export interface RawCliFlags {
-  model?: string;
-  mcp?: string[];
+  model?: string | undefined;
+  mcp?: string[] | undefined;
   /** Commander's `--no-session` surfaces as `false`; `--session X` as a string. */
-  session?: string | false;
+  session?: string | false | undefined;
   /** `--preset <name>`. */
-  preset?: string;
+  preset?: string | undefined;
   /** When true, ignore config entirely (power-user escape hatch). */
-  noConfig?: boolean;
+  noConfig?: boolean | undefined;
 }
 
 export function resolveDefaults(flags: RawCliFlags): ResolvedDefaults {

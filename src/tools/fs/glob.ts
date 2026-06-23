@@ -16,10 +16,10 @@ export async function globFiles(
   startAbs: string,
   args: {
     pattern: string;
-    sort_by?: "mtime" | "name";
-    include_deps?: boolean;
-    limit?: number;
-    signal?: AbortSignal;
+    sort_by?: "mtime" | "name" | undefined;
+    include_deps?: boolean | undefined;
+    limit?: number | undefined;
+    signal?: AbortSignal | undefined;
   },
 ): Promise<string> {
   if (args.signal?.aborted) {

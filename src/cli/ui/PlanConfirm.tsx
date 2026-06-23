@@ -16,10 +16,10 @@ export type PlanConfirmChoice = "approve" | "refine" | "revise" | "cancel";
 
 export interface PlanConfirmProps {
   plan: string;
-  steps?: PlanStep[];
-  summary?: string;
+  steps?: PlanStep[] | undefined;
+  summary?: string | undefined;
   onChoose: (choice: PlanConfirmChoice) => void;
-  projectRoot?: string;
+  projectRoot?: string | undefined;
 }
 
 const DEFAULT_DETAIL_LINES = 12;
@@ -29,7 +29,12 @@ const EXPANDED_MODAL_OVERHEAD_ROWS = 12;
 /** Card stripe + outer dividers — rows the modal needs even when the detail window owns everything else. */
 const EXPANDED_DETAIL_CHROME_ROWS = 4;
 
-function PlanConfirmInner({ plan, steps, summary, onChoose }: PlanConfirmProps) {
+function PlanConfirmInner({
+  plan,
+  steps,
+  summary,
+  onChoose,
+}: PlanConfirmProps): React.ReactElement {
   const { stdout } = useStdout();
   const totalRows = useTotalRows();
   const [expanded, setExpanded] = useState(false);
@@ -243,4 +248,5 @@ function summarizePlan(
   return "";
 }
 
-export const PlanConfirm = React.memo(PlanConfirmInner);
+export const PlanConfirm: React.MemoExoticComponent<typeof PlanConfirmInner> =
+  React.memo(PlanConfirmInner);

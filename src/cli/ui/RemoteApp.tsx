@@ -65,7 +65,7 @@ export function PermissionModal({
     <Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1}>
       <Text color="yellow">⚠ {params.toolCall.title ?? "Confirm action"}</Text>
       {params.options.map((o, i) => (
-        <Text key={o.optionId} color={i === idx ? "cyan" : undefined}>
+        <Text key={o.optionId} {...(i === idx ? { color: "cyan" } : {})}>
           {i === idx ? "▸ " : "  "}
           {i + 1}) {o.name}
         </Text>
@@ -79,7 +79,7 @@ export interface RemoteAppProps {
   socketPath: string;
   cwd: string;
   /** Injectable for tests; defaults to the real socket client. */
-  connect?: typeof connectDaemon;
+  connect?: typeof connectDaemon | undefined;
 }
 
 export function RemoteApp({ socketPath, cwd, connect }: RemoteAppProps): React.ReactElement {

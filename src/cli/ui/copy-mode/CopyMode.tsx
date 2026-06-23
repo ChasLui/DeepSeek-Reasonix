@@ -22,7 +22,7 @@ import { type SnapshotLine, buildSnapshot, isYankable, yankRange } from "./snaps
 export interface CopyModeProps {
   cards: ReadonlyArray<Card>;
   onClose: (yanked: { size: number; osc52: boolean; filePath: string | null } | null) => void;
-  multiClickMs?: number;
+  multiClickMs?: number | undefined;
 }
 
 const CHROME_ROWS = 3;

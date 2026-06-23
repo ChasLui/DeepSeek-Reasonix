@@ -6,7 +6,7 @@
 
 Reasonix is a DeepSeek-native coding agent (CLI + TUI + Tauri desktop). The architecture is **opinionated, not generic** — every abstraction exists because DeepSeek's prefix-cache mechanic or pricing demanded it. Do not generalize for "future providers"; the project explicitly rejects multi-provider support.
 
-Node ≥ 22, TS 5.6+ ES2022 ESM, Vitest, Biome, tsup. npm workspaces (`packages/core-utils` is the only sub-workspace; `desktop/` is a separate sibling project).
+Node ≥ 22, TS 6 + tsgo 7 native preview, ES2022 ESM, Vitest 4, OXLint/OXFmt, Rolldown. npm workspaces (`packages/core-utils` is the only sub-workspace; `desktop/` is a separate sibling project).
 
 ## Working mode (read before editing)
 
@@ -14,7 +14,7 @@ Four behavioral rules, derived from [Karpathy's LLM-coding pitfalls](https://git
 
 1. **Think before coding** — surface assumptions; if multiple interpretations exist, ask. Before borrowing or planning, grep the authoritative source (`docs/ARCHITECTURE.md`, current `HEAD`) — memory and prior plans drift.
 2. **Simplicity first** — minimum code that solves the actual ask. No speculative features, no "future-provider" abstractions, no error handling for impossible scenarios.
-3. **Surgical changes** — every changed line must trace to the user request. Match existing style. Don't reformat adjacent code or run bare `biome --write` (scope creep cerebrum-recorded 2026-05-25).
+3. **Surgical changes** — every changed line must trace to the user request. Match existing style. Don't reformat adjacent code or run repo-wide formatter writes (scope creep cerebrum-recorded 2026-05-25).
 4. **Goal-driven execution** — convert "fix the bug" into "write a failing test, then make it pass." For multi-step work, write the plan first with explicit verify checkpoints (`bin/plan-lint.sh` enforces this for RAL plans).
 
 Bias: **caution over speed** for anything touching `src/loop.ts`, `src/repair/`, `src/tools/`, `src/mcp/`. For trivial single-line fixes, use judgment.
@@ -46,9 +46,9 @@ Main source lives in `src/`: `src/cli/` holds CLI commands and Ink UI, `src/tool
 | `src/cli/commands/` | `chat`, `code`, `run`, `doctor`, `replay`, `stats`, `events`, `index`, `mcp`, `prune-sessions`, `update` |
 | `src/cli/ui/` | Ink TUI. `App.tsx` is the root; `slash/handlers/` is one file per topic |
 | `src/cli/ui/slash/handlers/` | Per-topic slash handlers (≤200 LOC each). Adding a slash command = one handler file + one registry line in `commands.ts` |
-| `packages/core-utils` | Shared bits used across CLI / Desktop / Dashboard / ACP (`derive-prefix`, `tildeify`, `tool-kind`, `permission-types`) — `noExternal` bundled by tsup |
+| `packages/core-utils` | Shared bits used across CLI / Desktop / Dashboard / ACP (`derive-prefix`, `tildeify`, `tool-kind`, `permission-types`) |
 | `desktop/` | Tauri 2 client (separate package, React 19, Vite) |
-| `dashboard/` | Browser SPA — built into `dashboard/dist/` by tsup, served by `src/server/` |
+| `dashboard/` | Browser SPA — built into `dashboard/dist/` by Rolldown, served by `src/server/` |
 | `benchmarks/` | τ-bench + harvest harnesses. CI smoke-tests `--dry` (no LLM calls) |
 | `tests/` | Flat Vitest layout. `tests/comment-policy.test.ts` enforces the comment rules |
 | `dist/`, `.reasonix/semantic/`, `sessions/`, `.reasonix/sessions/` | **Generated / user-private — never hand-edit** |
@@ -59,11 +59,11 @@ Main source lives in `src/`: `src/cli/` holds CLI commands and Ink UI, `src/tool
 npm install                # Node 22+ workspace deps
 npm run dev                # tsx src/cli/index.ts (live source)
 npm run chat               # tsx src/cli/index.ts chat
-npm run build              # tsup → dist/ (+ dashboard vendor css copy)
-npm run lint               # biome check src tests
+npm run build              # Rolldown → dist/ + dashboard/dist (+ vendor css / grammars copy)
+npm run lint               # oxlint src tests dashboard/src desktop/src packages/core-utils/src
 npm run lint:fix
-npm run format
-npm run typecheck          # tsc --noEmit && tsc --noEmit -p dashboard
+npm run format             # oxfmt src tests dashboard/src desktop/src packages/core-utils/src
+npm run typecheck          # tsgo root/tests/dashboard/core-utils/desktop + declaration probes
 npm run test               # vitest run
 npm run test:watch
 npm run test:coverage      # v8, what CI runs
@@ -99,7 +99,7 @@ Enforcement: `bash bin/plan-lint.sh docs/plans/<plan>.md` must exit 0 (E001 file
 
 ## Coding Style & Naming Conventions
 
-Strict TypeScript, named exports, explicit `import type` for type-only imports. Biome enforces 2-space indentation, double quotes, semicolons, trailing commas, 100-column formatting. Prefer focused files with one responsibility; avoid `index.ts` barrels unless they meaningfully shrink the public surface. Comments explain non-obvious *why* only.
+Strict TypeScript, named exports, explicit `import type` for type-only imports. OXFmt/OXLint enforce 2-space indentation, double quotes, semicolons, trailing commas, and local lint rules. Prefer focused files with one responsibility; avoid `index.ts` barrels unless they meaningfully shrink the public surface. Comments explain non-obvious *why* only.
 
 ## Code rules (enforced — read `CONTRIBUTING.md`)
 
@@ -107,7 +107,7 @@ Strict TypeScript, named exports, explicit `import type` for type-only imports. 
 
 - **Comments default to none.** Only when *why* is non-obvious (hidden constraint, workaround, invariant the type system can't express). No "what" comments. One line max — multi-line means the code itself needs clarification.
 - **No module-level docstrings, section banners (`// ─── helpers ───`), conversation history (`// user reported X`), or restated `@param` docs.**
-- **TypeScript strict.** `noUncheckedIndexedAccess`, `noImplicitOverride`. No `any` without a `// biome-ignore` and a reason.
+- **TypeScript strict.** `noUncheckedIndexedAccess`, `noImplicitOverride`. No `any` without a scoped lint suppression and a reason.
 - **Libraries over hand-rolled.** Visual width → `string-width`. Grapheme segmentation → `Intl.Segmenter`. Color → `theme.ts` constants, not raw hex.
 - **Error handling.** Boundary code validates (user input, network, FS). Internal code trusts. No try/catch for "internal" errors. No graceful fallback silently masking bugs — log + crash > silent wrong output.
 - **Imports.** Explicit `import type` for type-only. No barrel re-exports. Named exports only — no `export default`. Entry: `src/index.ts`.
@@ -124,7 +124,7 @@ Strict TypeScript, named exports, explicit `import type` for type-only imports. 
 
 ## Testing Guidelines
 
-Vitest 2.x with `describe`, `it`, `expect` (`globals: false` — import them). Name tests `<module>.test.ts` flat in `tests/`. Focus on regressions, invariants, edge cases, and boundary behavior — not type signatures or coverage bumps. `tests/fixtures/` and `tests/helpers/` are shared scaffolds; `tests/repair/` mirrors the repair pipeline. CI runs on Node 22 (Ubuntu + Windows), then smoke-tests the τ-bench runner with `--dry` (no `DEEPSEEK_API_KEY` needed). Run targeted tests while developing, then `npm run verify`.
+Vitest 4.x with `describe`, `it`, `expect` (`globals: false` — import them). Name tests `<module>.test.ts` flat in `tests/`. Focus on regressions, invariants, edge cases, and boundary behavior — not type signatures or coverage bumps. `tests/fixtures/` and `tests/helpers/` are shared scaffolds; `tests/repair/` mirrors the repair pipeline. CI runs on Node 22 (Ubuntu + Windows), then smoke-tests the τ-bench runner with `--dry` (no `DEEPSEEK_API_KEY` needed). Run targeted tests while developing, then `npm run verify`.
 
 ## Commit & Pull Request Guidelines
 
@@ -136,11 +136,11 @@ Keep secrets out of source. Use `.env.example` for documented variables, local `
 
 ## Things to leave alone
 
-- `dist/` — tsup output, regenerated.
+- `dist/` — Rolldown output, regenerated.
 - `.reasonix/semantic/` — auto-generated vector index.
 - `sessions/`, `.reasonix/sessions/` — user-private, gitignored.
 - `data/deepseek-tokenizer.json.gz` — shipped tokenizer asset.
-- `dashboard/codemirror.js` — vendored, biome-ignored.
+- `dashboard/codemirror.js` — vendored, formatter-ignored.
 - `CHANGELOG.md` — maintainer-only.
 
 ## h5i Integration

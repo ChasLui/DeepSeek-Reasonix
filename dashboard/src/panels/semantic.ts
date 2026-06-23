@@ -1,3 +1,4 @@
+import type { VNode } from "preact";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { t, useLang } from "../i18n/index.js";
 import { api } from "../lib/api.js";
@@ -118,7 +119,7 @@ export interface SemanticDraftValidation {
   error: string | null;
 }
 
-export function SemanticPanel() {
+export function SemanticPanel(): VNode | null {
   useLang();
   const [data, setData] = useState<SemanticData | null>(null);
   const [draft, setDraft] = useState<SemanticConfigDraft | null>(null);
@@ -294,12 +295,15 @@ export function SemanticPanel() {
     : draft.openaiCompat.model;
 
   const sectionH3 = (text: string) => html`
-    <h3 style="margin:18px 0 8px;font-family:var(--font-mono);font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.1em">${text}</h3>
+    <h3
+      style="margin:18px 0 8px;font-family:var(--font-mono);font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.1em"
+    >
+      ${text}
+    </h3>
   `;
 
   const idx = data.index;
   const indexReady = idx?.exists === true && idx.compatible !== false;
-  const indexMismatch = idx?.exists === true && idx.compatible === false;
   const semanticValidation = validateSemanticDraft(draft);
   const semanticDraftBlocked = draftDirty || semanticValidation.error !== null;
   return html`
@@ -309,11 +313,15 @@ export function SemanticPanel() {
           <span class=${`chip-f static ${indexReady ? "active" : ""}`}>
             ${indexReady ? t("semantic.indexBuilt") : t("semantic.noIndex")}
           </span>
-          ${
-            ready
-              ? html`<span class="chip-f static" style="border-color:var(--c-ok);color:var(--c-ok)">${t("semantic.ready")}</span>`
-              : html`<span class="chip-f static" style="border-color:var(--c-warn);color:var(--c-warn)">${t("semantic.setupNeeded")}</span>`
-          }
+          ${ready
+            ? html`<span class="chip-f static" style="border-color:var(--c-ok);color:var(--c-ok)"
+                >${t("semantic.ready")}</span
+              >`
+            : html`<span
+                class="chip-f static"
+                style="border-color:var(--c-warn);color:var(--c-warn)"
+                >${t("semantic.setupNeeded")}</span
+              >`}
         </div>
         ${error ? html`<div class="card accent-err">${error}</div>` : null}
 
@@ -337,9 +345,8 @@ export function SemanticPanel() {
               <option value="openai-compat">OpenAI-Compatible</option>
             </select>
           </div>
-          ${
-            draft.provider === "ollama"
-              ? html`
+          ${draft.provider === "ollama"
+            ? html`
                 <div class="form-row">
                   <span class="lbl">${t("semantic.model")}</span>
                   <input
@@ -357,7 +364,7 @@ export function SemanticPanel() {
                   />
                 </div>
               `
-              : html`
+            : html`
                 <div class="form-row">
                   <span class="lbl">${t("semantic.apiUrl")}</span>
                   <input
@@ -383,7 +390,9 @@ export function SemanticPanel() {
                   <input
                     class="input mono"
                     type="password"
-                    placeholder=${draft.openaiCompat.apiKeySet ? t("semantic.keepExistingKey") : "sk-..."}
+                    placeholder=${draft.openaiCompat.apiKeySet
+                      ? t("semantic.keepExistingKey")
+                      : "sk-..."}
                     value=${draft.openaiCompat.apiKey}
                     onInput=${(e: Event) => {
                       draftDirtyRef.current = true;
@@ -397,7 +406,9 @@ export function SemanticPanel() {
                       });
                     }}
                   />
-                  <div style="color:var(--fg-3);font-size:12px">${t("semantic.apiKeyStoredNote")}</div>
+                  <div style="color:var(--fg-3);font-size:12px">
+                    ${t("semantic.apiKeyStoredNote")}
+                  </div>
                 </div>
                 <div class="form-row">
                   <span class="lbl">${t("semantic.model")}</span>
@@ -440,7 +451,9 @@ export function SemanticPanel() {
                   />
                 </div>
                 <details style="margin-top:10px">
-                  <summary style="cursor:pointer;color:var(--fg-2);font-size:12px">${t("semantic.customRequestBody")}</summary>
+                  <summary style="cursor:pointer;color:var(--fg-2);font-size:12px">
+                    ${t("semantic.customRequestBody")}
+                  </summary>
                   <div class="form-row" style="margin-top:10px">
                     <span class="lbl">${t("semantic.customRequestBody")}</span>
                     <textarea
@@ -461,85 +474,112 @@ export function SemanticPanel() {
                     ></textarea>
                   </div>
                 </details>
-                ${
-                  semanticValidation.error
-                    ? html`<div style="color:var(--c-err);font-size:12px;margin-top:-2px">${semanticValidation.error}</div>`
-                    : null
-                }
-              `
-          }
+                ${semanticValidation.error
+                  ? html`<div style="color:var(--c-err);font-size:12px;margin-top:-2px">
+                      ${semanticValidation.error}
+                    </div>`
+                  : null}
+              `}
           <div style="display:flex;gap:6px;margin-top:10px">
-            <button class="btn primary" disabled=${busy || semanticValidation.error !== null} onClick=${saveProviderConfig}>${t("common.save")}</button>
+            <button
+              class="btn primary"
+              disabled=${busy || semanticValidation.error !== null}
+              onClick=${saveProviderConfig}
+            >
+              ${t("common.save")}
+            </button>
           </div>
         </div>
         ${info ? html`<div><span class="pill info">${info}</span></div>` : null}
-
         ${indexReady ? html`<${SemanticSearchSection} />` : null}
-
-        ${
-          isOllama && !binaryFound
-            ? html`
+        ${isOllama && !binaryFound
+          ? html`
               <div class="card">
                 <div class="card-h"><span class="title">${t("semantic.installOllama")}</span></div>
                 <div class="card-b" style="font-size:13px">
                   ${t("semantic.installOllamaDesc")}
                   <ul style="margin:10px 0 4px 18px;padding:0">
-                    <li><strong>${t("semantic.macWindows")}</strong> ${t("semantic.download")} <a href="https://ollama.com/download" target="_blank" rel="noreferrer">ollama.com/download</a></li>
-                    <li><strong>${t("semantic.linux")}</strong> <code class="mono">curl -fsSL https://ollama.com/install.sh | sh</code></li>
+                    <li>
+                      <strong>${t("semantic.macWindows")}</strong> ${t("semantic.download")}
+                      <a href="https://ollama.com/download" target="_blank" rel="noreferrer"
+                        >ollama.com/download</a
+                      >
+                    </li>
+                    <li>
+                      <strong>${t("semantic.linux")}</strong>
+                      <code class="mono">curl -fsSL https://ollama.com/install.sh | sh</code>
+                    </li>
                   </ul>
-                  <div style="color:var(--fg-3);margin-top:8px">${t("semantic.refreshHint", { model: modelName })}</div>
+                  <div style="color:var(--fg-3);margin-top:8px">
+                    ${t("semantic.refreshHint", { model: modelName })}
+                  </div>
                 </div>
               </div>
             `
-            : null
-        }
-        ${
-          isOllama && binaryFound && !daemonRunning
-            ? html`
+          : null}
+        ${isOllama && binaryFound && !daemonRunning
+          ? html`
               <div class="card">
                 <div class="card-h"><span class="title">${t("semantic.daemon")}</span></div>
                 <div class="card-b" style="font-size:13px">
                   ${t("semantic.daemonDesc")}
                   <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
-                    <button class="primary" disabled=${busy} onClick=${startDaemon}>${t("semantic.startDaemon")}</button>
-                    <span style="color:var(--fg-3);font-size:12px">${t("semantic.runsOllama")}</span>
+                    <button class="primary" disabled=${busy} onClick=${startDaemon}>
+                      ${t("semantic.startDaemon")}
+                    </button>
+                    <span style="color:var(--fg-3);font-size:12px"
+                      >${t("semantic.runsOllama")}</span
+                    >
                   </div>
                 </div>
               </div>
             `
-            : null
-        }
-        ${
-          isOllama && daemonRunning && !modelPulled
-            ? html`
+          : null}
+        ${isOllama && daemonRunning && !modelPulled
+          ? html`
               <div class="card">
                 <div class="card-h"><span class="title">${t("semantic.model")}</span></div>
                 <div class="card-b" style="font-size:13px">
-                  ${t("semantic.modelMissing", { model: modelName })}${pulling ? "" : ` ${t("semantic.modelSize")}`}
+                  ${t("semantic.modelMissing", { model: modelName })}${pulling
+                    ? ""
+                    : ` ${t("semantic.modelSize")}`}
                   <div style="display:flex;gap:8px;margin-top:10px">
-                    <button class="primary" disabled=${busy || pulling} onClick=${() => pullModel(modelName)}>
-                      ${pulling ? t("semantic.pulling") : t("semantic.pullModel", { model: modelName })}
+                    <button
+                      class="primary"
+                      disabled=${busy || pulling}
+                      onClick=${() => pullModel(modelName)}
+                    >
+                      ${pulling
+                        ? t("semantic.pulling")
+                        : t("semantic.pullModel", { model: modelName })}
                     </button>
                   </div>
-                  ${
-                    pull
-                      ? html`
-                        <div style="margin-top:10px;display:flex;gap:10px;align-items:center;font-size:11.5px">
-                          <span class=${`pill ${pull.status === "done" ? "ok" : pull.status === "error" ? "err" : ""}`}>${pull.status}</span>
-                          <span style="color:var(--fg-3)">${((Date.now() - pull.startedAt) / 1000).toFixed(1)}s</span>
-                          ${pull.lastLine ? html`<code class="mono" style="color:var(--fg-3)">${pull.lastLine}</code>` : null}
+                  ${pull
+                    ? html`
+                        <div
+                          style="margin-top:10px;display:flex;gap:10px;align-items:center;font-size:11.5px"
+                        >
+                          <span
+                            class=${`pill ${pull.status === "done" ? "ok" : pull.status === "error" ? "err" : ""}`}
+                            >${pull.status}</span
+                          >
+                          <span style="color:var(--fg-3)"
+                            >${((Date.now() - pull.startedAt) / 1000).toFixed(1)}s</span
+                          >
+                          ${pull.lastLine
+                            ? html`<code class="mono" style="color:var(--fg-3)"
+                                >${pull.lastLine}</code
+                              >`
+                            : null}
                         </div>
                       `
-                      : null
-                  }
+                    : null}
                 </div>
               </div>
             `
-            : null
-        }
-        ${
-          !isOllama
-            ? html`
+          : null}
+        ${!isOllama
+          ? html`
               <div class="card">
                 <div class="card-h"><span class="title">${t("semantic.remoteProvider")}</span></div>
                 <div class="card-b" style="font-size:13px;color:var(--fg-2)">
@@ -547,17 +587,13 @@ export function SemanticPanel() {
                 </div>
               </div>
             `
-            : null
-        }
-
-        ${
-          job
-            ? html`
+          : null}
+        ${job
+          ? html`
               ${sectionH3(t("semantic.job"))}
               <${SemanticJobView} job=${job} running=${running} />
             `
-            : null
-        }
+          : null}
       </div>
 
       <aside style="display:flex;flex-direction:column;gap:10px">
@@ -565,69 +601,157 @@ export function SemanticPanel() {
           <div class="card-h">
             <span class="title">${t("semantic.indexStatus")}</span>
             <span class="meta">
-              ${
-                idx?.exists
-                  ? idx.compatible === false
-                    ? html`<span class="pill warn">${t("semantic.incompatibleStatus")}</span>`
-                    : html`<span class="pill ok">${t("semantic.builtStatus")}</span>`
-                  : html`<span class="pill">${t("system.none")}</span>`
-              }
+              ${idx?.exists
+                ? idx.compatible === false
+                  ? html`<span class="pill warn">${t("semantic.incompatibleStatus")}</span>`
+                  : html`<span class="pill ok">${t("semantic.builtStatus")}</span>`
+                : html`<span class="pill">${t("system.none")}</span>`}
             </span>
           </div>
-          ${
-            idx?.exists
-              ? html`
-                <div class="rail-kv"><span class="k">${t("semantic.provider")}</span><span class="v">${idx.builtWith?.provider ?? idx.provider ?? provider}</span></div>
-                <div class="rail-kv"><span class="k">${t("semantic.chunks")}</span><span class="v">${fmtNum(idx.chunks)}</span></div>
-                <div class="rail-kv"><span class="k">${t("semantic.files")}</span><span class="v">${fmtNum(idx.files)}</span></div>
-                <div class="rail-kv"><span class="k">${t("semantic.model")}</span><span class="v" style="font-size:11px">${idx.builtWith?.model ?? idx.model ?? modelName}</span></div>
-                <div class="rail-kv"><span class="k">${t("semantic.dim")}</span><span class="v">${fmtNum(idx.dim)}</span></div>
-                <div class="rail-kv"><span class="k">${t("semantic.size")}</span><span class="v">${fmtBytes(idx.sizeBytes)}</span></div>
-                <div class="rail-kv"><span class="k">${t("semantic.lastBuild")}</span><span class="v">${fmtRelativeTime(idx.lastBuiltMs ?? null)}</span></div>
-                ${
-                  idx.compatible === false
-                    ? html`
-                      <div class="rail-kv"><span class="k">${t("semantic.builtWith")}</span><span class="v" style="font-size:11px">${idx.builtWith?.provider} · ${idx.builtWith?.model}</span></div>
-                      <div class="rail-kv"><span class="k">${t("semantic.currentTarget")}</span><span class="v" style="font-size:11px">${idx.current?.provider} · ${idx.current?.model}</span></div>
-                      <div style="color:var(--c-warn);font-size:12px;padding-top:8px">${t("semantic.incompatibleHint")}</div>
+          ${idx?.exists
+            ? html`
+                <div class="rail-kv">
+                  <span class="k">${t("semantic.provider")}</span
+                  ><span class="v">${idx.builtWith?.provider ?? idx.provider ?? provider}</span>
+                </div>
+                <div class="rail-kv">
+                  <span class="k">${t("semantic.chunks")}</span
+                  ><span class="v">${fmtNum(idx.chunks)}</span>
+                </div>
+                <div class="rail-kv">
+                  <span class="k">${t("semantic.files")}</span
+                  ><span class="v">${fmtNum(idx.files)}</span>
+                </div>
+                <div class="rail-kv">
+                  <span class="k">${t("semantic.model")}</span
+                  ><span class="v" style="font-size:11px"
+                    >${idx.builtWith?.model ?? idx.model ?? modelName}</span
+                  >
+                </div>
+                <div class="rail-kv">
+                  <span class="k">${t("semantic.dim")}</span
+                  ><span class="v">${fmtNum(idx.dim)}</span>
+                </div>
+                <div class="rail-kv">
+                  <span class="k">${t("semantic.size")}</span
+                  ><span class="v">${fmtBytes(idx.sizeBytes)}</span>
+                </div>
+                <div class="rail-kv">
+                  <span class="k">${t("semantic.lastBuild")}</span
+                  ><span class="v">${fmtRelativeTime(idx.lastBuiltMs ?? null)}</span>
+                </div>
+                ${idx.compatible === false
+                  ? html`
+                      <div class="rail-kv">
+                        <span class="k">${t("semantic.builtWith")}</span
+                        ><span class="v" style="font-size:11px"
+                          >${idx.builtWith?.provider} · ${idx.builtWith?.model}</span
+                        >
+                      </div>
+                      <div class="rail-kv">
+                        <span class="k">${t("semantic.currentTarget")}</span
+                        ><span class="v" style="font-size:11px"
+                          >${idx.current?.provider} · ${idx.current?.model}</span
+                        >
+                      </div>
+                      <div style="color:var(--c-warn);font-size:12px;padding-top:8px">
+                        ${t("semantic.incompatibleHint")}
+                      </div>
                     `
-                    : null
-                }
+                  : null}
               `
-              : html`<div style="color:var(--fg-3);font-size:12.5px;padding:6px 0">${t("semantic.runIndexHint")}</div>`
-          }
+            : html`<div style="color:var(--fg-3);font-size:12.5px;padding:6px 0">
+                ${t("semantic.runIndexHint")}
+              </div>`}
           <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
-            <button class="primary" disabled=${busy || running || !ready || semanticDraftBlocked} onClick=${() => start(false)}>${indexReady ? t("semantic.reIndex") : t("semantic.build")}</button>
-            ${
-              idx?.exists
-                ? html`<button disabled=${busy || running || !ready || semanticDraftBlocked} onClick=${() => start(true)}>${t("semantic.rebuild")}</button>`
-                : null
-            }
-            ${
-              running
-                ? html`<button onClick=${stop} style="border-color:var(--c-err);color:var(--c-err)">${t("semantic.stop")}</button>`
-                : null
-            }
+            <button
+              class="primary"
+              disabled=${busy || running || !ready || semanticDraftBlocked}
+              onClick=${() => start(false)}
+            >
+              ${indexReady ? t("semantic.reIndex") : t("semantic.build")}
+            </button>
+            ${idx?.exists
+              ? html`<button
+                  disabled=${busy || running || !ready || semanticDraftBlocked}
+                  onClick=${() => start(true)}
+                >
+                  ${t("semantic.rebuild")}
+                </button>`
+              : null}
+            ${running
+              ? html`<button onClick=${stop} style="border-color:var(--c-err);color:var(--c-err)">
+                  ${t("semantic.stop")}
+                </button>`
+              : null}
           </div>
         </div>
 
         <div class="card">
-          <div class="card-h"><span class="title">${isOllama ? t("semantic.ollama") : t("semantic.openaiCompat")}</span></div>
-          ${
-            isOllama
-              ? html`
-                <div class="rail-kv"><span class="k">${t("semantic.binary")}</span><span class="v">${binaryFound ? html`<span class="pill ok">${t("semantic.found")}</span>` : html`<span class="pill err">${t("semantic.missing")}</span>`}</span></div>
-                <div class="rail-kv"><span class="k">${t("semantic.daemonStatus")}</span><span class="v">${daemonRunning ? html`<span class="pill ok">${t("semantic.up")}</span>` : html`<span class="pill warn">${t("semantic.down")}</span>`}</span></div>
-                <div class="rail-kv"><span class="k">${t("semantic.model")}</span><span class="v">${modelPulled ? html`<span class="pill ok">${t("semantic.pulled")}</span>` : html`<span class="pill warn">${t("semantic.missing")}</span>`}</span></div>
+          <div class="card-h">
+            <span class="title"
+              >${isOllama ? t("semantic.ollama") : t("semantic.openaiCompat")}</span
+            >
+          </div>
+          ${isOllama
+            ? html`
+                <div class="rail-kv">
+                  <span class="k">${t("semantic.binary")}</span
+                  ><span class="v"
+                    >${binaryFound
+                      ? html`<span class="pill ok">${t("semantic.found")}</span>`
+                      : html`<span class="pill err">${t("semantic.missing")}</span>`}</span
+                  >
+                </div>
+                <div class="rail-kv">
+                  <span class="k">${t("semantic.daemonStatus")}</span
+                  ><span class="v"
+                    >${daemonRunning
+                      ? html`<span class="pill ok">${t("semantic.up")}</span>`
+                      : html`<span class="pill warn">${t("semantic.down")}</span>`}</span
+                  >
+                </div>
+                <div class="rail-kv">
+                  <span class="k">${t("semantic.model")}</span
+                  ><span class="v"
+                    >${modelPulled
+                      ? html`<span class="pill ok">${t("semantic.pulled")}</span>`
+                      : html`<span class="pill warn">${t("semantic.missing")}</span>`}</span
+                  >
+                </div>
               `
-              : html`
-                <div class="rail-kv"><span class="k">${t("semantic.apiUrl")}</span><span class="v" style="font-size:11px;max-width:160px;overflow-wrap:anywhere;word-break:break-word;text-align:right">${remote?.baseUrl ?? draft.openaiCompat.baseUrl}</span></div>
-                <div class="rail-kv"><span class="k">${t("semantic.apiKey")}</span><span class="v">${remote?.apiKeySet ? html`<span class="pill ok">${t("semantic.found")}</span>` : html`<span class="pill warn">${t("semantic.missing")}</span>`}</span></div>
-                <div class="rail-kv"><span class="k">${t("semantic.model")}</span><span class="v" style="font-size:11px">${remote?.model ?? draft.openaiCompat.model}</span></div>
-                <div class="rail-kv"><span class="k">${t("semantic.extraBody")}</span><span class="v">${fmtNum(remote?.extraBodyKeys.length ?? 0)}</span></div>
-                <div class="rail-kv"><span class="k">${t("semantic.batchSize")}</span><span class="v">${remote?.batchSize ?? 10}</span></div>
-              `
-          }
+            : html`
+                <div class="rail-kv">
+                  <span class="k">${t("semantic.apiUrl")}</span
+                  ><span
+                    class="v"
+                    style="font-size:11px;max-width:160px;overflow-wrap:anywhere;word-break:break-word;text-align:right"
+                    >${remote?.baseUrl ?? draft.openaiCompat.baseUrl}</span
+                  >
+                </div>
+                <div class="rail-kv">
+                  <span class="k">${t("semantic.apiKey")}</span
+                  ><span class="v"
+                    >${remote?.apiKeySet
+                      ? html`<span class="pill ok">${t("semantic.found")}</span>`
+                      : html`<span class="pill warn">${t("semantic.missing")}</span>`}</span
+                  >
+                </div>
+                <div class="rail-kv">
+                  <span class="k">${t("semantic.model")}</span
+                  ><span class="v" style="font-size:11px"
+                    >${remote?.model ?? draft.openaiCompat.model}</span
+                  >
+                </div>
+                <div class="rail-kv">
+                  <span class="k">${t("semantic.extraBody")}</span
+                  ><span class="v">${fmtNum(remote?.extraBodyKeys.length ?? 0)}</span>
+                </div>
+                <div class="rail-kv">
+                  <span class="k">${t("semantic.batchSize")}</span
+                  ><span class="v">${remote?.batchSize ?? 10}</span>
+                </div>
+              `}
         </div>
 
         <${SemanticExcludesCard} />
@@ -753,7 +877,11 @@ function SemanticSearchSection() {
   return html`
     <div style="margin-bottom:14px">
       <div style="position:relative">
-        <div style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--c-brand);font-family:var(--font-mono);font-size:14px;pointer-events:none">≈</div>
+        <div
+          style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--c-brand);font-family:var(--font-mono);font-size:14px;pointer-events:none"
+        >
+          ≈
+        </div>
         <input
           type="text"
           class="mono"
@@ -770,23 +898,28 @@ function SemanticSearchSection() {
           }}
         />
       </div>
-      ${
-        hits || busy || error
-          ? html`
-            <div style="font-family:var(--font-mono);font-size:11px;color:var(--fg-3);margin:8px 0 6px;display:flex;align-items:center;gap:8px">
-              ${
-                busy
-                  ? html`<span>${t("semantic.searching")}</span>`
-                  : error
-                    ? html`<span style="color:var(--c-err)">${error}</span>`
-                    : hits
-                      ? html`<span>${t("semantic.results", { count: hits.length, s: hits.length === 1 ? "" : "s", ms: meta?.elapsedMs ?? 0, model: meta?.model ?? "" })}</span>`
-                      : null
-              }
+      ${hits || busy || error
+        ? html`
+            <div
+              style="font-family:var(--font-mono);font-size:11px;color:var(--fg-3);margin:8px 0 6px;display:flex;align-items:center;gap:8px"
+            >
+              ${busy
+                ? html`<span>${t("semantic.searching")}</span>`
+                : error
+                  ? html`<span style="color:var(--c-err)">${error}</span>`
+                  : hits
+                    ? html`<span
+                        >${t("semantic.results", {
+                          count: hits.length,
+                          s: hits.length === 1 ? "" : "s",
+                          ms: meta?.elapsedMs ?? 0,
+                          model: meta?.model ?? "",
+                        })}</span
+                      >`
+                    : null}
             </div>
-            ${
-              hits && hits.length > 0
-                ? html`
+            ${hits && hits.length > 0
+              ? html`
                   <div class="card" style="padding:0;max-height:420px;overflow-y:auto">
                     ${hits.map(
                       (h) => html`
@@ -802,13 +935,13 @@ function SemanticSearchSection() {
                     )}
                   </div>
                 `
-                : hits && hits.length === 0 && !busy
-                  ? html`<div class="card" style="color:var(--fg-3);font-size:12px">${t("semantic.noMatches")}</div>`
-                  : null
-            }
+              : hits && hits.length === 0 && !busy
+                ? html`<div class="card" style="color:var(--fg-3);font-size:12px">
+                    ${t("semantic.noMatches")}
+                  </div>`
+                : null}
           `
-          : null
-      }
+        : null}
     </div>
   `;
 }
@@ -924,10 +1057,17 @@ function SemanticExcludesCard() {
       <div class="card-h">
         <span class="title">${t("semantic.indexConfig")}</span>
         <span class="meta">
-          <a class="mono" style="color:var(--c-brand);text-decoration:none;font-size:11px;cursor:pointer" onClick=${reset}>${t("semantic.reset")}</a>
+          <a
+            class="mono"
+            style="color:var(--c-brand);text-decoration:none;font-size:11px;cursor:pointer"
+            onClick=${reset}
+            >${t("semantic.reset")}</a
+          >
         </span>
       </div>
-      ${info ? html`<div style="margin-bottom:8px"><span class="pill ok">${info}</span></div>` : null}
+      ${info
+        ? html`<div style="margin-bottom:8px"><span class="pill ok">${info}</span></div>`
+        : null}
       ${error ? html`<div class="card accent-err" style="margin-bottom:8px">${error}</div>` : null}
 
       <${ChipFormRow}
@@ -956,8 +1096,14 @@ function SemanticExcludesCard() {
         placeholder="**/*.test.ts"
       />
 
-      <div class="checkbox-row" style="margin-top:8px;cursor:pointer" onClick=${() => setDraft({ ...draft, respectGitignore: !draft.respectGitignore })}>
-        <span class=${`box ${draft.respectGitignore ? "on" : ""}`}>${draft.respectGitignore ? "✓" : ""}</span>
+      <div
+        class="checkbox-row"
+        style="margin-top:8px;cursor:pointer"
+        onClick=${() => setDraft({ ...draft, respectGitignore: !draft.respectGitignore })}
+      >
+        <span class=${`box ${draft.respectGitignore ? "on" : ""}`}
+          >${draft.respectGitignore ? "✓" : ""}</span
+        >
         <span>${t("semantic.respectGitignore")}</span>
       </div>
 
@@ -969,18 +1115,29 @@ function SemanticExcludesCard() {
           min="1024"
           step="1024"
           value=${draft.maxFileBytes}
-          onInput=${(e: Event) => setDraft({ ...draft, maxFileBytes: Number((e.target as HTMLInputElement).value) || 0 })}
+          onInput=${(e: Event) =>
+            setDraft({ ...draft, maxFileBytes: Number((e.target as HTMLInputElement).value) || 0 })}
           style="font-size:12px"
         />
-        <span class="help">${t("semantic.skipLarger", { size: (draft.maxFileBytes / 1024 / 1024).toFixed(1) })}</span>
+        <span class="help"
+          >${t("semantic.skipLarger", {
+            size: (draft.maxFileBytes / 1024 / 1024).toFixed(1),
+          })}</span
+        >
       </div>
 
       <div style="display:flex;gap:6px;margin-top:10px">
-        <button class="btn ghost" style="flex:1" disabled=${busy} onClick=${runPreview}><span class="g">⊕</span><span>${t("semantic.preview")}</span></button>
-        <button class="btn primary" style="flex:1" disabled=${busy} onClick=${save}>${t("common.save")}</button>
+        <button class="btn ghost" style="flex:1" disabled=${busy} onClick=${runPreview}>
+          <span class="g">⊕</span><span>${t("semantic.preview")}</span>
+        </button>
+        <button class="btn primary" style="flex:1" disabled=${busy} onClick=${save}>
+          ${t("common.save")}
+        </button>
       </div>
 
-      ${preview ? html`<div style="margin-top:10px"><${ExcludesPreview} preview=${preview} /></div>` : null}
+      ${preview
+        ? html`<div style="margin-top:10px"><${ExcludesPreview} preview=${preview} /></div>`
+        : null}
     </div>
   `;
 }
@@ -1002,38 +1159,38 @@ function ExcludesPreview({ preview }: { preview: PreviewData }) {
   ].filter((k) => (buckets[k] || 0) > 0);
   return html`
     <div class="excludes-preview">
-      <div class="summary">${t("semantic.previewSummary", { included: preview.filesIncluded, skipped: totalSkipped })}</div>
-      ${
-        reasons.length === 0
-          ? html`<div style="color:var(--fg-3)">${t("semantic.nothingSkipped")}</div>`
-          : reasons.map(
-              (r) => html`
+      <div class="summary">
+        ${t("semantic.previewSummary", { included: preview.filesIncluded, skipped: totalSkipped })}
+      </div>
+      ${reasons.length === 0
+        ? html`<div style="color:var(--fg-3)">${t("semantic.nothingSkipped")}</div>`
+        : reasons.map(
+            (r) => html`
               <details>
                 <summary><strong>${r}: ${buckets[r]}</strong></summary>
                 <ul>
                   ${(samples[r] || []).map((p) => html`<li><code>${p}</code></li>`)}
-                  ${
-                    (buckets[r] || 0) > (samples[r] || []).length
-                      ? html`<li style="color:var(--fg-3)">…${(buckets[r] || 0) - (samples[r] || []).length} more</li>`
-                      : null
-                  }
+                  ${(buckets[r] || 0) > (samples[r] || []).length
+                    ? html`<li style="color:var(--fg-3)">
+                        …${(buckets[r] || 0) - (samples[r] || []).length} more
+                      </li>`
+                    : null}
                 </ul>
               </details>
             `,
-            )
-      }
-      ${
-        preview.sampleIncluded?.length
-          ? html`
+          )}
+      ${preview.sampleIncluded?.length
+        ? html`
             <details>
-              <summary>${t("semantic.firstIncluded", { count: preview.sampleIncluded.length })}</summary>
+              <summary>
+                ${t("semantic.firstIncluded", { count: preview.sampleIncluded.length })}
+              </summary>
               <ul>
                 ${preview.sampleIncluded.map((p) => html`<li><code>${p}</code></li>`)}
               </ul>
             </details>
           `
-          : null
-      }
+        : null}
     </div>
   `;
 }
@@ -1064,13 +1221,23 @@ function ChipFormRow({
   };
   return html`
     <div class="form-row">
-      <span class="lbl">${label}${sub ? html`<span style="color:var(--fg-3);font-weight:400;text-transform:none;letter-spacing:0"> · ${sub}</span>` : null}</span>
+      <span class="lbl"
+        >${label}${sub
+          ? html`<span
+              style="color:var(--fg-3);font-weight:400;text-transform:none;letter-spacing:0"
+            >
+              · ${sub}</span
+            >`
+          : null}</span
+      >
       <div style="display:flex;flex-wrap:wrap;gap:4px">
         ${value.map(
           (e) => html`
             <span class="chip-f static">
               <span>${e}</span>
-              <span class="x" style="cursor:pointer" onClick=${() => remove(e)} title="remove">×</span>
+              <span class="x" style="cursor:pointer" onClick=${() => remove(e)} title="remove"
+                >×</span
+              >
             </span>
           `,
         )}
@@ -1114,41 +1281,70 @@ function SemanticJobView({ job, running }: { job: SemanticJob; running: boolean 
   const elapsedSeconds = (elapsedBase - job.startedAt) / 1000;
   const elapsed = elapsedSeconds < 0.1 ? "<0.1s" : `${elapsedSeconds.toFixed(1)}s`;
   const phaseSummary =
-    job.phase === "error" && job.lastPhase === "setup"
-      ? t("semantic.setupFailed")
-      : phaseLabel;
+    job.phase === "error" && job.lastPhase === "setup" ? t("semantic.setupFailed") : phaseLabel;
 
   return html`
     <div class="kv">
-      <div><span class="kv-key">phase</span>
-        <span class=${`pill ${job.phase === "error" ? "pill-err" : job.phase === "cancelled" ? "warn" : running ? "pill-active" : "pill-dim"}`}>${phaseSummary}</span>
-        ${job.aborted && running ? html`<span class="pill warn" style="margin-left: 6px;">${t("semantic.stopping")}</span>` : null}
+      <div>
+        <span class="kv-key">phase</span>
+        <span
+          class=${`pill ${job.phase === "error" ? "pill-err" : job.phase === "cancelled" ? "warn" : running ? "pill-active" : "pill-dim"}`}
+          >${phaseSummary}</span
+        >
+        ${job.aborted && running
+          ? html`<span class="pill warn" style="margin-left: 6px;">${t("semantic.stopping")}</span>`
+          : null}
         <span style="color:var(--fg-3);margin-left:8px">${elapsed}</span>
       </div>
-      ${
-        job.filesScanned !== null && job.filesScanned !== undefined
-          ? html`<div><span class="kv-key">${t("semantic.files")}</span>${t("semantic.scanned", { count: job.filesScanned })}${job.filesChanged != null ? ` · ${t("semantic.changed", { count: job.filesChanged })}` : ""}${job.filesSkipped ? ` · ${t("semantic.skipped", { count: job.filesSkipped })}` : ""}</div>`
-          : null
-      }
-      ${
-        total > 0
-          ? html`
+      ${job.filesScanned !== null && job.filesScanned !== undefined
+        ? html`<div>
+            <span class="kv-key">${t("semantic.files")}</span>${t("semantic.scanned", {
+              count: job.filesScanned,
+            })}${job.filesChanged != null
+              ? ` · ${t("semantic.changed", { count: job.filesChanged })}`
+              : ""}${job.filesSkipped
+              ? ` · ${t("semantic.skipped", { count: job.filesSkipped })}`
+              : ""}
+          </div>`
+        : null}
+      ${total > 0
+        ? html`
             <div>
-              <span class="kv-key">${t("semantic.chunks")}</span>${t("semantic.chunksProgress", { done: doneN, total, pct: (ratio * 100).toFixed(0) })}
+              <span class="kv-key">${t("semantic.chunks")}</span>${t("semantic.chunksProgress", {
+                done: doneN,
+                total,
+                pct: (ratio * 100).toFixed(0),
+              })}
             </div>
             <div class="bar" style="margin-top: 4px;">
-              <div class="fill" style=${`width: ${(ratio * 100).toFixed(1)}%; background: var(--primary);`}></div>
+              <div
+                class="fill"
+                style=${`width: ${(ratio * 100).toFixed(1)}%; background: var(--primary);`}
+              ></div>
             </div>
           `
-          : null
-      }
-      ${job.error ? html`<div><span class="kv-key">${t("semantic.phaseError")}</span><span class="err">${job.error}</span></div>` : null}
-      ${
-        job.result
-          ? html`<div><span class="kv-key">${t("semantic.result")}</span>${t("semantic.added", { count: job.result.chunksAdded })} · ${t("semantic.removed", { count: job.result.chunksRemoved })}${job.result.chunksSkipped ? ` · ${t("semantic.failed", { count: job.result.chunksSkipped })}` : ""} · ${(job.result.durationMs / 1000).toFixed(1)}s</div>`
-          : null
-      }
-      ${job.result?.skipBuckets ? html`<${SkipBucketsView} buckets=${job.result.skipBuckets} />` : null}
+        : null}
+      ${job.error
+        ? html`<div>
+            <span class="kv-key">${t("semantic.phaseError")}</span
+            ><span class="err">${job.error}</span>
+          </div>`
+        : null}
+      ${job.result
+        ? html`<div>
+            <span class="kv-key">${t("semantic.result")}</span>${t("semantic.added", {
+              count: job.result.chunksAdded,
+            })}
+            ·
+            ${t("semantic.removed", { count: job.result.chunksRemoved })}${job.result.chunksSkipped
+              ? ` · ${t("semantic.failed", { count: job.result.chunksSkipped })}`
+              : ""}
+            · ${(job.result.durationMs / 1000).toFixed(1)}s
+          </div>`
+        : null}
+      ${job.result?.skipBuckets
+        ? html`<${SkipBucketsView} buckets=${job.result.skipBuckets} />`
+        : null}
     </div>
   `;
 }
@@ -1170,7 +1366,12 @@ function SkipBucketsView({ buckets }: { buckets: Record<string, number> }) {
   const parts = order
     .filter(([k]) => (buckets[k] || 0) > 0)
     .map(([k, label]) => `${label}: ${buckets[k]}`);
-  return html`<div><span class="kv-key">${t("semantic.skipped")}</span>${t("semantic.skippedFiles", { total, details: parts.join(", ") })}</div>`;
+  return html`<div>
+    <span class="kv-key">${t("semantic.skipped")}</span>${t("semantic.skippedFiles", {
+      total,
+      details: parts.join(", "),
+    })}
+  </div>`;
 }
 
 function isActiveSemanticPhase(phase: string | undefined): boolean {

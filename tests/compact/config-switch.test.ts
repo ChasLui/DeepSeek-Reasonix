@@ -15,7 +15,7 @@ const origEnv = { ...process.env };
 beforeEach(async () => {
   workspace = await fs.mkdtemp(join(os.tmpdir(), "reasonix-cs-"));
   teeDir = await fs.mkdtemp(join(os.tmpdir(), "reasonix-cs-tee-"));
-  process.env.REASONIX_TEE = teeDir;
+  process.env["REASONIX_TEE"] = teeDir;
   resetTeeCache();
   resetCompactors();
   _resetDefaultsRegistered();
@@ -68,7 +68,7 @@ describe("compact config switch", () => {
 
   it("REASONIX_COMPACT_EXCLUDE env CSV becomes the exclude set", async () => {
     await makeLongLs();
-    process.env.REASONIX_COMPACT_EXCLUDE = "ls, tree";
+    process.env["REASONIX_COMPACT_EXCLUDE"] = "ls, tree";
     const reg = new ToolRegistry();
     registerShellTools(reg, { rootDir: workspace, allowAll: true });
     const out = await dispatch(reg, "run_command", { command: "ls" });

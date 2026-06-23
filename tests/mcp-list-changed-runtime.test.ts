@@ -66,14 +66,14 @@ describe("createMcpRuntime listChanged handling", () => {
   let previousHome: string | undefined;
 
   beforeEach(() => {
-    previousHome = process.env.REASONIX_HOME;
-    process.env.REASONIX_HOME = mkdtempSync(join(tmpdir(), "reasonix-list-changed-"));
+    previousHome = process.env["REASONIX_HOME"];
+    process.env["REASONIX_HOME"] = mkdtempSync(join(tmpdir(), "reasonix-list-changed-"));
     mocks.FakeMcpClient.instances.length = 0;
   });
 
   afterEach(() => {
     if (previousHome === undefined) Reflect.deleteProperty(process.env, "REASONIX_HOME");
-    else process.env.REASONIX_HOME = previousHome;
+    else process.env["REASONIX_HOME"] = previousHome;
     vi.restoreAllMocks();
   });
 

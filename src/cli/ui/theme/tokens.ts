@@ -9,56 +9,69 @@ export type ThemeName =
   | "github-light"
   | "high-contrast";
 
+export interface ThemeFg {
+  strong: string;
+  body: string;
+  sub: string;
+  meta: string;
+  faint: string;
+}
+
+export interface ThemeTone {
+  brand: string;
+  accent: string;
+  violet: string;
+  ok: string;
+  warn: string;
+  err: string;
+  info: string;
+}
+
+export interface ThemeSurface {
+  bg: string;
+  bgInput: string;
+  bgCode: string;
+  bgElev: string;
+}
+
+export type ThemeCardName =
+  | "user"
+  | "reasoning"
+  | "streaming"
+  | "task"
+  | "tool"
+  | "plan"
+  | "diff"
+  | "error"
+  | "warn"
+  | "usage"
+  | "subagent"
+  | "approval"
+  | "search"
+  | "memory"
+  | "ctx"
+  | "doctor"
+  | "branch";
+
+export interface ThemeCardToken {
+  color: string;
+  glyph: string;
+}
+
+export type ThemeCardMap = Record<ThemeCardName, ThemeCardToken>;
+
 export interface ThemeTokens {
-  fg: {
-    strong: string;
-    body: string;
-    sub: string;
-    meta: string;
-    faint: string;
-  };
-  tone: {
-    brand: string;
-    accent: string;
-    violet: string;
-    ok: string;
-    warn: string;
-    err: string;
-    info: string;
-  };
-  toneActive: ThemeTokens["tone"];
-  surface: {
-    bg: string;
-    bgInput: string;
-    bgCode: string;
-    bgElev: string;
-  };
-  card: Record<
-    | "user"
-    | "reasoning"
-    | "streaming"
-    | "task"
-    | "tool"
-    | "plan"
-    | "diff"
-    | "error"
-    | "warn"
-    | "usage"
-    | "subagent"
-    | "approval"
-    | "search"
-    | "memory"
-    | "ctx"
-    | "doctor"
-    | "branch",
-    { color: string; glyph: string }
-  >;
+  fg: ThemeFg;
+  tone: ThemeTone;
+  toneActive: ThemeTone;
+  surface: ThemeSurface;
+  card: ThemeCardMap;
 }
 
 type ThemeBase = Omit<ThemeTokens, "card">;
 
-function card(fg: ThemeTokens["fg"], tone: ThemeTokens["tone"]): ThemeTokens["card"] {
-  return {
+function card(fg: ThemeFg, tone: ThemeTone): ThemeCardMap {
+  return nullPrototype({
     user: { color: tone.brand, glyph: "◇" },
     reasoning: { color: tone.accent, glyph: "◆" },
     streaming: { color: tone.brand, glyph: "◈" },
@@ -76,7 +89,7 @@ function card(fg: ThemeTokens["fg"], tone: ThemeTokens["tone"]): ThemeTokens["ca
     ctx: { color: tone.brand, glyph: "◔" },
     doctor: { color: fg.meta, glyph: "⚕" },
     branch: { color: tone.violet, glyph: "⎇" },
-  };
+  });
 }
 
 function defineTheme(base: ThemeBase): ThemeTokens {
@@ -287,7 +300,7 @@ const highContrast = defineTheme({
   },
 });
 
-export const THEMES = {
+export const THEMES: Record<ThemeName, ThemeTokens> = nullPrototype({
   default: githubDark,
   dark,
   light,
@@ -295,7 +308,7 @@ export const THEMES = {
   "github-dark": githubDark,
   "github-light": githubLight,
   "high-contrast": highContrast,
-} as const satisfies Record<ThemeName, ThemeTokens>;
+});
 
 export const DEFAULT_THEME_NAME: ThemeName = "default";
 
@@ -316,7 +329,7 @@ export function themeTokens(name?: string | null): ThemeTokens {
   return THEMES[resolveThemeName(name)];
 }
 
-export const DEFAULT_THEME = THEMES[DEFAULT_THEME_NAME];
+export const DEFAULT_THEME: ThemeTokens = THEMES[DEFAULT_THEME_NAME];
 
 let activeTheme: ThemeTokens = DEFAULT_THEME;
 let activeThemeVersion = 0;
@@ -351,11 +364,11 @@ function proxyTokens<T extends object>(select: (theme: ThemeTokens) => T): T {
   });
 }
 
-export const FG = proxyTokens((theme) => theme.fg);
-export const TONE = proxyTokens((theme) => theme.tone);
-export const TONE_ACTIVE = proxyTokens((theme) => theme.toneActive);
-export const SURFACE = proxyTokens((theme) => theme.surface);
-export const CARD = proxyTokens((theme) => theme.card);
+export const FG: ThemeFg = proxyTokens((theme) => theme.fg);
+export const TONE: ThemeTone = proxyTokens((theme) => theme.tone);
+export const TONE_ACTIVE: ThemeTone = proxyTokens((theme) => theme.toneActive);
+export const SURFACE: ThemeSurface = proxyTokens((theme) => theme.surface);
+export const CARD: ThemeCardMap = proxyTokens((theme) => theme.card);
 
 export type CardTone = keyof ThemeTokens["card"];
 
@@ -367,7 +380,7 @@ const SYMBOL: Record<string, string> = nullPrototype({ USD: "$", CNY: "¥" });
 /** Format an amount already in `currency`. Undefined currency → CNY (matches pre-fix behavior). */
 export function formatBalance(
   amount: number,
-  currency?: string,
+  currency?: string | undefined,
   opts?: { fractionDigits?: number; label?: boolean },
 ): string {
   const cur = currency ?? "CNY";

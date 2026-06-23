@@ -65,7 +65,7 @@ describe("storage/memory-store-sqlite", () => {
 
   it("round-trips a memory and removes it", () => {
     const store = new SqliteMemoryStore(getDb(tmp().db));
-    store.write(ENTRIES[0]);
+    store.write(ENTRIES[0]!);
     expect(store.query("global", "auth-flow")).toMatchObject({
       name: "auth-flow",
       description: "OAuth2 token\nrefresh cycle",

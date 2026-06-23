@@ -7,9 +7,9 @@ import type { ToolCatalog } from "./catalog.js";
 export interface SearchToolsOptions {
   catalog: ToolCatalog;
   /** FR-010 activation gate — when false, search_tools is not registered. */
-  enabled?: boolean;
+  enabled?: boolean | undefined;
   /** Slice 3 wires real unlock state; default treats everything as not-yet-unlocked. */
-  isUnlocked?: (source: string, name: string) => boolean;
+  isUnlocked?: ((source: string, name: string) => boolean | undefined) | undefined;
 }
 
 const DESCRIPTION =

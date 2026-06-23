@@ -71,7 +71,7 @@ export function computeCardStreamItems<T extends { id: string }>(
 export function CardStream({
   suppressLive = false,
 }: {
-  suppressLive?: boolean;
+  suppressLive?: boolean | undefined;
 }): React.ReactElement {
   const cards = useAgentState((s) => s.cards);
   const scrollRows = useChatScrollState((s) => s.scrollRows);
@@ -136,7 +136,10 @@ export function CardStream({
 function MeasuredCard({
   card,
   report,
-}: { card: Card; report: (id: string, rows: number) => void }): React.ReactElement {
+}: {
+  card: Card;
+  report: (id: string, rows: number) => void;
+}): React.ReactElement {
   const ref = useRef<DOMElement>(null!);
   const m = useBoxMetrics(ref);
   const lastReportedRef = useRef<number>(0);
@@ -168,7 +171,10 @@ function MeasuredCard({
 function ScrollIndicator({
   scrollRows,
   maxScroll,
-}: { scrollRows: number; maxScroll: number }): React.ReactElement {
+}: {
+  scrollRows: number;
+  maxScroll: number;
+}): React.ReactElement {
   const version = useChatScrollState((s) => s.scrollVersion);
   const [hot, setHot] = React.useState(false);
   React.useEffect(() => {

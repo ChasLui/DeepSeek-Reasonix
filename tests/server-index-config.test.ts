@@ -143,9 +143,9 @@ describe("/api/index-config", () => {
       };
       expect(body.sampleIncluded).toContain("main.ts");
       expect(body.sampleIncluded).not.toContain("drop.gen.ts");
-      expect(body.skipBuckets.pattern).toBeGreaterThanOrEqual(1);
-      expect(body.skipBuckets.defaultDir).toBeGreaterThanOrEqual(1);
-      expect(body.skipSamples.pattern).toContain("drop.gen.ts");
+      expect(body.skipBuckets["pattern"]).toBeGreaterThanOrEqual(1);
+      expect(body.skipBuckets["defaultDir"]).toBeGreaterThanOrEqual(1);
+      expect(body.skipSamples["pattern"]).toContain("drop.gen.ts");
     });
   });
 });

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { classifyToolListDrift } from "../src/mcp/drift.js";
-import type { ToolSpec } from "../src/types.js";
+import type { JSONSchema, ToolSpec } from "../src/types.js";
 
-function tool(name: string, description = "", params: object = { type: "object" }): ToolSpec {
+function tool(name: string, description = "", params: JSONSchema = { type: "object" }): ToolSpec {
   return {
     type: "function",
     function: { name, description, parameters: params },

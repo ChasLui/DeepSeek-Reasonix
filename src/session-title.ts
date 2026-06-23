@@ -6,9 +6,9 @@ const TITLE_MODEL_MAX_TOKENS = 32;
 const TITLE_MAX_CHARS = 48;
 
 export interface SessionTitleInput {
-  workspace?: string;
+  workspace?: string | undefined;
   userText: string;
-  assistantText?: string;
+  assistantText?: string | undefined;
 }
 
 export interface SessionTitleClient {
@@ -64,9 +64,9 @@ export function normalizeGeneratedSessionTitle(raw: string | null | undefined): 
 export function makeSessionNameFromTitle(
   title: string | null | undefined,
   opts: {
-    currentName?: string;
-    exists?: (name: string) => boolean;
-    suffix?: () => string;
+    currentName?: string | undefined;
+    exists?: ((name: string) => boolean | undefined) | undefined;
+    suffix?: (() => string | undefined) | undefined;
   } = {},
 ): string | null {
   const normalized = normalizeGeneratedSessionTitle(title);

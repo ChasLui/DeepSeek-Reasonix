@@ -9,18 +9,13 @@ const FG_STRONG = "#f0f6fc";
 const FG_META = "#8b949e";
 const TONE_BRAND = "#79c0ff";
 const TONE_OK = "#7ee787";
-const TONE_WARN = "#f0b07d";
 const SURFACE_ELEV = "#161b22";
 
 export function MarkdownView({ text }: { text: string }): React.ReactElement {
   return <MarkdownLines lines={markdownToLines(text)} />;
 }
 
-export function MarkdownLines({
-  lines,
-}: {
-  lines: ReadonlyArray<MdLine>;
-}): React.ReactElement {
+export function MarkdownLines({ lines }: { lines: ReadonlyArray<MdLine> }): React.ReactElement {
   return (
     <Box flexDirection="column">
       {lines.map((line, i) => (
@@ -103,11 +98,11 @@ function CodeBlock({ lang, text }: { lang: string; text: string }): React.ReactE
 
 interface SpansProps {
   readonly spans: ReadonlyArray<InlineSpan>;
-  readonly bold?: boolean;
-  readonly italic?: boolean;
-  readonly dim?: boolean;
-  readonly strike?: boolean;
-  readonly strongColor?: boolean;
+  readonly bold?: boolean | undefined;
+  readonly italic?: boolean | undefined;
+  readonly dim?: boolean | undefined;
+  readonly strike?: boolean | undefined;
+  readonly strongColor?: boolean | undefined;
 }
 
 function Spans({ spans, bold, italic, dim, strike, strongColor }: SpansProps): React.ReactElement {
@@ -138,11 +133,11 @@ function SpanText({
   strongColor,
 }: {
   span: InlineSpan;
-  ambientBold?: boolean;
-  ambientItalic?: boolean;
-  ambientDim?: boolean;
-  ambientStrike?: boolean;
-  strongColor?: boolean;
+  ambientBold?: boolean | undefined;
+  ambientItalic?: boolean | undefined;
+  ambientDim?: boolean | undefined;
+  ambientStrike?: boolean | undefined;
+  strongColor?: boolean | undefined;
 }): React.ReactElement {
   if (span.code) {
     return (

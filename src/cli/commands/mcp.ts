@@ -28,31 +28,31 @@ function finishProgressLine(): void {
 }
 
 export interface McpListOptions {
-  json?: boolean;
+  json?: boolean | undefined;
   /** Skip network — only show the bundled MCP_CATALOG entries. */
-  local?: boolean;
+  local?: boolean | undefined;
   /** Bypass cache TTL. */
-  refresh?: boolean;
+  refresh?: boolean | undefined;
   /** How many entries to show. Default 30. */
-  limit?: number;
+  limit?: number | undefined;
   /** Eagerly load this many pages before showing. Default 1. */
-  pages?: number;
+  pages?: number | undefined;
   /** Walk all pages of the registry (slow on first run). */
-  all?: boolean;
+  all?: boolean | undefined;
 }
 
 export interface McpSearchOptions {
-  json?: boolean;
-  refresh?: boolean;
-  limit?: number;
+  json?: boolean | undefined;
+  refresh?: boolean | undefined;
+  limit?: number | undefined;
   /** Cap how many pages to walk while searching. Default 20. */
-  maxPages?: number;
+  maxPages?: number | undefined;
 }
 
 export interface McpInstallOptions {
-  refresh?: boolean;
+  refresh?: boolean | undefined;
   /** Cap how many pages to walk while looking for the name. Default 30. */
-  maxPages?: number;
+  maxPages?: number | undefined;
 }
 
 function rankEntries(entries: RegistryEntry[]): RegistryEntry[] {

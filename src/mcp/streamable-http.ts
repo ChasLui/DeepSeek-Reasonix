@@ -8,7 +8,7 @@ export interface StreamableHttpTransportOptions {
   /** Streamable HTTP endpoint URL, e.g. `https://mcp.example.com/mcp`. */
   url: string;
   /** Extra headers sent on every request (e.g. `Authorization`). */
-  headers?: Record<string, string>;
+  headers?: Record<string, string> | undefined;
 }
 
 const SESSION_HEADER = "mcp-session-id";

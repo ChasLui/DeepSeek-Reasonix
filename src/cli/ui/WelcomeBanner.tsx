@@ -8,13 +8,13 @@ import { FG, TONE } from "./theme/tokens.js";
 
 export interface WelcomeBannerProps {
   /** True when running `reasonix code`. Surfaces code-mode hints. */
-  inCodeMode?: boolean;
+  inCodeMode?: boolean | undefined;
   /** Pinned workspace root — only meaningful in code mode. Surfaced so first-time users see they can pass --dir at next launch. */
-  workspaceRoot?: string;
+  workspaceRoot?: string | undefined;
   /** Live URL of the embedded dashboard, or null when it isn't running. */
-  dashboardUrl?: string | null;
+  dashboardUrl?: string | null | undefined;
   /** Bumped on language change; forces re-render so t() picks up new locale. */
-  languageVersion?: number;
+  languageVersion?: number | undefined;
 }
 
 const HINTS = ["/help", "/skill", "/init", "/memory", "/cost"] as const;

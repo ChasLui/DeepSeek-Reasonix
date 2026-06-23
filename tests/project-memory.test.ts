@@ -21,21 +21,21 @@ const BASE = "You are a test assistant.";
 
 describe("project-memory", () => {
   let root: string;
-  const originalEnv = process.env.REASONIX_MEMORY;
+  const originalEnv = process.env["REASONIX_MEMORY"];
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), "reasonix-mem-"));
     // biome-ignore lint/performance/noDelete: avoid leaking "undefined" into env
-    delete process.env.REASONIX_MEMORY;
+    delete process.env["REASONIX_MEMORY"];
   });
 
   afterEach(() => {
     rmSync(root, { recursive: true, force: true });
     if (originalEnv === undefined) {
       // biome-ignore lint/performance/noDelete: same reason
-      delete process.env.REASONIX_MEMORY;
+      delete process.env["REASONIX_MEMORY"];
     } else {
-      process.env.REASONIX_MEMORY = originalEnv;
+      process.env["REASONIX_MEMORY"] = originalEnv;
     }
   });
 
@@ -133,13 +133,13 @@ describe("project-memory", () => {
     });
 
     it.each(["off", "false", "0"])("returns false for REASONIX_MEMORY=%s", (val) => {
-      process.env.REASONIX_MEMORY = val;
+      process.env["REASONIX_MEMORY"] = val;
       expect(memoryEnabled()).toBe(false);
     });
 
     it("returns true for unrelated env values (on, 1, truthy, etc.)", () => {
       for (const val of ["on", "1", "true", "yes"]) {
-        process.env.REASONIX_MEMORY = val;
+        process.env["REASONIX_MEMORY"] = val;
         expect(memoryEnabled()).toBe(true);
       }
     });
@@ -174,7 +174,7 @@ describe("project-memory", () => {
 
     it("no-ops when REASONIX_MEMORY=off, even with a file present", () => {
       writeFileSync(join(root, PROJECT_MEMORY_FILE), "content\n", "utf8");
-      process.env.REASONIX_MEMORY = "off";
+      process.env["REASONIX_MEMORY"] = "off";
       expect(applyProjectMemory(BASE, root)).toBe(BASE);
     });
 

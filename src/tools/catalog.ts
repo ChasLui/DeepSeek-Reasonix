@@ -39,8 +39,8 @@ function clamp(n: number, lo: number, hi: number): number {
 function summarizeParams(paramsJson: string): string {
   try {
     const p = JSON.parse(paramsJson) as {
-      required?: unknown;
-      properties?: Record<string, unknown>;
+      required?: unknown | undefined;
+      properties?: Record<string, unknown> | undefined;
     };
     const required = Array.isArray(p.required) ? p.required.map(String) : [];
     const props = p.properties && typeof p.properties === "object" ? Object.keys(p.properties) : [];

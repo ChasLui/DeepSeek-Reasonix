@@ -119,9 +119,9 @@ export function applyCompactor(
   opts: {
     exitCode: number | null;
     timedOut: boolean;
-    runtime?: CompactorRuntime;
+    runtime?: CompactorRuntime | undefined;
     /** Pre-tokenized argv (avoids double-tokenize). */
-    argv?: readonly string[];
+    argv?: readonly string[] | undefined;
   },
 ): CompactResult {
   const runtime = opts.runtime ?? DEFAULT_RUNTIME;

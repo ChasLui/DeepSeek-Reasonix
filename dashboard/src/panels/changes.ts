@@ -1,8 +1,13 @@
 import hljs from "highlight.js/lib/common";
 import htm from "htm";
-import { h } from "preact";
+import { h, type ComponentChild } from "preact";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
-import { ChatMessage, type ChatMsg, ToolCard, parseToolArgs } from "../components/chat-internals.js";
+import {
+  ChatMessage,
+  type ChatMsg,
+  ToolCard,
+  parseToolArgs,
+} from "../components/chat-internals.js";
 import { t, useLang } from "../i18n/index.js";
 import { TOKEN, api } from "../lib/api.js";
 import { showToast } from "../lib/bus.js";
@@ -19,6 +24,10 @@ import { type LineComment, type LineCommentDraft, useLineComments } from "../lib
 import { useReviewDiffs } from "../lib/review-diffs.js";
 
 const html = htm.bind(h);
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
 
 // Diff rendering helpers — render patch to HTML, bypassing Preact VDOM
 interface DE {
@@ -77,8 +86,8 @@ function pairDiffRows(diff: DE[]): DP[] {
     }
     const d: string[] = [],
       ins: string[] = [];
-    while (k < diff.length && diff[k]!.kind === "del") d.push(diff[k]!.text), k++;
-    while (k < diff.length && diff[k]!.kind === "ins") ins.push(diff[k]!.text), k++;
+    while (k < diff.length && diff[k]!.kind === "del") (d.push(diff[k]!.text), k++);
+    while (k < diff.length && diff[k]!.kind === "ins") (ins.push(diff[k]!.text), k++);
     const p = Math.max(d.length, ins.length);
     for (let i = 0; i < p; i++)
       rows.push({
@@ -145,7 +154,7 @@ function renderDiffHtml(patch: string, style: "unified" | "split"): string {
   return html;
 }
 
-export function ChangesPanel() {
+export function ChangesPanel(): ComponentChild {
   useLang();
   const { tree, loading } = useProjectTree();
   const {
@@ -283,10 +292,6 @@ export function ChangesPanel() {
     setReviewMode((prev) => !prev);
   }, []);
 
-  const openReviewWithFilePicker = useCallback(() => {
-    setReviewMode(true);
-  }, []);
-
   const handleOpenFile = useCallback(
     async (filePath: string) => {
       // Try to find node in tree first
@@ -347,21 +352,21 @@ export function ChangesPanel() {
           <span>${t("changes.chatPanelTitle")}</span>
         </div>
         <div class="changes-panel-body">
-          <${ChatPane}
-            comments=${comments}
-            deleteComment=${deleteComment}
-          />
+          <${ChatPane} comments=${comments} deleteComment=${deleteComment} />
         </div>
       </div>
 
       <${ResizeHandle} onResize=${handleLeftResize} direction="horizontal" />
 
       <div class="changes-panel changes-panel-center">
-        ${
-          reviewMode
-            ? html`
+        ${reviewMode
+          ? html`
               <${TabBar}
-                reviewTab=${html`<${ReviewTab} count=${modifiedCount()} active=${true} onClick=${toggleReviewMode} />`}
+                reviewTab=${html`<${ReviewTab}
+                  count=${modifiedCount()}
+                  active=${true}
+                  onClick=${toggleReviewMode}
+                />`}
                 fileList=${diffs.map((d) => d.file)}
                 onOpenFile=${(f: string) => {
                   handleOpenFile(f);
@@ -376,154 +381,293 @@ export function ChangesPanel() {
                 }}
                 onClose=${closeFile}
               />
-              <div class="review-controls" style=${{ display: "flex", alignItems: "center", gap: "8px", padding: "6px 12px", borderBottom: "1px solid var(--bd)", fontSize: "12px" }}>
-                <select value=${diffSource} onChange=${(e: Event) => {
-                  const v = (e.target as HTMLSelectElement).value as
-                    | "session"
-                    | "git"
-                    | "checkpoint";
-                  setDiffSource(v);
-                  if (v !== "checkpoint") setSelectedCheckpointId(null);
-                }} style=${{ fontSize: "12px", fontWeight: 500, padding: "1px 4px", borderRadius: "3px", background: "var(--bg-elev)", color: "var(--fg-0)", border: "1px solid var(--bd)", cursor: "pointer", outline: "none" }}>
+              <div
+                class="review-controls"
+                style=${{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "6px 12px",
+                  borderBottom: "1px solid var(--bd)",
+                  fontSize: "12px",
+                }}
+              >
+                <select
+                  value=${diffSource}
+                  onChange=${(e: Event) => {
+                    const v = (e.target as HTMLSelectElement).value as
+                      | "session"
+                      | "git"
+                      | "checkpoint";
+                    setDiffSource(v);
+                    if (v !== "checkpoint") setSelectedCheckpointId(null);
+                  }}
+                  style=${{
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    padding: "1px 4px",
+                    borderRadius: "3px",
+                    background: "var(--bg-elev)",
+                    color: "var(--fg-0)",
+                    border: "1px solid var(--bd)",
+                    cursor: "pointer",
+                    outline: "none",
+                  }}
+                >
                   <option value="git">${t("changes.diffSourceGit")}</option>
                   <option value="session">${t("changes.diffSourceSession")}</option>
                   <option value="checkpoint">${t("changes.diffSourceCheckpoint")}</option>
                 </select>
-                ${
-                  diffSource !== "checkpoint" || selectedCheckpointId
-                    ? html`
-                <span style=${{ color: "var(--fg-3)" }}>${modifiedCount()}</span>
-                <div style=${{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "4px" }}>
-                  <button class=${`toggle-btn ${diffStyle === "unified" ? "active" : ""}`} onClick=${() => setDiffStyle("unified")} style=${{ fontSize: "11px", padding: "2px 6px" }}>${t("changes.diffStyleUnified")}</button>
-                  <button class=${`toggle-btn ${diffStyle === "split" ? "active" : ""}`} onClick=${() => setDiffStyle("split")} style=${{ fontSize: "11px", padding: "2px 6px" }}>${t("changes.diffStyleSplit")}</button>
-                  <button class="toggle-btn" onClick=${expandAll} style=${{ fontSize: "11px", padding: "2px 6px" }}>${t("changes.expandAll")}</button>
-                  <button class="toggle-btn" onClick=${collapseAll} style=${{ fontSize: "11px", padding: "2px 6px" }}>${t("changes.collapseAll")}</button>
-                </div>
-                `
-                    : null
-                }
+                ${diffSource !== "checkpoint" || selectedCheckpointId
+                  ? html`
+                      <span style=${{ color: "var(--fg-3)" }}>${modifiedCount()}</span>
+                      <div
+                        style=${{
+                          marginLeft: "auto",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <button
+                          class=${`toggle-btn ${diffStyle === "unified" ? "active" : ""}`}
+                          onClick=${() => setDiffStyle("unified")}
+                          style=${{ fontSize: "11px", padding: "2px 6px" }}
+                        >
+                          ${t("changes.diffStyleUnified")}
+                        </button>
+                        <button
+                          class=${`toggle-btn ${diffStyle === "split" ? "active" : ""}`}
+                          onClick=${() => setDiffStyle("split")}
+                          style=${{ fontSize: "11px", padding: "2px 6px" }}
+                        >
+                          ${t("changes.diffStyleSplit")}
+                        </button>
+                        <button
+                          class="toggle-btn"
+                          onClick=${expandAll}
+                          style=${{ fontSize: "11px", padding: "2px 6px" }}
+                        >
+                          ${t("changes.expandAll")}
+                        </button>
+                        <button
+                          class="toggle-btn"
+                          onClick=${collapseAll}
+                          style=${{ fontSize: "11px", padding: "2px 6px" }}
+                        >
+                          ${t("changes.collapseAll")}
+                        </button>
+                      </div>
+                    `
+                  : null}
               </div>
-              ${
-                diffSource === "checkpoint" && selectedCheckpointId
-                  ? html`
-                <div style=${{ padding: "4px 12px", fontSize: "11px", color: "var(--fg-3)", borderBottom: "1px solid var(--bd)", cursor: "pointer" }}>
-                  <span onClick=${() => setSelectedCheckpointId(null)} style=${{ color: "var(--c-brand)", cursor: "pointer" }}>← ${t("changes.backToList")}</span>
-                </div>
-              `
-                  : null
-              }
-              ${
-                diffSource === "checkpoint" && !selectedCheckpointId
-                  ? html`
-                <div class="checkpoint-picker" style=${{ flex: "1", overflowY: "auto", padding: "8px 12px" }}>
-                  <div style=${{ display: "flex", gap: "6px", marginBottom: "8px" }}>
-                    <input
-                      value=${createName}
-                      onInput=${(e: Event) => setCreateName((e.target as HTMLInputElement).value)}
-                      placeholder=${t("changes.createPlaceholder")}
-                      style=${{ flex: 1, fontSize: "12px", padding: "4px 8px", background: "var(--bg-input)", border: "1px solid var(--bd)", borderRadius: "3px", color: "var(--fg-0)" }}
-                    />
-                    <button
-                      class="primary"
-                      onClick=${async () => {
-                        const name = createName.trim();
-                        if (!name) return;
-                        try {
-                          await api("/checkpoint-create", { method: "POST", body: { name } });
-                          setCreateName("");
-                          const list =
-                            await api<
-                              Array<{ id: string; name: string; ago: string; fileCount: number }>
-                            >("/checkpoints");
-                          setCheckpointList(list);
-                        } catch {
-                          alert(t("changes.createFailed"));
-                        }
-                      }}
-                      disabled=${!createName.trim()}
-                      style=${{ padding: "5px 12px" }}
-                    >${t("changes.createBtn")}</button>
-                  </div>
-                  ${
-                    checkpointList.length === 0
-                      ? html`
-                    <div class="empty" style=${{ textAlign: "center", margin: "12px" }}>${t("changes.checkpointEmpty")}</div>
-                  `
-                      : checkpointList.map(
-                          (c) => html`
+              ${diffSource === "checkpoint" && selectedCheckpointId
+                ? html`
                     <div
-                      key=${c.id}
-                      class="checkpoint-item"
-                      style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px", cursor: "pointer", borderRadius: "4px", borderBottom: "1px solid var(--bd)" }}
-                      onMouseEnter=${(e: Event) => {
-                        (e.currentTarget as HTMLElement).style.background = "var(--bg-hover)";
-                      }}
-                      onMouseLeave=${(e: Event) => {
-                        (e.currentTarget as HTMLElement).style.background = "transparent";
+                      style=${{
+                        padding: "4px 12px",
+                        fontSize: "11px",
+                        color: "var(--fg-3)",
+                        borderBottom: "1px solid var(--bd)",
+                        cursor: "pointer",
                       }}
                     >
-                      <div
-                        onClick=${() => {
-                          setSelectedCheckpointId(c.id);
-                        }}
-                        style=${{ display: "flex", flexDirection: "column", gap: "2px", flex: 1 }}
+                      <span
+                        onClick=${() => setSelectedCheckpointId(null)}
+                        style=${{ color: "var(--c-brand)", cursor: "pointer" }}
+                        >← ${t("changes.backToList")}</span
                       >
-                        <span style=${{ fontSize: "13px", fontWeight: 500 }}>${c.name}</span>
-                        <span style=${{ fontSize: "11px", color: "var(--fg-3)" }}>${c.id.slice(0, 7)} · ${c.fileCount} file${c.fileCount === 1 ? "" : "s"}</span>
-                      </div>
-                      <div style=${{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span style=${{ fontSize: "11px", color: "var(--fg-4)" }}>${c.ago}</span>
-                        <button
-                          onClick=${async (e: Event) => {
-                            e.stopPropagation();
-                            if (confirm(t("changes.restoreConfirm").replace("{name}", c.name))) {
-                              try {
-                                await api("/checkpoint-restore", {
-                                  method: "POST",
-                                  body: { id: c.id },
-                                });
-                                setSelectedCheckpointId(null);
-                                setDiffSource("git");
-                              } catch {
-                                alert(t("changes.restoreFailed"));
-                              }
-                            }
-                          }}
-                          style=${{ fontSize: "11px", padding: "2px 6px", background: "var(--c-brand)", color: "#fff", border: "none", borderRadius: "3px", cursor: "pointer" }}
-                        >${t("changes.restoreBtn")}</button>
-                        <button
-                          onClick=${async (e: Event) => {
-                            e.stopPropagation();
-                            if (confirm(t("changes.deleteConfirm").replace("{name}", c.name))) {
-                              try {
-                                await api("/checkpoint-delete", {
-                                  method: "POST",
-                                  body: { id: c.id },
-                                });
-                                setCheckpointList((prev) => prev.filter((x) => x.id !== c.id));
-                              } catch {
-                                alert(t("changes.deleteFailed"));
-                              }
-                            }
-                          }}
-                          style=${{ fontSize: "11px", padding: "2px 6px", color: "var(--fg-3)", border: "1px solid var(--bd)", borderRadius: "3px", cursor: "pointer", background: "transparent" }}
-                        >${t("changes.deleteBtn")}</button>
-                      </div>
                     </div>
-                  `,
-                        )
-                  }
-                </div>
-              `
-                  : null
-              }
+                  `
+                : null}
+              ${diffSource === "checkpoint" && !selectedCheckpointId
+                ? html`
+                    <div
+                      class="checkpoint-picker"
+                      style=${{ flex: "1", overflowY: "auto", padding: "8px 12px" }}
+                    >
+                      <div style=${{ display: "flex", gap: "6px", marginBottom: "8px" }}>
+                        <input
+                          value=${createName}
+                          onInput=${(e: Event) =>
+                            setCreateName((e.target as HTMLInputElement).value)}
+                          placeholder=${t("changes.createPlaceholder")}
+                          style=${{
+                            flex: 1,
+                            fontSize: "12px",
+                            padding: "4px 8px",
+                            background: "var(--bg-input)",
+                            border: "1px solid var(--bd)",
+                            borderRadius: "3px",
+                            color: "var(--fg-0)",
+                          }}
+                        />
+                        <button
+                          class="primary"
+                          onClick=${async () => {
+                            const name = createName.trim();
+                            if (!name) return;
+                            try {
+                              await api("/checkpoint-create", { method: "POST", body: { name } });
+                              setCreateName("");
+                              const list = await api<
+                                Array<{
+                                  id: string;
+                                  name: string;
+                                  ago: string;
+                                  fileCount: number;
+                                }>
+                              >("/checkpoints");
+                              setCheckpointList(list);
+                            } catch {
+                              alert(t("changes.createFailed"));
+                            }
+                          }}
+                          disabled=${!createName.trim()}
+                          style=${{ padding: "5px 12px" }}
+                        >
+                          ${t("changes.createBtn")}
+                        </button>
+                      </div>
+                      ${checkpointList.length === 0
+                        ? html`
+                            <div class="empty" style=${{ textAlign: "center", margin: "12px" }}>
+                              ${t("changes.checkpointEmpty")}
+                            </div>
+                          `
+                        : checkpointList.map(
+                            (c) => html`
+                              <div
+                                key=${c.id}
+                                class="checkpoint-item"
+                                style=${{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  padding: "6px 8px",
+                                  cursor: "pointer",
+                                  borderRadius: "4px",
+                                  borderBottom: "1px solid var(--bd)",
+                                }}
+                                onMouseEnter=${(e: Event) => {
+                                  (e.currentTarget as HTMLElement).style.background =
+                                    "var(--bg-hover)";
+                                }}
+                                onMouseLeave=${(e: Event) => {
+                                  (e.currentTarget as HTMLElement).style.background = "transparent";
+                                }}
+                              >
+                                <div
+                                  onClick=${() => {
+                                    setSelectedCheckpointId(c.id);
+                                  }}
+                                  style=${{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "2px",
+                                    flex: 1,
+                                  }}
+                                >
+                                  <span style=${{ fontSize: "13px", fontWeight: 500 }}
+                                    >${c.name}</span
+                                  >
+                                  <span style=${{ fontSize: "11px", color: "var(--fg-3)" }}
+                                    >${c.id.slice(0, 7)} · ${c.fileCount}
+                                    file${c.fileCount === 1 ? "" : "s"}</span
+                                  >
+                                </div>
+                                <div style=${{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                  <span style=${{ fontSize: "11px", color: "var(--fg-4)" }}
+                                    >${c.ago}</span
+                                  >
+                                  <button
+                                    onClick=${async (e: Event) => {
+                                      e.stopPropagation();
+                                      if (
+                                        confirm(
+                                          t("changes.restoreConfirm").replace("{name}", c.name),
+                                        )
+                                      ) {
+                                        try {
+                                          await api("/checkpoint-restore", {
+                                            method: "POST",
+                                            body: { id: c.id },
+                                          });
+                                          setSelectedCheckpointId(null);
+                                          setDiffSource("git");
+                                        } catch {
+                                          alert(t("changes.restoreFailed"));
+                                        }
+                                      }
+                                    }}
+                                    style=${{
+                                      fontSize: "11px",
+                                      padding: "2px 6px",
+                                      background: "var(--c-brand)",
+                                      color: "#fff",
+                                      border: "none",
+                                      borderRadius: "3px",
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    ${t("changes.restoreBtn")}
+                                  </button>
+                                  <button
+                                    onClick=${async (e: Event) => {
+                                      e.stopPropagation();
+                                      if (
+                                        confirm(
+                                          t("changes.deleteConfirm").replace("{name}", c.name),
+                                        )
+                                      ) {
+                                        try {
+                                          await api("/checkpoint-delete", {
+                                            method: "POST",
+                                            body: { id: c.id },
+                                          });
+                                          setCheckpointList((prev) =>
+                                            prev.filter((x) => x.id !== c.id),
+                                          );
+                                        } catch {
+                                          alert(t("changes.deleteFailed"));
+                                        }
+                                      }
+                                    }}
+                                    style=${{
+                                      fontSize: "11px",
+                                      padding: "2px 6px",
+                                      color: "var(--fg-3)",
+                                      border: "1px solid var(--bd)",
+                                      borderRadius: "3px",
+                                      cursor: "pointer",
+                                      background: "transparent",
+                                    }}
+                                  >
+                                    ${t("changes.deleteBtn")}
+                                  </button>
+                                </div>
+                              </div>
+                            `,
+                          )}
+                    </div>
+                  `
+                : null}
               <div class="review-diff-view" style=${{ flex: "1", overflowY: "auto" }}>
-                <div class="review-diff-list" style=${{ padding: "0 12px" }} key=${diffStyle} dangerouslySetInnerHTML=${{ __html: reviewHtml }}></div>
+                <div
+                  class="review-diff-list"
+                  style=${{ padding: "0 12px" }}
+                  key=${diffStyle}
+                  dangerouslySetInnerHTML=${{ __html: reviewHtml }}
+                ></div>
               </div>
             `
-            : html`
+          : html`
               <${TabBar}
-                reviewTab=${html`<${ReviewTab} count=${modifiedCount()} active=${false} onClick=${toggleReviewMode} />`}
+                reviewTab=${html`<${ReviewTab}
+                  count=${modifiedCount()}
+                  active=${false}
+                  onClick=${toggleReviewMode}
+                />`}
                 fileList=${diffs.map((d) => d.file)}
                 onOpenFile=${handleOpenFile}
                 files=${openFiles}
@@ -543,8 +687,7 @@ export function ChangesPanel() {
                 onSubmitComment=${submitDraft}
                 onDeleteComment=${deleteComment}
               />
-            `
-        }
+            `}
       </div>
 
       <${ResizeHandle} onResize=${handleRightResize} direction="horizontal" />
@@ -560,21 +703,21 @@ export function ChangesPanel() {
           onToggle=${toggleModifiedFilter}
         />
         <div class="changes-panel-body">
-          ${
-            loading
-              ? html`<div class="empty" style=${{ margin: "12px", textAlign: "center" }}>${t("changes.loadingFiles")}</div>`
-              : html`<${FileTree}
+          ${loading
+            ? html`<div class="empty" style=${{ margin: "12px", textAlign: "center" }}>
+                ${t("changes.loadingFiles")}
+              </div>`
+            : html`<${FileTree}
                 nodes=${tree}
                 expanded=${expanded}
                 onToggle=${toggleExpand}
-                onSelect=${(node: any) => {
+                onSelect=${(node: TreeNode) => {
                   setReviewMode(false);
                   openFile(node);
                 }}
                 modifiedFiles=${modifiedFiles()}
                 showOnlyModified=${showOnlyModified}
-              />`
-          }
+              />`}
         </div>
       </div>
     </div>
@@ -626,13 +769,25 @@ function ChatStatusBar({ stats, model }: ChatStatusBarProps) {
       <span class="status-item">
         <span class="status-label">${t("chat.statusCtx")}</span>
         <span class="status-bar-mini">
-          <span class="status-bar-mini-fill" style=${`width: ${Math.min(100, ctxPct).toFixed(1)}%;`}></span>
+          <span
+            class="status-bar-mini-fill"
+            style=${`width: ${Math.min(100, ctxPct).toFixed(1)}%;`}
+          ></span>
         </span>
-        <span class="muted">${stats.lastPromptTokens.toLocaleString()} / ${(stats.contextCapTokens / 1000).toFixed(0)}K</span>
+        <span class="muted"
+          >${stats.lastPromptTokens.toLocaleString()} /
+          ${(stats.contextCapTokens / 1000).toFixed(0)}K</span
+        >
       </span>
       <span class="status-item">
         <span class="status-label">${t("chat.statusCache")}</span>
-        <span class=${stats.cacheHitRatio >= 0.9 ? "status-ok" : stats.cacheHitRatio >= 0.6 ? "status-warn" : "status-err"}>
+        <span
+          class=${stats.cacheHitRatio >= 0.9
+            ? "status-ok"
+            : stats.cacheHitRatio >= 0.6
+              ? "status-warn"
+              : "status-err"}
+        >
           ${(stats.cacheHitRatio * 100).toFixed(1)}%
         </span>
       </span>
@@ -647,16 +802,14 @@ function ChatStatusBar({ stats, model }: ChatStatusBarProps) {
           ${t("chat.statusTurns", { count: stats.turns, s: stats.turns === 1 ? "" : "s" })}
         </span>
       </span>
-      ${
-        balance
-          ? html`
-          <span class="status-item">
-            <span class="status-label">${t("chat.statusBalance")}</span>
-            <code>${balance.total_balance} ${balance.currency}</code>
-          </span>
-        `
-          : null
-      }
+      ${balance
+        ? html`
+            <span class="status-item">
+              <span class="status-label">${t("chat.statusBalance")}</span>
+              <code>${balance.total_balance} ${balance.currency}</code>
+            </span>
+          `
+        : null}
     </div>
   `;
 }
@@ -677,114 +830,6 @@ function CommentCard(props: CommentCardProps) {
       <span class="comment-card-file">${props.fileName}:${props.lineNumber}</span>
       <span class="comment-card-content">${props.content}</span>
       <span class="comment-card-remove" onClick=${props.onRemove}>×</span>
-    </div>
-  `;
-}
-
-// ── LineCommentAnchor ──────────────────────────────────────────
-
-interface LineCommentAnchorProps {
-  visible: boolean;
-  onClick: () => void;
-  hasComments: boolean;
-  commentCount: number;
-}
-
-function LineCommentAnchor(props: LineCommentAnchorProps) {
-  return html`
-    <div
-      class="line-comment-anchor ${props.visible ? "visible" : ""}"
-      onClick=${(e: Event) => {
-        e.stopPropagation();
-        props.onClick();
-      }}
-    >
-      ${
-        props.hasComments
-          ? html`<span class="comment-count">${props.commentCount}</span>`
-          : html`<span class="plus-icon">+</span>`
-      }
-    </div>
-  `;
-}
-
-// ── LineCommentBubble ──────────────────────────────────────────
-
-interface LineCommentBubbleProps {
-  content: string;
-  lineNumber: number;
-  onEdit: () => void;
-  onDelete: () => void;
-}
-
-function LineCommentBubble(props: LineCommentBubbleProps) {
-  return html`
-    <div class="line-comment-bubble">
-      <div class="bubble-content">${props.content}</div>
-      <div class="bubble-footer">
-        <span class="bubble-line">${t("changes.commentLine")} ${props.lineNumber}</span>
-        <div class="bubble-actions">
-          <button class="bubble-btn" onClick=${props.onEdit}>${t("changes.commentEdit")}</button>
-          <button class="bubble-btn danger" onClick=${props.onDelete}>${t("changes.commentDelete")}</button>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-// ── LineCommentEditor ──────────────────────────────────────────
-
-interface LineCommentEditorProps {
-  lineNumber: number;
-  value: string;
-  onInput: (value: string) => void;
-  onCancel: () => void;
-  onSubmit: () => void;
-}
-
-function LineCommentEditor(props: LineCommentEditorProps) {
-  const isComposingRef = useRef(false);
-
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        props.onCancel();
-      } else if (e.key === "Enter" && e.ctrlKey) {
-        e.preventDefault();
-        props.onSubmit();
-      }
-    },
-    [props.onCancel, props.onSubmit],
-  );
-
-  return html`
-    <div class="line-comment-editor">
-      <div class="line-comment-label">${t("changes.commentLabel")} ${props.lineNumber}</div>
-      <textarea
-        class="line-comment-textarea"
-        value=${props.value}
-        onCompositionStart=${() => {
-          isComposingRef.current = true;
-        }}
-        onCompositionEnd=${(e: CompositionEvent) => {
-          isComposingRef.current = false;
-          props.onInput((e.target as HTMLTextAreaElement).value);
-        }}
-        onInput=${(e: Event) => {
-          if (!isComposingRef.current) {
-            props.onInput((e.target as HTMLTextAreaElement).value);
-          }
-        }}
-        onKeyDown=${handleKeyDown}
-        placeholder=${t("changes.commentPlaceholder")}
-        rows=${3}
-        autofocus=${true}
-      />
-      <div class="line-comment-actions">
-        <button class="btn ghost" onClick=${props.onCancel}>${t("changes.commentCancel")}</button>
-        <button class="btn primary" onClick=${props.onSubmit} disabled=${!props.value.trim()}>${t("changes.commentSubmit")}</button>
-      </div>
     </div>
   `;
 }
@@ -815,7 +860,7 @@ function filterModifiedNodes(nodes: TreeNode[], modifiedFiles: Set<string>): Tre
     .filter((n) => n !== null) as TreeNode[];
 }
 
-function renderTree(props: FileTreeProps): any[] {
+function renderTree(props: FileTreeProps): ComponentChild[] {
   const {
     nodes,
     expanded,
@@ -828,7 +873,7 @@ function renderTree(props: FileTreeProps): any[] {
   const displayNodes = showOnlyModified ? filterModifiedNodes(nodes, modifiedFiles) : nodes;
   return displayNodes.map((node) => {
     const isExpanded = expanded.has(node.path);
-    const indentEls: any[] = [];
+    const indentEls: ComponentChild[] = [];
     for (let i = 0; i < indent; i++) {
       indentEls.push(html`<span class="indent" key=${`indent-${i}`} />`);
     }
@@ -842,26 +887,22 @@ function renderTree(props: FileTreeProps): any[] {
             <span class="icon dir">▼</span>
             <span class="name">${node.name}</span>
           </div>
-          ${
-            isExpanded && node.children && node.children.length > 0
-              ? renderTree({
-                  nodes: node.children,
-                  expanded,
-                  onToggle,
-                  onSelect,
-                  indent: indent + 1,
-                  modifiedFiles,
-                  showOnlyModified,
-                })
-              : null
-          }
-          ${
-            isExpanded && (!node.children || node.children.length === 0)
-              ? html`<div class="tree-node" style=${{ paddingLeft: `${(indent + 1) * 14 + 8}px` }}>
+          ${isExpanded && node.children && node.children.length > 0
+            ? renderTree({
+                nodes: node.children,
+                expanded,
+                onToggle,
+                onSelect,
+                indent: indent + 1,
+                modifiedFiles,
+                showOnlyModified,
+              })
+            : null}
+          ${isExpanded && (!node.children || node.children.length === 0)
+            ? html`<div class="tree-node" style=${{ paddingLeft: `${(indent + 1) * 14 + 8}px` }}>
                 <span class="name muted">${t("changes.treeEmpty")}</span>
               </div>`
-              : null
-          }
+            : null}
         </div>
       `;
     }
@@ -883,11 +924,7 @@ function renderTree(props: FileTreeProps): any[] {
 }
 
 function FileTree(props: FileTreeProps) {
-  return html`
-    <div class="tree">
-      ${renderTree(props)}
-    </div>
-  `;
+  return html` <div class="tree">${renderTree(props)}</div> `;
 }
 
 // ── FileTreeToggle ─────────────────────────────────────────────
@@ -930,7 +967,13 @@ function ReviewTab(props: ReviewTabProps) {
     <div
       class=${`editor-tab review-tab${props.active ? " active" : ""}`}
       onClick=${props.onClick}
-      style=${{ display: "flex", alignItems: "center", gap: "3px", padding: "4px 6px", cursor: props.onClick ? "pointer" : "default" }}
+      style=${{
+        display: "flex",
+        alignItems: "center",
+        gap: "3px",
+        padding: "4px 6px",
+        cursor: props.onClick ? "pointer" : "default",
+      }}
     >
       <span class="review-icon">◑</span>
       <span>${t("changes.review")}</span>
@@ -1013,7 +1056,7 @@ interface TabBarProps {
   activePath: string | null;
   onSelect: (path: string) => void;
   onClose: (path: string) => void;
-  reviewTab?: any;
+  reviewTab?: ComponentChild;
   fileList?: string[];
   onOpenFile?: (file: string) => void;
 }
@@ -1102,44 +1145,44 @@ function TabBar(props: TabBarProps) {
   return html`
     <div class="editor-tabs">
       ${reviewTab || null}
-      ${
-        fileList
-          ? html`
-        <span
-          ref=${btnRef}
-          style=${{
-            fontSize: "14px",
-            padding: "4px 3px",
-            cursor: "pointer",
-            color: "var(--fg-3)",
-            userSelect: "none",
-            lineHeight: "1",
-            fontFamily: "var(--font-mono)",
-          }}
-          title="Open file"
-        >+</span>
-      `
-          : null
-      }
+      ${fileList
+        ? html`
+            <span
+              ref=${btnRef}
+              style=${{
+                fontSize: "14px",
+                padding: "4px 3px",
+                cursor: "pointer",
+                color: "var(--fg-3)",
+                userSelect: "none",
+                lineHeight: "1",
+                fontFamily: "var(--font-mono)",
+              }}
+              title="Open file"
+              >+</span
+            >
+          `
+        : null}
       ${files.map(
         (f) => html`
-        <div
-          key=${f.path}
-          class=${`editor-tab ${f.path === activePath ? "active" : ""}`}
-          onClick=${() => onSelect(f.path)}
-          title=${f.path}
-        >
-          <span>${f.name}</span>
-          <span
-            class="x"
-            onClick=${(e: Event) => {
-              e.stopPropagation();
-              onClose(f.path);
-            }}
-            title=${t("changes.tabClose")}
-          >×</span>
-        </div>
-      `,
+          <div
+            key=${f.path}
+            class=${`editor-tab ${f.path === activePath ? "active" : ""}`}
+            onClick=${() => onSelect(f.path)}
+            title=${f.path}
+          >
+            <span>${f.name}</span>
+            <span
+              class="x"
+              onClick=${(e: Event) => {
+                e.stopPropagation();
+                onClose(f.path);
+              }}
+              title=${t("changes.tabClose")}
+              >×</span
+            >
+          </div>
+        `,
       )}
     </div>
   `;
@@ -1193,7 +1236,7 @@ function CodeViewer(props: CodeViewerProps) {
       const hasComments = lineComments.length > 0;
       const lineDiv = document.createElement("div");
       lineDiv.className = "editor-line";
-      lineDiv.dataset.lineNumber = String(lineNumber);
+      lineDiv.dataset["lineNumber"] = String(lineNumber);
       lineDiv.style.position = "relative";
       lineDiv.addEventListener("mouseenter", () => setHoveredLine(lineNumber));
       lineDiv.addEventListener("mouseleave", () => setHoveredLine(null));
@@ -1310,7 +1353,7 @@ function CodeViewer(props: CodeViewerProps) {
           if (isEditing) return;
           const bubbleDiv = document.createElement("div");
           bubbleDiv.className = "line-comment-bubble";
-          bubbleDiv.dataset.id = comment.id;
+          bubbleDiv.dataset["id"] = comment.id;
           const contentDiv = document.createElement("div");
           contentDiv.className = "bubble-content";
           contentDiv.textContent = comment.content;
@@ -1378,7 +1421,7 @@ function CodeViewer(props: CodeViewerProps) {
     anchors.forEach((anchor) => {
       const lineDiv = anchor.closest(".editor-line") as HTMLElement;
       if (!lineDiv) return;
-      const lineNumber = Number.parseInt(lineDiv.dataset.lineNumber || "0", 10);
+      const lineNumber = Number.parseInt(lineDiv.dataset["lineNumber"] || "0", 10);
       const isVisible =
         hoveredLine === lineNumber &&
         (!draft || draft.file !== file.path || draft.lineNumber !== lineNumber);
@@ -1389,7 +1432,10 @@ function CodeViewer(props: CodeViewerProps) {
 
   if (!file) {
     return html`
-      <div class="editor-area" style=${{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div
+        class="editor-area"
+        style=${{ display: "flex", alignItems: "center", justifyContent: "center" }}
+      >
         <div class="empty">${t("changes.viewerPlaceholder")}</div>
       </div>
     `;
@@ -1463,7 +1509,13 @@ interface ChatPaneProps {
 function summarizeTool(activeTool: ActiveToolState | null): string | null {
   if (!activeTool) return null;
   const name = activeTool.toolName ?? "tool";
-  const args = parseToolArgs(activeTool.args) as { path?: string; file_path?: string; filename?: string; content?: unknown; command?: unknown } | null;
+  const args = parseToolArgs(activeTool.args) as {
+    path?: string;
+    file_path?: string;
+    filename?: string;
+    content?: unknown;
+    command?: unknown;
+  } | null;
   const path = args?.path ?? args?.file_path ?? args?.filename;
   if (path) return `${name} → ${path}`;
   return name;
@@ -1476,7 +1528,7 @@ function ChatPane(props: ChatPaneProps) {
   const [activeTool, setActiveTool] = useState<ActiveToolState | null>(null);
   const [busy, setBusy] = useState(false);
   const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
-  const [nowTick, setNowTick] = useState(0);
+  const [, forceTick] = useState(0);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [statusLine, setStatusLine] = useState<string | null>(null);
@@ -1513,7 +1565,7 @@ function ChatPane(props: ChatPaneProps) {
   // Track busy start time for InFlightRow elapsed display
   useEffect(() => {
     if (!busy) return;
-    const id = setInterval(() => setNowTick((n) => n + 1), 500);
+    const id = setInterval(() => forceTick((n) => n + 1), 500);
     return () => clearInterval(id);
   }, [busy]);
   useEffect(() => {
@@ -1615,69 +1667,97 @@ function ChatPane(props: ChatPaneProps) {
       void refetchCanonicalState();
     };
     es.onmessage = (ev) => {
-      let dash: any;
+      let dash: unknown;
       try {
         dash = JSON.parse(ev.data);
       } catch {
         return;
       }
-      if (dash.kind === "ping") return;
-      if (dash.kind === "busy-change") {
-        setBusy(dash.busy);
+      const event = asRecord(dash);
+      if (event["kind"] === "ping") return;
+      if (event["kind"] === "busy-change") {
+        setBusy(event["busy"] === true);
         return;
       }
-      if (dash.kind === "user") {
-        setMessages((prev) => [...prev, { id: dash.id, role: "user" as const, text: dash.text }]);
+      if (event["kind"] === "user") {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: String(event["id"] ?? ""),
+            role: "user" as const,
+            text: String(event["text"] ?? ""),
+          },
+        ]);
         return;
       }
-      if (dash.kind === "assistant_delta") {
+      if (event["kind"] === "assistant_delta") {
         const cur = streamBufRef.current;
-        const baseId = cur?.id === dash.id ? cur : null;
+        const id = String(event["id"] ?? "");
+        const baseId = cur?.id === id ? cur : null;
         streamBufRef.current = {
-          id: dash.id,
-          text: (baseId?.text ?? "") + (dash.contentDelta ?? ""),
-          reasoning: (baseId?.reasoning ?? "") + (dash.reasoningDelta ?? ""),
+          id,
+          text: (baseId?.text ?? "") + String(event["contentDelta"] ?? ""),
+          reasoning: (baseId?.reasoning ?? "") + String(event["reasoningDelta"] ?? ""),
         };
         if (streamRafRef.current === null) {
           streamRafRef.current = requestAnimationFrame(flushStreaming);
         }
         return;
       }
-      if (dash.kind === "assistant_final") {
+      if (event["kind"] === "assistant_final") {
         cancelStreamingRaf();
         setStreaming(null);
         setMessages((prev) => [
           ...prev,
-          { id: dash.id, role: "assistant", text: dash.text, reasoning: dash.reasoning },
-        ]);
-        return;
-      }
-      if (dash.kind === "tool_start") {
-        setActiveTool({ id: dash.id, toolName: dash.toolName, args: dash.args });
-        return;
-      }
-      if (dash.kind === "tool") {
-        setActiveTool((cur) => (cur && cur.id === dash.id ? null : cur));
-        setMessages((prev) => [
-          ...prev,
           {
-            id: dash.id,
-            role: "tool",
-            text: dash.content,
-            toolName: dash.toolName,
-            toolArgs: dash.args,
+            id: String(event["id"] ?? ""),
+            role: "assistant",
+            text: String(event["text"] ?? ""),
+            ...(typeof event["reasoning"] === "string" ? { reasoning: event["reasoning"] } : {}),
           },
         ]);
         return;
       }
-      if (dash.kind === "warning" || dash.kind === "error" || dash.kind === "info") {
-        if (dash.kind === "error") setActiveTool(null);
-        setMessages((prev) => [...prev, { id: dash.id, role: dash.kind, text: dash.text }]);
+      if (event["kind"] === "tool_start") {
+        setActiveTool({
+          id: String(event["id"] ?? ""),
+          toolName: String(event["toolName"] ?? ""),
+          ...(typeof event["args"] === "string" ? { args: event["args"] } : {}),
+        });
         return;
       }
-      if (dash.kind === "status") {
-        setStatusLine(dash.text);
-        setTimeout(() => setStatusLine((cur) => (cur === dash.text ? null : cur)), 5000);
+      if (event["kind"] === "tool") {
+        const id = String(event["id"] ?? "");
+        setActiveTool((cur) => (cur && cur.id === id ? null : cur));
+        setMessages((prev) => [
+          ...prev,
+          {
+            id,
+            role: "tool",
+            text: String(event["content"] ?? ""),
+            toolName: String(event["toolName"] ?? ""),
+            ...(typeof event["args"] === "string" ? { toolArgs: event["args"] } : {}),
+          },
+        ]);
+        return;
+      }
+      if (event["kind"] === "warning" || event["kind"] === "error" || event["kind"] === "info") {
+        const role = event["kind"];
+        if (role === "error") setActiveTool(null);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: String(event["id"] ?? ""),
+            role,
+            text: String(event["text"] ?? ""),
+          },
+        ]);
+        return;
+      }
+      if (event["kind"] === "status") {
+        const text = String(event["text"] ?? "");
+        setStatusLine(text);
+        setTimeout(() => setStatusLine((cur) => (cur === text ? null : cur)), 5000);
         return;
       }
     };
@@ -1896,13 +1976,15 @@ function ChatPane(props: ChatPaneProps) {
 
   return html`
     <div style=${{ display: "flex", flexDirection: "column", height: "100%" }}>
-      ${statusLine ? html`<div class="changes-panel-header"><span>${statusLine}</span></div>` : null}
+      ${statusLine
+        ? html`<div class="changes-panel-header"><span>${statusLine}</span></div>`
+        : null}
       <div class="chat-feed" style=${{ flex: 1, overflowY: "auto", padding: "8px" }} ref=${feedRef}>
-        ${
-          allMessages.length === 0 && !streaming
-            ? html`<div class="empty" style=${{ margin: "12px", textAlign: "center" }}>${t("changes.chatWelcome")}</div>`
-            : null
-        }
+        ${allMessages.length === 0 && !streaming
+          ? html`<div class="empty" style=${{ margin: "12px", textAlign: "center" }}>
+              ${t("changes.chatWelcome")}
+            </div>`
+          : null}
         ${allMessages.map((msg) => {
           const isStreaming = streaming && msg.id === streaming.id;
           if (msg.role === "tool") {
@@ -1916,39 +1998,51 @@ function ChatPane(props: ChatPaneProps) {
           return html`
             <${ChatMessage}
               key=${msg.id}
-              msg=${{ id: msg.id, role: msg.role, text: msg.text, reasoning: msg.reasoning, toolName: msg.toolName, toolArgs: msg.toolArgs }}
+              msg=${{
+                id: msg.id,
+                role: msg.role,
+                text: msg.text,
+                reasoning: msg.reasoning,
+                toolName: msg.toolName,
+                toolArgs: msg.toolArgs,
+              }}
               streaming=${Boolean(isStreaming)}
             />
           `;
         })}
       </div>
-      ${error ? html`<div class="notice err" style=${{ margin: "0 8px 4px" }}>${error}</div>` : null}
+      ${error
+        ? html`<div class="notice err" style=${{ margin: "0 8px 4px" }}>${error}</div>`
+        : null}
       <div style=${{ padding: "8px", borderTop: "1px solid var(--bd)", flexShrink: 0 }}>
-        ${
-          props.comments.length > 0
-            ? html`
-          <div class="comment-cards-container" style=${{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "8px" }}>
-            ${props.comments.map(
-              (comment) => html`
-              <${CommentCard}
-                key=${comment.id}
-                fileName=${comment.file}
-                lineNumber=${comment.lineNumber}
-                content=${comment.content}
-                onRemove=${() => props.deleteComment(comment.id)}
-              />
-            `,
-            )}
-          </div>
-        `
-            : null
-        }
+        ${props.comments.length > 0
+          ? html`
+              <div
+                class="comment-cards-container"
+                style=${{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "8px" }}
+              >
+                ${props.comments.map(
+                  (comment) => html`
+                    <${CommentCard}
+                      key=${comment.id}
+                      fileName=${comment.file}
+                      lineNumber=${comment.lineNumber}
+                      content=${comment.content}
+                      onRemove=${() => props.deleteComment(comment.id)}
+                    />
+                  `,
+                )}
+              </div>
+            `
+          : null}
         <div style=${{ display: "flex", gap: "8px", alignItems: "flex-end", position: "relative" }}>
           <div style=${{ flex: 1, position: "relative" }}>
-            ${
-              popoverKind && popoverItems.length > 0
-                ? html`
-                  <div class="popover" style="position:absolute;bottom:calc(100% + 6px);left:0;width:380px;max-height:280px;overflow-y:auto;z-index:10">
+            ${popoverKind && popoverItems.length > 0
+              ? html`
+                  <div
+                    class="popover"
+                    style="position:absolute;bottom:calc(100% + 6px);left:0;width:380px;max-height:280px;overflow-y:auto;z-index:10"
+                  >
                     <div class="popover-h">${t("chat.slashCommands")}</div>
                     ${popoverItems.map(
                       (it, i) => html`
@@ -1968,12 +2062,27 @@ function ChatPane(props: ChatPaneProps) {
                     )}
                   </div>
                 `
-                : null
-            }
+              : null}
             <textarea
               class="input"
-              style=${{ width: "100%", resize: "none", minHeight: "36px", fontFamily: "inherit", fontSize: "13px", padding: "8px 10px", lineHeight: "1.4", background: "var(--bg-input)", border: "1px solid var(--bd)", borderRadius: "4px", color: "var(--fg-0)" }}
-              placeholder=${busy ? t("chat.placeholderBusy") : props.comments.length > 0 ? "总结评论..." : t("changes.chatPlaceholder")}
+              style=${{
+                width: "100%",
+                resize: "none",
+                minHeight: "36px",
+                fontFamily: "inherit",
+                fontSize: "13px",
+                padding: "8px 10px",
+                lineHeight: "1.4",
+                background: "var(--bg-input)",
+                border: "1px solid var(--bd)",
+                borderRadius: "4px",
+                color: "var(--fg-0)",
+              }}
+              placeholder=${busy
+                ? t("chat.placeholderBusy")
+                : props.comments.length > 0
+                  ? "总结评论..."
+                  : t("changes.chatPlaceholder")}
               value=${input}
               onInput=${onInput}
               onKeyDown=${onKeyDown}
@@ -1985,17 +2094,27 @@ function ChatPane(props: ChatPaneProps) {
             />
           </div>
           <div style=${{ display: "flex", flexDirection: "column", gap: "6px", flexShrink: 0 }}>
-            <button class="primary" onClick=${send} disabled=${busy || (!input.trim() && props.comments.length === 0)} style=${{ padding: "8px 12px", borderRadius: "4px" }}>${t("changes.chatSend")}</button>
+            <button
+              class="primary"
+              onClick=${send}
+              disabled=${busy || (!input.trim() && props.comments.length === 0)}
+              style=${{ padding: "8px 12px", borderRadius: "4px" }}
+            >
+              ${t("changes.chatSend")}
+            </button>
             <div style=${{ display: "flex", gap: "6px" }}>
-              <button onClick=${newConversation} title=${t("changes.newTitle")}>${t("changes.newConversation")}</button>
-              <button onClick=${clearScrollback} title=${t("changes.clearTitle")}>${t("changes.clearConversation")}</button>
+              <button onClick=${newConversation} title=${t("changes.newTitle")}>
+                ${t("changes.newConversation")}
+              </button>
+              <button onClick=${clearScrollback} title=${t("changes.clearTitle")}>
+                ${t("changes.clearConversation")}
+              </button>
             </div>
           </div>
         </div>
       </div>
-      ${
-        busy
-          ? (() => {
+      ${busy
+        ? (() => {
             const elapsedMs = turnStartedAt ? Date.now() - turnStartedAt : 0;
             const elapsed = (elapsedMs / 1000).toFixed(1);
             const textLen = streaming?.text?.length ?? 0;
@@ -2014,29 +2133,29 @@ function ChatPane(props: ChatPaneProps) {
                 <span class="chat-inflight-phase">${phase}</span>
                 <span class="chat-inflight-sep">·</span>
                 <span class="muted">${elapsed}s</span>
-                ${
-                  toolSummary
-                    ? html`<span class="chat-inflight-sep">·</span><span class="chat-inflight-tool" title=${toolSummary}>${toolSummary}</span>`
-                    : null
-                }
-                ${
-                  !toolSummary && (textLen > 0 || reasoningLen > 0)
-                    ? html`
+                ${toolSummary
+                  ? html`<span class="chat-inflight-sep">·</span
+                      ><span class="chat-inflight-tool" title=${toolSummary}>${toolSummary}</span>`
+                  : null}
+                ${!toolSummary && (textLen > 0 || reasoningLen > 0)
+                  ? html`
                       <span class="chat-inflight-sep">·</span>
                       <span class="muted">
-                        ${reasoningLen > 0 ? t("chat.inflightReasoning", { count: reasoningLen.toLocaleString() }) : null}
+                        ${reasoningLen > 0
+                          ? t("chat.inflightReasoning", { count: reasoningLen.toLocaleString() })
+                          : null}
                         ${reasoningLen > 0 && textLen > 0 ? html`<span> · </span>` : null}
-                        ${textLen > 0 ? t("chat.inflightOut", { count: textLen.toLocaleString() }) : null}
+                        ${textLen > 0
+                          ? t("chat.inflightOut", { count: textLen.toLocaleString() })
+                          : null}
                       </span>
                     `
-                    : null
-                }
+                  : null}
                 <button class="chat-inflight-abort" onClick=${abort}>${t("chat.abortBtn")}</button>
               </div>
             `;
           })()
-          : null
-      }
+        : null}
       <${ChatStatusBar} stats=${stats} model=${model} />
     </div>
   `;

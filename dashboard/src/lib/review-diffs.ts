@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "preact/hooks";
+import { useState, useCallback } from "preact/hooks";
 import { api } from "./api.js";
 
 export interface FileDiff {
@@ -9,7 +9,15 @@ export interface FileDiff {
   status: "added" | "deleted" | "modified";
 }
 
-export function useReviewDiffs() {
+export interface ReviewDiffsState {
+  diffs: FileDiff[];
+  loading: boolean;
+  modifiedFiles: () => Set<string>;
+  modifiedCount: () => number;
+  reload: (ep?: string) => Promise<void>;
+}
+
+export function useReviewDiffs(): ReviewDiffsState {
   const [diffs, setDiffs] = useState<FileDiff[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -28,5 +36,11 @@ export function useReviewDiffs() {
   const modifiedFiles = useCallback(() => new Set(diffs.map((d) => d.file)), [diffs]);
   const modifiedCount = useCallback(() => diffs.length, [diffs]);
 
-  return { diffs, loading, modifiedFiles, modifiedCount, reload: loadDiffs };
+  return {
+    diffs: diffs,
+    loading: loading,
+    modifiedFiles: modifiedFiles,
+    modifiedCount: modifiedCount,
+    reload: loadDiffs,
+  };
 }

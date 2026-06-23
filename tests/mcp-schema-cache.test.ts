@@ -41,14 +41,14 @@ describe("MCP tools/list schema cache", () => {
   let home: string;
 
   beforeEach(() => {
-    previousHome = process.env.REASONIX_HOME;
+    previousHome = process.env["REASONIX_HOME"];
     home = mkdtempSync(join(tmpdir(), "reasonix-cache-test-"));
-    process.env.REASONIX_HOME = home;
+    process.env["REASONIX_HOME"] = home;
   });
 
   afterEach(() => {
     if (previousHome === undefined) Reflect.deleteProperty(process.env, "REASONIX_HOME");
-    else process.env.REASONIX_HOME = previousHome;
+    else process.env["REASONIX_HOME"] = previousHome;
   });
 
   it("saves and loads a verified cache hit without env-derived filename data", () => {
@@ -104,14 +104,14 @@ describe("MCP eager drift gate (scheme 10)", () => {
   };
 
   beforeEach(() => {
-    previousHome = process.env.REASONIX_HOME;
+    previousHome = process.env["REASONIX_HOME"];
     home = mkdtempSync(join(tmpdir(), "reasonix-eager-test-"));
-    process.env.REASONIX_HOME = home;
+    process.env["REASONIX_HOME"] = home;
   });
 
   afterEach(() => {
     if (previousHome === undefined) Reflect.deleteProperty(process.env, "REASONIX_HOME");
-    else process.env.REASONIX_HOME = previousHome;
+    else process.env["REASONIX_HOME"] = previousHome;
   });
 
   // Drift -> null is the contract that makes mcp-runtime rebuild the prefix from a

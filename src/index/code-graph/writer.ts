@@ -10,7 +10,7 @@ import {
   type CodeGraphUnresolvedRef,
 } from "./types.js";
 
-export const CODE_GRAPH_INDEX_DIR = path.join(".reasonix", "index", "code-graph");
+export const CODE_GRAPH_INDEX_DIR: string = path.join(".reasonix", "index", "code-graph");
 export const CODE_GRAPH_NODES_FILE = "nodes.json";
 export const CODE_GRAPH_EDGES_FILE = "edges.json";
 export const CODE_GRAPH_BM25_FILE = "bm25.json";

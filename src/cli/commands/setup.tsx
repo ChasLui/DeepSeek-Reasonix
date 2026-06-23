@@ -19,9 +19,9 @@ export interface SetupOptions {
    * from test harnesses. Normal CLI use always pushes through the key
    * step when missing.
    */
-  skipKeyStep?: boolean;
+  skipKeyStep?: boolean | undefined;
   /** Show the API-key step even when a saved/env key already exists. */
-  forceKeyStep?: boolean;
+  forceKeyStep?: boolean | undefined;
 }
 
 export async function setupCommand(opts: SetupOptions = {}): Promise<void> {

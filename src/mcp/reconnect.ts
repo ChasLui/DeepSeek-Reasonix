@@ -15,11 +15,11 @@ export interface ReconnectArgs {
   /** The current tool list, used as the drift baseline. */
   beforeTools: readonly McpTool[];
   /** Drift kinds the caller is willing to accept. Default: ["identity"]. */
-  accept?: ReadonlyArray<"identity" | "append">;
+  accept?: ReadonlyArray<"identity" | "append"> | undefined;
   /** Stdio env overlay — same lookup that produced the live client's env. */
-  env?: Record<string, string>;
+  env?: Record<string, string> | undefined;
   /** SSE / Streamable-HTTP headers overlay. */
-  headers?: Record<string, string>;
+  headers?: Record<string, string> | undefined;
 }
 
 export type ReconnectResult =

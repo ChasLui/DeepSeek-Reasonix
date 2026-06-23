@@ -60,7 +60,7 @@ describe("replaceMcpServerSummary", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]).toBe(updated);
-    expect(result[0].toolCount).toBe(5);
+    expect(result[0]!.toolCount).toBe(5);
   });
 
   it("replaces by label/spec match when object references differ", () => {
@@ -73,7 +73,7 @@ describe("replaceMcpServerSummary", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]).toBe(updated);
-    expect(result[0].toolCount).toBe(7);
+    expect(result[0]!.toolCount).toBe(7);
   });
 
   it("preserves non-matching servers", () => {
@@ -98,7 +98,7 @@ describe("replaceMcpServerSummary", () => {
 
     expect(result).not.toBe(servers);
     expect(servers[0]).toBe(original);
-    expect(servers[0].toolCount).toBe(3);
+    expect(servers[0]!.toolCount).toBe(3);
   });
 
   it("handles stale-reference scenario: second update still matches by label/spec", () => {
@@ -116,6 +116,6 @@ describe("replaceMcpServerSummary", () => {
     // Must match via label/spec since `original !== servers[0]`
     expect(result).toHaveLength(1);
     expect(result[0]).toBe(updatedTwice);
-    expect(result[0].toolCount).toBe(9);
+    expect(result[0]!.toolCount).toBe(9);
   });
 });

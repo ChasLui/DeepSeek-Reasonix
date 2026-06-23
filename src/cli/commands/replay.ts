@@ -6,10 +6,10 @@ import { ReplayApp } from "../ui/ReplayApp.js";
 
 export interface ReplayOptions {
   path: string;
-  head?: number;
-  tail?: number;
+  head?: number | undefined;
+  tail?: number | undefined;
   /** Force stdout pretty-print mode (no Ink TUI). Also auto-enabled when stdout is not a TTY. */
-  print?: boolean;
+  print?: boolean | undefined;
 }
 
 export async function replayCommand(opts: ReplayOptions): Promise<void> {

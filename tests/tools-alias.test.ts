@@ -40,7 +40,7 @@ describe("ToolRegistry tool aliases", () => {
     const out = await reg.dispatch("nope", {});
 
     expect(parseToolResult(out)).toEqual({ error: "unknown tool: nope" });
-    expect(reg.getRepairStats().nope?.["unknown-tool-unaliased"]).toBe(1);
+    expect(reg.getRepairStats()["nope"]?.["unknown-tool-unaliased"]).toBe(1);
   });
 
   it("audits the resolved tool name and counts the original alias bucket", async () => {
@@ -57,9 +57,9 @@ describe("ToolRegistry tool aliases", () => {
     await reg.dispatch("Task", { task: "inspect workspace" });
 
     expect(seen).toEqual([{ name: "spawn_subagent", args: { task: "inspect workspace" } }]);
-    expect(reg.getRepairStats().Task?.["unknown-tool-aliased"]).toBe(1);
-    expect(reg.getRepairStats().spawn_subagent?.["unknown-tool-aliased"]).toBeUndefined();
-    expect(reg.getRepairStats().spawn_subagent?.["unknown-tool-unaliased"]).toBeUndefined();
+    expect(reg.getRepairStats()["Task"]?.["unknown-tool-aliased"]).toBe(1);
+    expect(reg.getRepairStats()["spawn_subagent"]?.["unknown-tool-aliased"]).toBeUndefined();
+    expect(reg.getRepairStats()["spawn_subagent"]?.["unknown-tool-unaliased"]).toBeUndefined();
   });
 
   it("falls back to unaliased accounting when an alias target or valid args are missing", async () => {
@@ -70,15 +70,15 @@ describe("ToolRegistry tool aliases", () => {
 
     expect(parseToolResult(unknownOut)).toEqual({ error: "unknown tool: nope" });
     expect(parseToolResult(aliasOut)).toEqual({ error: "unknown tool: Task" });
-    expect(reg.getRepairStats().Task?.["unknown-tool-unaliased"]).toBe(1);
+    expect(reg.getRepairStats()["Task"]?.["unknown-tool-unaliased"]).toBe(1);
     expect(countUnknownUnaliased(reg.getRepairStats())).toBe(2);
 
     const validationReg = new ToolRegistry();
     registerSpawnSubagent(validationReg);
     const validationOut = await validationReg.dispatch("Task", {});
 
-    expect(parseToolResult(validationOut).error).toMatch(/argument validation failed/);
-    expect(validationReg.getRepairStats().Task?.["unknown-tool-unaliased"]).toBe(1);
-    expect(validationReg.getRepairStats().Task?.["unknown-tool-aliased"]).toBeUndefined();
+    expect(parseToolResult(validationOut)["error"]).toMatch(/argument validation failed/);
+    expect(validationReg.getRepairStats()["Task"]?.["unknown-tool-unaliased"]).toBe(1);
+    expect(validationReg.getRepairStats()["Task"]?.["unknown-tool-aliased"]).toBeUndefined();
   });
 });

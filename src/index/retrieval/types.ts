@@ -12,7 +12,7 @@ export interface RetrievalHit {
   score: number;
   sources: RetrievalSource[];
   fusible: boolean;
-  snippet?: string;
+  snippet?: string | undefined;
 }
 
 export interface ParsedDocId {

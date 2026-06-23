@@ -41,7 +41,9 @@ class FakeMcpTransport implements McpTransport {
   private readonly queue: JsonRpcMessage[] = [];
   private readonly waiters: Array<(m: JsonRpcMessage | null) => void> = [];
   private closed = false;
-  constructor(private readonly opts: FakeServerOptions) {
+  private readonly opts: FakeServerOptions;
+  constructor(opts: FakeServerOptions) {
+    this.opts = opts;
     opts.received = opts.received ?? [];
   }
 
@@ -260,10 +262,10 @@ describe("McpClient: tools/list + tools/call", () => {
       tools: SAMPLE_TOOLS,
       callHandler: (name, args) => {
         if (name === "echo") {
-          return { content: [{ type: "text", text: String(args.msg ?? "") }] };
+          return { content: [{ type: "text", text: String(args["msg"] ?? "") }] };
         }
         if (name === "add") {
-          const sum = Number(args.a) + Number(args.b);
+          const sum = Number(args["a"]) + Number(args["b"]);
           return { content: [{ type: "text", text: String(sum) }] };
         }
         return { content: [{ type: "text", text: "?" }] };
@@ -342,7 +344,7 @@ describe("bridgeMcpTools (MCP → ToolRegistry)", () => {
         },
       ],
       callHandler: (_name, args) => ({
-        content: [{ type: "text", text: `you said: ${args.msg}` }],
+        content: [{ type: "text", text: `you said: ${args["msg"]}` }],
       }),
     });
     const client = new McpClient({ transport });
@@ -530,10 +532,10 @@ describe("flattenMcpResult: schema validation", () => {
 
 describe("bridgeMcpTools: result-size cap", () => {
   beforeEach(() => {
-    process.env.REASONIX_SHIELD = "0"; // test targets maxChars cap, not shield
+    process.env["REASONIX_SHIELD"] = "0"; // test targets maxChars cap, not shield
   });
   afterEach(() => {
-    process.env.REASONIX_SHIELD = undefined;
+    process.env["REASONIX_SHIELD"] = undefined;
   });
   it("caps a giant MCP tool result before handing it to the registry", async () => {
     // Minimal local fake — just enough to exercise the dispatch path.
@@ -763,11 +765,24 @@ describe("McpClient: progress notifications", () => {
       total?: number;
       message?: string;
     }> = [];
-    const result = await client.callTool("scan", {}, { onProgress: (info) => received.push(info) });
+    const result = await client.callTool(
+      "scan",
+      {},
+      {
+        onProgress: (info) => {
+          const item: { progress: number; total?: number; message?: string } = {
+            progress: info.progress,
+          };
+          if (info.total !== undefined) item.total = info.total;
+          if (info.message !== undefined) item.message = info.message;
+          received.push(item);
+        },
+      },
+    );
     expect(result.content[0]).toEqual({ type: "text", text: "done" });
     expect(received).toEqual([
       { progress: 1, total: 3, message: "reading..." },
-      { progress: 2, total: 3, message: undefined },
+      { progress: 2, total: 3 },
       { progress: 3, total: 3, message: "done" },
     ]);
     await client.close();
@@ -960,7 +975,11 @@ describe("bridgeMcpTools: progress pass-through", () => {
     }> = [];
     const { registry } = await bridgeMcpTools(client, {
       namePrefix: "fs_",
-      onProgress: ({ toolName, progress, total }) => observed.push({ toolName, progress, total }),
+      onProgress: ({ toolName, progress, total }) => {
+        const item: { toolName: string; progress: number; total?: number } = { toolName, progress };
+        if (total !== undefined) item.total = total;
+        observed.push(item);
+      },
     });
     await registry.dispatch("fs_scan", "{}");
     expect(observed).toEqual([{ toolName: "fs_scan", progress: 5, total: 10 }]);
@@ -1059,7 +1078,7 @@ describe("McpClient: prompts", () => {
             role: "user",
             content: {
               type: "text",
-              text: `please summarize in ${args?.lang ?? "?"}`,
+              text: `please summarize in ${args?.["lang"] ?? "?"}`,
             },
           },
         ],

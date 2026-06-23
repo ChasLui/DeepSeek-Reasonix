@@ -47,19 +47,19 @@ describe("eslint filter", () => {
   });
 });
 
-describe("biome filter", () => {
+describe("oxlint filter", () => {
   it("groups by file", () => {
     const out = [
-      "src/foo.ts:12:5 lint/suspicious/noExplicitAny ━━",
+      "src/foo.ts:12:5: typescript/no-explicit-any: Unexpected any. Use a specific type.",
       "  some explanation",
-      "src/foo.ts:20:1 lint/correctness/noUnused ━━",
-      "src/bar.ts:5:5 lint/style/useConst ━━",
+      "src/foo.ts:20:1: no-unused-vars: Unexpected unused variable.",
+      "src/bar.ts:5:5: unicorn/prefer-string-slice: Prefer string slice.",
     ].join("\n");
-    const r = applyCompactor("npx biome check src", out, {
+    const r = applyCompactor("npx oxlint src", out, {
       exitCode: 1,
       timedOut: false,
     });
-    expect(r.filter).toBe("biome");
+    expect(r.filter).toBe("oxlint");
     expect(r.compact).toMatch(/3 issues across 2 files/);
     expect(r.compact).toContain("foo.ts: 2");
     expect(r.compact).toContain("bar.ts: 1");

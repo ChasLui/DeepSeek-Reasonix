@@ -2,25 +2,25 @@
 
 export interface MultilineKey {
   input: string;
-  return?: boolean;
-  shift?: boolean;
-  ctrl?: boolean;
-  alt?: boolean;
-  super?: boolean;
-  hyper?: boolean;
-  meta?: boolean;
-  backspace?: boolean;
-  delete?: boolean;
-  tab?: boolean;
-  upArrow?: boolean;
-  downArrow?: boolean;
-  leftArrow?: boolean;
-  rightArrow?: boolean;
-  escape?: boolean;
-  pageUp?: boolean;
-  pageDown?: boolean;
-  home?: boolean;
-  end?: boolean;
+  return?: boolean | undefined;
+  shift?: boolean | undefined;
+  ctrl?: boolean | undefined;
+  alt?: boolean | undefined;
+  super?: boolean | undefined;
+  hyper?: boolean | undefined;
+  meta?: boolean | undefined;
+  backspace?: boolean | undefined;
+  delete?: boolean | undefined;
+  tab?: boolean | undefined;
+  upArrow?: boolean | undefined;
+  downArrow?: boolean | undefined;
+  leftArrow?: boolean | undefined;
+  rightArrow?: boolean | undefined;
+  escape?: boolean | undefined;
+  pageUp?: boolean | undefined;
+  pageDown?: boolean | undefined;
+  home?: boolean | undefined;
+  end?: boolean | undefined;
 }
 
 export interface MultilineAction {
@@ -30,14 +30,14 @@ export interface MultilineAction {
   cursor: number | null;
   /** When `true`, fire `onSubmit(submitValue ?? value)`. */
   submit: boolean;
-  submitValue?: string;
+  submitValue?: string | undefined;
   /** Set on Ctrl+P / Ctrl+N when no in-buffer cursor move applies — parent recalls prompt history. */
-  historyHandoff?: "prev" | "next";
-  historyHandoffSource?: "arrow" | "readline";
+  historyHandoff?: "prev" | "next" | undefined;
+  historyHandoffSource?: "arrow" | "readline" | undefined;
   /** Reducer is pure — hands raw paste to PromptInput which allocates a sentinel and inserts that. */
   pasteRequest?: { content: string };
   /** Ctrl+X — hand the current buffer to $EDITOR; parent re-injects on exit. */
-  openExternalEditor?: boolean;
+  openExternalEditor?: boolean | undefined;
 }
 
 import { recoverCsiTail, stripCsiFragments } from "./key-normalize.js";

@@ -23,14 +23,14 @@ import { listSessions, loadSessionMessages } from "../../memory/session.js";
 import { type MemoryEntry, type MemoryScope, openMemoryStore } from "../../memory/user.js";
 
 export interface MemoryCommandOptions {
-  homeDir?: string;
-  projectRoot?: string;
-  embedText?: EmbedText;
+  homeDir?: string | undefined;
+  projectRoot?: string | undefined;
+  embedText?: EmbedText | undefined;
 }
 
 export interface MemorySearchOptions extends MemoryCommandOptions {
-  hybrid?: boolean;
-  topK?: number;
+  hybrid?: boolean | undefined;
+  topK?: number | undefined;
 }
 
 export interface MemorySearchHit {
@@ -42,7 +42,7 @@ export interface MemorySearchResult {
   mode: "lexical-only" | "hybrid";
   hits: MemorySearchHit[];
   stale: boolean;
-  semanticError?: string;
+  semanticError?: string | undefined;
 }
 
 const DEFAULT_TOP_K = 8;
@@ -128,7 +128,7 @@ export async function rebuildMemoryIndex(opts: MemoryCommandOptions = {}): Promi
   entries: number;
   lexicalDocs: number;
   semanticDocs: number;
-  semanticError?: string;
+  semanticError?: string | undefined;
 }> {
   const store = openMemoryStore({
     homeDir: opts.homeDir,
@@ -210,7 +210,7 @@ export async function searchMemory(
   let mode: MemorySearchResult["mode"] = "lexical-only";
   let fused = lexicalHits;
   let semanticError: string | undefined;
-  const hybridEnabled = opts.hybrid === true && process.env.REASONIX_HYBRID_SEARCH !== "0";
+  const hybridEnabled = opts.hybrid === true && process.env["REASONIX_HYBRID_SEARCH"] !== "0";
   if (hybridEnabled) {
     mode = "hybrid";
     try {
@@ -312,10 +312,10 @@ function parseSearchArgs(args: readonly string[]): {
 
 function parseForgetArgs(args: readonly string[]): {
   minScore: number;
-  scope?: MemoryScope;
+  scope?: MemoryScope | undefined;
   dryRun: boolean;
   purge: boolean;
-  halflifeDays?: number;
+  halflifeDays?: number | undefined;
 } {
   let minScore = 0.1;
   let scope: MemoryScope | undefined;

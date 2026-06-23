@@ -3,31 +3,33 @@ const DEFAULT_EMBED_MODEL = "nomic-embed-text";
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_BATCH_SIZE = 10;
 
-export type EmbedOptions =
-  | {
-      provider?: "ollama";
-      baseUrl?: string;
-      model?: string;
-      timeoutMs?: number;
-      signal?: AbortSignal;
-    }
-  | {
-      provider: "openai-compat";
-      baseUrl: string;
-      apiKey: string;
-      model: string;
-      extraBody?: Record<string, unknown>;
-      timeoutMs?: number;
-      batchSize?: number;
-      signal?: AbortSignal;
-    };
+type OllamaEmbedOptions = {
+  provider?: "ollama" | undefined;
+  baseUrl?: string | undefined;
+  model?: string | undefined;
+  timeoutMs?: number | undefined;
+  signal?: AbortSignal | undefined;
+};
+
+type OpenAICompatEmbedOptions = {
+  provider: "openai-compat";
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  extraBody?: Record<string, unknown> | undefined;
+  timeoutMs?: number | undefined;
+  batchSize?: number | undefined;
+  signal?: AbortSignal | undefined;
+};
+
+export type EmbedOptions = OllamaEmbedOptions | OpenAICompatEmbedOptions;
 
 export class EmbeddingError extends Error {
-  constructor(
-    message: string,
-    public override readonly cause?: unknown,
-  ) {
+  public override readonly cause?: unknown;
+
+  constructor(message: string, cause?: unknown) {
     super(message);
+    this.cause = cause;
     this.name = "EmbeddingError";
   }
 }
@@ -40,8 +42,8 @@ export async function embed(text: string, opts: EmbedOptions = {}): Promise<Floa
 export async function embedAll(
   texts: readonly string[],
   opts: EmbedOptions & {
-    onProgress?: (done: number, total: number) => void;
-    onError?: (index: number, err: unknown) => void;
+    onProgress?: ((done: number, total: number) => void) | undefined;
+    onError?: ((index: number, err: unknown) => void) | undefined;
   } = {},
 ): Promise<Array<Float32Array | null>> {
   if (opts.provider === "openai-compat") return await embedAllOpenAICompat(texts, opts);
@@ -67,9 +69,11 @@ export async function embedAll(
 export async function probeOllama(
   opts: { baseUrl?: string; signal?: AbortSignal } = {},
 ): Promise<{ ok: true; models: string[] } | { ok: false; error: string }> {
-  const baseUrl = opts.baseUrl ?? process.env.OLLAMA_URL ?? DEFAULT_OLLAMA_URL;
+  const baseUrl = opts.baseUrl ?? process.env["OLLAMA_URL"] ?? DEFAULT_OLLAMA_URL;
   try {
-    const res = await fetch(`${baseUrl}/api/tags`, { signal: opts.signal });
+    const res = await fetch(`${baseUrl}/api/tags`, {
+      ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+    });
     if (!res.ok) return { ok: false, error: `Ollama returned ${res.status}` };
     const json = (await res.json()) as { models?: Array<{ name?: string }> };
     const models = (json.models ?? [])
@@ -82,12 +86,9 @@ export async function probeOllama(
   }
 }
 
-async function embedOllama(
-  text: string,
-  opts: Extract<EmbedOptions, { provider?: "ollama" }>,
-): Promise<Float32Array> {
-  const baseUrl = opts.baseUrl ?? process.env.OLLAMA_URL ?? DEFAULT_OLLAMA_URL;
-  const model = opts.model ?? process.env.REASONIX_EMBED_MODEL ?? DEFAULT_EMBED_MODEL;
+async function embedOllama(text: string, opts: OllamaEmbedOptions): Promise<Float32Array> {
+  const baseUrl = opts.baseUrl ?? process.env["OLLAMA_URL"] ?? DEFAULT_OLLAMA_URL;
+  const model = opts.model ?? process.env["REASONIX_EMBED_MODEL"] ?? DEFAULT_EMBED_MODEL;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const { controller, cleanup } = composeAbort(opts.signal, timeoutMs, "embedding timeout");
 
@@ -147,8 +148,8 @@ async function embedOpenAICompat(
 async function embedAllOpenAICompat(
   texts: readonly string[],
   opts: Extract<EmbedOptions, { provider: "openai-compat" }> & {
-    onProgress?: (done: number, total: number) => void;
-    onError?: (index: number, err: unknown) => void;
+    onProgress?: ((done: number, total: number) => void) | undefined;
+    onError?: ((index: number, err: unknown) => void) | undefined;
   },
 ): Promise<Array<Float32Array | null>> {
   if (texts.length === 0) return [];
@@ -241,7 +242,7 @@ async function requestOpenAICompatEmbeddings(
   }
 
   const json = (await res.json()) as {
-    data?: Array<{ index?: unknown; embedding?: unknown }>;
+    data?: Array<{ index?: unknown; embedding?: unknown }> | undefined;
   };
   if (!Array.isArray(json.data)) {
     throw new EmbeddingError("OpenAI-compatible response missing 'data' array");

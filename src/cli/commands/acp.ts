@@ -61,15 +61,15 @@ import { formatMcpSlowToast } from "../ui/mcp-toast.js";
 import { canonicalPresetName, resolvePreset } from "../ui/presets.js";
 
 export interface AcpOptions {
-  model?: string;
-  dir?: string;
-  budgetUsd?: number;
-  transcript?: string;
-  yolo?: boolean;
+  model?: string | undefined;
+  dir?: string | undefined;
+  budgetUsd?: number | undefined;
+  transcript?: string | undefined;
+  yolo?: boolean | undefined;
   /** Zero or more MCP server specs. Each: `"name=cmd args..."` or `"cmd args..."`. */
-  mcpSpecs?: string[];
+  mcpSpecs?: string[] | undefined;
   /** Global prefix — only honored when a single anonymous server is given. */
-  mcpPrefix?: string;
+  mcpPrefix?: string | undefined;
 }
 
 export interface Session {
@@ -161,14 +161,14 @@ export function resolveDir(raw: string | undefined, fallback: string): string {
 
 export async function buildSession(opts: {
   rootDir: string;
-  modelOverride?: string;
-  budgetUsd?: number;
-  mcpSpecs?: string[];
-  mcpPrefix?: string;
+  modelOverride?: string | undefined;
+  budgetUsd?: number | undefined;
+  mcpSpecs?: string[] | undefined;
+  mcpPrefix?: string | undefined;
   /** Override MCP setup — the daemon injects a per-workspace warm pool. Default per-session init. Bridges into `tools` BEFORE the prefix is built either way (Pillar 1). */
-  bridgeMcp?: (tools: import("../../tools.js").ToolRegistry) => Promise<McpClient[]>;
+  bridgeMcp?: ((tools: import("../../tools.js").ToolRegistry) => Promise<McpClient[]>) | undefined;
   /** Per-session HITL gate — the daemon passes a fresh PauseGate so confirmations route to its connection. Defaults to the global singleton (ACP/in-process behavior). */
-  confirmationGate?: PauseGate;
+  confirmationGate?: PauseGate | undefined;
 }): Promise<Session> {
   const preset = canonicalPresetName(loadPreset());
   const resolved = resolvePreset(preset);
@@ -228,7 +228,7 @@ export async function buildSession(opts: {
 export async function acpCommand(opts: AcpOptions): Promise<void> {
   loadDotenv();
   if (loadApiKey()) {
-    process.env.DEEPSEEK_API_KEY = loadApiKey();
+    process.env["DEEPSEEK_API_KEY"] = loadApiKey();
   }
 
   const defaultDir = resolveDir(opts.dir, process.cwd());

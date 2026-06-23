@@ -11,8 +11,11 @@ class NotificationTransport implements McpTransport {
   private readonly queue: JsonRpcMessage[] = [];
   private readonly waiters: Array<(msg: JsonRpcMessage | null) => void> = [];
   private closed = false;
+  private readonly capabilities: Record<string, unknown>;
 
-  constructor(private readonly capabilities: Record<string, unknown>) {}
+  constructor(capabilities: Record<string, unknown>) {
+    this.capabilities = capabilities;
+  }
 
   async send(msg: JsonRpcMessage): Promise<void> {
     if (!("method" in msg) || !("id" in msg)) return;

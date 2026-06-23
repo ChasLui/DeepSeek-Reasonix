@@ -131,7 +131,11 @@ async function waitForMtimeTick(): Promise<void> {
 }
 
 function git(root: string, args: string[]): void {
-  execFileSync("git", args, { cwd: root, env: withoutGitEnv(), stdio: "pipe" });
+  execFileSync("git", args, {
+    cwd: root,
+    env: withoutGitEnv(process.env, { isolateConfig: true }),
+    stdio: "pipe",
+  });
 }
 
 function initGitRepo(root: string): void {
@@ -149,25 +153,25 @@ describe("code graph v4 index", () => {
     root = mkdtempSync(join(tmpdir(), "reasonix-code-graph-"));
     resetCodeGraphStats();
     resetCodeGraphBuildCooldown();
-    originalCodeGraph = process.env.REASONIX_CODE_GRAPH;
-    originalCodeGraphBody = process.env.REASONIX_CODE_GRAPH_BODY;
-    process.env.REASONIX_CODE_GRAPH = "1";
+    originalCodeGraph = process.env["REASONIX_CODE_GRAPH"];
+    originalCodeGraphBody = process.env["REASONIX_CODE_GRAPH_BODY"];
+    process.env["REASONIX_CODE_GRAPH"] = "1";
     // biome-ignore lint/performance/noDelete: tests pin body fields explicitly per case
-    delete process.env.REASONIX_CODE_GRAPH_BODY;
+    delete process.env["REASONIX_CODE_GRAPH_BODY"];
   });
 
   afterEach(() => {
     if (originalCodeGraph === undefined) {
       // biome-ignore lint/performance/noDelete: restore exact env state
-      delete process.env.REASONIX_CODE_GRAPH;
+      delete process.env["REASONIX_CODE_GRAPH"];
     } else {
-      process.env.REASONIX_CODE_GRAPH = originalCodeGraph;
+      process.env["REASONIX_CODE_GRAPH"] = originalCodeGraph;
     }
     if (originalCodeGraphBody === undefined) {
       // biome-ignore lint/performance/noDelete: restore exact env state
-      delete process.env.REASONIX_CODE_GRAPH_BODY;
+      delete process.env["REASONIX_CODE_GRAPH_BODY"];
     } else {
-      process.env.REASONIX_CODE_GRAPH_BODY = originalCodeGraphBody;
+      process.env["REASONIX_CODE_GRAPH_BODY"] = originalCodeGraphBody;
     }
     rmSync(root, {
       recursive: true,
@@ -346,10 +350,10 @@ describe("code graph v4 index", () => {
 
   it("rebuild command honors REASONIX_CODE_GRAPH=0 without creating artifacts", async () => {
     writeProjectFile(root, "src/mod.ts", "export function run() { return 1; }\n");
-    const originalEnv = process.env.REASONIX_CODE_GRAPH;
+    const originalEnv = process.env["REASONIX_CODE_GRAPH"];
     const originalWrite = process.stdout.write;
     let out = "";
-    process.env.REASONIX_CODE_GRAPH = "0";
+    process.env["REASONIX_CODE_GRAPH"] = "0";
     process.stdout.write = ((chunk: string | Uint8Array) => {
       out += typeof chunk === "string" ? chunk : chunk.toString();
       return true;
@@ -360,9 +364,9 @@ describe("code graph v4 index", () => {
       process.stdout.write = originalWrite;
       if (originalEnv === undefined) {
         // biome-ignore lint/performance/noDelete: restore exact env state
-        delete process.env.REASONIX_CODE_GRAPH;
+        delete process.env["REASONIX_CODE_GRAPH"];
       } else {
-        process.env.REASONIX_CODE_GRAPH = originalEnv;
+        process.env["REASONIX_CODE_GRAPH"] = originalEnv;
       }
     }
 
@@ -1290,7 +1294,7 @@ describe("code graph v4 index", () => {
     await buildCodeGraph(root);
     const paths = codeGraphPaths(root);
     const bm25File = readJson<Record<string, unknown>>(paths.bm25);
-    bm25File.docs = "bogus";
+    bm25File["docs"] = "bogus";
     writeFileSync(paths.bm25, JSON.stringify(bm25File));
     rewriteGraphHashes(root);
 
@@ -1327,7 +1331,7 @@ describe("code graph v4 index", () => {
     await buildCodeGraph(root);
     const paths = codeGraphPaths(root);
     const filesFile = readJson<Record<string, unknown>>(paths.filesStamps);
-    filesFile.graphHash = "different";
+    filesFile["graphHash"] = "different";
     writeFileSync(paths.filesStamps, JSON.stringify(filesFile));
     mirrorJsonArtifactsToSqlite(root);
 

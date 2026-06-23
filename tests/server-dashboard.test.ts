@@ -14,6 +14,7 @@ import {
 } from "../src/server/index.js";
 import { resetDb } from "../src/storage/db.js";
 import { ToolRegistry } from "../src/tools.js";
+import { withoutGitEnv } from "../src/utils/git-env.js";
 
 interface FetchResult {
   status: number;
@@ -40,11 +41,12 @@ async function call(
     headers["X-Reasonix-Token"] = opts.token;
   }
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
-  const res = await fetch(u.toString(), {
+  const init: RequestInit = {
     method,
     headers,
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-  });
+  };
+  if (opts.body !== undefined) init.body = JSON.stringify(opts.body);
+  const res = await fetch(u.toString(), init);
   const text = await res.text();
   let parsed: any = null;
   try {
@@ -1136,9 +1138,9 @@ describe("dashboard server: D-1 settings + auto-loop surface", () => {
       model: [],
     };
     const base = await boot({
-      setProNextLive: (v) => calls.proNext!.push(v),
-      setBudgetUsdLive: (v) => calls.budgetUsd!.push(v),
-      applyModelLive: (v) => calls.model!.push(v),
+      setProNextLive: (v) => calls["proNext"]!.push(v),
+      setBudgetUsdLive: (v) => calls["budgetUsd"]!.push(v),
+      applyModelLive: (v) => calls["model"]!.push(v),
     });
     const r = await call(`${base}api/settings`, {
       method: "POST",
@@ -1148,9 +1150,9 @@ describe("dashboard server: D-1 settings + auto-loop surface", () => {
     });
     expect(r.status).toBe(200);
     expect(r.body.changed).toEqual(expect.arrayContaining(["proNext", "budgetUsd", "model"]));
-    expect(calls.proNext).toEqual([true]);
-    expect(calls.budgetUsd).toEqual([2.5]);
-    expect(calls.model).toEqual(["deepseek-v4-pro"]);
+    expect(calls["proNext"]).toEqual([true]);
+    expect(calls["budgetUsd"]).toEqual([2.5]);
+    expect(calls["model"]).toEqual(["deepseek-v4-pro"]);
   });
 
   it("POST /api/settings rejects non-positive budgetUsd", async () => {
@@ -1306,10 +1308,7 @@ describe("dashboard server: checkpoint API", () => {
     // operate on the parent repo, not the temp dir — and `git config
     // user.email test@test.com` would silently rewrite the parent's
     // committer identity.
-    const env: NodeJS.ProcessEnv = { ...process.env };
-    for (const k of Object.keys(env)) {
-      if (k.startsWith("GIT_")) delete env[k];
-    }
+    const env = withoutGitEnv(process.env, { isolateConfig: true });
     execSync("git init", { cwd, env });
     execSync("git config user.email test@test.com", { cwd, env });
     execSync("git config user.name test", { cwd, env });

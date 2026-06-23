@@ -10,11 +10,11 @@ export interface CardHeaderProps {
   tone: string;
   title: string;
   /** Body-tone text after the title, separated by a space (no `·`). */
-  subtitle?: string;
+  subtitle?: string | undefined;
   /** Faint trailing fields, prefixed with ` · ` and joined by ` · `. */
-  meta?: ReadonlyArray<MetaItem>;
+  meta?: ReadonlyArray<MetaItem> | undefined;
   /** Inline ad-hoc element after meta — for spinners, badges, anything outside the meta vocabulary. */
-  right?: React.ReactNode;
+  right?: React.ReactNode | undefined;
 }
 
 export function CardHeader({

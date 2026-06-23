@@ -60,7 +60,7 @@ clearer (rename, extract, simplify) before any comment is added.
 
 ### TypeScript
 
-- Strict mode. No `any` without a `// biome-ignore` and a reason.
+- Strict mode. No `any` without a scoped lint suppression and a reason.
 - Prefer narrow types over option bags; if a function takes 5+
   optional flags, split the responsibilities.
 - Don't re-export types just so two files can share them — move the

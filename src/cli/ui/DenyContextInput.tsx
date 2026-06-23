@@ -5,7 +5,7 @@ import { useKeystroke } from "./keystroke-context.js";
 import { FG, TONE } from "./theme/tokens.js";
 
 export interface DenyContextInputProps {
-  description?: string;
+  description?: string | undefined;
   onSubmit: (context: string) => void;
   onCancel: () => void;
 }
@@ -16,7 +16,7 @@ export function DenyContextInput({
   description = DEFAULT_DESCRIPTION,
   onSubmit,
   onCancel,
-}: DenyContextInputProps) {
+}: DenyContextInputProps): React.ReactElement {
   const [value, setValue] = useState("");
 
   useKeystroke((ev) => {

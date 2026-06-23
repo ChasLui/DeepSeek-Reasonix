@@ -31,8 +31,8 @@ export interface AssistantFinalContext {
     current: {
       name: string;
       chars: number;
-      index?: number;
-      readyCount?: number;
+      index?: number | undefined;
+      readyCount?: number | undefined;
     } | null;
   };
   assistantId: string;
@@ -66,7 +66,7 @@ export function handleAssistantFinal(ev: LoopEvent, ctx: AssistantFinalContext):
     kind: "assistant_final",
     id: ctx.assistantId,
     text: ev.content || ctx.streamRef.text,
-    reasoning: ctx.streamRef.reasoning || undefined,
+    ...(ctx.streamRef.reasoning ? { reasoning: ctx.streamRef.reasoning } : {}),
   });
   // Keep the live stats panel current with per-iter usage. Without this,
   // cost/ctx/cache/hit stay at the prior turn's numbers until the whole
@@ -83,7 +83,7 @@ export function handleAssistantFinal(ev: LoopEvent, ctx: AssistantFinalContext):
     // mirrors what the web dashboard reads from `loop.stats.summary()`
     // (issue #1028) instead of showing this single turn's ratio.
     ctx.translator.turnEnd(ev.stats, ctx.streamRef.reasoning, {
-      promptCap: ctx.ctxMax > 0 ? ctx.ctxMax : undefined,
+      ...(ctx.ctxMax > 0 ? { promptCap: ctx.ctxMax } : {}),
       sessionCacheHit: ctx.getSessionSummary().cacheHitRatio,
     });
     if (ctx.ctxMax > 0) {
@@ -96,7 +96,7 @@ export function handleAssistantFinal(ev: LoopEvent, ctx: AssistantFinalContext):
   // so deltas don't bleed into the next.
   ctx.streamRef.text = "";
   ctx.streamRef.reasoning = "";
-  ctx.streamRef.toolCallBuild = undefined;
+  delete ctx.streamRef.toolCallBuild;
   ctx.contentBuf.current = "";
   ctx.reasoningBuf.current = "";
   ctx.toolCallBuildBuf.current = null;

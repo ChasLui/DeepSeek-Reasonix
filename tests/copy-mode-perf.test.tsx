@@ -14,7 +14,11 @@ import type { Card } from "../src/cli/ui/state/cards.js";
 import type { KeyEvent } from "../src/cli/ui/stdin-reader.js";
 
 const clipboardMock = vi.hoisted(() => ({
-  writeClipboard: vi.fn(() => ({ osc52: true, filePath: null, size: 0 })),
+  writeClipboard: vi.fn((text: string) => ({
+    osc52: true,
+    filePath: null as string | null,
+    size: text.length,
+  })),
 }));
 
 vi.mock("../src/cli/ui/clipboard.js", () => ({

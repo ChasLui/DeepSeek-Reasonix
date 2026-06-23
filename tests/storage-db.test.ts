@@ -21,11 +21,11 @@ describe("storage/db", () => {
     const before = appliedVersions(db1);
     migrate(db1);
     expect(appliedVersions(db1)).toEqual(before);
-    const count1 = Number(db1.prepare("SELECT count(*) c FROM schema_migrations").get()?.c);
+    const count1 = Number(db1.prepare("SELECT count(*) c FROM schema_migrations").get()?.["c"]);
 
     resetDb();
     const db2 = getDb(path);
-    const count2 = Number(db2.prepare("SELECT count(*) c FROM schema_migrations").get()?.c);
+    const count2 = Number(db2.prepare("SELECT count(*) c FROM schema_migrations").get()?.["c"]);
     expect(count2).toBe(count1);
   });
 
@@ -34,7 +34,7 @@ describe("storage/db", () => {
     const cols = db
       .prepare("PRAGMA table_info(schema_migrations)")
       .all()
-      .map((r) => String(r.name));
+      .map((r) => String(r["name"]));
     expect(cols).toEqual(["version", "name", "applied_at"]);
   });
 
@@ -56,14 +56,14 @@ describe("storage/db", () => {
     const db = getDb(tmpDbPath());
     db.exec("CREATE TABLE t (v INTEGER)");
     db.tx(() => db.prepare("INSERT INTO t VALUES (?)").run(1));
-    expect(Number(db.prepare("SELECT count(*) c FROM t").get()?.c)).toBe(1);
+    expect(Number(db.prepare("SELECT count(*) c FROM t").get()?.["c"])).toBe(1);
     expect(() =>
       db.tx(() => {
         db.prepare("INSERT INTO t VALUES (?)").run(2);
         throw new Error("boom");
       }),
     ).toThrow("boom");
-    expect(Number(db.prepare("SELECT count(*) c FROM t").get()?.c)).toBe(1);
+    expect(Number(db.prepare("SELECT count(*) c FROM t").get()?.["c"])).toBe(1);
   });
 
   it("withBusyRetry returns the result and rethrows non-busy errors", () => {

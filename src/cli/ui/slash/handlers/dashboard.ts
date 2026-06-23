@@ -2,7 +2,8 @@ import { t } from "@/i18n/index.js";
 import type { SlashHandler } from "../dispatch.js";
 
 const dashboard: SlashHandler = (args, _loop, ctx) => {
-  if (!ctx.startDashboard || !ctx.getDashboardUrl) {
+  const startDashboard = ctx.startDashboard;
+  if (!startDashboard || !ctx.getDashboardUrl) {
     return { info: t("handlers.dashboard.notAvailable") };
   }
 
@@ -30,8 +31,7 @@ const dashboard: SlashHandler = (args, _loop, ctx) => {
     };
   }
 
-  ctx
-    .startDashboard()
+  startDashboard()
     .then((url) => {
       ctx.postInfo?.(
         [t("handlers.dashboard.ready"), `  ${url}`, "", t("handlers.dashboard.readyHint")].join(

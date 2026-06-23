@@ -15,15 +15,15 @@ export type SkillInstalledHook = (info: {
 
 export interface SkillToolsOptions {
   /** Override `$HOME` — tests set this to a tmpdir. */
-  homeDir?: string;
-  projectRoot?: string;
-  customSkillPaths?: readonly string[];
+  homeDir?: string | undefined;
+  projectRoot?: string | undefined;
+  customSkillPaths?: readonly string[] | undefined;
   /** When omitted, subagent skills error rather than silently falling back to inline (loses isolation). */
-  subagentRunner?: SubagentRunner;
+  subagentRunner?: SubagentRunner | undefined;
   /** Hide built-in skills (test-only knob; production callers leave off). */
-  disableBuiltins?: boolean;
+  disableBuiltins?: boolean | undefined;
   /** Called synchronously after `install_skill` successfully writes a new skill file. */
-  onSkillInstalled?: SkillInstalledHook;
+  onSkillInstalled?: SkillInstalledHook | undefined;
 }
 
 export function registerSkillTools(
@@ -178,13 +178,13 @@ export function registerSkillTools(
       required: ["name", "description", "body"],
     },
     fn: async (args: {
-      name?: unknown;
-      description?: unknown;
-      body?: unknown;
-      scope?: unknown;
-      runAs?: unknown;
-      model?: unknown;
-      allowedTools?: unknown;
+      name?: unknown | undefined;
+      description?: unknown | undefined;
+      body?: unknown | undefined;
+      scope?: unknown | undefined;
+      runAs?: unknown | undefined;
+      model?: unknown | undefined;
+      allowedTools?: unknown | undefined;
     }) => {
       const name = typeof args.name === "string" ? args.name.trim() : "";
       const description =

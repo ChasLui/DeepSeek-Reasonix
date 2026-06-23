@@ -1,7 +1,7 @@
 import { emptyMap, nullPrototype } from "../../../utils/safe-object.js";
 import type { SlashArgContext, SlashCommandSpec, SlashGroup } from "./types.js";
 
-export const SLASH_GROUP_ORDER = [
+export const SLASH_GROUP_ORDER: readonly SlashGroup[] = [
   "setup",
   "info",
   "chat",
@@ -10,7 +10,7 @@ export const SLASH_GROUP_ORDER = [
   "code",
   "jobs",
   "advanced",
-] as const satisfies readonly SlashGroup[];
+];
 
 export const SLASH_GROUP_LABEL: Record<SlashGroup, string> = nullPrototype({
   setup: "SETUP",
@@ -432,7 +432,7 @@ export const SLASH_COMMANDS: readonly SlashCommandSpec[] = [
 export function suggestSlashCommands(
   prefix: string,
   codeMode = false,
-  counts?: Readonly<Record<string, number>>,
+  counts?: Readonly<Record<string, number>> | undefined,
 ): SlashCommandSpec[] {
   const p = prefix.toLowerCase();
   const matches = SLASH_COMMANDS.filter((c) => {

@@ -21,7 +21,7 @@ export interface ReplayAppProps {
   pages: TurnPage[];
 }
 
-export function ReplayApp({ meta, pages }: ReplayAppProps) {
+export function ReplayApp({ meta, pages }: ReplayAppProps): React.ReactElement {
   const { exit } = useApp();
   const maxIdx = Math.max(0, pages.length - 1);
   // Start at the last page — more useful than "start from the beginning"
@@ -62,13 +62,6 @@ export function ReplayApp({ meta, pages }: ReplayAppProps) {
     lastPromptTokens: 0,
     lastTurnCostUsd: 0,
   };
-
-  const prefixHash =
-    cumStats.prefixHashes.length === 1
-      ? cumStats.prefixHashes[0]!.slice(0, 16)
-      : cumStats.prefixHashes.length === 0
-        ? t("replayApp.untracked")
-        : t("replayApp.churned", { count: cumStats.prefixHashes.length });
 
   const currentPage = pages[idx];
   const progressLabel =

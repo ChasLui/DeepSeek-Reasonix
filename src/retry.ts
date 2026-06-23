@@ -4,20 +4,20 @@ import { isRateLimitTimeoutError } from "./rate-limit/errors.js";
 
 export interface RetryOptions {
   /** Maximum total attempts (including the first). Default 4. */
-  maxAttempts?: number;
+  maxAttempts?: number | undefined;
   /** Initial backoff in ms. Doubles each retry, with jitter. Default 500. */
-  initialBackoffMs?: number;
+  initialBackoffMs?: number | undefined;
   /** Upper bound on any single backoff delay. Default 10000 (10s). */
-  maxBackoffMs?: number;
+  maxBackoffMs?: number | undefined;
   /** HTTP statuses to treat as retryable. Default [408, 429, 500, 502, 503, 504]. */
-  retryableStatuses?: readonly number[];
+  retryableStatuses?: readonly number[] | undefined;
   /** Abort signal; we do NOT retry once aborted. */
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
   /** Telemetry hook — called before each wait. */
-  onRetry?: (info: RetryInfo) => void;
+  onRetry?: ((info: RetryInfo) => void) | undefined;
   /** Called on HTTP 429. Retry-After still wins when present. */
-  onRateLimit?: (resp: Response, model?: string) => number | undefined;
-  model?: string;
+  onRateLimit?: ((resp: Response, model?: string) => number | undefined) | undefined;
+  model?: string | undefined;
 }
 
 export interface RetryInfo {
@@ -173,10 +173,10 @@ const NETWORK_ERROR_CAUSE_CODES = new Set([
 function isFetchNetworkError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const error = err as {
-    name?: unknown;
-    message?: unknown;
-    stack?: unknown;
-    cause?: unknown;
+    name?: unknown | undefined;
+    message?: unknown | undefined;
+    stack?: unknown | undefined;
+    cause?: unknown | undefined;
   };
   if (error.name !== "TypeError" || typeof error.message !== "string") return false;
   const message = error.message;

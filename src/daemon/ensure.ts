@@ -5,11 +5,11 @@ import { daemonSocketPath } from "../storage/path.js";
 import { type DaemonClient, connectDaemon } from "./client.js";
 
 export interface EnsureDaemonDeps {
-  connect?: (socketPath: string) => Promise<DaemonClient>;
-  spawnDaemon?: () => void;
-  delayMs?: (ms: number) => Promise<void>;
+  connect?: ((socketPath: string) => Promise<DaemonClient>) | undefined;
+  spawnDaemon?: (() => void) | undefined;
+  delayMs?: ((ms: number) => Promise<void>) | undefined;
   /** Max poll attempts after spawn (× ~200ms). */
-  attempts?: number;
+  attempts?: number | undefined;
 }
 
 function defaultSpawn(): void {

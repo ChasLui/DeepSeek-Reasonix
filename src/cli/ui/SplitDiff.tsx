@@ -30,7 +30,7 @@ export interface SplitDiffProps {
    * Total columns budget. Defaults to terminal width. Modal callers
    * pass a smaller number so the diff fits inside the modal frame.
    */
-  totalCols?: number;
+  totalCols?: number | undefined;
 }
 
 export function SplitDiff({ rows, totalCols }: SplitDiffProps): React.ReactElement {
@@ -44,11 +44,11 @@ export function SplitDiff({ rows, totalCols }: SplitDiffProps): React.ReactEleme
     <Box flexDirection="column">
       {rows.map((row, i) => (
         <Box key={`r-${i}-${row.left.num ?? "p"}-${row.right.num ?? "p"}`}>
-          <Cell side={row.left} width={halfCols} which="left" />
+          <Cell side={row.left} width={halfCols} />
           <Text color={COLOR.info} dimColor>
             {" │ "}
           </Text>
-          <Cell side={row.right} width={halfCols} which="right" />
+          <Cell side={row.right} width={halfCols} />
         </Box>
       ))}
     </Box>
@@ -58,11 +58,9 @@ export function SplitDiff({ rows, totalCols }: SplitDiffProps): React.ReactEleme
 function Cell({
   side,
   width,
-  which,
 }: {
   side: SplitDiffRow["left"] | SplitDiffRow["right"];
   width: number;
-  which: "left" | "right";
 }) {
   const numPad = 4; // up to 9999 lines
   const sgnPad = 1; // single-char sign

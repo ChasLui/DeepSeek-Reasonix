@@ -6,12 +6,17 @@ import { chunkDirectory } from "../semantic/chunker.js";
 import type { CodeChunk } from "../semantic/chunker.js";
 import { Bm25Index } from "./bm25.js";
 
-export const CODE_LEXICAL_INDEX_FILE = path.join(".reasonix", "index", "lexical", "code.json");
+export const CODE_LEXICAL_INDEX_FILE: string = path.join(
+  ".reasonix",
+  "index",
+  "lexical",
+  "code.json",
+);
 
 export interface BuildCodeLexicalOptions {
-  config?: ResolvedIndexConfig;
-  windowLines?: number;
-  overlap?: number;
+  config?: ResolvedIndexConfig | undefined;
+  windowLines?: number | undefined;
+  overlap?: number | undefined;
 }
 
 // Build the code-text BM25 index WITHOUT an embedder — decoupled from the
@@ -56,7 +61,7 @@ export async function openCodeLexicalIndex(root: string): Promise<Bm25Index | nu
 const lexicalBuildCooldown = new Map<string, number>();
 
 function lexicalBuildCooldownMs(): number {
-  const raw = Number(process.env.REASONIX_LEXICAL_BUILD_COOLDOWN_MS);
+  const raw = Number(process.env["REASONIX_LEXICAL_BUILD_COOLDOWN_MS"]);
   return Number.isFinite(raw) && raw > 0 ? raw : 60_000;
 }
 

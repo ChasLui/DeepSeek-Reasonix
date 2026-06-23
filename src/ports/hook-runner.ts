@@ -7,6 +7,6 @@ export interface HookRunner {
     event: HookEvent,
     payload: HookPayload,
     hooks: ReadonlyArray<ResolvedHook>,
-    signal?: AbortSignal,
+    signal?: AbortSignal | undefined,
   ): Promise<ReadonlyArray<HookOutcome>>;
 }

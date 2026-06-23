@@ -1,4 +1,6 @@
 import htm from "htm";
-import { h } from "preact";
+import { h, type VNode } from "preact";
 
-export const html = htm.bind(h);
+type HtmlTemplate = (strings: TemplateStringsArray, ...values: unknown[]) => VNode;
+
+export const html: HtmlTemplate = htm.bind(h) as HtmlTemplate;

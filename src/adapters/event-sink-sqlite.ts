@@ -7,10 +7,13 @@ const INSERT_SQL =
   "INSERT INTO events (session, event_id, ts, turn, type, payload) VALUES (?, ?, ?, ?, ?, ?)";
 
 export class SqliteEventSink implements EventSink {
-  constructor(
-    private readonly db: Db,
-    private readonly session: string,
-  ) {}
+  private readonly db: Db;
+  private readonly session: string;
+
+  constructor(db: Db, session: string) {
+    this.db = db;
+    this.session = session;
+  }
 
   append(ev: Event): void {
     // Skip model.delta — recoverable from model.final.text, parity with JSONL sink.
@@ -44,7 +47,11 @@ export class SqliteEventSink implements EventSink {
 }
 
 export class SqliteEventSource implements EventSource {
-  constructor(private readonly db: Db) {}
+  private readonly db: Db;
+
+  constructor(db: Db) {
+    this.db = db;
+  }
 
   // DatabaseSync has no async cursor, so a session's events materialize in full.
   // Fine for replay/inspection; chunk with LIMIT/OFFSET if a session ever outgrows

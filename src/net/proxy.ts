@@ -169,9 +169,9 @@ export interface ProxyInstallResult {
 
 export interface InstallProxyOptions {
   /** Skip proxy install entirely — for `--no-proxy` / `cfg.proxy.disabled` / env-driven kill-switch. */
-  disabled?: boolean;
+  disabled?: boolean | undefined;
   /** Additional NO_PROXY patterns layered on top of defaults + env. Sourced from `cfg.proxy.noProxy` / `REASONIX_NO_PROXY`. */
-  extraNoProxy?: readonly string[];
+  extraNoProxy?: readonly string[] | undefined;
 }
 
 export interface ResolvedNoProxy {
@@ -191,7 +191,7 @@ export function resolveNoProxy(
   const defaults = parseNoProxy(DEFAULT_NO_PROXY.join(","));
   const envSystem = parseNoProxy(detectNoProxyRaw(env));
   const envReasonix = parseNoProxy(
-    typeof env.REASONIX_NO_PROXY === "string" ? env.REASONIX_NO_PROXY : null,
+    typeof env["REASONIX_NO_PROXY"] === "string" ? env["REASONIX_NO_PROXY"] : null,
   );
   const extra = parseNoProxy((opts.extraNoProxy ?? []).join(","));
   return {
@@ -222,7 +222,10 @@ export function installProxyIfConfigured(
   // Default whitelist always applies; env NO_PROXY, REASONIX_NO_PROXY, and
   // opts.extraNoProxy (config) all layer on top additively. Composition lives
   // in resolveNoProxy() so /doctor and install can't drift.
-  const { all: patterns } = resolveNoProxy(env, { extraNoProxy: opts.extraNoProxy });
+  const { all: patterns } = resolveNoProxy(
+    env,
+    opts.extraNoProxy === undefined ? {} : { extraNoProxy: opts.extraNoProxy },
+  );
 
   try {
     const reinstalled = installed;

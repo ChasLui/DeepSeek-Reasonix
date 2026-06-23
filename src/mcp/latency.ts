@@ -22,29 +22,30 @@ export interface UnhealthyEvent {
 export interface LatencySample {
   ok: boolean;
   elapsedMs: number;
-  errorKind?: "timeout" | "error";
+  errorKind?: "timeout" | "error" | undefined;
 }
 
 export interface LatencyTrackerOptions {
-  thresholdMs?: number;
-  onSlow?: (ev: SlowEvent) => void;
-  onUnhealthy?: (ev: UnhealthyEvent) => void;
+  thresholdMs?: number | undefined;
+  onSlow?: ((ev: SlowEvent) => void) | undefined;
+  onUnhealthy?: ((ev: UnhealthyEvent) => void) | undefined;
 }
 
 export class LatencyTracker {
+  private readonly serverName: string;
+
   private samples: number[] = [];
   private outcomes: LatencySample[] = [];
   private wasOverThreshold = false;
   private wasUnhealthy = false;
   private timeoutStreak = 0;
   private readonly thresholdMs: number;
-  private readonly onSlow?: (ev: SlowEvent) => void;
-  private readonly onUnhealthy?: (ev: UnhealthyEvent) => void;
+  private readonly onSlow?: ((ev: SlowEvent) => void) | undefined;
+  private readonly onUnhealthy?: ((ev: UnhealthyEvent) => void) | undefined;
 
-  constructor(
-    private readonly serverName: string,
-    opts: LatencyTrackerOptions = {},
-  ) {
+  constructor(serverName: string, opts: LatencyTrackerOptions = {}) {
+    this.serverName = serverName;
+
     this.thresholdMs = opts.thresholdMs ?? DEFAULT_THRESHOLD_MS;
     this.onSlow = opts.onSlow;
     this.onUnhealthy = opts.onUnhealthy;

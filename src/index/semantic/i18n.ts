@@ -6,12 +6,12 @@ let cachedLocale: Locale | null = null;
 
 export function detectLocale(): Locale {
   if (cachedLocale) return cachedLocale;
-  const override = (process.env.REASONIX_LANG ?? "").toLowerCase();
+  const override = (process.env["REASONIX_LANG"] ?? "").toLowerCase();
   if (override === "zh" || override === "en") {
     cachedLocale = override;
     return cachedLocale;
   }
-  const env = process.env.LANG ?? process.env.LC_ALL ?? process.env.LC_MESSAGES ?? "";
+  const env = process.env["LANG"] ?? process.env["LC_ALL"] ?? process.env["LC_MESSAGES"] ?? "";
   if (/^zh[-_]/i.test(env)) {
     cachedLocale = "zh";
     return "zh";

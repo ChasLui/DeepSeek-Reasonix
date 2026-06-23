@@ -17,9 +17,8 @@ type PromptCacheMonitorInstance = InstanceType<PromptMonitorModule["PromptCacheM
 
 afterEach(() => {
   vi.restoreAllMocks();
-  vi.resetModules();
   vi.doUnmock("node:fs");
-  vi.doUnmock("node:crypto");
+  vi.resetModules();
 });
 
 describe("PromptCacheMonitor diff patch writes", () => {
@@ -42,14 +41,14 @@ describe("PromptCacheMonitor diff patch writes", () => {
   it("preserves break history when random filenames collide three times", async () => {
     const tmp = makeTmpDir();
     const random = Buffer.from("abcdef");
-    vi.doMock("node:crypto", async (importOriginal) => {
-      const actual = await importOriginal<typeof import("node:crypto")>();
-      return { ...actual, randomBytes: () => random };
-    });
     const id = random.toString("hex");
     writeFileSync(join(tmp, `cache-break-${id}.diff`), "existing");
     const runtime = await loadPromptRuntime();
-    const monitor = new runtime.PromptCacheMonitor({ tmpDir: tmp, minDropTokens: 2000 });
+    const monitor = new runtime.PromptCacheMonitor({
+      tmpDir: tmp,
+      minDropTokens: 2000,
+      randomBytes: () => random,
+    });
     silenceDiagnostics();
 
     triggerBreak(runtime, monitor);

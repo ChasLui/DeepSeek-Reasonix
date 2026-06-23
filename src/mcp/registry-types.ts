@@ -2,15 +2,15 @@ export type RegistrySource = "official" | "smithery" | "local";
 
 export interface RegistryInstall {
   runtime: "npm" | "pypi" | "remote";
-  packageId?: string;
-  version?: string;
+  packageId?: string | undefined;
+  version?: string | undefined;
   transport: "stdio" | "sse" | "streamable-http";
   /** For remote transports. */
-  url?: string;
+  url?: string | undefined;
   /** Env var names the user must set. */
-  requiredEnv?: string[];
+  requiredEnv?: string[] | undefined;
   /** Trailing args to pass after the package id — e.g. ["run", "<qualifiedName>"] for `npx -y @smithery/cli run X`. */
-  extraArgs?: string[];
+  extraArgs?: string[] | undefined;
 }
 
 export interface RegistryEntry {
@@ -20,13 +20,13 @@ export interface RegistryEntry {
   description: string;
   source: RegistrySource;
   /** Populated for official + local. Smithery list omits install info. */
-  install?: RegistryInstall;
+  install?: RegistryInstall | undefined;
   /** Smithery's useCount, used as a sort key when present. */
-  popularity?: number;
+  popularity?: number | undefined;
   /** Project / homepage URL. */
-  homepage?: string;
+  homepage?: string | undefined;
   /** Icon URL — official: first packages[0].icons[0].src; smithery: iconUrl on listing. */
-  iconUrl?: string;
+  iconUrl?: string | undefined;
 }
 
 export interface CachePagination {

@@ -188,7 +188,10 @@ describe("CacheFirstLoop (non-streaming)", () => {
     const roleOrder: { role: string; toolName?: string }[] = [];
     for await (const ev of loop.step("go")) {
       if (ev.role === "tool_start" || ev.role === "tool") {
-        roleOrder.push({ role: ev.role, toolName: ev.toolName });
+        roleOrder.push({
+          role: ev.role,
+          ...(ev.toolName !== undefined ? { toolName: ev.toolName } : {}),
+        });
       }
     }
     // tool_start must precede the matching tool result.
@@ -252,7 +255,6 @@ describe("CacheFirstLoop (non-streaming)", () => {
       prefix: new ImmutablePrefix({ system: "s", toolSpecs: reg.specs() }),
       tools: reg,
       stream: false,
-      maxToolIters: 16,
     });
 
     // Call abort AFTER the first tool event fires — simulates the user
@@ -260,7 +262,11 @@ describe("CacheFirstLoop (non-streaming)", () => {
     const events: { role: string; content?: string; forcedSummary?: boolean }[] = [];
     let aborted = false;
     for await (const ev of loop.step("go")) {
-      events.push({ role: ev.role, content: ev.content, forcedSummary: ev.forcedSummary });
+      events.push({
+        role: ev.role,
+        ...(typeof ev.content === "string" ? { content: ev.content } : {}),
+        ...(ev.forcedSummary !== undefined ? { forcedSummary: ev.forcedSummary } : {}),
+      });
       if (!aborted && ev.role === "tool") {
         aborted = true;
         loop.abort();
@@ -314,7 +320,6 @@ describe("CacheFirstLoop (non-streaming)", () => {
       prefix: new ImmutablePrefix({ system: "s", toolSpecs: reg.specs() }),
       tools: reg,
       stream: false,
-      maxToolIters: 16,
     });
 
     // Turn 1 — abort mid-flight.
@@ -368,12 +373,15 @@ describe("CacheFirstLoop (non-streaming)", () => {
       prefix: new ImmutablePrefix({ system: "s", toolSpecs: reg.specs() }),
       tools: reg,
       stream: false,
-      maxToolIters: 8,
     });
 
     const events: { role: string; forcedSummary?: boolean; content?: string }[] = [];
     for await (const ev of loop.step("explore")) {
-      events.push({ role: ev.role, forcedSummary: ev.forcedSummary, content: ev.content });
+      events.push({
+        role: ev.role,
+        ...(ev.forcedSummary !== undefined ? { forcedSummary: ev.forcedSummary } : {}),
+        ...(typeof ev.content === "string" ? { content: ev.content } : {}),
+      });
     }
 
     expect(
@@ -419,12 +427,15 @@ describe("CacheFirstLoop (non-streaming)", () => {
       prefix: new ImmutablePrefix({ system: "s", toolSpecs: reg.specs() }),
       tools: reg,
       stream: false,
-      maxToolIters: 8,
     });
 
     const events: { role: string; forcedSummary?: boolean; content?: string }[] = [];
     for await (const ev of loop.step("explore")) {
-      events.push({ role: ev.role, forcedSummary: ev.forcedSummary, content: ev.content });
+      events.push({
+        role: ev.role,
+        ...(ev.forcedSummary !== undefined ? { forcedSummary: ev.forcedSummary } : {}),
+        ...(typeof ev.content === "string" ? { content: ev.content } : {}),
+      });
     }
 
     expect(
@@ -469,12 +480,15 @@ describe("CacheFirstLoop (non-streaming)", () => {
       prefix: new ImmutablePrefix({ system: "s", toolSpecs: reg.specs() }),
       tools: reg,
       stream: false,
-      maxToolIters: 64,
     });
 
     const events: { role: string; forcedSummary?: boolean; content?: string }[] = [];
     for await (const ev of loop.step("analyze the repo")) {
-      events.push({ role: ev.role, forcedSummary: ev.forcedSummary, content: ev.content });
+      events.push({
+        role: ev.role,
+        ...(ev.forcedSummary !== undefined ? { forcedSummary: ev.forcedSummary } : {}),
+        ...(typeof ev.content === "string" ? { content: ev.content } : {}),
+      });
     }
 
     // A warning must fire about the context guard. Accept both the
@@ -577,7 +591,6 @@ describe("CacheFirstLoop (non-streaming)", () => {
       prefix: new ImmutablePrefix({ system: "s", toolSpecs: reg.specs() }),
       tools: reg,
       stream: false,
-      maxToolIters: 8,
     });
     // Seed 18 user/assistant turns sized so the LOG estimate stays
     // below the 95% preflight threshold (otherwise preflight folds
@@ -641,7 +654,6 @@ describe("CacheFirstLoop (non-streaming)", () => {
       prefix: new ImmutablePrefix({ system: "s", toolSpecs: reg.specs() }),
       tools: reg,
       stream: false,
-      maxToolIters: 8,
     });
     const fillLines = (label: string, n: number) =>
       Array.from(
@@ -863,7 +875,6 @@ describe("CacheFirstLoop - configure() method", () => {
     });
     expect(loop.stream).toBe(true);
     loop.configure({ stream: false });
-    expect(loop._streamPreference).toBe(false);
     expect(loop.stream).toBe(false);
   });
 
@@ -1402,13 +1413,15 @@ describe("CacheFirstLoop (streaming) — tool_call_delta emission", () => {
       prefix: new ImmutablePrefix({ system: "s", toolSpecs: tools.specs() }),
       tools,
       stream: true,
-      maxToolIters: 1,
     });
 
     const deltas: Array<{ name?: string; chars?: number }> = [];
     for await (const ev of loop.step("do it")) {
       if (ev.role === "tool_call_delta") {
-        deltas.push({ name: ev.toolName, chars: ev.toolCallArgsChars });
+        deltas.push({
+          ...(ev.toolName !== undefined ? { name: ev.toolName } : {}),
+          ...(ev.toolCallArgsChars !== undefined ? { chars: ev.toolCallArgsChars } : {}),
+        });
       }
       if (ev.role === "tool_start") break;
     }
@@ -1446,7 +1459,6 @@ describe("CacheFirstLoop (streaming) — tool_call_delta emission", () => {
       client,
       prefix: new ImmutablePrefix({ system: "s" }),
       stream: true,
-      maxToolIters: 1,
       autoEscalate: false,
     });
 
@@ -1490,7 +1502,10 @@ describe("CacheFirstLoop (streaming) — tool_call_delta emission", () => {
     const events: Array<{ role: string; error?: string }> = [];
     const stepPromise = (async () => {
       for await (const ev of loop.step("hi")) {
-        events.push({ role: ev.role, error: ev.error });
+        events.push({
+          role: ev.role,
+          ...(ev.error !== undefined ? { error: ev.error } : {}),
+        });
       }
     })();
     // Race: fire abort before the fake fetch can resolve.
@@ -1511,8 +1526,6 @@ describe("CacheFirstLoop (streaming) — tool_call_delta emission", () => {
     // the user confirms (silent data loss). Both still get tool
     // results — the deferred one with a clear "skipped" payload — so
     // tool_call ↔ tool pairing stays valid for DeepSeek's next turn.
-    const { registerWorkspaceTool } = await import("../src/tools/workspace.js");
-
     const client = makeClient([
       {
         content: "",
@@ -1539,7 +1552,6 @@ describe("CacheFirstLoop (streaming) — tool_call_delta emission", () => {
     ]);
 
     const tools = new ToolRegistry();
-    registerWorkspaceTool(tools);
     let writeFired = false;
     tools.register<{ value: string }, string>({
       name: "write_marker",
@@ -1579,9 +1591,9 @@ describe("CacheFirstLoop (streaming) — tool_call_delta emission", () => {
     // Override ask to auto-approve without blocking.
     const origAsk = gate.ask.bind(gate);
     void origAsk;
-    gate.ask = (_opts: { kind: string; payload?: unknown }) => {
+    gate.ask = (() => {
       return Promise.resolve<ConfirmationChoice>({ type: "run_once" });
-    };
+    }) as PauseGate["ask"];
 
     // A tool that uses the confirmation gate (like run_command does)
     const reg = new ToolRegistry();
@@ -1765,7 +1777,10 @@ describe("CacheFirstLoop (streaming) — tool_call_delta emission", () => {
 
       const events: { role: string; error?: string }[] = [];
       for await (const ev of loop.step("a")) {
-        events.push({ role: ev.role, error: ev.error });
+        events.push({
+          role: ev.role,
+          ...(ev.error !== undefined ? { error: ev.error } : {}),
+        });
       }
       expect(events).toHaveLength(1);
       expect(events[0]?.role).toBe("error");
@@ -1946,8 +1961,8 @@ describe("CacheFirstLoop (streaming) — tool_call_delta emission", () => {
     });
 
     it("REASONIX_TOOL_DISPATCH=serial forces serial dispatch", async () => {
-      const prev = process.env.REASONIX_TOOL_DISPATCH;
-      process.env.REASONIX_TOOL_DISPATCH = "serial";
+      const prev = process.env["REASONIX_TOOL_DISPATCH"];
+      process.env["REASONIX_TOOL_DISPATCH"] = "serial";
       try {
         const client = makeClient([
           makeMultiToolResponse([
@@ -1982,14 +1997,14 @@ describe("CacheFirstLoop (streaming) — tool_call_delta emission", () => {
       } finally {
         if (prev === undefined) {
           // biome-ignore lint/performance/noDelete: env restore must remove the key, not stringify "undefined"
-          delete process.env.REASONIX_TOOL_DISPATCH;
-        } else process.env.REASONIX_TOOL_DISPATCH = prev;
+          delete process.env["REASONIX_TOOL_DISPATCH"];
+        } else process.env["REASONIX_TOOL_DISPATCH"] = prev;
       }
     });
 
     it("REASONIX_PARALLEL_MAX caps the chunk size", async () => {
-      const prev = process.env.REASONIX_PARALLEL_MAX;
-      process.env.REASONIX_PARALLEL_MAX = "2";
+      const prev = process.env["REASONIX_PARALLEL_MAX"];
+      process.env["REASONIX_PARALLEL_MAX"] = "2";
       try {
         const client = makeClient([
           makeMultiToolResponse([
@@ -2027,8 +2042,8 @@ describe("CacheFirstLoop (streaming) — tool_call_delta emission", () => {
       } finally {
         if (prev === undefined) {
           // biome-ignore lint/performance/noDelete: env restore must remove the key, not stringify "undefined"
-          delete process.env.REASONIX_PARALLEL_MAX;
-        } else process.env.REASONIX_PARALLEL_MAX = prev;
+          delete process.env["REASONIX_PARALLEL_MAX"];
+        } else process.env["REASONIX_PARALLEL_MAX"] = prev;
       }
     });
   });

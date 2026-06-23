@@ -129,18 +129,18 @@ function metaToRow(meta: SessionMeta): Array<string | number | null> {
 
 function rowToMeta(row: Record<string, unknown>): SessionMeta {
   const meta: SessionMeta = {};
-  if (row.branch != null) meta.branch = String(row.branch);
-  if (row.summary != null) meta.summary = String(row.summary);
-  if (row.total_cost_usd != null) meta.totalCostUsd = Number(row.total_cost_usd);
-  if (row.turn_count != null) meta.turnCount = Number(row.turn_count);
-  if (row.workspace != null) meta.workspace = String(row.workspace);
-  if (row.balance_currency != null) meta.balanceCurrency = String(row.balance_currency);
-  if (row.cache_hit_tokens != null) meta.cacheHitTokens = Number(row.cache_hit_tokens);
-  if (row.cache_miss_tokens != null) meta.cacheMissTokens = Number(row.cache_miss_tokens);
-  if (row.last_prompt_tokens != null) meta.lastPromptTokens = Number(row.last_prompt_tokens);
-  if (row.auto_title_generated != null)
-    meta.autoTitleGenerated = Number(row.auto_title_generated) === 1;
-  if (row.source != null) meta.source = String(row.source) as SessionMeta["source"];
+  if (row["branch"] != null) meta.branch = String(row["branch"]);
+  if (row["summary"] != null) meta.summary = String(row["summary"]);
+  if (row["total_cost_usd"] != null) meta.totalCostUsd = Number(row["total_cost_usd"]);
+  if (row["turn_count"] != null) meta.turnCount = Number(row["turn_count"]);
+  if (row["workspace"] != null) meta.workspace = String(row["workspace"]);
+  if (row["balance_currency"] != null) meta.balanceCurrency = String(row["balance_currency"]);
+  if (row["cache_hit_tokens"] != null) meta.cacheHitTokens = Number(row["cache_hit_tokens"]);
+  if (row["cache_miss_tokens"] != null) meta.cacheMissTokens = Number(row["cache_miss_tokens"]);
+  if (row["last_prompt_tokens"] != null) meta.lastPromptTokens = Number(row["last_prompt_tokens"]);
+  if (row["auto_title_generated"] != null)
+    meta.autoTitleGenerated = Number(row["auto_title_generated"]) === 1;
+  if (row["source"] != null) meta.source = String(row["source"]) as SessionMeta["source"];
   return meta;
 }
 
@@ -184,9 +184,9 @@ export function listSessionMetaDb(db: Db): SessionMetaRow[] {
     )
     .all() as Array<Record<string, unknown>>;
   return rows.map((row) => ({
-    name: String(row.name),
+    name: String(row["name"]),
     meta: rowToMeta(row),
-    messageCount: Number(row.message_count),
-    updatedAt: row.updated_at != null ? String(row.updated_at) : null,
+    messageCount: Number(row["message_count"]),
+    updatedAt: row["updated_at"] != null ? String(row["updated_at"]) : null,
   }));
 }

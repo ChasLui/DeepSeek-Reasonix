@@ -1,20 +1,20 @@
 /** Batches same-style runs into one SGR — per-cell escapes balloon 200x50 frames to 50KB+. */
 
 import { nullPrototype } from "../utils/safe-object.js";
-import type { Cell, Frame, FrameRow } from "./types.js";
+import type { Frame, FrameRow } from "./types.js";
 
 const ESC = "\u001b";
 const RESET = `${ESC}[0m`;
 
 interface Style {
-  fg?: string;
-  bg?: string;
-  bold?: boolean;
-  dim?: boolean;
-  italic?: boolean;
-  underline?: boolean;
-  inverse?: boolean;
-  href?: string;
+  fg?: string | undefined;
+  bg?: string | undefined;
+  bold?: boolean | undefined;
+  dim?: boolean | undefined;
+  italic?: boolean | undefined;
+  underline?: boolean | undefined;
+  inverse?: boolean | undefined;
+  href?: string | undefined;
 }
 
 function sameStyle(a: Style, b: Style): boolean {

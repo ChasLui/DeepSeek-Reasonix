@@ -28,12 +28,14 @@ const SERIALIZED_VERSION = 1;
 export class Bm25Index {
   private readonly docs = new Map<string, DocState>();
   private readonly documentFrequency = new Map<string, number>();
+  private readonly k1: number;
+  private readonly b: number;
   private totalLength = 0;
 
-  constructor(
-    private readonly k1 = DEFAULT_K1,
-    private readonly b = DEFAULT_B,
-  ) {}
+  constructor(k1: number = DEFAULT_K1, b: number = DEFAULT_B) {
+    this.k1 = k1;
+    this.b = b;
+  }
 
   get size(): number {
     return this.docs.size;

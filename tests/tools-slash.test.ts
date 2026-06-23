@@ -15,10 +15,7 @@ function tmpDbPath(): string {
   return join(mkdtempSync(join(tmpdir(), "reasonix-tools-slash-")), "reasonix.db");
 }
 
-function buildLoop(opts: {
-  defer?: boolean;
-  session?: string;
-}): CacheFirstLoop {
+function buildLoop(opts: { defer?: boolean; session?: string }): CacheFirstLoop {
   const tools = new ToolRegistry();
   tools.register({
     name: "read_file",

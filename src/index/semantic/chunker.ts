@@ -31,15 +31,15 @@ export type SkipReason =
 
 export interface ChunkOptions {
   /** Lines per window. Default 60. */
-  windowLines?: number;
+  windowLines?: number | undefined;
   /** Lines of overlap between consecutive windows. Default 12. */
-  overlap?: number;
+  overlap?: number | undefined;
   /** Default 4000 — keeps unicode-heavy slices under nomic-embed-text's 8K-token window. */
-  maxChunkChars?: number;
+  maxChunkChars?: number | undefined;
   /** Resolved exclude/limit settings. Falls back to package defaults when omitted. */
-  config?: ResolvedIndexConfig;
+  config?: ResolvedIndexConfig | undefined;
   /** Tally callback for files that didn't make it into the index. */
-  onSkip?: (relPath: string, reason: SkipReason) => void;
+  onSkip?: ((relPath: string, reason: SkipReason) => void) | undefined;
 }
 
 /** Default character cap per chunk — sized for nomic-embed-text. */

@@ -128,6 +128,7 @@ function fakeClient(): DeepSeekClient {
 
 describe("/budget window slash", () => {
   let dir: string;
+  const budget = handlers["budget"]!;
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "budget-slash-"));
@@ -153,14 +154,14 @@ describe("/budget window slash", () => {
 
   it("status with no window set reports none", () => {
     const loop = makeLoop();
-    const res = handlers.budget(["window"], loop, {} as never);
+    const res = budget(["window"], loop, {} as never);
     expect(res.info).toMatch(/no rolling budget/i);
   });
 
   it("set persists to config and updates the live loop", () => {
     const loop = makeLoop();
     expect(loop.budgetWindows).toHaveLength(0);
-    const res = handlers.budget(["window", "daily", "5"], loop, {} as never);
+    const res = budget(["window", "daily", "5"], loop, {} as never);
     expect(res.info).toMatch(/rolling budget/i);
     // Live loop updated without restart.
     expect(loop.budgetWindows).toEqual([{ period: "daily", capUsd: 5, scope: "global" }]);
@@ -172,8 +173,8 @@ describe("/budget window slash", () => {
 
   it("a workspace window stacks alongside a global one via the slash scope token", () => {
     const loop = makeLoop();
-    handlers.budget(["window", "daily", "5"], loop, {} as never);
-    handlers.budget(["window", "workspace", "daily", "2"], loop, {} as never);
+    budget(["window", "daily", "5"], loop, {} as never);
+    budget(["window", "workspace", "daily", "2"], loop, {} as never);
     expect(loop.budgetWindows).toEqual([
       { period: "daily", capUsd: 5, scope: "global" },
       { period: "daily", capUsd: 2, scope: "workspace" },
@@ -182,8 +183,8 @@ describe("/budget window slash", () => {
 
   it("a second period stacks alongside the first", () => {
     const loop = makeLoop();
-    handlers.budget(["window", "daily", "5"], loop, {} as never);
-    handlers.budget(["window", "monthly", "50"], loop, {} as never);
+    budget(["window", "daily", "5"], loop, {} as never);
+    budget(["window", "monthly", "50"], loop, {} as never);
     expect(loop.budgetWindows).toEqual([
       { period: "daily", capUsd: 5, scope: "global" },
       { period: "monthly", capUsd: 50, scope: "global" },
@@ -192,9 +193,9 @@ describe("/budget window slash", () => {
 
   it("off clears every window (both scopes) from config and the loop", () => {
     const loop = makeLoop();
-    handlers.budget(["window", "daily", "5"], loop, {} as never);
-    handlers.budget(["window", "workspace", "monthly", "50"], loop, {} as never);
-    const res = handlers.budget(["window", "off"], loop, {} as never);
+    budget(["window", "daily", "5"], loop, {} as never);
+    budget(["window", "workspace", "monthly", "50"], loop, {} as never);
+    const res = budget(["window", "off"], loop, {} as never);
     expect(res.info).toMatch(/off/i);
     expect(loop.budgetWindows).toHaveLength(0);
     expect(loadBudgetWindows(join(dir, ".reasonix", "config.json"))).toEqual([]);
@@ -202,22 +203,22 @@ describe("/budget window slash", () => {
 
   it("`workspace <period> off` clears just that workspace window", () => {
     const loop = makeLoop();
-    handlers.budget(["window", "daily", "5"], loop, {} as never);
-    handlers.budget(["window", "workspace", "daily", "2"], loop, {} as never);
-    handlers.budget(["window", "workspace", "daily", "off"], loop, {} as never);
+    budget(["window", "daily", "5"], loop, {} as never);
+    budget(["window", "workspace", "daily", "2"], loop, {} as never);
+    budget(["window", "workspace", "daily", "off"], loop, {} as never);
     expect(loop.budgetWindows).toEqual([{ period: "daily", capUsd: 5, scope: "global" }]);
   });
 
   it("rejects a bad period with a usage hint and does not persist", () => {
     const loop = makeLoop();
-    const res = handlers.budget(["window", "fortnightly", "5"], loop, {} as never);
+    const res = budget(["window", "fortnightly", "5"], loop, {} as never);
     expect(res.info).toMatch(/usage:/i);
     expect(loop.budgetWindows).toHaveLength(0);
   });
 
   it("$-prefixed cap is accepted", () => {
     const loop = makeLoop();
-    handlers.budget(["window", "monthly", "$50"], loop, {} as never);
+    budget(["window", "monthly", "$50"], loop, {} as never);
     expect(loop.budgetWindows).toEqual([{ period: "monthly", capUsd: 50, scope: "global" }]);
   });
 });

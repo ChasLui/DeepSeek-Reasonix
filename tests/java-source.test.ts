@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, sep } from "node:path";
+import { join } from "node:path";
 import { deflateRawSync } from "node:zlib";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ClassSourceFinder } from "../src/java/class-source-finder.js";
@@ -754,7 +754,7 @@ describe("registerJavaSourceTool", () => {
     const result = await reg.dispatch("java_source", JSON.stringify({}));
     const parsed = parseToolResult(result);
     expect(parsed).toHaveProperty("error");
-    expect(parsed.error).toContain("className");
+    expect(parsed["error"]).toContain("className");
   });
 
   it("validates empty className — returns error JSON", async () => {
@@ -767,7 +767,7 @@ describe("registerJavaSourceTool", () => {
     );
     const parsed = parseToolResult(result);
     expect(parsed).toHaveProperty("error");
-    expect(parsed.error).toContain("className");
+    expect(parsed["error"]).toContain("className");
   });
 
   it("rejects invalid className format — returns error JSON", async () => {
@@ -789,7 +789,7 @@ describe("registerJavaSourceTool", () => {
       );
       const parsed = parseToolResult(result);
       expect(parsed).toHaveProperty("error");
-      expect(parsed.error).toContain("not a valid fully qualified Java class name");
+      expect(parsed["error"]).toContain("not a valid fully qualified Java class name");
     }
   });
 
@@ -834,10 +834,10 @@ describe("registerJavaSourceTool", () => {
       JSON.stringify({ className: "com.test.Hello", jarKeyword: "test" }),
     );
     const parsed = parseToolResult(result);
-    expect(parsed.status).toBe("found");
-    expect(parsed.method).toBe("project");
-    expect(parsed.source).toContain("public class Hello");
-    expect(parsed.sourcePath).toContain("Hello.java");
+    expect(parsed["status"]).toBe("found");
+    expect(parsed["method"]).toBe("project");
+    expect(parsed["source"]).toContain("public class Hello");
+    expect(parsed["sourcePath"]).toContain("Hello.java");
   });
 
   it("mode 2: jarPath dispatch reads + decompiles (jarKeyword not required)", async () => {
@@ -875,9 +875,9 @@ describe("registerJavaSourceTool", () => {
       }),
     );
     const parsed = parseToolResult(result);
-    expect(parsed.status).toBe("found");
-    expect(parsed.method).toBe("jar");
-    expect(parsed.source).toContain("public class Util");
+    expect(parsed["status"]).toBe("found");
+    expect(parsed["method"]).toBe("jar");
+    expect(parsed["source"]).toContain("public class Util");
   });
 
   it("jarKeyword dispatch accepts keyword without error", async () => {
@@ -902,8 +902,8 @@ describe("registerJavaSourceTool", () => {
     );
     const parsed = parseToolResult(result);
     expect(parsed).toHaveProperty("status");
-    expect(parsed.status).toBe("not-found");
-    expect(parsed.className).toBe("org.springframework.SomeClass");
+    expect(parsed["status"]).toBe("not-found");
+    expect(parsed["className"]).toBe("org.springframework.SomeClass");
   });
 
   it("className-only dispatch (no jarKeyword, no jarPath) works", async () => {
@@ -920,10 +920,10 @@ describe("registerJavaSourceTool", () => {
       JSON.stringify({ className: "com.example.Missing" }),
     );
     const parsed = parseToolResult(result);
-    expect(parsed.status).toBe("not-found");
-    expect(parsed.className).toBe("com.example.Missing");
+    expect(parsed["status"]).toBe("not-found");
+    expect(parsed["className"]).toBe("com.example.Missing");
     // When jarKeyword is absent, the tip should suggest passing it
-    expect(parsed.message).toContain("Tip: pass `jarKeyword`");
+    expect(parsed["message"]).toContain("Tip: pass `jarKeyword`");
   });
 
   it("returns proper not-found response format", async () => {
@@ -941,8 +941,8 @@ describe("registerJavaSourceTool", () => {
       JSON.stringify({ className: "com.example.Nonexistent", jarKeyword: "test" }),
     );
     const parsed = parseToolResult(result);
-    expect(parsed.status).toBe("not-found");
-    expect(parsed.className).toBe("com.example.Nonexistent");
-    expect(parsed.message).toContain("No source found");
+    expect(parsed["status"]).toBe("not-found");
+    expect(parsed["className"]).toBe("com.example.Nonexistent");
+    expect(parsed["message"]).toContain("No source found");
   });
 });

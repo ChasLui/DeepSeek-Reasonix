@@ -7,7 +7,7 @@ export interface InspectionReport {
   protocolVersion: string;
   serverInfo: { name: string; version: string };
   capabilities: Record<string, unknown>;
-  instructions?: string;
+  instructions?: string | undefined;
   tools: SectionResult<McpTool>;
   resources: SectionResult<McpResource>;
   prompts: SectionResult<McpPrompt>;

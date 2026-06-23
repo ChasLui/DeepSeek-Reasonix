@@ -149,11 +149,11 @@ export class SessionStats {
 
   /** Seed totals from a resumed session's persisted meta — only call once at construction. */
   seedCarryover(opts: {
-    totalCostUsd?: number;
-    turnCount?: number;
-    cacheHitTokens?: number;
-    cacheMissTokens?: number;
-    lastPromptTokens?: number;
+    totalCostUsd?: number | undefined;
+    turnCount?: number | undefined;
+    cacheHitTokens?: number | undefined;
+    cacheMissTokens?: number | undefined;
+    lastPromptTokens?: number | undefined;
   }): void {
     if (typeof opts.totalCostUsd === "number" && opts.totalCostUsd > 0) {
       this._carryoverCost = opts.totalCostUsd;

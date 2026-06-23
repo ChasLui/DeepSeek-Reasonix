@@ -12,11 +12,11 @@ export interface FuseStatus {
 }
 
 interface ProbeDeps {
-  platform?: NodeJS.Platform;
-  env?: NodeJS.ProcessEnv;
-  existsSync?: (path: string) => boolean;
-  canAccess?: (path: string) => boolean;
-  path?: string;
+  platform?: NodeJS.Platform | undefined;
+  env?: NodeJS.ProcessEnv | undefined;
+  existsSync?: ((path: string) => boolean) | undefined;
+  canAccess?: ((path: string) => boolean) | undefined;
+  path?: string | undefined;
 }
 
 const MACFUSE_MARKERS = [
@@ -27,7 +27,7 @@ const MACFUSE_MARKERS = [
 ] as const;
 
 export function resolveFuseMode(env: NodeJS.ProcessEnv = process.env): FuseMode {
-  const raw = env.REASONIX_FUSE?.trim().toLowerCase();
+  const raw = env["REASONIX_FUSE"]?.trim().toLowerCase();
   if (raw === "0" || raw === "off" || raw === "false" || raw === "no") return "off";
   if (raw === "required" || raw === "require") return "required";
   return "default";
@@ -49,7 +49,7 @@ export function getFuseStatus(deps: ProbeDeps = {}): FuseStatus {
     platform,
     exists: deps.existsSync ?? existsSync,
     canAccess: deps.canAccess ?? canAccessPath,
-    path: deps.path ?? deps.env?.PATH ?? process.env.PATH ?? "",
+    path: deps.path ?? deps.env?.["PATH"] ?? process.env["PATH"] ?? "",
   });
   if (ready) {
     return {

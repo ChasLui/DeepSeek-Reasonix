@@ -8,8 +8,8 @@ export interface CountdownProps {
   /** Absolute timestamp (ms since epoch) when the countdown reaches zero. */
   endsAt: number;
   /** Override digit color — default brand sky. */
-  color?: string;
-  backgroundColor?: string;
+  color?: string | undefined;
+  backgroundColor?: string | undefined;
 }
 
 export function Countdown({
@@ -20,7 +20,7 @@ export function Countdown({
   useSlowTick();
   const remainingSec = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
   return (
-    <Text bold color={color} backgroundColor={backgroundColor}>
+    <Text bold color={color} {...(backgroundColor !== undefined ? { backgroundColor } : {})}>
       {String(remainingSec)}
     </Text>
   );

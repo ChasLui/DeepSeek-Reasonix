@@ -153,7 +153,7 @@ describe("searchHybrid degradation (NF-002)", () => {
       const v = new Float32Array(dim);
       for (const ch of text.toLowerCase()) {
         const c = ch.charCodeAt(0);
-        if (c >= 97 && c <= 122) v[(c - 97) % dim] += 1;
+        if (c >= 97 && c <= 122) v[(c - 97) % dim]! += 1;
       }
       return v;
     };

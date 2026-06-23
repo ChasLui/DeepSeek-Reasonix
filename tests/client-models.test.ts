@@ -67,10 +67,10 @@ describe("DeepSeekClient.listModels", () => {
       fetch: spy as unknown as typeof fetch,
     });
     await client.listModels();
-    const [, init] = spy.mock.calls[0]!;
+    const [, init] = spy.mock.calls[0] as unknown[];
     expect((init as RequestInit).method).toBe("GET");
     const headers = (init as RequestInit).headers as Record<string, string>;
-    expect(headers.Authorization).toBe("Bearer sk-xyz");
+    expect(headers["Authorization"]).toBe("Bearer sk-xyz");
   });
 });
 

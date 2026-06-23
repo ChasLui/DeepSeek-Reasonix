@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type ProcessCleanupEvent = "exit" | "SIGINT" | "SIGTERM";
+type ProcessCleanupListener = (...args: unknown[]) => void;
 
 const mocks = vi.hoisted(() => {
   const renderMock = vi.fn();
@@ -171,7 +172,10 @@ async function captureStartupState(opts?: {
   mocks.resolveSessionMock.mockReset();
   mocks.searchEnabledMock.mockReset();
 
-  mocks.readConfigMock.mockReturnValue(opts?.readConfig ?? { mcpDisabled: [] });
+  mocks.readConfigMock.mockReturnValue({
+    ...(opts?.readConfig ?? {}),
+    mcpDisabled: opts?.readConfig?.mcpDisabled ?? [],
+  });
   mocks.searchEnabledMock.mockReturnValue(false);
   mocks.listSessionsForWorkspaceMock.mockReturnValue([]);
   mocks.resolveSessionMock.mockReturnValue({ resolved: "session-1" });
@@ -229,8 +233,11 @@ async function captureStartupState(opts?: {
     "SIGINT",
     "SIGTERM",
   ] as const satisfies readonly ProcessCleanupEvent[];
-  const originalListeners = new Map<ProcessCleanupEvent, Set<(...args: unknown[]) => void>>(
-    cleanupEvents.map((event) => [event, new Set(process.listeners(event))]),
+  const originalListeners = new Map<ProcessCleanupEvent, Set<ProcessCleanupListener>>(
+    cleanupEvents.map((event) => [
+      event,
+      new Set<ProcessCleanupListener>(process.listeners(event) as ProcessCleanupListener[]),
+    ]),
   );
   try {
     await chatCommand({
@@ -243,7 +250,7 @@ async function captureStartupState(opts?: {
   } finally {
     for (const event of cleanupEvents) {
       const original = originalListeners.get(event) ?? new Set();
-      for (const listener of process.listeners(event)) {
+      for (const listener of process.listeners(event) as ProcessCleanupListener[]) {
         if (!original.has(listener)) process.removeListener(event, listener);
       }
     }
@@ -251,7 +258,7 @@ async function captureStartupState(opts?: {
 
   expect(capturedProps).not.toBeNull();
   return {
-    ...(capturedProps as {
+    ...(capturedProps as unknown as {
       mcpServers: Array<{ label: string; spec: string }>;
       mcpSpecs: string[];
       startupInfoHints: string[];

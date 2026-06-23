@@ -64,14 +64,17 @@ export async function wipeStoreFiles(indexDir: string): Promise<void> {
 }
 
 export class SemanticStore {
+  public readonly indexDir: string;
+  public readonly identity: IndexIdentity;
+
   private entries: IndexEntry[] = [];
   private byPath = new Map<string, IndexEntry[]>();
   private dim = 0;
 
-  constructor(
-    public readonly indexDir: string,
-    public readonly identity: IndexIdentity,
-  ) {}
+  constructor(indexDir: string, identity: IndexIdentity) {
+    this.indexDir = indexDir;
+    this.identity = identity;
+  }
 
   get provider(): EmbeddingProvider {
     return this.identity.provider;

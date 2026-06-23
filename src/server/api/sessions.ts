@@ -7,10 +7,10 @@ import type { ApiResult } from "../router.js";
 
 interface SessionMessage {
   role: string;
-  content?: string;
-  toolName?: string;
+  content?: string | undefined;
+  toolName?: string | undefined;
   /** Raw record. Kept for debug; SPA reads from `role`/`content` first. */
-  raw?: unknown;
+  raw?: unknown | undefined;
 }
 
 /** True when the session has a conversation-log row under SQLite. */

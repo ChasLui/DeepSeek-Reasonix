@@ -27,7 +27,7 @@ export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Pro
   const res = await fetch(url, {
     method,
     headers,
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
   });
   const text = await res.text();
   let parsed: unknown = null;

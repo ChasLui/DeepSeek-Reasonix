@@ -6,14 +6,14 @@ export interface DesktopQQSettingsState extends Omit<LoadedQQConfig, "sandbox" |
   enabled: boolean;
   configured: boolean;
   runtimeState: "disconnected" | "connecting" | "connected" | "failed";
-  lastError?: string;
-  appIdPreview?: string;
+  lastError?: string | undefined;
+  appIdPreview?: string | undefined;
   access: string;
 }
 
 export interface DesktopQQSettingsPatch {
-  appId?: string;
-  appSecret?: string;
+  appId?: string | undefined;
+  appSecret?: string | undefined;
   sandbox: boolean;
 }
 
@@ -50,7 +50,7 @@ export function loadDesktopQQState(path?: string): DesktopQQSettingsState {
 
 export function saveDesktopQQSettings(
   patch: DesktopQQSettingsPatch,
-  path?: string,
+  path?: string | undefined,
 ): DesktopQQSettingsState {
   const existing = loadQQConfig(path);
   saveQQConfig(

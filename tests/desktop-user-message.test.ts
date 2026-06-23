@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import type { ChatMessage } from "../desktop/src/App";
 import type { IncomingEvent } from "../desktop/src/protocol";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -33,7 +34,6 @@ vi.mock("../desktop/src/ui/thread", () => ({
   UserMsg: () => null,
 }));
 
-type ChatMessage = Awaited<typeof import("../desktop/src/App")>["ChatMessage"];
 type AppState = Parameters<Awaited<typeof import("../desktop/src/App")>["applyIncoming"]>[0];
 type ApplyIncoming = Awaited<typeof import("../desktop/src/App")>["applyIncoming"];
 

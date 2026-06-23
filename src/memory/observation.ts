@@ -9,18 +9,18 @@ import { memoryRootFromHome } from "./access.js";
 import { BUILTIN_MEMORY_TYPES, type MemoryScope, sanitizeMemoryName } from "./user.js";
 
 export interface ObservationBudgets {
-  maxLines?: number;
-  maxWrites?: number;
-  aggregateBytes?: number;
-  aggregateTokens?: number;
-  lineMaxBytes?: number;
+  maxLines?: number | undefined;
+  maxWrites?: number | undefined;
+  aggregateBytes?: number | undefined;
+  aggregateTokens?: number | undefined;
+  lineMaxBytes?: number | undefined;
 }
 
 export interface ObservationOptions {
   store: SqliteMemoryStore;
-  autoCapture?: boolean;
-  budgets?: ObservationBudgets;
-  config?: ReasonixConfig;
+  autoCapture?: boolean | undefined;
+  budgets?: ObservationBudgets | undefined;
+  config?: ReasonixConfig | undefined;
 }
 
 export interface ObservationResult {
@@ -30,11 +30,11 @@ export interface ObservationResult {
 }
 
 interface ObservationCandidate {
-  v?: unknown;
-  type?: unknown;
-  name?: unknown;
-  description?: unknown;
-  body?: unknown;
+  v?: unknown | undefined;
+  type?: unknown | undefined;
+  name?: unknown | undefined;
+  description?: unknown | undefined;
+  body?: unknown | undefined;
 }
 
 const DEFAULT_BUDGETS = {
@@ -51,12 +51,18 @@ export async function extractObservationFromHook(
   raw: { stdout: string; stderr: string },
   opts: ObservationOptions,
 ): Promise<ObservationResult> {
-  if (!opts.autoCapture || process.env.REASONIX_MEMORY_AUTO === "0") {
+  if (!opts.autoCapture || process.env["REASONIX_MEMORY_AUTO"] === "0") {
     return { written: 0, skipped: 0, reasons: [] };
   }
   if (payload.event !== "Stop") return { written: 0, skipped: 1, reasons: ["non_stop_event"] };
 
-  const budgets = { ...DEFAULT_BUDGETS, ...(opts.budgets ?? {}) };
+  const budgets = {
+    maxLines: opts.budgets?.maxLines ?? DEFAULT_BUDGETS.maxLines,
+    maxWrites: opts.budgets?.maxWrites ?? DEFAULT_BUDGETS.maxWrites,
+    aggregateBytes: opts.budgets?.aggregateBytes ?? DEFAULT_BUDGETS.aggregateBytes,
+    aggregateTokens: opts.budgets?.aggregateTokens ?? DEFAULT_BUDGETS.aggregateTokens,
+    lineMaxBytes: opts.budgets?.lineMaxBytes ?? DEFAULT_BUDGETS.lineMaxBytes,
+  };
   const allowedTypes = new Set([
     ...BUILTIN_MEMORY_TYPES,
     ...(opts.config?.memory?.customTypes ?? []).map((entry) => entry.name),

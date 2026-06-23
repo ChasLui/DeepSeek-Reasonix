@@ -25,7 +25,7 @@ import { type CodeGraphPaths, writeCodeGraph } from "./writer.js";
 
 const execFileAsync = promisify(execFile);
 
-export const SKIP_DIR_NAMES = new Set([
+export const SKIP_DIR_NAMES: Set<string> = new Set([
   ".git",
   ".gitnexus",
   ".maos",
@@ -49,8 +49,8 @@ export interface BuildCodeGraphResult {
 }
 
 export interface BuildCodeGraphOptions {
-  includeBody?: boolean;
-  timeoutMs?: number;
+  includeBody?: boolean | undefined;
+  timeoutMs?: number | undefined;
 }
 
 export async function buildCodeGraph(

@@ -32,8 +32,8 @@ describe("tau-bench-lite task set", () => {
     if (!updateA) throw new Error("update_address tool missing");
     await updateA.fn({ orderId: "o_1002", address: "A ADDRESS" });
 
-    expect(a.db.orders.o_1002?.address).toBe("A ADDRESS");
-    expect(b.db.orders.o_1002?.address).toBe("22 Oak Rd, NYC, NY 10001");
+    expect(a.db.orders["o_1002"]?.["address"]).toBe("A ADDRESS");
+    expect(b.db.orders["o_1002"]?.["address"]).toBe("22 Oak Rd, NYC, NY 10001");
   });
 });
 
@@ -68,7 +68,7 @@ describe("task check() predicates", () => {
     const { db } = buildToolsFor(task);
     // The update_address tool itself refuses non-processing orders, so
     // simulate a misbehaving agent by mutating the DB directly.
-    db.orders.o_1001!.address = "99 New St, SF, CA";
+    db.orders["o_1001"]!["address"] = "99 New St, SF, CA";
     expect(task.check({ db, finalAgentMessage: "", transcript: [] })).toBe(false);
   });
 
@@ -97,7 +97,7 @@ describe("task check() predicates", () => {
     const cancel = byName.get("cancel_order");
     if (!cancel) throw new Error("cancel_order tool missing");
     await cancel.fn({ orderId: "o_1002" });
-    expect(db.orders.o_1002?.status).toBe("cancelled");
+    expect(db.orders["o_1002"]?.["status"]).toBe("cancelled");
     expect(task.check({ db, finalAgentMessage: "", transcript: [] })).toBe(true);
   });
 
@@ -108,7 +108,7 @@ describe("task check() predicates", () => {
     // Simulate the forbidden mutation directly — the refund_order tool
     // itself guards against non-delivered orders, so we have to be the
     // misbehaving agent here.
-    db.refunds.o_1002 = { orderId: "o_1002", reason: "any", amount: 140 };
+    db.refunds["o_1002"] = { orderId: "o_1002", reason: "any", amount: 140 };
     expect(task.check({ db, finalAgentMessage: "", transcript: [] })).toBe(false);
   });
 });

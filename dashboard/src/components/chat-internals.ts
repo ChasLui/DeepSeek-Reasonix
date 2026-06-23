@@ -1,4 +1,5 @@
 import { marked } from "marked";
+import type { ComponentType, VNode } from "preact";
 import { memo } from "preact/compat";
 import { useState } from "preact/hooks";
 import { html } from "../lib/html.js";
@@ -159,9 +160,12 @@ interface DiffPair {
   kind: "context" | "change" | "ins" | "del";
 }
 
-export function renderMessageBody(text: string | null | undefined) {
+export function renderMessageBody(text: string | null | undefined): VNode | null {
   if (!text) return null;
-  return html`<div class="md" dangerouslySetInnerHTML=${{ __html: renderMarkdownToString(text) }}></div>`;
+  return html`<div
+    class="md"
+    dangerouslySetInnerHTML=${{ __html: renderMarkdownToString(text) }}
+  ></div>`;
 }
 
 export function parseToolArgs(raw: string | null | undefined): Record<string, unknown> | null {
@@ -173,24 +177,24 @@ export function parseToolArgs(raw: string | null | undefined): Record<string, un
   }
 }
 
-export function ToolCard({ msg }: ToolCardProps) {
+export function ToolCard({ msg }: ToolCardProps): VNode {
   useLang();
   const args = parseToolArgs(msg.toolArgs);
   const name = msg.toolName ?? "tool";
   // Reasonix's filesystem tools emit the path in args.path; MCP-bridged
   // ones may differ but most expose a `path` field too. Normalize.
-  const path = (args?.path ?? args?.file_path ?? args?.filename) as string | undefined;
+  const path = (args?.["path"] ?? args?.["file_path"] ?? args?.["filename"]) as string | undefined;
 
   // edit_file (Reasonix) — search/replace pair → diff view.
   if (
     (name === "edit_file" || name.endsWith("_edit_file")) &&
     args &&
-    typeof args.search === "string" &&
-    typeof args.replace === "string"
+    typeof args["search"] === "string" &&
+    typeof args["replace"] === "string"
   ) {
     const diffHtml = renderSearchReplace(
-      args.search as string,
-      args.replace as string,
+      args["search"] as string,
+      args["replace"] as string,
       path ?? "",
     );
     return html`
@@ -210,7 +214,7 @@ export function ToolCard({ msg }: ToolCardProps) {
   if (
     (name === "write_file" || name.endsWith("_write_file")) &&
     args &&
-    typeof args.content === "string"
+    typeof args["content"] === "string"
   ) {
     const lang = langFromPath(path);
     return html`
@@ -221,7 +225,11 @@ export function ToolCard({ msg }: ToolCardProps) {
           ${path ? html`<code class="tool-card-path">${path}</code>` : null}
           ${lang ? html`<span class="pill">${lang}</span>` : null}
         </div>
-        <div dangerouslySetInnerHTML=${{ __html: renderHighlightedBlock(args.content as string, lang) }}></div>
+        <div
+          dangerouslySetInnerHTML=${{
+            __html: renderHighlightedBlock(args["content"] as string, lang),
+          }}
+        ></div>
         ${msg.text ? html`<div class="tool-card-result">${msg.text}</div>` : null}
       </div>
     `;
@@ -238,25 +246,29 @@ export function ToolCard({ msg }: ToolCardProps) {
           ${path ? html`<code class="tool-card-path">${path}</code>` : null}
           ${lang ? html`<span class="pill">${lang}</span>` : null}
         </div>
-        <div dangerouslySetInnerHTML=${{ __html: renderHighlightedBlock(msg.text ?? "", lang) }}></div>
+        <div
+          dangerouslySetInnerHTML=${{ __html: renderHighlightedBlock(msg.text ?? "", lang) }}
+        ></div>
       </div>
     `;
   }
 
   // run_command / run_background — terminal-style.
   if (name === "run_command" || name === "run_background") {
-    const cmd = args?.command;
+    const cmd = args?.["command"];
     return html`
       <div class="tool-card">
         <div class="tool-card-head">
           <span class="tool-card-icon">⚡</span>
-          <span class="tool-card-name">${name === "run_background" ? "run_background" : "run_command"}</span>
+          <span class="tool-card-name"
+            >${name === "run_background" ? "run_background" : "run_command"}</span
+          >
         </div>
-        ${
-          cmd
-            ? html`<pre class="tool-card-cmd"><span class="tool-card-prompt">$</span> <code>${cmd}</code></pre>`
-            : null
-        }
+        ${cmd
+          ? html`<pre
+              class="tool-card-cmd"
+            ><span class="tool-card-prompt">$</span> <code>${cmd}</code></pre>`
+          : null}
         ${msg.text ? html`<pre class="tool-card-output">${msg.text}</pre>` : null}
       </div>
     `;
@@ -291,11 +303,12 @@ export function ToolCard({ msg }: ToolCardProps) {
         <span class="tool-card-icon">▣</span>
         <span class="tool-card-name">${name}</span>
       </div>
-      ${
-        args
-          ? html`<details class="tool-card-args"><summary>${t("modal.arguments")}</summary><pre>${escapeHtml(JSON.stringify(args, null, 2))}</pre></details>`
-          : null
-      }
+      ${args
+        ? html`<details class="tool-card-args">
+            <summary>${t("modal.arguments")}</summary>
+            <pre>${escapeHtml(JSON.stringify(args, null, 2))}</pre>
+          </details>`
+        : null}
       <pre class="tool-card-output">${msg.text}</pre>
     </div>
   `;
@@ -305,7 +318,10 @@ export function ToolCard({ msg }: ToolCardProps) {
 // Historical messages keep stable msg references across deltas, so the
 // O(N) marked.parse + hljs work that used to fire per assistant_delta
 // now only runs on truly new messages and the live streaming bubble.
-export const ChatMessage = memo(function ChatMessage({ msg, streaming }: ChatMessageProps) {
+export const ChatMessage: ComponentType<ChatMessageProps> = memo(function ChatMessage({
+  msg,
+  streaming,
+}: ChatMessageProps): VNode {
   const role = msg.role;
   const glyph = ROLE_GLYPH[role as ChatRole] ?? "·";
   if (role === "tool") {
@@ -335,7 +351,7 @@ export const ChatMessage = memo(function ChatMessage({ msg, streaming }: ChatMes
 // server; the SSE channel will echo back a modal-down that clears the
 // local state — both surfaces stay in lockstep without polling.
 
-export function ModalCard({ accent, icon, title, subtitle, children }: ModalCardProps) {
+export function ModalCard({ accent, icon, title, subtitle, children }: ModalCardProps): VNode {
   return html`
     <div class="modal-card" style=${`border-left-color: ${accent};`}>
       <div class="modal-card-head">
@@ -350,7 +366,13 @@ export function ModalCard({ accent, icon, title, subtitle, children }: ModalCard
   `;
 }
 
-export function ShellModal({ modal, onResolve }: { modal: ShellModalSpec; onResolve: OnResolve }) {
+export function ShellModal({
+  modal,
+  onResolve,
+}: {
+  modal: ShellModalSpec;
+  onResolve: OnResolve;
+}): VNode {
   useLang();
   const isBg = modal.shellKind === "run_background";
   return html`
@@ -358,69 +380,97 @@ export function ShellModal({ modal, onResolve }: { modal: ShellModalSpec; onReso
       accent="#f87171"
       icon=${isBg ? "⏱" : "⚡"}
       title=${isBg ? t("modal.shellBgTitle") : t("modal.shellTitle")}
-      subtitle=${
-        isBg ? t("modal.shellBgSubtitle") : t("modal.shellSubtitle")
-      }
+      subtitle=${isBg ? t("modal.shellBgSubtitle") : t("modal.shellSubtitle")}
     >
-      <div class="modal-cmd"><span class="modal-cmd-prompt">$</span> <code>${modal.command}</code></div>
+      <div class="modal-cmd">
+        <span class="modal-cmd-prompt">$</span> <code>${modal.command}</code>
+      </div>
       <div class="modal-actions">
-        <button class="primary" onClick=${() => onResolve("shell", "run_once")}>${t("modal.runOnce")}</button>
-        <button onClick=${() => onResolve("shell", "always_allow")}>${t("modal.alwaysAllow", { prefix: modal.allowPrefix ?? "" })}</button>
-        <button class="danger" onClick=${() => onResolve("shell", "deny")}>${t("modal.deny")}</button>
+        <button class="primary" onClick=${() => onResolve("shell", "run_once")}>
+          ${t("modal.runOnce")}
+        </button>
+        <button onClick=${() => onResolve("shell", "always_allow")}>
+          ${t("modal.alwaysAllow", { prefix: modal.allowPrefix ?? "" })}
+        </button>
+        <button class="danger" onClick=${() => onResolve("shell", "deny")}>
+          ${t("modal.deny")}
+        </button>
       </div>
     <//>
   `;
 }
 
-export function ChoiceModal({ modal, onResolve }: { modal: ChoiceModalSpec; onResolve: OnResolve }) {
+export function ChoiceModal({
+  modal,
+  onResolve,
+}: {
+  modal: ChoiceModalSpec;
+  onResolve: OnResolve;
+}): VNode {
   useLang();
   const [custom, setCustom] = useState("");
   const [showCustom, setShowCustom] = useState(false);
   return html`
-    <${ModalCard} accent="#f0abfc" icon="🔀" title=${t("modal.choiceTitle")} subtitle=${modal.question}>
+    <${ModalCard}
+      accent="#f0abfc"
+      icon="🔀"
+      title=${t("modal.choiceTitle")}
+      subtitle=${modal.question}
+    >
       ${modal.options.map(
         (opt: ChoiceOption) => html`
-        <button
-          key=${opt.id}
-          class="modal-choice-row"
-          onClick=${() => onResolve("choice", { kind: "pick", optionId: opt.id })}
-        >
-          <span class="modal-choice-id">${opt.id}</span>
-          <span class="modal-choice-title">${opt.title}</span>
-          ${opt.summary ? html`<span class="modal-choice-summary">${opt.summary}</span>` : null}
-        </button>
-      `,
+          <button
+            key=${opt.id}
+            class="modal-choice-row"
+            onClick=${() => onResolve("choice", { kind: "pick", optionId: opt.id })}
+          >
+            <span class="modal-choice-id">${opt.id}</span>
+            <span class="modal-choice-title">${opt.title}</span>
+            ${opt.summary ? html`<span class="modal-choice-summary">${opt.summary}</span>` : null}
+          </button>
+        `,
       )}
-      ${
-        modal.allowCustom
-          ? showCustom
-            ? html`
-            <div class="modal-custom">
-              <textarea
-                placeholder=${t("modal.typePlaceholder")}
-                rows="2"
-                value=${custom}
-                onInput=${(e: Event) => setCustom((e.target as HTMLTextAreaElement).value)}
-              ></textarea>
-              <div class="modal-actions">
-                <button class="primary" onClick=${() => onResolve("choice", { kind: "custom", text: custom })} disabled=${!custom.trim()}>${t("modal.send")}</button>
-                <button onClick=${() => {
-                  setShowCustom(false);
-                  setCustom("");
-                }}>${t("common.back")}</button>
+      ${modal.allowCustom
+        ? showCustom
+          ? html`
+              <div class="modal-custom">
+                <textarea
+                  placeholder=${t("modal.typePlaceholder")}
+                  rows="2"
+                  value=${custom}
+                  onInput=${(e: Event) => setCustom((e.target as HTMLTextAreaElement).value)}
+                ></textarea>
+                <div class="modal-actions">
+                  <button
+                    class="primary"
+                    onClick=${() => onResolve("choice", { kind: "custom", text: custom })}
+                    disabled=${!custom.trim()}
+                  >
+                    ${t("modal.send")}
+                  </button>
+                  <button
+                    onClick=${() => {
+                      setShowCustom(false);
+                      setCustom("");
+                    }}
+                  >
+                    ${t("common.back")}
+                  </button>
+                </div>
               </div>
-            </div>
-          `
-            : html`
-            <button class="modal-choice-row" onClick=${() => setShowCustom(true)}>
-              <span class="modal-choice-id">·</span>
-              <span class="modal-choice-title">${t("modal.typeOwn")}</span>
-              <span class="modal-choice-summary">${t("modal.typeOwnSummary")}</span>
-            </button>
-          `
-          : null
-      }
-      <button class="modal-choice-row modal-choice-cancel" onClick=${() => onResolve("choice", { kind: "cancel" })}>
+            `
+          : html`
+              <button class="modal-choice-row" onClick=${() => setShowCustom(true)}>
+                <span class="modal-choice-id">·</span>
+                <span class="modal-choice-title">${t("modal.typeOwn")}</span>
+                <span class="modal-choice-summary">${t("modal.typeOwnSummary")}</span>
+              </button>
+            `
+        : null}
+      <button
+        class="modal-choice-row modal-choice-cancel"
+        onClick=${() => onResolve("choice", { kind: "cancel" })}
+      >
         <span class="modal-choice-id">×</span>
         <span class="modal-choice-title">${t("modal.cancel")}</span>
         <span class="modal-choice-summary">${t("modal.cancelSummary")}</span>
@@ -429,43 +479,61 @@ export function ChoiceModal({ modal, onResolve }: { modal: ChoiceModalSpec; onRe
   `;
 }
 
-export function PlanModal({ modal, onResolve }: { modal: PlanModalSpec; onResolve: OnResolve }) {
+export function PlanModal({
+  modal,
+  onResolve,
+}: {
+  modal: PlanModalSpec;
+  onResolve: OnResolve;
+}): VNode {
   useLang();
   const [feedback, setFeedback] = useState("");
   const [stage, setStage] = useState<"approve" | "refine" | null>(null);
-  const send = () => onResolve("plan", stage, feedback);
+  const send = (): void => onResolve("plan", stage, feedback);
+  const bodyHtml = marked.parse(modal.body || "", { async: false });
   return html`
-    <${ModalCard} accent="#67e8f9" icon="◆" title=${t("modal.planTitle")} subtitle=${t("modal.planSubtitle")}>
-      <div class="md modal-plan-body" dangerouslySetInnerHTML=${{ __html: marked.parse(modal.body || "") }}></div>
-      ${
-        stage
-          ? html`
-          <textarea
-            placeholder=${
-              stage === "approve"
+    <${ModalCard}
+      accent="#67e8f9"
+      icon="◆"
+      title=${t("modal.planTitle")}
+      subtitle=${t("modal.planSubtitle")}
+    >
+      <div class="md modal-plan-body" dangerouslySetInnerHTML=${{ __html: bodyHtml }}></div>
+      ${stage
+        ? html`
+            <textarea
+              placeholder=${stage === "approve"
                 ? t("modal.approveInstructions")
-                : t("modal.refinePlaceholder")
-            }
-            rows="3"
-            value=${feedback}
-            onInput=${(e: Event) => setFeedback((e.target as HTMLTextAreaElement).value)}
-          ></textarea>
-          <div class="modal-actions">
-            <button class="primary" onClick=${send}>${stage === "approve" ? t("modal.approve") : t("modal.sendRefinement")}</button>
-            <button onClick=${() => {
-              setStage(null);
-              setFeedback("");
-            }}>${t("common.back")}</button>
-          </div>
-        `
-          : html`
-          <div class="modal-actions">
-            <button class="primary" onClick=${() => setStage("approve")}>${t("modal.approve")}</button>
-            <button onClick=${() => setStage("refine")}>${t("modal.refine")}</button>
-            <button class="danger" onClick=${() => onResolve("plan", "cancel")}>${t("modal.cancel")}</button>
-          </div>
-        `
-      }
+                : t("modal.refinePlaceholder")}
+              rows="3"
+              value=${feedback}
+              onInput=${(e: Event) => setFeedback((e.target as HTMLTextAreaElement).value)}
+            ></textarea>
+            <div class="modal-actions">
+              <button class="primary" onClick=${send}>
+                ${stage === "approve" ? t("modal.approve") : t("modal.sendRefinement")}
+              </button>
+              <button
+                onClick=${() => {
+                  setStage(null);
+                  setFeedback("");
+                }}
+              >
+                ${t("common.back")}
+              </button>
+            </div>
+          `
+        : html`
+            <div class="modal-actions">
+              <button class="primary" onClick=${() => setStage("approve")}>
+                ${t("modal.approve")}
+              </button>
+              <button onClick=${() => setStage("refine")}>${t("modal.refine")}</button>
+              <button class="danger" onClick=${() => onResolve("plan", "cancel")}>
+                ${t("modal.cancel")}
+              </button>
+            </div>
+          `}
     <//>
   `;
 }
@@ -541,7 +609,13 @@ function pairDiffRows(diff: DiffEntry[]): DiffPair[] {
   return rows;
 }
 
-export function EditReviewModal({ modal, onResolve }: { modal: EditReviewSpec; onResolve: OnResolve }) {
+export function EditReviewModal({
+  modal,
+  onResolve,
+}: {
+  modal: EditReviewSpec;
+  onResolve: OnResolve;
+}): VNode {
   useLang();
   const search = modal.search ?? "";
   const replace = modal.replace ?? "";
@@ -555,7 +629,11 @@ export function EditReviewModal({ modal, onResolve }: { modal: EditReviewSpec; o
       accent="#86efac"
       icon="◆"
       title=${t("modal.editTitle")}
-      subtitle=${t("modal.editSubtitle", { path: modal.path ?? "", remaining: modal.remaining, total: modal.total })}
+      subtitle=${t("modal.editSubtitle", {
+        path: modal.path ?? "",
+        remaining: modal.remaining,
+        total: modal.total,
+      })}
     >
       <div class="edit-diff-wrap">
         <div class="edit-diff-head">
@@ -569,43 +647,51 @@ export function EditReviewModal({ modal, onResolve }: { modal: EditReviewSpec; o
         <div class="edit-diff-body">
           ${rows.map(
             (row, i) => html`
-            <div key=${i} class=${`edit-diff-row edit-diff-row-${row.kind}`}>
-              <div class="edit-diff-cell edit-diff-cell-old">
-                ${
-                  row.left != null
+              <div key=${i} class=${`edit-diff-row edit-diff-row-${row.kind}`}>
+                <div class="edit-diff-cell edit-diff-cell-old">
+                  ${row.left != null
                     ? html`<span
                         class="edit-diff-line"
                         dangerouslySetInnerHTML=${{ __html: hlLine(row.left, lang) || "&nbsp;" }}
                       ></span>`
-                    : html`<span class="edit-diff-empty">&nbsp;</span>`
-                }
-              </div>
-              <div class="edit-diff-cell edit-diff-cell-new">
-                ${
-                  row.right != null
+                    : html`<span class="edit-diff-empty">&nbsp;</span>`}
+                </div>
+                <div class="edit-diff-cell edit-diff-cell-new">
+                  ${row.right != null
                     ? html`<span
                         class="edit-diff-line"
                         dangerouslySetInnerHTML=${{ __html: hlLine(row.right, lang) || "&nbsp;" }}
                       ></span>`
-                    : html`<span class="edit-diff-empty">&nbsp;</span>`
-                }
+                    : html`<span class="edit-diff-empty">&nbsp;</span>`}
+                </div>
               </div>
-            </div>
-          `,
+            `,
           )}
         </div>
       </div>
       <div class="modal-actions">
-        <button class="primary" onClick=${() => onResolve("edit-review", "apply")}>${t("chat.confirmBtn")}</button>
+        <button class="primary" onClick=${() => onResolve("edit-review", "apply")}>
+          ${t("chat.confirmBtn")}
+        </button>
         <button onClick=${() => onResolve("edit-review", "reject")}>${t("chat.rejectBtn")}</button>
-        <button onClick=${() => onResolve("edit-review", "apply-rest-of-turn")}>${t("chat.applyRestBtn")}</button>
-        <button onClick=${() => onResolve("edit-review", "flip-to-auto")}>${t("chat.flipAutoBtn")}</button>
+        <button onClick=${() => onResolve("edit-review", "apply-rest-of-turn")}>
+          ${t("chat.applyRestBtn")}
+        </button>
+        <button onClick=${() => onResolve("edit-review", "flip-to-auto")}>
+          ${t("chat.flipAutoBtn")}
+        </button>
       </div>
     <//>
   `;
 }
 
-export function WorkspaceModal({ modal, onResolve }: { modal: WorkspaceSpec; onResolve: OnResolve }) {
+export function WorkspaceModal({
+  modal,
+  onResolve,
+}: {
+  modal: WorkspaceSpec;
+  onResolve: OnResolve;
+}): VNode {
   useLang();
   return html`
     <${ModalCard}
@@ -614,16 +700,28 @@ export function WorkspaceModal({ modal, onResolve }: { modal: WorkspaceSpec; onR
       title=${t("modal.workspaceTitle")}
       subtitle=${t("modal.workspaceSubtitle")}
     >
-      <div class="modal-cmd"><span class="modal-cmd-prompt">→</span> <code>${modal.path}</code></div>
+      <div class="modal-cmd">
+        <span class="modal-cmd-prompt">→</span> <code>${modal.path}</code>
+      </div>
       <div class="modal-actions">
-        <button class="primary" onClick=${() => onResolve("workspace", "switch")}>${t("modal.switchBtn")}</button>
-        <button class="danger" onClick=${() => onResolve("workspace", "deny")}>${t("modal.denyBtn")}</button>
+        <button class="primary" onClick=${() => onResolve("workspace", "switch")}>
+          ${t("modal.switchBtn")}
+        </button>
+        <button class="danger" onClick=${() => onResolve("workspace", "deny")}>
+          ${t("modal.denyBtn")}
+        </button>
       </div>
     <//>
   `;
 }
 
-export function CheckpointModal({ modal, onResolve }: { modal: CheckpointSpec; onResolve: OnResolve }) {
+export function CheckpointModal({
+  modal,
+  onResolve,
+}: {
+  modal: CheckpointSpec;
+  onResolve: OnResolve;
+}): VNode {
   useLang();
   const [reviseText, setReviseText] = useState("");
   const [staged, setStaged] = useState(false);
@@ -636,31 +734,42 @@ export function CheckpointModal({ modal, onResolve }: { modal: CheckpointSpec; o
       title=${t("modal.stepComplete", { counter })}
       subtitle=${label}
     >
-      ${
-        staged
-          ? html`
-          <textarea
-            placeholder=${t("modal.revisePlaceholder")}
-            rows="3"
-            value=${reviseText}
-            onInput=${(e: Event) => setReviseText((e.target as HTMLTextAreaElement).value)}
-          ></textarea>
-          <div class="modal-actions">
-            <button class="primary" onClick=${() => onResolve("checkpoint", "revise", reviseText)}>${t("modal.sendRevision")}</button>
-            <button onClick=${() => {
-              setStaged(false);
-              setReviseText("");
-            }}>${t("common.back")}</button>
-          </div>
-        `
-          : html`
-          <div class="modal-actions">
-            <button class="primary" onClick=${() => onResolve("checkpoint", "continue")}>${t("modal.continueBtn")}</button>
-            <button onClick=${() => setStaged(true)}>${t("modal.reviseBtn")}</button>
-            <button class="danger" onClick=${() => onResolve("checkpoint", "stop")}>${t("modal.stopBtn")}</button>
-          </div>
-        `
-      }
+      ${staged
+        ? html`
+            <textarea
+              placeholder=${t("modal.revisePlaceholder")}
+              rows="3"
+              value=${reviseText}
+              onInput=${(e: Event) => setReviseText((e.target as HTMLTextAreaElement).value)}
+            ></textarea>
+            <div class="modal-actions">
+              <button
+                class="primary"
+                onClick=${() => onResolve("checkpoint", "revise", reviseText)}
+              >
+                ${t("modal.sendRevision")}
+              </button>
+              <button
+                onClick=${() => {
+                  setStaged(false);
+                  setReviseText("");
+                }}
+              >
+                ${t("common.back")}
+              </button>
+            </div>
+          `
+        : html`
+            <div class="modal-actions">
+              <button class="primary" onClick=${() => onResolve("checkpoint", "continue")}>
+                ${t("modal.continueBtn")}
+              </button>
+              <button onClick=${() => setStaged(true)}>${t("modal.reviseBtn")}</button>
+              <button class="danger" onClick=${() => onResolve("checkpoint", "stop")}>
+                ${t("modal.stopBtn")}
+              </button>
+            </div>
+          `}
     <//>
   `;
 }
@@ -671,7 +780,7 @@ export function PickerModal({
 }: {
   modal: PickerModalSpec;
   onResolve: OnResolve;
-}) {
+}): VNode {
   useLang();
   const [selectedId, setSelectedId] = useState<string | null>(modal.items[0]?.id ?? null);
   const [query, setQuery] = useState(modal.query ?? "");
@@ -680,84 +789,77 @@ export function PickerModal({
   const [showNew, setShowNew] = useState(false);
   const [newText, setNewText] = useState("");
 
-  const has = (a: PickerActionName) => modal.actions.includes(a);
+  const has = (a: PickerActionName): boolean => modal.actions.includes(a);
   const selected = modal.items.find((i) => i.id === selectedId) ?? null;
 
-  const submitRefine = (next: string) => {
+  const submitRefine = (next: string): void => {
     setQuery(next);
     if (has("refine")) onResolve("picker", { action: "refine", query: next });
   };
 
-  const startRename = (id: string) => {
+  const startRename = (id: string): void => {
     const item = modal.items.find((i) => i.id === id);
     if (!item) return;
     setRenameTarget(id);
     setRenameText(item.title);
   };
 
-  const sendRename = () => {
+  const sendRename = (): void => {
     if (!renameTarget || !renameText.trim()) return;
     onResolve("picker", { action: "rename", id: renameTarget, text: renameText });
     setRenameTarget(null);
     setRenameText("");
   };
 
-  const sendNew = () => {
+  const sendNew = (): void => {
     onResolve("picker", newText.trim() ? { action: "new", text: newText } : { action: "new" });
     setShowNew(false);
     setNewText("");
   };
 
   return html`
-    <${ModalCard}
-      accent="#fcd34d"
-      icon="≡"
-      title=${modal.title}
-      subtitle=${modal.hint}
-    >
-      ${
-        has("refine")
-          ? html`<input
-              class="modal-picker-search"
-              type="search"
-              placeholder=${t("modal.pickerFilter")}
-              value=${query}
-              onInput=${(e: Event) => submitRefine((e.target as HTMLInputElement).value)}
-            />`
-          : null
-      }
+    <${ModalCard} accent="#fcd34d" icon="≡" title=${modal.title} subtitle=${modal.hint}>
+      ${has("refine")
+        ? html`<input
+            class="modal-picker-search"
+            type="search"
+            placeholder=${t("modal.pickerFilter")}
+            value=${query}
+            onInput=${(e: Event) => submitRefine((e.target as HTMLInputElement).value)}
+          />`
+        : null}
       <div class="modal-picker-list">
-        ${
-          modal.items.length === 0
-            ? html`<div class="modal-picker-empty">${t("modal.pickerEmpty")}</div>`
-            : modal.items.map(
-                (it) => html`
-                  <button
-                    key=${it.id}
-                    class=${`modal-picker-row${it.id === selectedId ? " selected" : ""}`}
-                    onClick=${() => setSelectedId(it.id)}
-                    onDblClick=${() => has("pick") && onResolve("picker", { action: "pick", id: it.id })}
-                  >
-                    <span class="modal-picker-title">${it.title}</span>
-                    ${it.badge ? html`<span class="modal-picker-badge">${it.badge}</span>` : null}
-                    ${it.subtitle ? html`<span class="modal-picker-subtitle">${it.subtitle}</span>` : null}
-                    ${it.meta ? html`<span class="modal-picker-meta">${it.meta}</span>` : null}
-                  </button>
-                `,
-              )
-        }
+        ${modal.items.length === 0
+          ? html`<div class="modal-picker-empty">${t("modal.pickerEmpty")}</div>`
+          : modal.items.map(
+              (it) => html`
+                <button
+                  key=${it.id}
+                  class=${`modal-picker-row${it.id === selectedId ? " selected" : ""}`}
+                  onClick=${() => setSelectedId(it.id)}
+                  onDblClick=${() =>
+                    has("pick") && onResolve("picker", { action: "pick", id: it.id })}
+                >
+                  <span class="modal-picker-title">${it.title}</span>
+                  ${it.badge ? html`<span class="modal-picker-badge">${it.badge}</span>` : null}
+                  ${it.subtitle
+                    ? html`<span class="modal-picker-subtitle">${it.subtitle}</span>`
+                    : null}
+                  ${it.meta ? html`<span class="modal-picker-meta">${it.meta}</span>` : null}
+                </button>
+              `,
+            )}
       </div>
-      ${
-        modal.hasMore && has("load-more")
-          ? html`<button
-              class="modal-picker-more"
-              onClick=${() => onResolve("picker", { action: "load-more" })}
-            >${t("modal.pickerLoadMore")}</button>`
-          : null
-      }
-      ${
-        renameTarget
-          ? html`
+      ${modal.hasMore && has("load-more")
+        ? html`<button
+            class="modal-picker-more"
+            onClick=${() => onResolve("picker", { action: "load-more" })}
+          >
+            ${t("modal.pickerLoadMore")}
+          </button>`
+        : null}
+      ${renameTarget
+        ? html`
             <div class="modal-picker-form">
               <input
                 type="text"
@@ -765,13 +867,15 @@ export function PickerModal({
                 onInput=${(e: Event) => setRenameText((e.target as HTMLInputElement).value)}
               />
               <div class="modal-actions">
-                <button class="primary" onClick=${sendRename} disabled=${!renameText.trim()}>${t("common.save")}</button>
+                <button class="primary" onClick=${sendRename} disabled=${!renameText.trim()}>
+                  ${t("common.save")}
+                </button>
                 <button onClick=${() => setRenameTarget(null)}>${t("common.back")}</button>
               </div>
             </div>
           `
-          : showNew
-            ? html`
+        : showNew
+          ? html`
               <div class="modal-picker-form">
                 <input
                   type="text"
@@ -785,53 +889,52 @@ export function PickerModal({
                 </div>
               </div>
             `
-            : html`
+          : html`
               <div class="modal-actions">
-                ${
-                  has("pick") && selected
-                    ? html`<button
-                        class="primary"
-                        onClick=${() => onResolve("picker", { action: "pick", id: selected.id })}
-                      >${t("modal.pickerPick")}</button>`
-                    : null
-                }
-                ${
-                  has("install") && selected
-                    ? html`<button
-                        class="primary"
-                        onClick=${() => onResolve("picker", { action: "install", id: selected.id })}
-                      >${t("modal.pickerInstall")}</button>`
-                    : null
-                }
-                ${
-                  has("uninstall") && selected
-                    ? html`<button
-                        onClick=${() => onResolve("picker", { action: "uninstall", id: selected.id })}
-                      >${t("modal.pickerUninstall")}</button>`
-                    : null
-                }
-                ${
-                  has("rename") && selected
-                    ? html`<button onClick=${() => startRename(selected.id)}>${t("modal.pickerRename")}</button>`
-                    : null
-                }
-                ${
-                  has("delete") && selected
-                    ? html`<button
-                        class="danger"
-                        onClick=${() => onResolve("picker", { action: "delete", id: selected.id })}
-                      >${t("common.delete")}</button>`
-                    : null
-                }
-                ${
-                  has("new")
-                    ? html`<button onClick=${() => setShowNew(true)}>${t("modal.pickerNew")}</button>`
-                    : null
-                }
-                <button onClick=${() => onResolve("picker", { action: "cancel" })}>${t("modal.cancel")}</button>
+                ${has("pick") && selected
+                  ? html`<button
+                      class="primary"
+                      onClick=${() => onResolve("picker", { action: "pick", id: selected.id })}
+                    >
+                      ${t("modal.pickerPick")}
+                    </button>`
+                  : null}
+                ${has("install") && selected
+                  ? html`<button
+                      class="primary"
+                      onClick=${() => onResolve("picker", { action: "install", id: selected.id })}
+                    >
+                      ${t("modal.pickerInstall")}
+                    </button>`
+                  : null}
+                ${has("uninstall") && selected
+                  ? html`<button
+                      onClick=${() => onResolve("picker", { action: "uninstall", id: selected.id })}
+                    >
+                      ${t("modal.pickerUninstall")}
+                    </button>`
+                  : null}
+                ${has("rename") && selected
+                  ? html`<button onClick=${() => startRename(selected.id)}>
+                      ${t("modal.pickerRename")}
+                    </button>`
+                  : null}
+                ${has("delete") && selected
+                  ? html`<button
+                      class="danger"
+                      onClick=${() => onResolve("picker", { action: "delete", id: selected.id })}
+                    >
+                      ${t("common.delete")}
+                    </button>`
+                  : null}
+                ${has("new")
+                  ? html`<button onClick=${() => setShowNew(true)}>${t("modal.pickerNew")}</button>`
+                  : null}
+                <button onClick=${() => onResolve("picker", { action: "cancel" })}>
+                  ${t("modal.cancel")}
+                </button>
               </div>
-            `
-      }
+            `}
     <//>
   `;
 }
@@ -842,18 +945,13 @@ export function ViewerModal({
 }: {
   modal: ViewerModalSpec;
   onResolve: OnResolve;
-}) {
+}): VNode {
   useLang();
+  const bodyHtml = modal.body ? marked.parse(modal.body, { async: false }) : null;
   return html`
-    <${ModalCard}
-      accent="#67e8f9"
-      icon="◇"
-      title=${modal.title}
-      subtitle=${modal.meta}
-    >
-      ${
-        modal.steps && modal.steps.length > 0
-          ? html`
+    <${ModalCard} accent="#67e8f9" icon="◇" title=${modal.title} subtitle=${modal.meta}>
+      ${modal.steps && modal.steps.length > 0
+        ? html`
             <ol class="modal-viewer-steps">
               ${modal.steps.map(
                 (s: ViewerStep) => html`
@@ -865,23 +963,31 @@ export function ViewerModal({
               )}
             </ol>
           `
-          : null
-      }
-      ${
-        modal.body
-          ? html`<div class="md modal-viewer-body" dangerouslySetInnerHTML=${{ __html: marked.parse(modal.body) }}></div>`
-          : null
-      }
+        : null}
+      ${bodyHtml
+        ? html`<div
+            class="md modal-viewer-body"
+            dangerouslySetInnerHTML=${{ __html: bodyHtml }}
+          ></div>`
+        : null}
       <div class="modal-actions">
-        <button onClick=${() => onResolve("viewer", { action: "close" })}>${t("modal.viewerClose")}</button>
+        <button onClick=${() => onResolve("viewer", { action: "close" })}>
+          ${t("modal.viewerClose")}
+        </button>
       </div>
     <//>
   `;
 }
 
-export function RevisionModal({ modal, onResolve }: { modal: RevisionSpec; onResolve: OnResolve }) {
+export function RevisionModal({
+  modal,
+  onResolve,
+}: {
+  modal: RevisionSpec;
+  onResolve: OnResolve;
+}): VNode {
   useLang();
-  const riskColor = (r: string | undefined) =>
+  const riskColor = (r: string | undefined): string =>
     r === "high" ? "#f87171" : r === "med" ? "#fbbf24" : r === "low" ? "#86efac" : "#9ca3af";
   return html`
     <${ModalCard}
@@ -904,8 +1010,12 @@ export function RevisionModal({ modal, onResolve }: { modal: RevisionSpec; onRes
         )}
       </ol>
       <div class="modal-actions">
-        <button class="primary" onClick=${() => onResolve("revision", "accept")}>${t("modal.accept")}</button>
-        <button class="danger" onClick=${() => onResolve("revision", "reject")}>${t("modal.reject")}</button>
+        <button class="primary" onClick=${() => onResolve("revision", "accept")}>
+          ${t("modal.accept")}
+        </button>
+        <button class="danger" onClick=${() => onResolve("revision", "reject")}>
+          ${t("modal.reject")}
+        </button>
       </div>
     <//>
   `;

@@ -78,7 +78,7 @@ let cached: LoadedTokenizer | null = null;
 
 /** Two ../data candidates needed: dist/index.js AND dist/cli/index.js resolve to different roots. */
 export function resolveDataPath(): string {
-  if (process.env.REASONIX_TOKENIZER_PATH) return process.env.REASONIX_TOKENIZER_PATH;
+  if (process.env["REASONIX_TOKENIZER_PATH"]) return process.env["REASONIX_TOKENIZER_PATH"];
   const candidates: string[] = [];
   try {
     const here = dirname(fileURLToPath(import.meta.url));
@@ -254,11 +254,11 @@ export function countTokens(text: string): number {
   return encode(text).length;
 }
 
-export const DEFAULT_BOUNDED_TOKENIZE_CHARS = 2 * 1024;
+export const DEFAULT_BOUNDED_TOKENIZE_CHARS: number = 2 * 1024;
 
 export function countTokensBounded(
   text: string,
-  maxChars = DEFAULT_BOUNDED_TOKENIZE_CHARS,
+  maxChars: number = DEFAULT_BOUNDED_TOKENIZE_CHARS,
 ): number {
   if (text.length === 0) return 0;
   const cap = Math.floor(maxChars);
@@ -315,13 +315,13 @@ interface ToolCall {
 }
 
 interface V4Message {
-  role?: string;
-  content?: string | null;
-  tool_calls?: ToolCall[];
-  tool_call_id?: string;
-  reasoning_content?: string | null;
-  _toolBlocks?: string[];
-  _textParts?: string[];
+  role?: string | undefined;
+  content?: string | null | undefined;
+  tool_calls?: ToolCall[] | undefined;
+  tool_call_id?: string | undefined;
+  reasoning_content?: string | null | undefined;
+  _toolBlocks?: string[] | undefined;
+  _textParts?: string[] | undefined;
 }
 
 function encodeArgumentsToDsml(argsJson: string): string {
@@ -444,11 +444,11 @@ function dropThinkingMessages(messages: V4Message[]): V4Message[] {
 /** Apply DeepSeek V4 chat template. Matches `encoding_dsv4.py`: tool results merged into user messages, assistant tool_calls in DSML, generation suffix appended. */
 export function formatDeepSeekPrompt(
   messages: Array<{
-    role?: string;
-    content?: string | null;
-    tool_calls?: unknown;
-    tool_call_id?: string;
-    reasoning_content?: string | null;
+    role?: string | undefined;
+    content?: string | null | undefined;
+    tool_calls?: unknown | undefined;
+    tool_call_id?: string | undefined;
+    reasoning_content?: string | null | undefined;
   }>,
   drop_thinking = false,
 ): string {
@@ -493,11 +493,11 @@ export function formatDeepSeekPrompt(
 /** Token-count the FULL conversation as the API would see it: wraps messages in V4 chat template, then encodes once. */
 export function estimateConversationTokens(
   messages: Array<{
-    role?: string;
-    content?: string | null;
-    tool_calls?: unknown;
-    tool_call_id?: string;
-    reasoning_content?: string | null;
+    role?: string | undefined;
+    content?: string | null | undefined;
+    tool_calls?: unknown | undefined;
+    tool_call_id?: string | undefined;
+    reasoning_content?: string | null | undefined;
   }>,
   drop_thinking = false,
 ): number {
@@ -508,13 +508,13 @@ export function estimateConversationTokens(
 /** Total request tokens (messages + tool specs) as the API counts them. Tool specs rendered via V4 TOOLS_TEMPLATE and added to message token count. */
 export function estimateRequestTokens(
   messages: Array<{
-    role?: string;
-    content?: string | null;
-    tool_calls?: unknown;
-    tool_call_id?: string;
-    reasoning_content?: string | null;
+    role?: string | undefined;
+    content?: string | null | undefined;
+    tool_calls?: unknown | undefined;
+    tool_call_id?: string | undefined;
+    reasoning_content?: string | null | undefined;
   }>,
-  toolSpecs?: ReadonlyArray<unknown> | null,
+  toolSpecs?: ReadonlyArray<unknown> | null | undefined,
   drop_thinking = false,
 ): number {
   let total = estimateConversationTokens(messages, drop_thinking);

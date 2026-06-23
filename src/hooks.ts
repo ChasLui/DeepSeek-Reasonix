@@ -32,20 +32,20 @@ export type HookScope = "project" | "global";
 
 export interface HookConfig {
   /** Anchored regex; `"*"` / omitted = every tool. Pre/PostToolUse only. */
-  match?: string;
+  match?: string | undefined;
   /** Shell command to run. Spawned through the platform shell. */
   command: string;
   /** Optional human description — surfaced in `/hooks`. */
-  description?: string;
+  description?: string | undefined;
   /** Per-hook timeout override in ms. */
-  timeout?: number;
+  timeout?: number | undefined;
   /** Defaults: project scope → project root; global scope → process.cwd(). */
-  cwd?: string;
+  cwd?: string | undefined;
 }
 
 /** Shape of `<scope>/.reasonix/settings.json` — only `hooks` for now. */
 export interface HookSettings {
-  hooks?: Partial<Record<HookEvent, HookConfig[]>>;
+  hooks?: Partial<Record<HookEvent, HookConfig[]>> | undefined;
 }
 
 /** A loaded hook with its origin scope baked in (used for ordering and `/hooks`). */
@@ -69,7 +69,7 @@ export interface HookOutcome {
   stderr: string;
   durationMs: number;
   /** Output crossed the per-stream byte cap; surfaced so user knows we kept less than the script wrote. */
-  truncated?: boolean;
+  truncated?: boolean | undefined;
 }
 
 /** Aggregate report for `runHooks`. */
@@ -109,9 +109,9 @@ function readSettingsFile(path: string): HookSettings | null {
 /** Project hooks fire before global; within a scope, array order. */
 export interface LoadHookSettingsOptions {
   /** Absolute project root, if any. Without it, only global hooks load. */
-  projectRoot?: string;
+  projectRoot?: string | undefined;
   /** Override `~` for tests. */
-  homeDir?: string;
+  homeDir?: string | undefined;
 }
 
 export function loadHooks(opts: LoadHookSettingsOptions = {}): ResolvedHook[] {
@@ -162,12 +162,12 @@ export function matchesTool(hook: ResolvedHook, toolName: string): boolean {
 export interface HookPayload {
   event: HookEvent;
   cwd: string;
-  toolName?: string;
-  toolArgs?: unknown;
-  toolResult?: string;
-  prompt?: string;
-  lastAssistantText?: string;
-  turn?: number;
+  toolName?: string | undefined;
+  toolArgs?: unknown | undefined;
+  toolResult?: string | undefined;
+  prompt?: string | undefined;
+  lastAssistantText?: string | undefined;
+  turn?: number | undefined;
 }
 
 /** Test seam — same shape as Node's spawn but returns a Promise of the raw outcome bits. */
@@ -184,9 +184,9 @@ export interface HookSpawnResult {
   stderr: string;
   timedOut: boolean;
   /** True iff spawn() itself failed (ENOENT, EACCES, …). */
-  spawnError?: Error;
+  spawnError?: Error | undefined;
   /** Output capped at byte limit — hook ran to completion but consumers see clipped view. */
-  truncated?: boolean;
+  truncated?: boolean | undefined;
 }
 
 /** Per-stream cap — bounds heap exposure to a runaway child between spawn and timeout. */
@@ -312,7 +312,7 @@ export interface RunHooksOptions {
   payload: HookPayload;
   hooks: ResolvedHook[];
   /** Test seam — defaults to a real `spawn`. */
-  spawner?: HookSpawner;
+  spawner?: HookSpawner | undefined;
 }
 
 /** Stops at first `block` so a gating hook can prevent later hooks running against a phantom success. */

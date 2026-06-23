@@ -130,7 +130,7 @@ describe("expandAtMentions", () => {
     const r = expandAtMentions("read @src/loop.ts and @notes.md", root);
     expect(r.expansions).toHaveLength(2);
     expect(r.expansions.every((ex) => ex.ok)).toBe(true);
-    expect(referencedFilesFrom(r.text).map((item) => item.path)).toEqual([
+    expect(referencedFilesFrom(r.text).map((item) => item["path"])).toEqual([
       "src/loop.ts",
       "notes.md",
     ]);
@@ -776,7 +776,7 @@ describe("expandAtUrls", () => {
 
   it("returns input unchanged when no @url is in the text", async () => {
     const out = await expandAtUrls("plain text with no urls", {
-      fetcher: async () => ({ url: "", text: "" }),
+      fetcher: async () => ({ url: "", text: "", truncated: false }),
     });
     expect(out.text).toBe("plain text with no urls");
     expect(out.expansions).toEqual([]);

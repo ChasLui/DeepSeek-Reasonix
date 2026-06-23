@@ -1,26 +1,29 @@
 import type { ToolRegistry } from "../../tools.js";
-import { indexCompatible, indexExists, querySemantic } from "./builder.js";
+import { indexCompatible, querySemantic } from "./builder.js";
 import type { SearchHit } from "./store.js";
 
 type SemanticToolOptions = {
-  provider?: "ollama" | "openai-compat";
-  baseUrl?: string;
-  apiKey?: string;
-  model?: string;
-  extraBody?: Record<string, unknown>;
-  timeoutMs?: number;
-  batchSize?: number;
+  provider?: "ollama" | "openai-compat" | undefined;
+  baseUrl?: string | undefined;
+  apiKey?: string | undefined;
+  model?: string | undefined;
+  extraBody?: Record<string, unknown> | undefined;
+  timeoutMs?: number | undefined;
+  batchSize?: number | undefined;
   root: string;
-  defaultTopK?: number;
-  defaultMinScore?: number;
+  defaultTopK?: number | undefined;
+  defaultMinScore?: number | undefined;
 };
 
 export async function registerSemanticSearchTool(
   registry: ToolRegistry,
   opts: SemanticToolOptions,
 ): Promise<boolean> {
-  if (!(await indexCompatible(opts.root, { provider: opts.provider, model: opts.model })))
-    return false;
+  const identity = {
+    ...(opts.provider !== undefined ? { provider: opts.provider } : {}),
+    ...(opts.model !== undefined ? { model: opts.model } : {}),
+  };
+  if (!(await indexCompatible(opts.root, identity))) return false;
   const defaultTopK = opts.defaultTopK ?? 8;
   const defaultMinScore = opts.defaultMinScore ?? 0.3;
 
@@ -107,7 +110,11 @@ export async function bootstrapSemanticSearchInCodeMode(
   rootDir: string,
   opts: Omit<SemanticToolOptions, "root" | "defaultTopK" | "defaultMinScore"> = {},
 ): Promise<{ enabled: boolean }> {
-  if (await indexCompatible(rootDir, { provider: opts.provider, model: opts.model })) {
+  const identity = {
+    ...(opts.provider !== undefined ? { provider: opts.provider } : {}),
+    ...(opts.model !== undefined ? { model: opts.model } : {}),
+  };
+  if (await indexCompatible(rootDir, identity)) {
     await registerSemanticSearchTool(registry, { ...opts, root: rootDir });
     return { enabled: true };
   }

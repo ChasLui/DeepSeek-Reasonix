@@ -8,19 +8,23 @@ import type { JobRegistry } from "../../../tools/jobs.js";
 import { CharBar } from "../char-bar.js";
 import { Card } from "../primitives/Card.js";
 import { CardHeader } from "../primitives/CardHeader.js";
-import { PILL_MODEL, PILL_SECTION, Pill, modelBadgeFor } from "../primitives/Pill.js";
+import { PILL_MODEL, Pill, modelBadgeFor } from "../primitives/Pill.js";
 import { Spinner } from "../primitives/Spinner.js";
-import { useThemeTokens } from "../theme/context.js";
 import { CARD, FG, TONE } from "../theme/tokens.js";
 import { useElapsedSeconds, useSlowTick, useTick } from "../ticker.js";
 import type { SubagentActivity } from "../useSubagent.js";
 
-export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+export const SPINNER_FRAMES: readonly string[] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+type ToolProgress = {
+  progress: number;
+  total?: number | undefined;
+  message?: string | undefined;
+};
 
 /** "Thinking" row — soft pulse + italic label (model wait, not tool call). */
-export function ThinkingRow({ text }: { text: string }) {
+export function ThinkingRow({ text }: { text: string }): React.ReactElement {
   const elapsed = useElapsedSeconds();
-  const { fg, tone } = useThemeTokens();
   return (
     <Box marginY={1} paddingX={1} gap={1}>
       <Spinner kind="circle" color={TONE.accent} />
@@ -38,7 +42,7 @@ export function ModeStatusBar({
   pendingCount,
   flash,
   planMode,
-  undoArmed,
+  undoArmed: _undoArmed,
   jobs,
 }: {
   editMode: EditMode;
@@ -46,8 +50,8 @@ export function ModeStatusBar({
   flash: boolean;
   planMode: boolean;
   undoArmed: boolean;
-  jobs?: JobRegistry;
-}) {
+  jobs?: JobRegistry | undefined;
+}): React.ReactElement {
   useSlowTick();
   const running = jobs?.runningCount() ?? 0;
   const jobsTag =
@@ -87,7 +91,7 @@ export function ModeStatusBar({
   );
 }
 
-function ModeBarFrame({ children }: { children: React.ReactNode }) {
+function ModeBarFrame({ children }: { children: React.ReactNode }): React.ReactElement {
   return <Box paddingX={1}>{children}</Box>;
 }
 
@@ -99,7 +103,7 @@ function ModePill({
   label: string;
   color: string;
   flash: boolean;
-}) {
+}): React.ReactElement {
   return (
     <Text color={color} bold inverse={flash}>
       {`[${label}]`}
@@ -112,7 +116,7 @@ export function UndoBanner({
   banner,
 }: {
   banner: { results: ApplyResult[]; expiresAt: number; pausedRemainingMs: number | null };
-}) {
+}): React.ReactElement {
   useTick();
   const totalMs = 5000;
   const paused = banner.pausedRemainingMs !== null;
@@ -159,14 +163,8 @@ function subagentPhaseLabel(
   return "working through tools…";
 }
 
-function subagentTitle(skillName: string | undefined, task: string): string {
-  if (skillName) return `Sub-agent · ${skillName}`;
-  const short = task.length > 32 ? `${task.slice(0, 32)}…` : task;
-  return `Sub-agent · ${short || "anonymous"}`;
-}
-
 /** Live block for a single in-flight subagent — rich layout, used when only one is running. */
-export function SubagentRow({ activity }: { activity: SubagentActivity }) {
+export function SubagentRow({ activity }: { activity: SubagentActivity }): React.ReactElement {
   useTick();
   const seconds = (activity.elapsedMs / 1000).toFixed(1);
   const phase = subagentPhaseLabel(activity.phase, activity.iter, activity.elapsedMs);
@@ -220,8 +218,8 @@ export function SubagentLiveStack({
   max = 3,
 }: {
   activities: ReadonlyArray<SubagentActivity>;
-  max?: number;
-}) {
+  max?: number | undefined;
+}): React.ReactElement | null {
   const tick = useTick();
   if (activities.length === 0) return null;
   if (activities.length === 1) return <SubagentRow activity={activities[0]!} />;
@@ -255,7 +253,7 @@ function CompactSubagentLine({
   activity: SubagentActivity;
   tick: number;
   index: number;
-}) {
+}): React.ReactElement {
   const summarising = activity.phase === "summarising";
   const spinnerFrame = SPINNER_FRAMES[(tick + index) % SPINNER_FRAMES.length] ?? "·";
   const glyph = summarising ? "▶" : spinnerFrame;
@@ -294,8 +292,8 @@ export function OngoingToolRow({
   progress,
 }: {
   tool: { name: string; args?: string };
-  progress: { progress: number; total?: number; message?: string } | null;
-}) {
+  progress: ToolProgress | null;
+}): React.ReactElement {
   const tick = useTick();
   const elapsed = useElapsedSeconds();
   const summary = summarizeToolArgs(tool.name, tool.args);
@@ -326,7 +324,7 @@ export function OngoingToolRow({
 }
 
 /** With `total`: bar + "n/total pct%". Without: "progress: n" + optional message. */
-function renderProgressLine(p: { progress: number; total?: number; message?: string }): string {
+function renderProgressLine(p: ToolProgress): string {
   const msg = p.message ? `  ${p.message}` : "";
   if (p.total && p.total > 0) {
     const ratio = Math.max(0, Math.min(1, p.progress / p.total));
@@ -349,30 +347,30 @@ function summarizeToolArgs(name: string, args?: string): string {
     return args.length > 80 ? `${args.slice(0, 80)}…` : args;
   }
   const hasSuffix = (s: string) => name === s || name.endsWith(`_${s}`);
-  const path = typeof parsed.path === "string" ? parsed.path : undefined;
+  const path = typeof parsed["path"] === "string" ? parsed["path"] : undefined;
   if (hasSuffix("read_file")) {
-    const head = typeof parsed.head === "number" ? `, head=${parsed.head}` : "";
-    const tail = typeof parsed.tail === "number" ? `, tail=${parsed.tail}` : "";
+    const head = typeof parsed["head"] === "number" ? `, head=${parsed["head"]}` : "";
+    const tail = typeof parsed["tail"] === "number" ? `, tail=${parsed["tail"]}` : "";
     return `path: ${path ?? "?"}${head}${tail}`;
   }
   if (hasSuffix("write_file")) {
-    const content = typeof parsed.content === "string" ? parsed.content : "";
+    const content = typeof parsed["content"] === "string" ? parsed["content"] : "";
     return `path: ${path ?? "?"} (${content.length} chars)`;
   }
   if (hasSuffix("edit_file")) {
-    const edits = Array.isArray(parsed.edits) ? parsed.edits.length : 0;
+    const edits = Array.isArray(parsed["edits"]) ? parsed["edits"].length : 0;
     return `path: ${path ?? "?"} (${edits} edit${edits === 1 ? "" : "s"})`;
   }
   if (hasSuffix("list_directory") || hasSuffix("directory_tree")) {
     return `path: ${path ?? "?"}`;
   }
   if (hasSuffix("search_files")) {
-    const pattern = typeof parsed.pattern === "string" ? parsed.pattern : "?";
+    const pattern = typeof parsed["pattern"] === "string" ? parsed["pattern"] : "?";
     return `path: ${path ?? "?"} · pattern: ${pattern}`;
   }
   if (hasSuffix("move_file")) {
-    const src = typeof parsed.source === "string" ? parsed.source : "?";
-    const dst = typeof parsed.destination === "string" ? parsed.destination : "?";
+    const src = typeof parsed["source"] === "string" ? parsed["source"] : "?";
+    const dst = typeof parsed["destination"] === "string" ? parsed["destination"] : "?";
     return `${src} → ${dst}`;
   }
   if (hasSuffix("get_file_info")) {

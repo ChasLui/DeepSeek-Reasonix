@@ -34,25 +34,27 @@ export function appendUsageRow(db: Db, record: UsageRecord): void {
 // stays the single source of bucket/savings/subagent logic (no SQL duplication).
 function rowToRecord(row: Record<string, unknown>): UsageRecord {
   const record: UsageRecord = {
-    ts: Number(row.ts),
-    session: row.session === null || row.session === undefined ? null : String(row.session),
-    model: String(row.model),
-    promptTokens: Number(row.prompt_tokens),
-    completionTokens: Number(row.completion_tokens),
-    cacheHitTokens: Number(row.cache_hit_tokens),
-    cacheMissTokens: Number(row.cache_miss_tokens),
-    costUsd: Number(row.cost_usd),
-    claudeEquivUsd: Number(row.claude_equiv_usd),
+    ts: Number(row["ts"]),
+    session:
+      row["session"] === null || row["session"] === undefined ? null : String(row["session"]),
+    model: String(row["model"]),
+    promptTokens: Number(row["prompt_tokens"]),
+    completionTokens: Number(row["completion_tokens"]),
+    cacheHitTokens: Number(row["cache_hit_tokens"]),
+    cacheMissTokens: Number(row["cache_miss_tokens"]),
+    costUsd: Number(row["cost_usd"]),
+    claudeEquivUsd: Number(row["claude_equiv_usd"]),
   };
-  if (row.reasoning_tokens !== null && row.reasoning_tokens !== undefined) {
-    record.reasoningTokens = Number(row.reasoning_tokens);
+  if (row["reasoning_tokens"] !== null && row["reasoning_tokens"] !== undefined) {
+    record.reasoningTokens = Number(row["reasoning_tokens"]);
   }
-  if (row.workspace !== null && row.workspace !== undefined) {
-    record.workspace = String(row.workspace);
+  if (row["workspace"] !== null && row["workspace"] !== undefined) {
+    record.workspace = String(row["workspace"]);
   }
-  if (row.kind === "subagent") record.kind = "subagent";
-  if (row.subagent_json !== null && row.subagent_json !== undefined) {
-    record.subagent = JSON.parse(String(row.subagent_json)) as UsageRecord["subagent"];
+  if (row["kind"] === "subagent") record.kind = "subagent";
+  if (row["subagent_json"] !== null && row["subagent_json"] !== undefined) {
+    const subagent = JSON.parse(String(row["subagent_json"])) as UsageRecord["subagent"];
+    if (subagent !== undefined) record.subagent = subagent;
   }
   return record;
 }
@@ -72,7 +74,7 @@ export function countByModel(db: Db): Array<{ model: string; turns: number }> {
   return db
     .prepare("SELECT model, count(*) AS turns FROM usage GROUP BY model ORDER BY turns DESC, model")
     .all()
-    .map((row) => ({ model: String(row.model), turns: Number(row.turns) }));
+    .map((row) => ({ model: String(row["model"]), turns: Number(row["turns"]) }));
 }
 
 export function countBySession(db: Db): Array<{ session: string; turns: number }> {
@@ -81,7 +83,7 @@ export function countBySession(db: Db): Array<{ session: string; turns: number }
       "SELECT COALESCE(session, '(ephemeral)') AS session, count(*) AS turns FROM usage GROUP BY COALESCE(session, '(ephemeral)') ORDER BY turns DESC, session",
     )
     .all()
-    .map((row) => ({ session: String(row.session), turns: Number(row.turns) }));
+    .map((row) => ({ session: String(row["session"]), turns: Number(row["turns"]) }));
 }
 
 // Retention is a doctor/maintenance operation, never piggybacked on append

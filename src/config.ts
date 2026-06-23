@@ -31,22 +31,22 @@ export type EngineeringLifecycleMode = "off" | "strict";
 export type EmbeddingProvider = "ollama" | "openai-compat";
 
 export interface OllamaEmbeddingUserConfig {
-  baseUrl?: string;
-  model?: string;
+  baseUrl?: string | undefined;
+  model?: string | undefined;
 }
 
 export interface OpenAICompatEmbeddingUserConfig {
-  baseUrl?: string;
-  apiKey?: string;
-  model?: string;
-  extraBody?: Record<string, unknown>;
-  batchSize?: number;
+  baseUrl?: string | undefined;
+  apiKey?: string | undefined;
+  model?: string | undefined;
+  extraBody?: Record<string, unknown> | undefined;
+  batchSize?: number | undefined;
 }
 
 export interface SemanticEmbeddingUserConfig {
-  provider?: EmbeddingProvider;
-  ollama?: OllamaEmbeddingUserConfig;
-  openaiCompat?: OpenAICompatEmbeddingUserConfig;
+  provider?: EmbeddingProvider | undefined;
+  ollama?: OllamaEmbeddingUserConfig | undefined;
+  openaiCompat?: OpenAICompatEmbeddingUserConfig | undefined;
 }
 
 export interface ResolvedOllamaEmbeddingConfig {
@@ -87,241 +87,249 @@ export interface SemanticEmbeddingConfigView {
 }
 
 export interface McpServerConfig {
-  command?: string;
-  args?: string[];
-  env?: Record<string, string>;
-  transport?: "stdio" | "sse" | "streamable-http";
+  command?: string | undefined;
+  args?: string[] | undefined;
+  env?: Record<string, string> | undefined;
+  transport?: "stdio" | "sse" | "streamable-http" | undefined;
   /** Claude `.mcp.json` alias for `transport`; `"http"` is treated as `"streamable-http"`. */
-  type?: "stdio" | "sse" | "streamable-http" | "http";
-  url?: string;
-  headers?: Record<string, string>;
-  disabled?: boolean;
+  type?: "stdio" | "sse" | "streamable-http" | "http" | undefined;
+  url?: string | undefined;
+  headers?: Record<string, string> | undefined;
+  disabled?: boolean | undefined;
 }
 
 export interface QQBotConfig {
-  appId?: string;
-  appSecret?: string;
-  sandbox?: boolean;
-  enabled?: boolean;
-  ownerOpenId?: string;
-  allowlist?: string[];
+  appId?: string | undefined;
+  appSecret?: string | undefined;
+  sandbox?: boolean | undefined;
+  enabled?: boolean | undefined;
+  ownerOpenId?: string | undefined;
+  allowlist?: string[] | undefined;
 }
 
 export interface PricingOverride {
-  inputCacheHit?: number;
-  inputCacheMiss?: number;
-  output?: number;
+  inputCacheHit?: number | undefined;
+  inputCacheMiss?: number | undefined;
+  output?: number | undefined;
 }
 
 export interface RateLimitConfig {
-  rpm?: number;
+  rpm?: number | undefined;
   concurrency?: {
-    pro?: number;
-    flash?: number;
-    default?: number;
-    adaptive?: boolean;
+    pro?: number | undefined;
+    flash?: number | undefined;
+    default?: number | undefined;
+    adaptive?: boolean | undefined;
   };
 }
 
 export type ToonMode = "off" | "results" | "prefix" | "all";
 
 export interface ToonConfig {
-  enabled?: boolean;
-  mode?: ToonMode;
+  enabled?: boolean | undefined;
+  mode?: ToonMode | undefined;
 }
 
 export interface CodeRelationsConfig {
-  enabled?: boolean;
+  enabled?: boolean | undefined;
 }
 
 export interface CodeGraphConfig {
-  enabled?: boolean;
-  includeBody?: boolean;
+  enabled?: boolean | undefined;
+  includeBody?: boolean | undefined;
 }
 
 export interface ProxyConfig {
   /** Skip proxy detection entirely — equivalent to launching with `--no-proxy`. */
-  disabled?: boolean;
+  disabled?: boolean | undefined;
   /** Additional NO_PROXY patterns (curl syntax). Additive on top of env NO_PROXY and the default DeepSeek-bypass whitelist. */
-  noProxy?: string[];
+  noProxy?: string[] | undefined;
 }
 
 export interface ReasonixConfig {
-  apiKey?: string;
-  baseUrl?: string;
-  lang?: LanguageCode;
-  preset?: PresetName;
-  editMode?: EditMode;
-  editModeHintShown?: boolean;
-  mouseClipboardHintShown?: boolean;
-  macOSModifierHintShown?: boolean;
+  apiKey?: string | undefined;
+  baseUrl?: string | undefined;
+  lang?: LanguageCode | undefined;
+  preset?: PresetName | undefined;
+  editMode?: EditMode | undefined;
+  editModeHintShown?: boolean | undefined;
+  mouseClipboardHintShown?: boolean | undefined;
+  macOSModifierHintShown?: boolean | undefined;
   /** When false, skip the boot splash animation and show the main UI immediately. Default true. */
-  banner?: boolean;
-  reasoningEffort?: ReasoningEffort;
+  banner?: boolean | undefined;
+  reasoningEffort?: ReasoningEffort | undefined;
   /** Default workspace root for the desktop client. CLI uses cwd. */
-  workspaceDir?: string;
+  workspaceDir?: string | undefined;
   /** Last N workspace paths the desktop client has opened, most recent first. */
-  recentWorkspaces?: string[];
+  recentWorkspaces?: string[] | undefined;
   /** Desktop only — open tabs in tab order, each with its workspace dir, loaded session and focus, persisted so restart restores every tab and its conversation (issues #933, #1244). Empty/absent → boot with a single default tab. */
-  desktopOpenTabs?: DesktopOpenTab[];
+  desktopOpenTabs?: DesktopOpenTab[] | undefined;
   /** Desktop only — `openWith` value for clicking file links. Empty/undefined = OS default app. Examples: "code", "cursor", "C:\\path\\to\\editor.exe". */
-  editor?: string;
-  theme?: ThemeName | "auto";
+  editor?: string | undefined;
+  theme?: ThemeName | "auto" | undefined;
   /** Stored as `--mcp`-format strings so one parser handles both flag and config. */
-  mcp?: string[];
+  mcp?: string[] | undefined;
   /** Names of servers in `mcp` to skip on bridge — see `/mcp disable <name>`. */
-  mcpDisabled?: string[];
+  mcpDisabled?: string[] | undefined;
   /** Env overlay per MCP server name (matches the `name=` prefix of the spec). Stdio transports merge this over process.env; SSE/HTTP ignore it. */
-  mcpEnv?: Record<string, Record<string, string>>;
+  mcpEnv?: Record<string, Record<string, string>> | undefined;
   /** Canonical MCP server configuration — merges with and overrides legacy `mcp`/`mcpEnv`/`mcpDisabled`. */
-  mcpServers?: Record<string, McpServerConfig>;
+  mcpServers?: Record<string, McpServerConfig> | undefined;
   /** Named tool groups for session-level toolset gating, e.g. `{ "web": ["web_search","web_fetch"] }`. A group name expands to its tool names; an unknown token is treated as a literal tool name. */
-  toolsets?: Record<string, string[]>;
+  toolsets?: Record<string, string[]> | undefined;
   /** Session-start tool selection: a group name, a tool name, or a list of either. Absent ⟹ all tools load (current behavior); essential tools are always kept. Env `REASONIX_TOOLSET` overrides; `REASONIX_TOOLGATE=0` disables gating. */
-  defaultToolset?: string | string[];
+  defaultToolset?: string | string[] | undefined;
   /** Tiered tool exposure (FR-005) — keeps bloated MCP/tool sets out of the prefix until search_tools unlocks them, fighting lost-in-the-middle without breaking the prefix cache. ABSENT ⟹ every tool stays in the prefix (byte-identical to today, FR-010). */
   toolTiers?: {
     /** Per-tool-name tier override: 0/1 = always in prefix, 2 = deferred (catalog-only, reachable via search_tools). */
-    tiers?: Record<string, number>;
+    tiers?: Record<string, number> | undefined;
     /** Default tier for every bridged MCP tool. Absent/0 ⟹ MCP tools enter the prefix as today; set 2 to defer all of them. */
-    mcpDefaultTier?: number;
+    mcpDefaultTier?: number | undefined;
     /** Auto-defer a server's tools to Tier 2 once it bridges ≥ this many (fights single-server bloat, e.g. GitHub MCP's ~50 tools). Absent ⟹ no count-based auto-defer. */
-    mcpDeferThreshold?: number;
+    mcpDeferThreshold?: number | undefined;
   };
-  session?: string | null;
-  setupCompleted?: boolean;
-  search?: boolean;
+  session?: string | null | undefined;
+  setupCompleted?: boolean | undefined;
+  search?: boolean | undefined;
   /** Web search engine backend: "mojeek" (default, scrapes Mojeek), "searxng" (self-hosted SearXNG), "metaso" (Metaso API), "tavily" (LLM-friendly API, free tier), "perplexity" (Perplexity AI), "exa" (Exa API), or "anysearch" (AnySearch remote MCP server, anonymous access with optional key). */
-  webSearchEngine?: "mojeek" | "searxng" | "metaso" | "tavily" | "perplexity" | "exa" | "anysearch";
+  webSearchEngine?:
+    | "mojeek"
+    | "searxng"
+    | "metaso"
+    | "tavily"
+    | "perplexity"
+    | "exa"
+    | "anysearch"
+    | undefined;
   /** Base URL for SearXNG instance (default http://localhost:8080). */
-  webSearchEndpoint?: string;
+  webSearchEndpoint?: string | undefined;
   /** Metaso API key. Falls back to METASO_API_KEY env var, then a built-in default. */
-  metasoApiKey?: string;
+  metasoApiKey?: string | undefined;
   /** Tavily API key. Falls back to TAVILY_API_KEY env var. No baked-in default — free tier is 1000/mo per account, sharing would burn out. */
-  tavilyApiKey?: string;
+  tavilyApiKey?: string | undefined;
   /** Perplexity API key. Falls back to PERPLEXITY_API_KEY env var. Get one at https://perplexity.ai/settings/api */
-  perplexityApiKey?: string;
+  perplexityApiKey?: string | undefined;
   /** Exa API key. Falls back to EXA_API_KEY env var. Free 1000/mo signup at https://exa.ai */
-  exaApiKey?: string;
+  exaApiKey?: string | undefined;
   /** AnySearch API key. Falls back to ANYSEARCH_API_KEY env var. Optional — anonymous access works with lower rate limits; get one at https://anysearch.com/console/api-keys */
-  anysearchApiKey?: string;
+  anysearchApiKey?: string | undefined;
 
   /** TUI SGR mouse tracking. Default false so native drag-select stays terminal-owned; set true only if alternate-scroll is insufficient. */
-  mouseTracking?: boolean;
+  mouseTracking?: boolean | undefined;
   copyMode?: {
-    multiClickMs?: number;
+    multiClickMs?: number | undefined;
   };
   dashboard?: {
     /** Pin the embedded dashboard to a fixed port — required for stable SSH tunnels. 0/absent → ephemeral. */
-    port?: number;
+    port?: number | undefined;
     /** Bind address (#968). Defaults to 127.0.0.1 (loopback only). Set to 0.0.0.0 / :: / a LAN IP to expose to other devices; the URL token is then the only auth, so keep it secret. */
-    host?: string;
+    host?: string | undefined;
     /** Stable URL token (#968). If unset, a fresh token is minted each boot. Min 16 chars enforced at load time. */
-    token?: string;
+    token?: string | undefined;
   };
   /** Per-field visibility toggles for the bottom status row. All default to true (visible). */
   statusBar?: {
-    showBalance?: boolean;
-    showSessionCost?: boolean;
-    showTurnCost?: boolean;
-    showCacheHit?: boolean;
-    showCtxUsage?: boolean;
-    showVersion?: boolean;
-    showFeedbackHint?: boolean;
+    showBalance?: boolean | undefined;
+    showSessionCost?: boolean | undefined;
+    showTurnCost?: boolean | undefined;
+    showCacheHit?: boolean | undefined;
+    showCtxUsage?: boolean | undefined;
+    showVersion?: boolean | undefined;
+    showFeedbackHint?: boolean | undefined;
   };
   projects?: {
     [absoluteRootDir: string]: {
-      shellAllowed?: string[];
+      shellAllowed?: string[] | undefined;
       /** Absolute directory prefixes the user pre-approved for outside-sandbox file access (#684). */
-      pathAllowed?: string[];
+      pathAllowed?: string[] | undefined;
     };
   };
   /** Issue #259 — user-configurable sensitive-path prefixes and filename patterns.
    *  Commands touching these paths are demoted to the confirm gate even when allowlisted. */
   sensitivePaths?: {
     /** Path prefixes (tilde-relative or absolute) that trigger confirmation. */
-    prefixes?: string[];
+    prefixes?: string[] | undefined;
     /** Glob-style filename patterns (matched against basename, case-insensitive). */
-    patterns?: string[];
+    patterns?: string[] | undefined;
   };
-  index?: IndexUserConfig;
-  semantic?: SemanticEmbeddingUserConfig;
+  index?: IndexUserConfig | undefined;
+  semantic?: SemanticEmbeddingUserConfig | undefined;
   skills?: {
-    paths?: string[];
+    paths?: string[] | undefined;
   };
   /** Enable the `java_source` tool for finding and decompiling Java class source. Default off. */
-  javaSource?: boolean;
+  javaSource?: boolean | undefined;
   /** User-declared extensions to the built-in memory types (#709). Unknown types round-trip even without a declaration; declaring one lets you attach a default priority + lifecycle. */
   memory?: {
-    customTypes?: CustomMemoryTypeConfig[];
-    autoCapture?: boolean;
+    customTypes?: CustomMemoryTypeConfig[] | undefined;
+    autoCapture?: boolean | undefined;
     observationBudgets?: {
-      maxLines?: number;
-      maxWrites?: number;
-      aggregateBytes?: number;
-      aggregateTokens?: number;
+      maxLines?: number | undefined;
+      maxWrites?: number | undefined;
+      aggregateBytes?: number | undefined;
+      aggregateTokens?: number | undefined;
     };
   };
-  pricingOverride?: Record<string, PricingOverride>;
+  pricingOverride?: Record<string, PricingOverride> | undefined;
   /** Per-app proxy override. Layered on top of HTTPS_PROXY / NO_PROXY env vars + the default DeepSeek-bypass whitelist. */
-  proxy?: ProxyConfig;
-  rateLimit?: RateLimitConfig;
+  proxy?: ProxyConfig | undefined;
+  rateLimit?: RateLimitConfig | undefined;
   /** Host-enforced engineering lifecycle. Defaults to off so opt-outs pay zero prefix cost. */
   engineeringLifecycle?: {
-    mode?: EngineeringLifecycleMode;
+    mode?: EngineeringLifecycleMode | undefined;
   };
   filesystem?: {
     /** read_file flips to outline mode for files above this. Default 64 KiB — keeps the cache prefix slim while covering ~99% of source files. Raise to 524288 (512 KiB) for the pre-0.46.0 "trust the cache" behavior. */
-    outlineThresholdBytes?: number;
+    outlineThresholdBytes?: number | undefined;
     /** read_file session read-dedup. Default true. false (or REASONIX_DEDUP=0) disables, so unchanged re-reads always dump in full. */
-    dedupEnabled?: boolean;
+    dedupEnabled?: boolean | undefined;
   };
   /** Cross-session rolling spend guardrails. Reads the existing usage.jsonl aggregate (no separate ledger); blocks the next turn once any window's spend reaches its cap. `windows` allows several periods at once (e.g. daily + monthly). `period`/`capUsd` is the legacy single-window form, still read. Absent → no guardrail. */
   budget?: {
-    period?: BudgetPeriod;
-    capUsd?: number;
+    period?: BudgetPeriod | undefined;
+    capUsd?: number | undefined;
     windows?: Array<{
       period: BudgetPeriod;
       capUsd: number;
-      scope?: BudgetScope;
+      scope?: BudgetScope | undefined;
     }>;
   };
   /** Output compaction (rtk-inspired Tier-1 filters). Defaults: enabled, exclude empty, tee on. */
   compact?: {
     /** Master switch. false → bypass the entire layer for run_command. REASONIX_COMPACT=0 also flips this. */
-    enabled?: boolean;
+    enabled?: boolean | undefined;
     /** Skip the matcher when argv[0] is in this list (e.g. ["git"] disables every git-* filter). */
-    exclude?: string[];
+    exclude?: string[] | undefined;
     /** Persist the raw output to a tee file the model can read back. REASONIX_TEE=0 forces this off. */
-    tee?: boolean;
+    tee?: boolean | undefined;
   };
   /** TOON payload encoding. Defaults to all payload layers; env REASONIX_TOON overrides this. */
-  toon?: boolean | ToonConfig;
+  toon?: boolean | ToonConfig | undefined;
   /** Lightweight on-demand code relation tools. REASONIX_CODEREL=0 disables registration. */
-  codeRelations?: boolean | CodeRelationsConfig;
+  codeRelations?: boolean | CodeRelationsConfig | undefined;
   /** Persistent code graph index. REASONIX_CODE_GRAPH=0 bypasses it; body fields are opt-in. */
-  codeGraph?: boolean | CodeGraphConfig;
+  codeGraph?: boolean | CodeGraphConfig | undefined;
   /** Pillar 5 opt-in pre-turn retrieval. OFF by default; REASONIX_ACTIVE_RETRIEVAL=1 enables. */
   activeRetrieval?: boolean | { enabled?: boolean; topK?: number; minScore?: number };
   /** MCP response shielding (shape-aware reduction before head+tail truncation). REASONIX_SHIELD=0 disables. */
   mcpShield?: { enabled?: boolean };
   /** QQ Bot configuration */
-  qq?: QQBotConfig;
+  qq?: QQBotConfig | undefined;
 }
 
 export interface CustomMemoryTypeConfig {
   name: string;
-  description?: string;
-  priority?: "low" | "medium" | "high";
-  expires?: "project_end";
+  description?: string | undefined;
+  priority?: "low" | "medium" | "high" | undefined;
+  expires?: "project_end" | undefined;
 }
 
 export interface MemoryTypeRegistryEntry {
   name: string;
   builtin: boolean;
-  description?: string;
-  priority?: "low" | "medium" | "high";
-  expires?: "project_end";
+  description?: string | undefined;
+  priority?: "low" | "medium" | "high" | undefined;
+  expires?: "project_end" | undefined;
 }
 
 const BUILTIN_TYPE_DOCS: Record<string, string> = nullPrototype({
@@ -372,7 +380,7 @@ export function memoryTypeDefaults(
 const DEFAULT_METASO_API_KEY = "mk-E384C1DD5E8501BB7EFE27C949AFDE5B";
 
 export function loadMetasoApiKey(path: string = defaultConfigPath()): string {
-  if (process.env.METASO_API_KEY) return process.env.METASO_API_KEY;
+  if (process.env["METASO_API_KEY"]) return process.env["METASO_API_KEY"];
   const cfg = readConfig(path).metasoApiKey;
   if (cfg && typeof cfg === "string" && cfg.trim()) return cfg.trim();
   return DEFAULT_METASO_API_KEY;
@@ -380,7 +388,7 @@ export function loadMetasoApiKey(path: string = defaultConfigPath()): string {
 
 /** Tavily API key — env > config > undefined. Returning undefined means the caller must error out with a clear "go get one at tavily.com" message; we deliberately ship no default because the free 1000/mo quota wouldn't survive being shared. */
 export function loadTavilyApiKey(path: string = defaultConfigPath()): string | undefined {
-  if (process.env.TAVILY_API_KEY) return process.env.TAVILY_API_KEY.trim();
+  if (process.env["TAVILY_API_KEY"]) return process.env["TAVILY_API_KEY"].trim();
   const cfg = readConfig(path).tavilyApiKey;
   if (cfg && typeof cfg === "string" && cfg.trim()) return cfg.trim();
   return undefined;
@@ -388,7 +396,7 @@ export function loadTavilyApiKey(path: string = defaultConfigPath()): string | u
 
 /** Perplexity API key — env > config > undefined. Get one at https://perplexity.ai/settings/api */
 export function loadPerplexityApiKey(path: string = defaultConfigPath()): string | undefined {
-  if (process.env.PERPLEXITY_API_KEY) return process.env.PERPLEXITY_API_KEY.trim();
+  if (process.env["PERPLEXITY_API_KEY"]) return process.env["PERPLEXITY_API_KEY"].trim();
   const cfg = readConfig(path).perplexityApiKey;
   if (cfg && typeof cfg === "string" && cfg.trim()) return cfg.trim();
   return undefined;
@@ -396,7 +404,7 @@ export function loadPerplexityApiKey(path: string = defaultConfigPath()): string
 
 /** Exa API key — env > config > undefined. Free 1000/mo signup at https://exa.ai */
 export function loadExaApiKey(path: string = defaultConfigPath()): string | undefined {
-  if (process.env.EXA_API_KEY) return process.env.EXA_API_KEY.trim();
+  if (process.env["EXA_API_KEY"]) return process.env["EXA_API_KEY"].trim();
   const cfg = readConfig(path).exaApiKey;
   if (cfg && typeof cfg === "string" && cfg.trim()) return cfg.trim();
   return undefined;
@@ -404,7 +412,7 @@ export function loadExaApiKey(path: string = defaultConfigPath()): string | unde
 
 /** AnySearch API key — env > config > undefined. Undefined is fine: AnySearch allows anonymous access (lower rate limits), so the caller must NOT treat undefined as an error. Get one at https://anysearch.com/console/api-keys */
 export function loadAnysearchApiKey(path: string = defaultConfigPath()): string | undefined {
-  if (process.env.ANYSEARCH_API_KEY) return process.env.ANYSEARCH_API_KEY.trim();
+  if (process.env["ANYSEARCH_API_KEY"]) return process.env["ANYSEARCH_API_KEY"].trim();
   const cfg = readConfig(path).anysearchApiKey;
   if (cfg && typeof cfg === "string" && cfg.trim()) return cfg.trim();
   return undefined;
@@ -566,8 +574,8 @@ function configJsonPath(path: string): string {
 }
 
 export function resolveToonMode(
-  cfg?: ReasonixConfig["toon"],
-  env: string | undefined = process.env.REASONIX_TOON,
+  cfg?: ReasonixConfig["toon"] | undefined,
+  env: string | undefined = process.env["REASONIX_TOON"],
 ): ToonMode {
   const fromEnv = parseToonMode(env);
   if (fromEnv) return fromEnv;
@@ -582,8 +590,8 @@ export function loadToonMode(path: string = defaultConfigPath()): ToonMode {
 }
 
 export function resolveCodeRelationsEnabled(
-  cfg?: ReasonixConfig["codeRelations"],
-  env: string | undefined = process.env.REASONIX_CODEREL,
+  cfg?: ReasonixConfig["codeRelations"] | undefined,
+  env: string | undefined = process.env["REASONIX_CODEREL"],
 ): boolean {
   const fromEnv = parseBooleanEnv(env);
   if (fromEnv !== null) return fromEnv;
@@ -597,8 +605,8 @@ export function loadCodeRelationsEnabled(path: string = defaultConfigPath()): bo
 }
 
 export function resolveCodeGraphEnabled(
-  cfg?: ReasonixConfig["codeGraph"],
-  env: string | undefined = process.env.REASONIX_CODE_GRAPH,
+  cfg?: ReasonixConfig["codeGraph"] | undefined,
+  env: string | undefined = process.env["REASONIX_CODE_GRAPH"],
 ): boolean {
   const fromEnv = parseBooleanEnv(env);
   if (fromEnv !== null) return fromEnv;
@@ -619,7 +627,7 @@ export interface ActiveRetrievalResolved {
 
 export function resolveActiveRetrieval(
   cfg?: boolean | { enabled?: boolean; topK?: number; minScore?: number },
-  env: string | undefined = process.env.REASONIX_ACTIVE_RETRIEVAL,
+  env: string | undefined = process.env["REASONIX_ACTIVE_RETRIEVAL"],
 ): ActiveRetrievalResolved {
   const fromEnv = parseBooleanEnv(env);
   const obj = typeof cfg === "object" && cfg !== null ? cfg : undefined;
@@ -633,8 +641,8 @@ export function loadActiveRetrieval(path: string = defaultConfigPath()): ActiveR
 }
 
 export function resolveCodeGraphIncludeBody(
-  cfg?: ReasonixConfig["codeGraph"],
-  env: string | undefined = process.env.REASONIX_CODE_GRAPH_BODY,
+  cfg?: ReasonixConfig["codeGraph"] | undefined,
+  env: string | undefined = process.env["REASONIX_CODE_GRAPH_BODY"],
 ): boolean {
   const fromEnv = parseBooleanEnv(env);
   if (fromEnv !== null) return fromEnv;
@@ -721,7 +729,7 @@ export function normalizeMcpConfig(cfg: ReasonixConfig, extraLegacy?: string[]):
       const env = spec.name ? normalizeStringRecord(cfg.mcpEnv?.[spec.name]) : undefined;
       const disabled = spec.name ? disabledFromLegacy.has(spec.name) : false;
       if (spec.transport === "stdio") {
-        result.push({ ...spec, env, disabled });
+        result.push({ ...spec, ...(env !== undefined ? { env } : {}), disabled });
       } else if (spec.transport === "sse") {
         result.push({ ...spec, disabled });
       } else {
@@ -745,8 +753,8 @@ export function normalizeMcpConfig(cfg: ReasonixConfig, extraLegacy?: string[]):
         name,
         command: (serverCfg as McpServerConfig).command ?? "",
         args: (serverCfg as McpServerConfig).args ?? [],
-        env,
         disabled,
+        ...(env !== undefined ? { env } : {}),
       };
       if (seen.has(name)) {
         const idx = result.findIndex((s) => s.name === name);
@@ -765,8 +773,8 @@ export function normalizeMcpConfig(cfg: ReasonixConfig, extraLegacy?: string[]):
           transport: "sse",
           name,
           url,
-          headers,
           disabled,
+          ...(headers !== undefined ? { headers } : {}),
         };
         if (seen.has(name)) {
           const idx = result.findIndex((s) => s.name === name);
@@ -780,8 +788,8 @@ export function normalizeMcpConfig(cfg: ReasonixConfig, extraLegacy?: string[]):
           transport: "streamable-http",
           name,
           url,
-          headers,
           disabled,
+          ...(headers !== undefined ? { headers } : {}),
         };
         if (seen.has(name)) {
           const idx = result.findIndex((s) => s.name === name);
@@ -806,13 +814,13 @@ export function saveLanguage(lang: LanguageCode, path: string = defaultConfigPat
 
 /** Resolve the API key from env var first, then the config file. */
 export function loadApiKey(path: string = defaultConfigPath()): string | undefined {
-  if (process.env.DEEPSEEK_API_KEY) return process.env.DEEPSEEK_API_KEY;
+  if (process.env["DEEPSEEK_API_KEY"]) return process.env["DEEPSEEK_API_KEY"];
   return readConfig(path).apiKey;
 }
 
 /** env > config > undefined. Client falls back to api.deepseek.com when undefined. */
 export function loadBaseUrl(path: string = defaultConfigPath()): string | undefined {
-  if (process.env.DEEPSEEK_BASE_URL) return process.env.DEEPSEEK_BASE_URL;
+  if (process.env["DEEPSEEK_BASE_URL"]) return process.env["DEEPSEEK_BASE_URL"];
   return readConfig(path).baseUrl;
 }
 
@@ -830,9 +838,10 @@ export function loadPricingOverride(
   for (const [model, value] of Object.entries(raw)) {
     if (!isPlainObject(value)) continue;
     const pricing: PricingOverride = {};
-    if (isNonNegativeNumber(value.inputCacheHit)) pricing.inputCacheHit = value.inputCacheHit;
-    if (isNonNegativeNumber(value.inputCacheMiss)) pricing.inputCacheMiss = value.inputCacheMiss;
-    if (isNonNegativeNumber(value.output)) pricing.output = value.output;
+    if (isNonNegativeNumber(value["inputCacheHit"])) pricing.inputCacheHit = value["inputCacheHit"];
+    if (isNonNegativeNumber(value["inputCacheMiss"]))
+      pricing.inputCacheMiss = value["inputCacheMiss"];
+    if (isNonNegativeNumber(value["output"])) pricing.output = value["output"];
     if (Object.keys(pricing).length > 0) result[model] = pricing;
   }
   return result;
@@ -1014,14 +1023,16 @@ export function removeSkillPath(
   );
   return {
     removed: true,
-    path: removed?.raw ?? existing[removeAt],
-    resolved: removed?.resolved,
+    ...((removed?.raw ?? existing[removeAt]) !== undefined
+      ? { path: removed?.raw ?? existing[removeAt] }
+      : {}),
+    ...(removed?.resolved !== undefined ? { resolved: removed.resolved } : {}),
     paths,
   };
 }
 
 export function searchEnabled(path: string = defaultConfigPath()): boolean {
-  const env = process.env.REASONIX_SEARCH;
+  const env = process.env["REASONIX_SEARCH"];
   if (env === "off" || env === "false" || env === "0") return false;
   const cfg = readConfig(path).search;
   if (cfg === false) return false;
@@ -1029,7 +1040,7 @@ export function searchEnabled(path: string = defaultConfigPath()): boolean {
 }
 
 export function loadJavaSourceEnabled(path: string = defaultConfigPath()): boolean {
-  const env = process.env.REASONIX_JAVA_SOURCE;
+  const env = process.env["REASONIX_JAVA_SOURCE"];
   if (env === "1" || env === "true") return true;
   const cfg = readConfig(path).javaSource;
   return cfg === true;
@@ -1293,14 +1304,14 @@ export function resolveBudgetWindows(path: string = defaultConfigPath()): Budget
   const cfg = readConfig(path).budget;
   const m = collectBudgetWindows(cfg);
   if (
-    process.env.REASONIX_BUDGET_PERIOD !== undefined ||
-    process.env.REASONIX_BUDGET_CAP !== undefined ||
-    process.env.REASONIX_BUDGET_SCOPE !== undefined
+    process.env["REASONIX_BUDGET_PERIOD"] !== undefined ||
+    process.env["REASONIX_BUDGET_CAP"] !== undefined ||
+    process.env["REASONIX_BUDGET_SCOPE"] !== undefined
   ) {
-    const period: unknown = process.env.REASONIX_BUDGET_PERIOD ?? cfg?.period;
-    const capRaw = process.env.REASONIX_BUDGET_CAP;
+    const period: unknown = process.env["REASONIX_BUDGET_PERIOD"] ?? cfg?.period;
+    const capRaw = process.env["REASONIX_BUDGET_CAP"];
     const capUsd: unknown = capRaw !== undefined ? Number.parseFloat(capRaw) : cfg?.capUsd;
-    const scope = normalizeBudgetScope(process.env.REASONIX_BUDGET_SCOPE);
+    const scope = normalizeBudgetScope(process.env["REASONIX_BUDGET_SCOPE"]);
     const envWindow = normalizeBudgetWindow(period, capUsd, scope);
     if (envWindow) m.set(budgetWindowKey(scope, envWindow.period), envWindow);
   }
@@ -1315,9 +1326,9 @@ function toToolsetTokens(raw: string | string[] | undefined): string[] {
 
 /** Session-start tool selection (env > config). `REASONIX_TOOLGATE=0` disables gating (all tools). `REASONIX_TOOLSET` (comma-separated group/tool names) overrides `config.defaultToolset`. Group names expand via `config.toolsets`; unknown tokens are literal tool names. Returns the selected name set, or null ⟹ load all tools. Essential tools are merged in at the registry layer, not here. */
 export function resolveSessionToolset(path: string = defaultConfigPath()): Set<string> | null {
-  if (process.env.REASONIX_TOOLGATE === "0") return null;
+  if (process.env["REASONIX_TOOLGATE"] === "0") return null;
   const cfg = readConfig(path);
-  const envSel = process.env.REASONIX_TOOLSET;
+  const envSel = process.env["REASONIX_TOOLSET"];
   const rawSel = envSel !== undefined && envSel.trim() !== "" ? envSel : cfg.defaultToolset;
   const tokens = toToolsetTokens(rawSel);
   if (tokens.length === 0) return null;
@@ -1351,14 +1362,15 @@ export function saveBudgetWindow(
   if (capUsd === null || !Number.isFinite(capUsd) || capUsd <= 0) m.delete(key);
   else m.set(key, { period, capUsd, scope });
   const windows = windowsFromMap(m);
-  cfg.budget = windows.length > 0 ? { windows } : undefined;
+  if (windows.length > 0) cfg.budget = { windows };
+  else delete cfg.budget;
   writeConfig(cfg, path);
 }
 
 /** Clear every rolling budget window. The `/budget window off` slash writes here. */
 export function clearBudgetWindows(path: string = defaultConfigPath()): void {
   const cfg = readConfig(path);
-  cfg.budget = undefined;
+  delete cfg.budget;
   writeConfig(cfg, path);
 }
 
@@ -1408,7 +1420,7 @@ export function loadTheme(path: string = defaultConfigPath()): ThemeName | "auto
 
 export function resolveThemePreference(
   configTheme: ThemeName | "auto" | undefined,
-  envTheme?: string | null,
+  envTheme?: string | null | undefined,
 ): ThemeName {
   if (configTheme && configTheme !== "auto") return configTheme;
   return resolveThemeName(envTheme);
@@ -1476,9 +1488,9 @@ export function pushRecentWorkspace(dir: string, path: string = defaultConfigPat
 export interface DesktopOpenTab {
   dir: string;
   /** Session the tab had loaded; reopened on boot if its jsonl still exists. */
-  session?: string;
+  session?: string | undefined;
   /** Whether this was the focused tab. */
-  active?: boolean;
+  active?: boolean | undefined;
 }
 
 export function loadDesktopOpenTabs(path: string = defaultConfigPath()): DesktopOpenTab[] {
@@ -1584,8 +1596,8 @@ export function resolveSemanticEmbeddingConfig(
   }
   return {
     provider: "ollama",
-    baseUrl: user.ollama?.baseUrl?.trim() || process.env.OLLAMA_URL || DEFAULT_OLLAMA_URL,
-    model: user.ollama?.model?.trim() || process.env.REASONIX_EMBED_MODEL || DEFAULT_EMBED_MODEL,
+    baseUrl: user.ollama?.baseUrl?.trim() || process.env["OLLAMA_URL"] || DEFAULT_OLLAMA_URL,
+    model: user.ollama?.model?.trim() || process.env["REASONIX_EMBED_MODEL"] || DEFAULT_EMBED_MODEL,
     timeoutMs: DEFAULT_TIMEOUT_MS,
   };
 }
@@ -1597,9 +1609,12 @@ export function redactSemanticEmbeddingConfig(
   return {
     provider: normalized.provider ?? "ollama",
     ollama: {
-      baseUrl: normalized.ollama?.baseUrl?.trim() || process.env.OLLAMA_URL || DEFAULT_OLLAMA_URL,
+      baseUrl:
+        normalized.ollama?.baseUrl?.trim() || process.env["OLLAMA_URL"] || DEFAULT_OLLAMA_URL,
       model:
-        normalized.ollama?.model?.trim() || process.env.REASONIX_EMBED_MODEL || DEFAULT_EMBED_MODEL,
+        normalized.ollama?.model?.trim() ||
+        process.env["REASONIX_EMBED_MODEL"] ||
+        DEFAULT_EMBED_MODEL,
     },
     openaiCompat: {
       baseUrl: normalized.openaiCompat?.baseUrl?.trim() ?? "",
@@ -1705,22 +1720,22 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 export interface LoadedQQConfig {
-  appId?: string;
-  appSecret?: string;
-  sandbox?: boolean;
-  enabled?: boolean;
-  ownerOpenId?: string;
-  allowlist?: string[];
+  appId?: string | undefined;
+  appSecret?: string | undefined;
+  sandbox?: boolean | undefined;
+  enabled?: boolean | undefined;
+  ownerOpenId?: string | undefined;
+  allowlist?: string[] | undefined;
 }
 
 export function loadQQConfig(path: string = defaultConfigPath()): LoadedQQConfig {
-  const envSandbox = process.env.QQ_SANDBOX;
-  const envAllowlist = normalizeQQAllowlist(process.env.QQ_ALLOWLIST);
+  const envSandbox = process.env["QQ_SANDBOX"];
+  const envAllowlist = normalizeQQAllowlist(process.env["QQ_ALLOWLIST"]);
   const fromEnv = {
-    appId: process.env.QQ_APPID,
-    appSecret: process.env.QQ_SECRET,
+    appId: process.env["QQ_APPID"],
+    appSecret: process.env["QQ_SECRET"],
     sandbox: envSandbox === "1" ? true : envSandbox === "0" ? false : undefined,
-    ownerOpenId: normalizeQQOpenId(process.env.QQ_OWNER_OPENID),
+    ownerOpenId: normalizeQQOpenId(process.env["QQ_OWNER_OPENID"]),
     allowlist: envAllowlist,
   };
   const fromCfg = readConfig(path).qq ?? {};

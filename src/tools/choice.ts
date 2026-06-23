@@ -6,7 +6,7 @@ import type { ToolRegistry } from "../tools.js";
 export interface ChoiceOption {
   id: string;
   title: string;
-  summary?: string;
+  summary?: string | undefined;
 }
 
 export class ChoiceRequestedError extends Error {
@@ -39,7 +39,7 @@ export class ChoiceRequestedError extends Error {
 }
 
 export interface ChoiceToolOptions {
-  onChoiceRequested?: (question: string, options: ChoiceOption[]) => void;
+  onChoiceRequested?: ((question: string, options: ChoiceOption[]) => void) | undefined;
 }
 
 function sanitizeOptions(raw: unknown): ChoiceOption[] {
@@ -49,12 +49,12 @@ function sanitizeOptions(raw: unknown): ChoiceOption[] {
   for (const entry of raw) {
     if (!entry || typeof entry !== "object") continue;
     const e = entry as Record<string, unknown>;
-    const id = typeof e.id === "string" ? e.id.trim() : "";
-    const title = typeof e.title === "string" ? e.title.trim() : "";
+    const id = typeof e["id"] === "string" ? e["id"].trim() : "";
+    const title = typeof e["title"] === "string" ? e["title"].trim() : "";
     if (!id || !title) continue;
     if (seen.has(id)) continue;
     seen.add(id);
-    const summary = typeof e.summary === "string" ? e.summary.trim() || undefined : undefined;
+    const summary = typeof e["summary"] === "string" ? e["summary"].trim() || undefined : undefined;
     const opt: ChoiceOption = { id, title };
     if (summary) opt.summary = summary;
     out.push(opt);

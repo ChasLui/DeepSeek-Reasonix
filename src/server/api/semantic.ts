@@ -15,7 +15,6 @@ import {
 import {
   INDEX_DIR_NAME,
   buildIndex,
-  indexCompatible,
   indexExists,
   querySemantic,
 } from "../../index/semantic/builder.js";
@@ -35,17 +34,17 @@ import type { ApiResult } from "../router.js";
 
 interface JobRecord {
   startedAt: number;
-  finishedAt?: number;
-  cancelledAt?: number;
+  finishedAt?: number | undefined;
+  cancelledAt?: number | undefined;
   phase: BuildProgress["phase"] | "error" | "cancelled";
-  lastPhase?: BuildProgress["phase"];
-  filesScanned?: number;
-  filesChanged?: number;
-  filesSkipped?: number;
-  chunksTotal?: number;
-  chunksDone?: number;
-  result?: BuildResult;
-  error?: string;
+  lastPhase?: BuildProgress["phase"] | undefined;
+  filesScanned?: number | undefined;
+  filesChanged?: number | undefined;
+  filesSkipped?: number | undefined;
+  chunksTotal?: number | undefined;
+  chunksDone?: number | undefined;
+  result?: BuildResult | undefined;
+  error?: string | undefined;
   rebuild: boolean;
   aborted: boolean;
   controller: AbortController;
@@ -278,7 +277,7 @@ async function startDaemon(ctx: DashboardContext): Promise<ApiResult> {
 }
 
 interface PullBody {
-  model?: unknown;
+  model?: unknown | undefined;
 }
 
 async function startPull(body: string, ctx: DashboardContext): Promise<ApiResult> {
@@ -348,7 +347,7 @@ function snapshotJob(j: JobRecord): unknown {
 }
 
 interface StartBody {
-  rebuild?: unknown;
+  rebuild?: unknown | undefined;
 }
 
 async function startJob(body: string, ctx: DashboardContext): Promise<ApiResult> {
@@ -478,14 +477,14 @@ function getSemanticConfig(ctx: DashboardContext): ApiResult {
 
 function saveSemanticConfigApi(rawBody: string, ctx: DashboardContext): ApiResult {
   let parsed: {
-    provider?: unknown;
+    provider?: unknown | undefined;
     ollama?: { baseUrl?: unknown; model?: unknown };
     openaiCompat?: {
-      baseUrl?: unknown;
-      apiKey?: unknown;
-      model?: unknown;
-      extraBody?: unknown;
-      batchSize?: unknown;
+      baseUrl?: unknown | undefined;
+      apiKey?: unknown | undefined;
+      model?: unknown | undefined;
+      extraBody?: unknown | undefined;
+      batchSize?: unknown | undefined;
     };
   };
   try {
@@ -571,7 +570,7 @@ async function getProviderStatusFromConfig(
       modelPulled: boolean;
       modelName: string;
       installedModels: string[];
-      error?: string;
+      error?: string | undefined;
     }
   | {
       kind: "openai-compat";
@@ -610,57 +609,6 @@ async function getProviderStatusFromConfig(
     kind: "ollama",
     ready: ollama.daemonRunning && ollama.modelPulled,
     baseUrl: config.ollama.baseUrl,
-    ...ollama,
-  };
-}
-
-async function getProviderStatus(
-  resolved: ReturnType<typeof resolveSemanticEmbeddingConfig>,
-): Promise<
-  | {
-      kind: "ollama";
-      ready: boolean;
-      baseUrl: string;
-      binaryFound: boolean;
-      daemonRunning: boolean;
-      modelPulled: boolean;
-      modelName: string;
-      installedModels: string[];
-      error?: string;
-    }
-  | {
-      kind: "openai-compat";
-      ready: boolean;
-      baseUrl: string;
-      apiKeySet: boolean;
-      model: string;
-      extraBodyKeys: string[];
-      batchSize: number;
-    }
-> {
-  if (resolved.provider === "openai-compat") {
-    return {
-      kind: "openai-compat",
-      ready: Boolean(resolved.baseUrl && resolved.apiKey && resolved.model),
-      baseUrl: resolved.baseUrl,
-      apiKeySet: Boolean(resolved.apiKey),
-      model: resolved.model,
-      extraBodyKeys: Object.keys(resolved.extraBody),
-      batchSize: resolved.batchSize,
-    };
-  }
-  const ollama = await checkOllamaStatus(resolved.model, resolved.baseUrl).catch((err) => ({
-    binaryFound: false,
-    daemonRunning: false,
-    modelPulled: false,
-    modelName: resolved.model,
-    installedModels: [] as string[],
-    error: err instanceof Error ? err.message : String(err),
-  }));
-  return {
-    kind: "ollama",
-    ready: ollama.daemonRunning && ollama.modelPulled,
-    baseUrl: resolved.baseUrl,
     ...ollama,
   };
 }

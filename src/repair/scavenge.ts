@@ -7,7 +7,7 @@ export interface ScavengeOptions {
   /** Names of tools the model may legitimately call. Other names are ignored. */
   allowedNames: ReadonlySet<string>;
   /** Maximum number of calls to scavenge per pass (defence against runaway). */
-  maxCalls?: number;
+  maxCalls?: number | undefined;
 }
 
 export interface ScavengeResult {
@@ -152,7 +152,7 @@ function coerceToToolCall(
   candidateJson: string,
   allowedNames: ReadonlySet<string>,
 ): ToolCall | null {
-  let parsed: any;
+  let parsed: unknown;
   try {
     parsed = JSON.parse(candidateJson);
   } catch {
@@ -161,41 +161,44 @@ function coerceToToolCall(
     parsed = loose.value;
   }
   if (!parsed || typeof parsed !== "object") return null;
+  const obj = parsed as Record<string, unknown>;
 
   // Pattern 1: { name, arguments }
-  if (typeof parsed.name === "string" && allowedNames.has(parsed.name)) {
-    const args = parsed.arguments;
+  if (typeof obj["name"] === "string" && allowedNames.has(obj["name"])) {
+    const args = obj["arguments"];
     return {
       function: {
-        name: parsed.name,
+        name: obj["name"],
         arguments: typeof args === "string" ? args : JSON.stringify(args ?? {}),
       },
     };
   }
 
   // Pattern 2: OpenAI-style { type: "function", function: { name, arguments } }
+  const fn = obj["function"];
+  const fnObj = fn && typeof fn === "object" ? (fn as Record<string, unknown>) : null;
   if (
-    parsed.type === "function" &&
-    parsed.function &&
-    typeof parsed.function.name === "string" &&
-    allowedNames.has(parsed.function.name)
+    obj["type"] === "function" &&
+    fnObj &&
+    typeof fnObj["name"] === "string" &&
+    allowedNames.has(fnObj["name"])
   ) {
-    const args = parsed.function.arguments;
+    const args = fnObj["arguments"];
     return {
       type: "function",
       function: {
-        name: parsed.function.name,
+        name: fnObj["name"],
         arguments: typeof args === "string" ? args : JSON.stringify(args ?? {}),
       },
     };
   }
 
   // Pattern 3: { tool_name, tool_args } (R1 free-form variant)
-  if (typeof parsed.tool_name === "string" && allowedNames.has(parsed.tool_name)) {
+  if (typeof obj["tool_name"] === "string" && allowedNames.has(obj["tool_name"])) {
     return {
       function: {
-        name: parsed.tool_name,
-        arguments: JSON.stringify(parsed.tool_args ?? {}),
+        name: obj["tool_name"],
+        arguments: JSON.stringify(obj["tool_args"] ?? {}),
       },
     };
   }

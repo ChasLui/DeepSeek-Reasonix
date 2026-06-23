@@ -6,7 +6,6 @@ import { writeCodeLexicalIndex } from "../lexical/code.js";
 import { walkChunks } from "./chunker.js";
 import type { CodeChunk, SkipReason } from "./chunker.js";
 import { embed, embedAll, probeOllama } from "./embedding.js";
-import type { EmbedOptions } from "./embedding.js";
 import {
   compareIndexIdentity,
   normalize,
@@ -14,37 +13,37 @@ import {
   readIndexMeta,
   wipeStoreFiles,
 } from "./store.js";
-import type { IndexEntry, IndexIdentity, IndexMismatch, SearchHit } from "./store.js";
+import type { IndexEntry, IndexIdentity, SearchHit } from "./store.js";
 
-export const INDEX_DIR_NAME = path.join(".reasonix", "semantic");
+export const INDEX_DIR_NAME: string = path.join(".reasonix", "semantic");
 
 type BuildOptions = {
-  provider?: "ollama" | "openai-compat";
-  baseUrl?: string;
-  apiKey?: string;
-  model?: string;
-  extraBody?: Record<string, unknown>;
-  timeoutMs?: number;
-  batchSize?: number;
-  signal?: AbortSignal;
-  windowLines?: number;
-  overlap?: number;
-  rebuild?: boolean;
-  indexConfig?: ResolvedIndexConfig;
-  onProgress?: (info: BuildProgress) => void;
-  configPath?: string;
+  provider?: "ollama" | "openai-compat" | undefined;
+  baseUrl?: string | undefined;
+  apiKey?: string | undefined;
+  model?: string | undefined;
+  extraBody?: Record<string, unknown> | undefined;
+  timeoutMs?: number | undefined;
+  batchSize?: number | undefined;
+  signal?: AbortSignal | undefined;
+  windowLines?: number | undefined;
+  overlap?: number | undefined;
+  rebuild?: boolean | undefined;
+  indexConfig?: ResolvedIndexConfig | undefined;
+  onProgress?: ((info: BuildProgress) => void) | undefined;
+  configPath?: string | undefined;
 };
 
 export type SkipBuckets = Record<SkipReason, number>;
 
 export interface BuildProgress {
   phase: "setup" | "scan" | "embed" | "write" | "done";
-  filesScanned?: number;
-  chunksTotal?: number;
-  chunksDone?: number;
-  filesSkipped?: number;
-  filesChanged?: number;
-  skipBuckets?: SkipBuckets;
+  filesScanned?: number | undefined;
+  chunksTotal?: number | undefined;
+  chunksDone?: number | undefined;
+  filesSkipped?: number | undefined;
+  filesChanged?: number | undefined;
+  skipBuckets?: SkipBuckets | undefined;
 }
 
 export interface BuildResult {
@@ -212,17 +211,17 @@ export async function buildIndex(root: string, opts: BuildOptions = {}): Promise
 }
 
 type QueryOptions = {
-  provider?: "ollama" | "openai-compat";
-  baseUrl?: string;
-  apiKey?: string;
-  model?: string;
-  extraBody?: Record<string, unknown>;
-  timeoutMs?: number;
-  batchSize?: number;
-  signal?: AbortSignal;
-  topK?: number;
-  minScore?: number;
-  configPath?: string;
+  provider?: "ollama" | "openai-compat" | undefined;
+  baseUrl?: string | undefined;
+  apiKey?: string | undefined;
+  model?: string | undefined;
+  extraBody?: Record<string, unknown> | undefined;
+  timeoutMs?: number | undefined;
+  batchSize?: number | undefined;
+  signal?: AbortSignal | undefined;
+  topK?: number | undefined;
+  minScore?: number | undefined;
+  configPath?: string | undefined;
 };
 
 export async function querySemantic(
@@ -275,8 +274,8 @@ function resolveBuildEmbeddingConfig(opts: BuildOptions): ResolvedEmbeddingConfi
   if (opts.baseUrl || opts.model) {
     return {
       provider: "ollama",
-      baseUrl: opts.baseUrl ?? process.env.OLLAMA_URL ?? "http://localhost:11434",
-      model: opts.model ?? process.env.REASONIX_EMBED_MODEL ?? "nomic-embed-text",
+      baseUrl: opts.baseUrl ?? process.env["OLLAMA_URL"] ?? "http://localhost:11434",
+      model: opts.model ?? process.env["REASONIX_EMBED_MODEL"] ?? "nomic-embed-text",
       timeoutMs: opts.timeoutMs ?? 30_000,
     };
   }
@@ -284,9 +283,9 @@ function resolveBuildEmbeddingConfig(opts: BuildOptions): ResolvedEmbeddingConfi
 }
 
 function resolveIndexIdentity(opts: {
-  provider?: "ollama" | "openai-compat";
-  model?: string;
-  configPath?: string;
+  provider?: "ollama" | "openai-compat" | undefined;
+  model?: string | undefined;
+  configPath?: string | undefined;
 }): IndexIdentity {
   if (opts.provider && opts.model) {
     return { provider: opts.provider, model: opts.model };
@@ -304,7 +303,10 @@ async function probeEmbeddingProvider(
   signal: AbortSignal | undefined,
 ): Promise<void> {
   if (config.provider === "openai-compat") return;
-  const probe = await probeOllama({ baseUrl: config.baseUrl, signal });
+  const probe = await probeOllama({
+    baseUrl: config.baseUrl,
+    ...(signal !== undefined ? { signal } : {}),
+  });
   if (!probe.ok) {
     throw new Error(
       `Ollama is not reachable: ${probe.error}. Install from https://ollama.com, then \`ollama serve\` and \`ollama pull ${config.model}\`.`,

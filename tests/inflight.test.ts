@@ -110,7 +110,7 @@ describe("InflightSet", () => {
       s.add("abortable");
       try {
         // Simulated tool that hangs until the signal fires.
-        await new Promise<void>((resolve, reject) => {
+        await new Promise<void>((_resolve, reject) => {
           if (signal.aborted) {
             reject(new Error("aborted before await"));
             return;

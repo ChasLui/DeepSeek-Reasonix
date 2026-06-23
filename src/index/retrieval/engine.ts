@@ -19,9 +19,9 @@ import {
 } from "./types.js";
 
 export interface RetrieveOptions {
-  topK?: number;
-  semantic?: boolean;
-  graph?: boolean;
+  topK?: number | undefined;
+  semantic?: boolean | undefined;
+  graph?: boolean | undefined;
 }
 
 export interface RetrieveResult {
@@ -36,7 +36,7 @@ interface HitMeta {
   endLine: number;
   sources: Set<RetrievalSource>;
   fusible: boolean;
-  snippet?: string;
+  snippet?: string | undefined;
 }
 
 const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, n));

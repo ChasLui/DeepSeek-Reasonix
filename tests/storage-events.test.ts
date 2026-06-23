@@ -47,7 +47,7 @@ describe("storage/event-sink-sqlite", () => {
     const ids = db
       .prepare("SELECT event_id FROM events WHERE session = 's1' ORDER BY event_id")
       .all()
-      .map((r) => Number(r.event_id));
+      .map((r) => Number(r["event_id"]));
     expect(ids).toEqual([1, 2]);
   });
 
@@ -60,7 +60,7 @@ describe("storage/event-sink-sqlite", () => {
       db
         .prepare("SELECT event_id FROM events WHERE session = ? ORDER BY event_id")
         .all(session)
-        .map((r) => Number(r.event_id));
+        .map((r) => Number(r["event_id"]));
     expect(ids("s1")).toEqual([1, 2]);
     expect(ids("s2")).toEqual([1]);
   });

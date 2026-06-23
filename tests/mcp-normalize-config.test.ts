@@ -387,7 +387,7 @@ describe("normalizeMcpConfig: headers round-trip into transport", () => {
     const spec = specs[0]!;
     if (spec.transport !== "stdio") throw new Error("unreachable");
     // headers should not be present on stdio spec
-    expect((spec as Record<string, unknown>).headers).toBeUndefined();
+    expect((spec as unknown as Record<string, unknown>)["headers"]).toBeUndefined();
     const transport = buildTransportFromSpec(spec);
     expect(transport).toBeInstanceOf(StdioTransport);
     void transport.close();

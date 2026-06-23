@@ -9,13 +9,13 @@ import { DiffApp } from "../ui/DiffApp.js";
 export interface DiffOptions {
   a: string;
   b: string;
-  mdPath?: string;
-  labelA?: string;
-  labelB?: string;
+  mdPath?: string | undefined;
+  labelA?: string | undefined;
+  labelB?: string | undefined;
   /** Force stdout summary table (no Ink TUI). Auto when stdout isn't a TTY. */
-  print?: boolean;
+  print?: boolean | undefined;
   /** Force the TUI even when stdout isn't a TTY (rare). */
-  tui?: boolean;
+  tui?: boolean | undefined;
 }
 
 export async function diffCommand(opts: DiffOptions): Promise<void> {

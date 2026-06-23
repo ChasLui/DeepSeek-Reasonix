@@ -33,23 +33,23 @@ import type { ToolRegistry } from "../../tools.js";
 import { applyMcpServerTier, resolveMcpDefaultTier } from "../../tools/tiering.js";
 import { isToolSelected } from "../../tools/toolset.js";
 import type { ToolSpec } from "../../types.js";
-import { type McpLifecycleEvent, formatMcpLifecycleEvent } from "../ui/mcp-lifecycle.js";
+import { formatMcpLifecycleEvent } from "../ui/mcp-lifecycle.js";
 import { formatMcpSlowToast } from "../ui/mcp-toast.js";
 import type { McpServerSummary } from "../ui/slash.js";
 
 export interface ProgressInfo {
   toolName: string;
   progress: number;
-  total?: number;
-  message?: string;
+  total?: number | undefined;
+  message?: string | undefined;
 }
 
 interface SpecRecord {
   spec: string;
   client: McpClient;
   host: McpClientHost;
-  env?: Record<string, string>;
-  headers?: Record<string, string>;
+  env?: Record<string, string> | undefined;
+  headers?: Record<string, string> | undefined;
   bridgeEnv: BridgeEnv;
   mcpTools: McpTool[];
   summary: McpServerSummary;
@@ -67,7 +67,7 @@ export interface RuntimeContext {
   progressSink: { current: ((info: ProgressInfo) => void) | null };
   projectRoot: () => string;
   /** Session toolset selection — bridged MCP tools not in this set (and not essential) are gated out of the prefix. Absent / returns null ⟹ no gating. */
-  getToolSelection?: () => ReadonlySet<string> | null;
+  getToolSelection?: () => ReadonlySet<string> | null | undefined;
 }
 
 export type McpLifecycleNotice =
@@ -157,8 +157,8 @@ export interface McpRuntime {
   failures(): McpFailure[];
   addSpec(
     raw: string,
-    loop?: CacheFirstLoop,
-    signal?: AbortSignal,
+    loop?: CacheFirstLoop | undefined,
+    signal?: AbortSignal | undefined,
   ): Promise<{ ok: true; summary: McpServerSummary } | { ok: false; reason: string }>;
   removeSpec(raw: string, loop?: CacheFirstLoop): Promise<boolean>;
   reloadFromConfig(loop?: CacheFirstLoop): Promise<{
@@ -187,8 +187,8 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
 
   async function addSpecImpl(
     raw: string,
-    loop?: CacheFirstLoop,
-    signal?: AbortSignal,
+    loop?: CacheFirstLoop | undefined,
+    signal?: AbortSignal | undefined,
   ): Promise<{ ok: true; summary: McpServerSummary } | { ok: false; reason: string }> {
     ensureWatcher(loop);
     if (records.has(raw)) {
@@ -242,13 +242,15 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
       if (spec.transport === "stdio") preflightStdioSpec(spec);
       const transport = buildTransportFromSpec(spec);
       mcp = new McpClient({ transport });
-      await mcp.initialize({ signal });
+      await mcp.initialize({
+        ...(signal !== undefined ? { signal } : {}),
+      });
       const host: McpClientHost = { client: mcp };
       const selection = ctx.getToolSelection?.() ?? null;
       // Scheme 10 (Slice 2): eager tools/list drift check before building the
       // prefix, so a changed server's latest tools land in this session instead
       // of the next. Default ON; set REASONIX_MCP_EAGER_DRIFT=0 to opt out.
-      const eagerDrift = process.env.REASONIX_MCP_EAGER_DRIFT !== "0";
+      const eagerDrift = process.env["REASONIX_MCP_EAGER_DRIFT"] !== "0";
       let cachedTools: McpTool[] | null = null;
       if (spec.transport === "stdio") {
         cachedTools = eagerDrift
@@ -284,7 +286,7 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
       if (spec.transport === "stdio" && cachedTools === null) {
         saveMcpToolCache(label, spec, mcp, bridge.mcpTools);
       }
-      const slice4Enabled = process.env.REASONIX_MCP_RESOURCES_BRIDGE === "1";
+      const slice4Enabled = process.env["REASONIX_MCP_RESOURCES_BRIDGE"] === "1";
       const resourcesBridge = slice4Enabled
         ? await bridgeMcpResources(mcp, { registry: tools, serverName: label })
         : { registry: tools, registeredNames: [], mcpTools: [], skipped: [] };
@@ -488,8 +490,8 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
 
   function addSpec(
     raw: string,
-    loop?: CacheFirstLoop,
-    signal?: AbortSignal,
+    loop?: CacheFirstLoop | undefined,
+    signal?: AbortSignal | undefined,
   ): Promise<{ ok: true; summary: McpServerSummary } | { ok: false; reason: string }> {
     return enqueueMutation(
       `addSpec:${raw}`,
@@ -543,7 +545,7 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
   }
 
   async function refilterImpl(
-    loop?: CacheFirstLoop,
+    loop?: CacheFirstLoop | undefined,
   ): Promise<{ added: string[]; removed: string[] }> {
     const added: string[] = [];
     const removed: string[] = [];
@@ -580,7 +582,7 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
   async function handleToolsListChanged(
     raw: string,
     label: string,
-    loop?: CacheFirstLoop,
+    loop?: CacheFirstLoop | undefined,
   ): Promise<void> {
     const record = records.get(raw);
     if (!record) return;
@@ -655,7 +657,7 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
   function registerMcpTool(
     record: SpecRecord,
     mcpTool: McpTool,
-    loop?: CacheFirstLoop,
+    loop?: CacheFirstLoop | undefined,
   ): string | null {
     const tools = ctx.getTools();
     if (!tools) return null;
@@ -687,7 +689,7 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
     raw: string,
     label: string,
     client: McpClient,
-    loop?: CacheFirstLoop,
+    loop?: CacheFirstLoop | undefined,
   ): Array<() => void> {
     return [
       client.onToolsListChanged(() =>

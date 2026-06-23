@@ -34,8 +34,8 @@ describe("StdioTransport child stderr handling", { timeout: 5_000 }, () => {
     await awaitChildExit(t);
     await t.close();
 
-    const stderrCalls = writeSpy.mock.calls.map((c) => String(c[0]));
-    expect(stderrCalls.some((s) => s.includes("server.py:534"))).toBe(false);
+    const stderrCalls = writeSpy.mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(stderrCalls.some((s: string) => s.includes("server.py:534"))).toBe(false);
   });
 
   it("forwards child stderr to our stderr when REASONIX_DEBUG_MCP=1", async () => {
@@ -48,7 +48,7 @@ describe("StdioTransport child stderr handling", { timeout: 5_000 }, () => {
     await awaitChildExit(t);
     await t.close();
 
-    const stderrCalls = writeSpy.mock.calls.map((c) => String(c[0]));
-    expect(stderrCalls.some((s) => s.includes("server.py:534"))).toBe(true);
+    const stderrCalls = writeSpy.mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(stderrCalls.some((s: string) => s.includes("server.py:534"))).toBe(true);
   });
 });

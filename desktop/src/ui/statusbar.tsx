@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { I } from "../icons";
 import { t } from "../i18n";
 import type { Balance, Settings, UsageStats } from "../App";
@@ -7,6 +7,15 @@ import { THEME, THEME_STYLES, type Theme, type ThemeStyle, themeForStyle } from 
 import { localizeShortcutText } from "./shortcut";
 
 const USD_TO_CNY = 7.2;
+type TKey = Parameters<typeof t>[0];
+
+function titleCase(value: string): string {
+  return `${value[0]!.toUpperCase()}${value.slice(1)}`;
+}
+
+function themeStyleStatusKey(style: ThemeStyle): TKey {
+  return `statusbar.themeStyle${titleCase(style)}` as TKey;
+}
 
 function formatMoney(amountUsd: number, currency: "CNY" | "USD"): string {
   const symbol = currency === "CNY" ? "¥" : "$";
@@ -51,7 +60,7 @@ export function StatusBar({
   onToggleCurrency: () => void;
   onOpenSettings: () => void;
   onOpenWorkdir?: (anchor: { bottom: number; left: number }) => void;
-}) {
+}): ReactElement {
   const totalTokens = usage.cacheHitTokens + usage.cacheMissTokens;
   const cacheHitPct = totalTokens > 0 ? Math.round((usage.cacheHitTokens / totalTokens) * 100) : 0;
   const runningJobs = jobs.filter((j) => j.running).length;
@@ -83,7 +92,9 @@ export function StatusBar({
           style={connState === "off" ? { background: "var(--danger)" } : undefined}
         />
         <span>{settings?.baseUrl?.replace(/^https?:\/\//, "") ?? "api.deepseek.com"}</span>
-        <span className="v">{!ready ? t("statusbar.offline") : busy ? t("statusbar.busy") : t("statusbar.online")}</span>
+        <span className="v">
+          {!ready ? t("statusbar.offline") : busy ? t("statusbar.busy") : t("statusbar.online")}
+        </span>
       </span>
       <span className="seg" title={t("statusbar.cacheHit")}>
         <I.zap size={11} style={{ color: "var(--accent)" }} />
@@ -148,12 +159,15 @@ export function StatusBar({
         onClick={() => setThemeOpen((open) => !open)}
       >
         {theme === THEME.DARK ? <I.moon size={11} /> : <I.sun size={11} />}
-        <span className="v">
-          {t(`statusbar.themeStyle${themeStyle[0]!.toUpperCase()}${themeStyle.slice(1)}` as any)}
-        </span>
+        <span className="v">{t(themeStyleStatusKey(themeStyle))}</span>
       </span>
       {themeOpen ? (
-        <div ref={themePopRef} className="theme-pop" role="menu" aria-label={t("settings.themeStyle")}>
+        <div
+          ref={themePopRef}
+          className="theme-pop"
+          role="menu"
+          aria-label={t("settings.themeStyle")}
+        >
           <div className="theme-pop-head">
             <div className="tt">{t("settings.themeStyle")}</div>
             <div className="ss">{t("statusbar.switchTheme")}</div>
@@ -177,9 +191,7 @@ export function StatusBar({
                   <span />
                 </span>
                 <span className="txt">
-                  <span className="nm">
-                    {t(`statusbar.themeStyle${style[0]!.toUpperCase()}${style.slice(1)}` as any)}
-                  </span>
+                  <span className="nm">{t(themeStyleStatusKey(style))}</span>
                   <span className="md">
                     {themeForStyle(style) === THEME.DARK
                       ? t("statusbar.themeDark")

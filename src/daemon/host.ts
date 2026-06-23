@@ -29,26 +29,26 @@ import { WorkspaceLifecycle } from "./workspace-lifecycle.js";
 
 /** Per-workspace idle window before `WorkspaceLifecycle` emits `idle` (background prebuild trigger, Slice 2). 0 disables. */
 function resolveWorkspaceQuietMs(): number {
-  const raw = process.env.REASONIX_WORKSPACE_QUIET_MS;
+  const raw = process.env["REASONIX_WORKSPACE_QUIET_MS"];
   const n = raw ? Number(raw) : Number.NaN;
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 export interface DaemonHostOptions {
   defaultDir: string;
-  model?: string;
-  budgetUsd?: number;
-  mcpSpecs?: string[];
-  mcpPrefix?: string;
-  yolo?: boolean;
+  model?: string | undefined;
+  budgetUsd?: number | undefined;
+  mcpSpecs?: string[] | undefined;
+  mcpPrefix?: string | undefined;
+  yolo?: boolean | undefined;
   /** Override session construction — the seam Slice 3's per-workspace pool plugs into; tests inject a loop stub. */
-  createSession?: (rootDir: string) => Promise<Session>;
+  createSession?: ((rootDir: string) => Promise<Session>) | undefined;
   /** Shut down after this many ms with zero sessions. 0/undefined disables (stay up forever). */
-  idleMs?: number;
+  idleMs?: number | undefined;
   /** Fired when the idle window elapses with no sessions — the run command triggers graceful shutdown. */
-  onIdle?: () => void;
+  onIdle?: (() => void) | undefined;
   /** Enable Pillar 5 background index maintenance (per-workspace fs-watch → incremental). Off by default until cross-platform watch lands (Slice 3). */
-  backgroundIndex?: boolean;
+  backgroundIndex?: boolean | undefined;
 }
 
 /** Per-session loop snapshot the rich (desktop) client reads for its display panels. */
@@ -63,7 +63,7 @@ export interface DaemonSessionStats {
 interface SessionMeta {
   owner: AcpServer;
   /** Per-session PauseGate — its identity IS the session binding, so confirmations route to `owner` with no AsyncLocalStorage attribution (Slice 4). Absent for injected (test stub) sessions. */
-  gate?: PauseGate;
+  gate?: PauseGate | undefined;
 }
 
 /** Register the routing listener for one session's gate: auto-resolve by policy, else round-trip a permission request to the owning connection. Resolves on the same gate, so per-session ids never collide. */
@@ -86,6 +86,8 @@ export function attachSessionGate(
 }
 
 export class DaemonHost {
+  private readonly opts: DaemonHostOptions;
+
   private readonly sessions = new Map<string, Session>();
   private readonly meta = new Map<string, SessionMeta>();
   // Warm MCP children shared across sessions in the same workspace (FR-005).
@@ -98,7 +100,9 @@ export class DaemonHost {
   private gateUnsub: (() => void) | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private readonly opts: DaemonHostOptions) {
+  constructor(opts: DaemonHostOptions) {
+    this.opts = opts;
+
     this.indexMaintainer = opts.backgroundIndex ? new IndexMaintainer(this.lifecycle) : null;
   }
 

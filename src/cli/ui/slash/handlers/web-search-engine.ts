@@ -12,7 +12,7 @@ import { t } from "../../../../i18n/index.js";
 import type { SlashHandler } from "../dispatch.js";
 
 export const handlers: Record<string, SlashHandler> = {
-  "search-engine": (args, _loop, ctx) => {
+  "search-engine": (args, _loop, _ctx) => {
     const engine = args[0];
     if (
       !engine ||
@@ -98,22 +98,6 @@ export const handlers: Record<string, SlashHandler> = {
     }
     writeConfig(cfg);
 
-    const note =
-      engine === "searxng"
-        ? t("handlers.webSearchEngine.switchedSearxngNote", {
-            endpoint: webSearchEndpoint(),
-          })
-        : engine === "metaso"
-          ? t("handlers.webSearchEngine.switchedMetasoNote")
-          : engine === "tavily"
-            ? t("handlers.webSearchEngine.switchedTavilyNote")
-            : engine === "perplexity"
-              ? t("handlers.webSearchEngine.switchedPerplexityNote")
-              : engine === "exa"
-                ? t("handlers.webSearchEngine.switchedExaNote")
-                : engine === "anysearch"
-                  ? t("handlers.webSearchEngine.switchedAnysearchNote")
-                  : "";
     const detail =
       engine === "searxng"
         ? t("handlers.webSearchEngine.confirmedDetail", {

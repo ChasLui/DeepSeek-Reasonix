@@ -3,12 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ToolRegistry } from "../src/tools.js";
-import {
-  UnsupportedSyntaxError,
-  chainAllowed,
-  parseCommandChain,
-  runChain,
-} from "../src/tools/shell-chain.js";
+import { chainAllowed, parseCommandChain, runChain } from "../src/tools/shell-chain.js";
 import { isAllowed, isCommandAllowed, registerShellTools, runCommand } from "../src/tools/shell.js";
 
 describe("parseCommandChain", () => {

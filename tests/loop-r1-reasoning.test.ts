@@ -232,7 +232,7 @@ describe("R1 reasoning_content round-trip", () => {
     // the field, and the NEXT API call 400'd. Invariant is now keyed
     // to the producing model, not to whether reasoning arrived.
     const { fetch: fakeFetch, bodies } = capturingFetch([
-      { content: "straight answer", reasoning_content: undefined },
+      { content: "straight answer" },
       { content: "follow-up" },
     ]);
     const client = new DeepSeekClient({ apiKey: "sk-test", fetch: fakeFetch });
@@ -261,10 +261,7 @@ describe("R1 reasoning_content round-trip", () => {
     // Mirror image: non-thinking-mode sessions must stay clean —
     // sending an empty string here would still be valid per the API
     // but would needlessly churn the prefix cache across V3 calls.
-    const { fetch: fakeFetch, bodies } = capturingFetch([
-      { content: "hi", reasoning_content: undefined },
-      { content: "bye" },
-    ]);
+    const { fetch: fakeFetch, bodies } = capturingFetch([{ content: "hi" }, { content: "bye" }]);
     const client = new DeepSeekClient({ apiKey: "sk-test", fetch: fakeFetch });
     const loop = new CacheFirstLoop({
       client,

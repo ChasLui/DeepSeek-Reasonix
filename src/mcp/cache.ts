@@ -26,7 +26,7 @@ interface ValidEntry {
 // entry + path, or null on any miss.
 function readValidEntry(
   serverName: string,
-  spec: StdioMcpSpec & { env?: Record<string, string> },
+  spec: StdioMcpSpec & { env?: Record<string, string> | undefined },
   client: McpClient,
 ): ValidEntry | null {
   ensureCachePermissions();
@@ -45,7 +45,7 @@ function readValidEntry(
 
 export function loadMcpToolCache(
   serverName: string,
-  spec: StdioMcpSpec & { env?: Record<string, string> },
+  spec: StdioMcpSpec & { env?: Record<string, string> | undefined },
   client: McpClient,
 ): McpTool[] | null {
   const valid = readValidEntry(serverName, spec, client);
@@ -62,13 +62,13 @@ export function loadMcpToolCache(
 // rebuilds from a live tools/list. Per-server timeout falls back to fire-and-forget (FR-004).
 export async function loadMcpToolCacheEager(
   serverName: string,
-  spec: StdioMcpSpec & { env?: Record<string, string> },
+  spec: StdioMcpSpec & { env?: Record<string, string> | undefined },
   client: McpClient,
-  timeoutMs = EAGER_DRIFT_TIMEOUT_MS,
+  timeoutMs: number = EAGER_DRIFT_TIMEOUT_MS,
 ): Promise<McpTool[] | null> {
   const valid = readValidEntry(serverName, spec, client);
   if (!valid) return null;
-  const ms = Number(process.env.REASONIX_MCP_EAGER_DRIFT_TIMEOUT_MS) || timeoutMs;
+  const ms = Number(process.env["REASONIX_MCP_EAGER_DRIFT_TIMEOUT_MS"]) || timeoutMs;
   const driftP = verifyDriftAsync(client, valid.entry);
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeoutP = new Promise<"timeout">((resolve) => {
@@ -90,7 +90,7 @@ export async function loadMcpToolCacheEager(
 
 export function saveMcpToolCache(
   serverName: string,
-  spec: StdioMcpSpec & { env?: Record<string, string> },
+  spec: StdioMcpSpec & { env?: Record<string, string> | undefined },
   client: McpClient,
   tools: readonly McpTool[],
 ): void {
@@ -151,14 +151,14 @@ function cachePath(serverName: string): string {
 }
 
 function cacheDir(): string {
-  return join(process.env.REASONIX_HOME ?? join(homedir(), ".reasonix"), "mcp-cache");
+  return join(process.env["REASONIX_HOME"] ?? join(homedir(), ".reasonix"), "mcp-cache");
 }
 
 function saltPath(): string {
-  return join(process.env.REASONIX_HOME ?? join(homedir(), ".reasonix"), ".cache-salt");
+  return join(process.env["REASONIX_HOME"] ?? join(homedir(), ".reasonix"), ".cache-salt");
 }
 
-function specHash(spec: StdioMcpSpec & { env?: Record<string, string> }): string {
+function specHash(spec: StdioMcpSpec & { env?: Record<string, string> | undefined }): string {
   return hash({
     command: spec.command,
     args: spec.args,

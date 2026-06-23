@@ -59,7 +59,7 @@ describe("memory tools", () => {
         content: "c",
       });
       const parsed = parseToolResult(out);
-      expect(parsed.error).toMatch(/scope='project'/);
+      expect(parsed["error"]).toMatch(/scope='project'/);
     });
 
     it("allows scope='project' when projectRoot is configured", async () => {
@@ -86,7 +86,7 @@ describe("memory tools", () => {
         content: "c",
       });
       const parsed = parseToolResult(out);
-      expect(parsed.error).toMatch(/invalid memory name/);
+      expect(parsed["error"]).toMatch(/invalid memory name/);
     });
 
     it("returns an error when description is empty", async () => {
@@ -100,7 +100,7 @@ describe("memory tools", () => {
         content: "body",
       });
       const parsed = parseToolResult(out);
-      expect(parsed.error).toMatch(/description/);
+      expect(parsed["error"]).toMatch(/description/);
     });
   });
 
@@ -163,7 +163,7 @@ describe("memory tools", () => {
         name: "ghost_one",
       });
       const parsed = parseToolResult(out);
-      expect(parsed.error).toMatch(/recall failed/);
+      expect(parsed["error"]).toMatch(/recall failed/);
     });
 
     it("is marked readOnly (available in plan mode)", () => {

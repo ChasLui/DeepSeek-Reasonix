@@ -5,7 +5,6 @@ import stripAnsi from "strip-ansi";
 import { describe, expect, it } from "vitest";
 import { PlanConfirm } from "../src/cli/ui/PlanConfirm.js";
 import { ViewportBudgetProvider, useReserveRows } from "../src/cli/ui/layout/viewport-budget.js";
-import { makeFakeStdin, makeFakeStdout } from "./helpers/ink-stdio.js";
 
 function bytesFor(plan: string, steps?: { id: string; title: string }[]): string {
   const { lastFrame, unmount } = render(
@@ -127,10 +126,8 @@ describe("PlanConfirm — issue #336 plan body must be visible", () => {
 
   it("uses the allocated expanded detail height before any detail scroll", async () => {
     const longPlan = Array.from({ length: 50 }, (_, i) => `line ${i + 1}`).join("\n");
-    const stdout = makeFakeStdout();
     const { lastFrame, stdin, unmount } = render(
       <PlanConfirm plan={longPlan} steps={[]} onChoose={() => {}} />,
-      { stdout: stdout as never, stdin: makeFakeStdin() as never },
     );
     stdin.write("\x10");
     await nextFrame();

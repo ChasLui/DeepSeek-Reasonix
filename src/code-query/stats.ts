@@ -30,11 +30,11 @@ export function getCodeRelationStats(): CodeRelationStats {
 }
 
 export function recordCodeRelationQuery(input: {
-  candidatesScanned?: number;
-  changedFiles?: number;
-  relations?: number;
-  fallback?: boolean;
-  savedRoundsEstimate?: number;
+  candidatesScanned?: number | undefined;
+  changedFiles?: number | undefined;
+  relations?: number | undefined;
+  fallback?: boolean | undefined;
+  savedRoundsEstimate?: number | undefined;
 }): void {
   stats.queries += 1;
   stats.candidatesScanned += input.candidatesScanned ?? 0;

@@ -49,9 +49,9 @@ function fakeFetch(responses: FakeResponseShape[]): typeof fetch {
     if (body.stream === true) {
       const finish = resp.tool_calls ? "tool_calls" : "stop";
       const delta: Record<string, unknown> = {};
-      if (resp.content) delta.content = resp.content;
-      if (resp.reasoning_content) delta.reasoning_content = resp.reasoning_content;
-      if (resp.tool_calls) delta.tool_calls = resp.tool_calls;
+      if (resp.content) delta["content"] = resp.content;
+      if (resp.reasoning_content) delta["reasoning_content"] = resp.reasoning_content;
+      if (resp.tool_calls) delta["tool_calls"] = resp.tool_calls;
       const frames = [
         `data: ${JSON.stringify({ choices: [{ index: 0, delta }] })}\n\n`,
         `data: ${JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: finish }], usage })}\n\n`,
@@ -89,19 +89,6 @@ function makeClient(responses: FakeResponseShape[]) {
     apiKey: "sk-test",
     fetch: fakeFetch(responses),
   });
-}
-
-function makeToolCallResponses(n: number): FakeResponseShape[] {
-  return Array.from({ length: n }, (_, i) => ({
-    content: "",
-    tool_calls: [
-      {
-        id: `call_${i + 1}`,
-        type: "function",
-        function: { name: "noop", arguments: JSON.stringify({ i: i + 1 }) },
-      },
-    ],
-  }));
 }
 
 function makeSink(): { sink: SubagentSink; events: SubagentEvent[] } {

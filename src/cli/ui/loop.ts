@@ -1,9 +1,9 @@
 /** Pure parsing for `/loop <interval> <prompt>`; cancellation contract is enforced in App.tsx. */
 
 /** Lower bound on loop interval (ms). Faster than this would queue submits faster than turns finish. */
-export const MIN_LOOP_INTERVAL_MS = 5_000;
+export const MIN_LOOP_INTERVAL_MS = 5_000 as const;
 /** Upper bound on loop interval (ms). Beyond a few hours, use cron. */
-export const MAX_LOOP_INTERVAL_MS = 6 * 60 * 60_000;
+export const MAX_LOOP_INTERVAL_MS: number = 6 * 60 * 60_000;
 
 /** Returns null on bad shape OR out-of-range; caller surfaces as usage hint. */
 export function parseLoopInterval(raw: string): { ms: number } | null {

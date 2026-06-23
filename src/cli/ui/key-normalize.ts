@@ -3,15 +3,15 @@
 
 /** Structured-flag subset of Ink's Key — optional across Ink versions. */
 export interface CsiKeyFlags {
-  upArrow?: boolean;
-  downArrow?: boolean;
-  leftArrow?: boolean;
-  rightArrow?: boolean;
-  pageUp?: boolean;
-  pageDown?: boolean;
-  delete?: boolean;
-  shift?: boolean;
-  tab?: boolean;
+  upArrow?: boolean | undefined;
+  downArrow?: boolean | undefined;
+  leftArrow?: boolean | undefined;
+  rightArrow?: boolean | undefined;
+  pageUp?: boolean | undefined;
+  pageDown?: boolean | undefined;
+  delete?: boolean | undefined;
+  shift?: boolean | undefined;
+  tab?: boolean | undefined;
 }
 
 /** Bracketed-paste `[200~`/`[201~` excluded — handled by PromptInput's paste accumulator. */
@@ -39,13 +39,13 @@ const CSI_TAIL_TO_FLAGS: ReadonlyArray<{ tail: string; flags: CsiKeyFlags }> = [
 function alreadyStructured(flags: CsiKeyFlags): boolean {
   return Boolean(
     flags.upArrow ||
-      flags.downArrow ||
-      flags.leftArrow ||
-      flags.rightArrow ||
-      flags.pageUp ||
-      flags.pageDown ||
-      flags.delete ||
-      (flags.tab && flags.shift),
+    flags.downArrow ||
+    flags.leftArrow ||
+    flags.rightArrow ||
+    flags.pageUp ||
+    flags.pageDown ||
+    flags.delete ||
+    (flags.tab && flags.shift),
   );
 }
 

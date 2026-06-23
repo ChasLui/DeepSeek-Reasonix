@@ -3,8 +3,8 @@ import { loadCodeGraphEnabled } from "../../config.js";
 import { buildCodeGraph } from "../../index/code-graph/builder.js";
 
 export interface RebuildCodeGraphOptions {
-  dir?: string;
-  json?: boolean;
+  dir?: string | undefined;
+  json?: boolean | undefined;
 }
 
 export async function rebuildCodeGraphCommand(opts: RebuildCodeGraphOptions = {}): Promise<void> {
@@ -28,6 +28,6 @@ export async function rebuildCodeGraphCommand(opts: RebuildCodeGraphOptions = {}
 }
 
 function codeGraphDisabledReason(): string {
-  const env = process.env.REASONIX_CODE_GRAPH?.trim();
+  const env = process.env["REASONIX_CODE_GRAPH"]?.trim();
   return env ? `REASONIX_CODE_GRAPH=${env}` : "config.codeGraph";
 }

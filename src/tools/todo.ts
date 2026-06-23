@@ -9,7 +9,7 @@ export interface TodoItem {
 }
 
 export interface TodoToolOptions {
-  onTodosUpdated?: (todos: TodoItem[]) => void;
+  onTodosUpdated?: ((todos: TodoItem[]) => void) | undefined;
 }
 
 const DESCRIPTION =
@@ -27,9 +27,9 @@ function validateTodos(raw: unknown): TodoItem[] {
       throw new Error(`todo_write: todo #${i + 1} must be an object`);
     }
     const e = entry as Record<string, unknown>;
-    const content = typeof e.content === "string" ? e.content.trim() : "";
-    const activeForm = typeof e.activeForm === "string" ? e.activeForm.trim() : "";
-    const status = e.status;
+    const content = typeof e["content"] === "string" ? e["content"].trim() : "";
+    const activeForm = typeof e["activeForm"] === "string" ? e["activeForm"].trim() : "";
+    const status = e["status"];
     if (!content) {
       throw new Error(`todo_write: todo #${i + 1} \`content\` must be a non-empty string`);
     }

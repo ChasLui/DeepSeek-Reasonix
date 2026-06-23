@@ -16,7 +16,7 @@ export function ThemePicker({
   currentPreference: ThemeChoice;
   activeTheme: ThemeName;
   onChoose: (outcome: ThemePickerOutcome) => void;
-}) {
+}): React.ReactElement {
   const choices: ThemeChoice[] = ["auto", ...listThemeNames()];
   const items: SelectItem<ThemeChoice>[] = choices.map((value) => ({
     value,

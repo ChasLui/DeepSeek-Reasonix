@@ -1,7 +1,7 @@
 export interface QQAccessConfig {
-  ownerOpenId?: string;
-  allowlist?: readonly string[];
-  runtimeBoundOpenId?: string | null;
+  ownerOpenId?: string | undefined;
+  allowlist?: readonly string[] | undefined;
+  runtimeBoundOpenId?: string | null | undefined;
 }
 
 export type QQAccessMode = "owner" | "allowlist" | "runtime" | "open";

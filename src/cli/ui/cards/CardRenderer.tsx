@@ -23,9 +23,9 @@ import { WarnCard } from "./WarnCard.js";
 // Memoized so the cards array re-rendering (every store update) only
 // reconciles cards whose object identity actually changed — the reducer
 // keeps prior cards reference-stable, so unchanged history skips work.
-export const CardRenderer = React.memo(function CardRenderer({
-  card,
-}: { card: Card }): React.ReactElement {
+export const CardRenderer: React.MemoExoticComponent<
+  ({ card }: { card: Card }) => React.ReactElement
+> = React.memo(function CardRenderer({ card }: { card: Card }): React.ReactElement {
   return <Box flexDirection="column">{renderCard(card)}</Box>;
 });
 

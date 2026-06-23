@@ -6,7 +6,6 @@ import { dirname, join } from "node:path";
 import { MCP_CATALOG } from "./catalog.js";
 import type {
   CacheFile,
-  CachePagination,
   RegistryEntry,
   RegistryInstall,
   RegistrySource,
@@ -14,7 +13,7 @@ import type {
 
 export const OFFICIAL_REGISTRY_URL = "https://registry.modelcontextprotocol.io/v0/servers";
 export const SMITHERY_REGISTRY_URL = "https://registry.smithery.ai/servers";
-export const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+export const CACHE_TTL_MS: number = 24 * 60 * 60 * 1000;
 export const FETCH_TIMEOUT_MS = 10_000;
 export const CACHE_SCHEMA_VERSION = 2;
 
@@ -61,29 +60,29 @@ async function timeoutFetch(url: string, fetcher: typeof fetch): Promise<Respons
 }
 
 interface OfficialPackage {
-  registryType?: string;
-  identifier?: string;
-  version?: string;
+  registryType?: string | undefined;
+  identifier?: string | undefined;
+  version?: string | undefined;
   transport?: { type?: string };
-  environmentVariables?: Array<{ name?: string }>;
+  environmentVariables?: Array<{ name?: string }> | undefined;
 }
 
 interface OfficialServerCore {
-  name?: string;
-  title?: string;
-  description?: string;
-  packages?: OfficialPackage[];
-  remotes?: Array<{ type?: string; url?: string }>;
-  websiteUrl?: string;
-  icons?: Array<{ src?: string }>;
+  name?: string | undefined;
+  title?: string | undefined;
+  description?: string | undefined;
+  packages?: OfficialPackage[] | undefined;
+  remotes?: Array<{ type?: string; url?: string }> | undefined;
+  websiteUrl?: string | undefined;
+  icons?: Array<{ src?: string }> | undefined;
 }
 
 interface OfficialServerEntry {
-  server?: OfficialServerCore;
+  server?: OfficialServerCore | undefined;
 }
 
 interface OfficialResponse {
-  servers?: OfficialServerEntry[];
+  servers?: OfficialServerEntry[] | undefined;
   metadata?: { nextCursor?: string };
 }
 
@@ -150,16 +149,16 @@ export async function fetchOfficialPage(
 }
 
 interface SmitheryServer {
-  qualifiedName?: string;
-  displayName?: string;
-  description?: string;
-  useCount?: number;
-  homepage?: string;
-  iconUrl?: string;
+  qualifiedName?: string | undefined;
+  displayName?: string | undefined;
+  description?: string | undefined;
+  useCount?: number | undefined;
+  homepage?: string | undefined;
+  iconUrl?: string | undefined;
 }
 
 interface SmitheryResponse {
-  servers?: SmitheryServer[];
+  servers?: SmitheryServer[] | undefined;
   pagination?: { totalPages?: number; pageSize?: number };
 }
 
@@ -178,17 +177,17 @@ function normalizeSmithery(s: SmitheryServer): RegistryEntry | null {
 }
 
 interface SmitheryConnection {
-  type?: string;
-  deploymentUrl?: string;
-  bundleUrl?: string;
-  runtime?: string;
+  type?: string | undefined;
+  deploymentUrl?: string | undefined;
+  bundleUrl?: string | undefined;
+  runtime?: string | undefined;
 }
 
 interface SmitheryDetailResponse {
-  qualifiedName?: string;
-  remote?: boolean;
-  deploymentUrl?: string | null;
-  connections?: SmitheryConnection[];
+  qualifiedName?: string | undefined;
+  remote?: boolean | undefined;
+  deploymentUrl?: string | null | undefined;
+  connections?: SmitheryConnection[] | undefined;
 }
 
 /** Resolve a Smithery listing entry into a runnable install. http → streamable-http remote; stdio → spawn via @smithery/cli. */
@@ -253,15 +252,15 @@ export type FetchProgress = (info: {
 
 export interface FetchOptions {
   /** Force a network refresh even when cache is fresh. */
-  noCache?: boolean;
+  noCache?: boolean | undefined;
   /** Override fetch — primarily for tests. */
-  fetcher?: typeof fetch;
+  fetcher?: typeof fetch | undefined;
   /** Override cache file path — primarily for tests. */
-  cachePath?: string;
+  cachePath?: string | undefined;
   /** Skip the fallback chain and force a specific source. */
-  preferSource?: "official" | "smithery" | "local";
+  preferSource?: "official" | "smithery" | "local" | undefined;
   /** Progress callback — once per fetched page. */
-  onProgress?: FetchProgress;
+  onProgress?: FetchProgress | undefined;
 }
 
 export interface RegistryHandle {
@@ -396,15 +395,15 @@ export async function openRegistry(opts: FetchOptions = {}): Promise<RegistryHan
 
 export interface LoadMoreOptions {
   /** Number of additional pages to fetch (cap). Stops early when the source is exhausted. */
-  pages?: number;
+  pages?: number | undefined;
   /** Override fetch — primarily for tests. */
-  fetcher?: typeof fetch;
+  fetcher?: typeof fetch | undefined;
   /** Stop early if filter() finds at least this many matching entries (across all loaded pages). */
-  matchTarget?: number;
+  matchTarget?: number | undefined;
   /** Filter applied for matchTarget counting. */
-  filter?: (e: RegistryEntry) => boolean;
+  filter?: ((e: RegistryEntry) => boolean | undefined) | undefined;
   /** Progress callback. */
-  onProgress?: FetchProgress;
+  onProgress?: FetchProgress | undefined;
 }
 
 export interface LoadMoreResult {

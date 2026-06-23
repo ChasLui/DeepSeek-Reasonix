@@ -97,7 +97,9 @@ describe("CacheFirstLoop window budget gate", () => {
     });
 
     const events: { role: string; error?: string }[] = [];
-    for await (const ev of loop.step("q")) events.push({ role: ev.role, error: ev.error });
+    for await (const ev of loop.step("q")) {
+      events.push({ role: ev.role, ...(ev.error !== undefined ? { error: ev.error } : {}) });
+    }
 
     expect(events).toHaveLength(1);
     expect(events[0]?.role).toBe("error");
@@ -207,7 +209,9 @@ describe("CacheFirstLoop window budget gate", () => {
     });
 
     const events: { role: string; error?: string }[] = [];
-    for await (const ev of loop.step("q")) events.push({ role: ev.role, error: ev.error });
+    for await (const ev of loop.step("q")) {
+      events.push({ role: ev.role, ...(ev.error !== undefined ? { error: ev.error } : {}) });
+    }
     // Per-session cap is checked first, so its message wins.
     expect(events[0]?.role).toBe("error");
     expect(events[0]?.error).toMatch(/budget exhausted/);
@@ -235,7 +239,9 @@ describe("CacheFirstLoop window budget gate", () => {
     const callsBefore = fetcher.calls();
 
     const events2: { role: string; error?: string }[] = [];
-    for await (const ev of loop.step("q2")) events2.push({ role: ev.role, error: ev.error });
+    for await (const ev of loop.step("q2")) {
+      events2.push({ role: ev.role, ...(ev.error !== undefined ? { error: ev.error } : {}) });
+    }
     expect(events2).toHaveLength(1);
     expect(events2[0]?.error).toMatch(/rolling budget exhausted/);
     expect(fetcher.calls()).toBe(callsBefore); // no new model call
@@ -264,7 +270,9 @@ describe("CacheFirstLoop window budget gate", () => {
     });
 
     const events: { role: string; error?: string }[] = [];
-    for await (const ev of loop.step("q")) events.push({ role: ev.role, error: ev.error });
+    for await (const ev of loop.step("q")) {
+      events.push({ role: ev.role, ...(ev.error !== undefined ? { error: ev.error } : {}) });
+    }
     expect(events).toHaveLength(1);
     expect(events[0]?.role).toBe("error");
     expect(events[0]?.error).toMatch(/rolling budget exhausted/);

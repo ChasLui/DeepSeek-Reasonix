@@ -34,8 +34,8 @@ describe("loadDotMcpJson", () => {
     const out = loadDotMcpJson(root);
     expect(out).toBeDefined();
     expect(Object.keys(out!)).toEqual(["local", "gh", "events"]);
-    expect(out!.local!.command).toBe("node");
-    expect(out!.gh!.url).toBe("https://api.githubcopilot.com/mcp/");
+    expect(out!["local"]!.command).toBe("node");
+    expect(out!["gh"]!.url).toBe("https://api.githubcopilot.com/mcp/");
   });
 
   it("returns undefined for malformed JSON", () => {

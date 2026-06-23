@@ -8,20 +8,20 @@ import { serializeToolResult } from "../src/toon/encode-result.js";
 import { getToonStats, resetToonStats } from "../src/toon/stats.js";
 
 describe("TOON tool-result payloads", () => {
-  const originalToonEnv = process.env.REASONIX_TOON;
+  const originalToonEnv = process.env["REASONIX_TOON"];
 
   beforeEach(() => {
     resetToonStats();
     // biome-ignore lint/performance/noDelete: the string "undefined" leaks into process.env otherwise
-    delete process.env.REASONIX_TOON;
+    delete process.env["REASONIX_TOON"];
   });
 
   afterEach(() => {
     if (originalToonEnv === undefined) {
       // biome-ignore lint/performance/noDelete: restore exact env state
-      delete process.env.REASONIX_TOON;
+      delete process.env["REASONIX_TOON"];
     } else {
-      process.env.REASONIX_TOON = originalToonEnv;
+      process.env["REASONIX_TOON"] = originalToonEnv;
     }
   });
 
@@ -85,7 +85,7 @@ describe("TOON tool-result payloads", () => {
 
     expect(first).toContain("rejectedReason: plan-mode");
     expect(first.trimStart().startsWith("{")).toBe(false);
-    expect(decodeToolResultObject(first)?.rejectedReason).toBe("plan-mode");
+    expect(decodeToolResultObject(first)?.["rejectedReason"]).toBe("plan-mode");
     expect(decodeToolResultObject(second)).toMatchObject({
       rejectedReason: "plan-mode",
       consecutiveInterceptorRejection: true,

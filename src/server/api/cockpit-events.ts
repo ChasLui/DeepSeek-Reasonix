@@ -37,7 +37,7 @@ const TOOL_FEED_CAP = 6;
 
 export function computeEventsCockpit(
   now: number = Date.now(),
-  _sessionsDirOverride?: string,
+  _sessionsDirOverride?: string | undefined,
 ): EventsCockpit {
   const sessions = recentEventSessions(now);
   if (sessions.length === 0) {
@@ -182,8 +182,8 @@ function summarizeArgs(args: string): string {
   }
   if (parsed && typeof parsed === "object") {
     const obj = parsed as Record<string, unknown>;
-    const path = obj.path ?? obj.file_path ?? obj.filename;
-    const command = obj.command;
+    const path = obj["path"] ?? obj["file_path"] ?? obj["filename"];
+    const command = obj["command"];
     if (typeof command === "string")
       return command.length > 60 ? `${command.slice(0, 60)}…` : command;
     if (typeof path === "string") return path;

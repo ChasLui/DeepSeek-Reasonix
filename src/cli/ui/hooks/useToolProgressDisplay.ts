@@ -2,17 +2,26 @@ import { type Dispatch, type SetStateAction, useCallback, useEffect, useState } 
 
 export interface ProgressSinkRef {
   current:
-    | ((info: { toolName: string; progress: number; total?: number; message?: string }) => void)
+    | ((info: {
+        toolName: string;
+        progress: number;
+        total?: number | undefined;
+        message?: string | undefined;
+      }) => void)
     | null;
 }
+
+type ToolProgress = {
+  progress: number;
+  total?: number | undefined;
+  message?: string | undefined;
+};
 
 export interface ToolProgressDisplay {
   ongoingTool: { name: string; args?: string } | null;
   setOngoingTool: Dispatch<SetStateAction<{ name: string; args?: string } | null>>;
-  toolProgress: { progress: number; total?: number; message?: string } | null;
-  setToolProgress: Dispatch<
-    SetStateAction<{ progress: number; total?: number; message?: string } | null>
-  >;
+  toolProgress: ToolProgress | null;
+  setToolProgress: Dispatch<SetStateAction<ToolProgress | null>>;
   statusLine: string | null;
   setStatusLine: Dispatch<SetStateAction<string | null>>;
   /** Clears all three — call from the turn-end `finally`. */
@@ -21,11 +30,7 @@ export interface ToolProgressDisplay {
 
 export function useToolProgressDisplay(progressSink?: ProgressSinkRef): ToolProgressDisplay {
   const [ongoingTool, setOngoingTool] = useState<{ name: string; args?: string } | null>(null);
-  const [toolProgress, setToolProgress] = useState<{
-    progress: number;
-    total?: number;
-    message?: string;
-  } | null>(null);
+  const [toolProgress, setToolProgress] = useState<ToolProgress | null>(null);
   const [statusLine, setStatusLine] = useState<string | null>(null);
 
   useEffect(() => {
@@ -33,8 +38,8 @@ export function useToolProgressDisplay(progressSink?: ProgressSinkRef): ToolProg
     progressSink.current = (info) => {
       setToolProgress({
         progress: info.progress,
-        total: info.total,
-        message: info.message,
+        ...(info.total !== undefined ? { total: info.total } : {}),
+        ...(info.message !== undefined ? { message: info.message } : {}),
       });
     };
     return () => {

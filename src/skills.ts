@@ -44,10 +44,10 @@ export interface Skill {
   /** Absolute path to the SKILL.md (or {name}.md) file, or "(builtin)" for shipped defaults. */
   path: string;
   /** Parsed `allowed-tools` frontmatter — when present, the spawned subagent's registry is scoped to these literal tool names. */
-  allowedTools?: readonly string[];
+  allowedTools?: readonly string[] | undefined;
   runAs: SkillRunAs;
   /** Subagent model override; only meaningful when `runAs === "subagent"`. */
-  model?: string;
+  model?: string | undefined;
 }
 
 export interface SkillRoot {
@@ -59,19 +59,19 @@ export interface SkillRoot {
 
 export interface SkillStoreOptions {
   /** Override `$HOME` — tests point this at a tmpdir. */
-  homeDir?: string;
+  homeDir?: string | undefined;
   /** Required for project-scope skills; omit to read only the global scope. */
-  projectRoot?: string;
-  customSkillPaths?: readonly string[];
+  projectRoot?: string | undefined;
+  customSkillPaths?: readonly string[] | undefined;
   /** Suppress bundled built-ins — for tests asserting exact list contents. */
-  disableBuiltins?: boolean;
-  toonMode?: ToonMode;
+  disableBuiltins?: boolean | undefined;
+  toonMode?: ToonMode | undefined;
 }
 
 /** Reject skill files that would silently disappear from the prefix index — `description:` is what `applySkillsIndex` keys on. */
 export function validateSkillFrontmatter(raw: string): { ok: true } | { error: string } {
   const { data } = parseFrontmatter(raw);
-  const desc = (data.description ?? "").trim();
+  const desc = (data["description"] ?? "").trim();
   if (!desc) {
     return {
       error:
@@ -272,8 +272,8 @@ export class SkillStore {
       return null;
     }
     const { data, body } = parseFrontmatter(raw);
-    const name = data.name && isValidSkillName(data.name) ? data.name : stem;
-    const description = (data.description ?? "").trim();
+    const name = data["name"] && isValidSkillName(data["name"]) ? data["name"] : stem;
+    const description = (data["description"] ?? "").trim();
     // Surface the silent-pin failure mode at parse time. Builtins always have
     // a description so user-authored files are the only ones that hit this.
     if (!description) {
@@ -288,8 +288,8 @@ export class SkillStore {
       scope,
       path,
       allowedTools: parseAllowedTools(data["allowed-tools"]),
-      runAs: parseRunAs(data.runAs, data.context, data.agent),
-      model: data.model?.startsWith("deepseek-") ? data.model : undefined,
+      runAs: parseRunAs(data["runAs"], data["context"], data["agent"]),
+      model: data["model"]?.startsWith("deepseek-") ? data["model"] : undefined,
     };
   }
 }
@@ -415,10 +415,10 @@ export function skillsIndexExceedsCap(
 
 /** Skills as catalog entries, resolved the same way applySkillsIndex resolves them so the catalog set matches the rendered index (Slice 5). */
 export function resolveCatalogSkills(opts: {
-  projectRoot?: string;
-  homeDir?: string;
-  cfg?: { skills?: { paths?: readonly unknown[] } };
-  toonMode?: ToonMode;
+  projectRoot?: string | undefined;
+  homeDir?: string | undefined;
+  cfg?: { skills?: { paths?: readonly unknown[] | undefined } | undefined };
+  toonMode?: ToonMode | undefined;
 }): CatalogSkill[] {
   const customSkillPaths = opts.cfg?.skills?.paths
     ? resolveSkillPaths(opts.cfg.skills.paths, opts.projectRoot ?? process.cwd())

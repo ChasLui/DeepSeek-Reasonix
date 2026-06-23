@@ -8,33 +8,33 @@ export interface JsonRpcRequest<P = unknown> {
   jsonrpc: "2.0";
   id: JsonRpcId;
   method: string;
-  params?: P;
+  params?: P | undefined;
 }
 
 export interface JsonRpcNotification<P = unknown> {
   jsonrpc: "2.0";
   method: string;
-  params?: P;
+  params?: P | undefined;
 }
 
 export interface JsonRpcError {
   code: number;
   message: string;
-  data?: unknown;
+  data?: unknown | undefined;
 }
 
 export interface JsonRpcResponse<R = unknown> {
   jsonrpc: "2.0";
   id: JsonRpcId | null;
-  result?: R;
-  error?: JsonRpcError;
+  result?: R | undefined;
+  error?: JsonRpcError | undefined;
 }
 
 export interface InitializeParams {
   protocolVersion: number;
   clientCapabilities?: {
     fs?: { readTextFile?: boolean; writeTextFile?: boolean };
-    terminal?: boolean;
+    terminal?: boolean | undefined;
   };
   clientInfo?: { name: string; title?: string; version?: string };
 }
@@ -42,7 +42,7 @@ export interface InitializeParams {
 export interface InitializeResult {
   protocolVersion: number;
   agentCapabilities: {
-    loadSession?: boolean;
+    loadSession?: boolean | undefined;
     promptCapabilities?: { image?: boolean; audio?: boolean; embeddedContext?: boolean };
     mcpCapabilities?: { http?: boolean; sse?: boolean };
   };
@@ -51,12 +51,12 @@ export interface InitializeResult {
 }
 
 export interface SessionNewParams {
-  cwd?: string;
+  cwd?: string | undefined;
   mcpServers?: Array<{
     name: string;
-    command?: string;
-    args?: string[];
-    env?: Record<string, string>;
+    command?: string | undefined;
+    args?: string[] | undefined;
+    env?: Record<string, string> | undefined;
   }>;
 }
 
@@ -93,16 +93,16 @@ export type SessionUpdate =
   | {
       sessionUpdate: "tool_call";
       toolCallId: string;
-      title?: string;
-      kind?: "read" | "edit" | "search" | "execute" | "other";
-      status?: "pending" | "in_progress" | "completed" | "failed";
-      rawInput?: unknown;
+      title?: string | undefined;
+      kind?: "read" | "edit" | "search" | "execute" | "other" | undefined;
+      status?: "pending" | "in_progress" | "completed" | "failed" | undefined;
+      rawInput?: unknown | undefined;
     }
   | {
       sessionUpdate: "tool_call_update";
       toolCallId: string;
-      status?: "pending" | "in_progress" | "completed" | "failed";
-      content?: Array<{ type: "content"; content: { type: "text"; text: string } }>;
+      status?: "pending" | "in_progress" | "completed" | "failed" | undefined;
+      content?: Array<{ type: "content"; content: { type: "text"; text: string } }> | undefined;
     }
   | {
       sessionUpdate: "plan";
@@ -134,10 +134,10 @@ export interface PermissionRequestParams {
   sessionId: string;
   toolCall: {
     toolCallId: string;
-    title?: string;
-    kind?: "read" | "edit" | "search" | "execute" | "other";
-    status?: "pending";
-    rawInput?: unknown;
+    title?: string | undefined;
+    kind?: "read" | "edit" | "search" | "execute" | "other" | undefined;
+    status?: "pending" | undefined;
+    rawInput?: unknown | undefined;
   };
   options: PermissionOption[];
 }

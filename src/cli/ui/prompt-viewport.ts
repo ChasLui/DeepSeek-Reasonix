@@ -76,7 +76,7 @@ export function buildViewport(
   line: string,
   cursorCol: number | null,
   visibleCells: number,
-  pastes?: ReadonlyMap<number, PasteEntry>,
+  pastes?: ReadonlyMap<number, PasteEntry> | undefined,
 ): Viewport {
   if (visibleCells <= 0) {
     return {
@@ -111,7 +111,7 @@ export function buildViewport(
 function clipFromLeft(
   line: string,
   visibleCells: number,
-  pastes?: ReadonlyMap<number, PasteEntry>,
+  pastes?: ReadonlyMap<number, PasteEntry> | undefined,
 ): Viewport {
   // Show as much of the head as fits; mark the right edge as hidden.
   // Reserve 1 cell for the `›` marker.
@@ -119,7 +119,6 @@ function clipFromLeft(
   let used = 0;
   let end = 0;
   while (end < line.length) {
-    const ch = line[end]!;
     const cw = charCellsAt(line, end, pastes);
     if (used + cw > budget) break;
     used += cw;
@@ -133,7 +132,7 @@ function clipAroundCursor(
   line: string,
   cursorCol: number,
   visibleCells: number,
-  pastes?: ReadonlyMap<number, PasteEntry>,
+  pastes?: ReadonlyMap<number, PasteEntry> | undefined,
 ): Viewport {
   // `cursorCol` is between 0 and line.length (inclusive). The cursor
   // visually sits BEFORE the char at line[cursorCol] (or after the

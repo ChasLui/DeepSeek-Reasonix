@@ -2,13 +2,8 @@ import { resolve } from "node:path";
 import { type DeepSeekClient, Usage } from "./client.js";
 import type { PauseGate } from "./core/pause-gate.js";
 import { pauseGate as defaultPauseGate } from "./core/pause-gate.js";
-import { type HookPayload, type ResolvedHook, runHooks } from "./hooks.js";
-import {
-  DEFAULT_MAX_RESULT_CHARS,
-  DEFAULT_MAX_RESULT_TOKENS,
-  truncateForModel,
-  truncateForModelByTokens,
-} from "./mcp/registry.js";
+import { type ResolvedHook, runHooks } from "./hooks.js";
+import { DEFAULT_MAX_RESULT_CHARS, DEFAULT_MAX_RESULT_TOKENS } from "./mcp/registry.js";
 
 import {
   type BudgetWindow,
@@ -61,7 +56,7 @@ import {
   rewriteSession,
 } from "./memory/session.js";
 import { PromptCacheMonitor } from "./observability/prompt-cache-monitor.js";
-import { type RepairReport, ToolCallRepair } from "./repair/index.js";
+import { ToolCallRepair } from "./repair/index.js";
 import { getDb } from "./storage/db.js";
 import { listUnlockedTools, nextUnlockSeq, recordUnlock } from "./storage/unlocked-tools-repo.js";
 import { SessionStats, type TurnStats } from "./telemetry/stats.js";
@@ -92,66 +87,66 @@ export type { EventRole, LoopEvent } from "./loop/types.js";
 export interface CacheFirstLoopOptions {
   client: DeepSeekClient;
   prefix: ImmutablePrefix;
-  tools?: ToolRegistry;
-  model?: string;
-  stream?: boolean;
-  reasoningEffort?: "high" | "max";
-  autoEscalate?: boolean;
+  tools?: ToolRegistry | undefined;
+  model?: string | undefined;
+  stream?: boolean | undefined;
+  reasoningEffort?: "high" | "max" | undefined;
+  autoEscalate?: boolean | undefined;
   /** Soft USD cap — warns at 80%, refuses next turn at 100%. Opt-in (default no cap). */
-  budgetUsd?: number;
+  budgetUsd?: number | undefined;
   /** Cross-session rolling spend guardrails (daily/weekly/monthly, any combination). Reads the shared usage aggregate from SQLite (no separate ledger), so subagent + every session's spend counts. Empty/undefined → no window guardrail. */
-  budgetWindows?: BudgetWindow[];
+  budgetWindows?: BudgetWindow[] | undefined;
   /** Workspace root for `scope: "workspace"` budget windows. Resolved before use; absent ⟹ workspace windows are inert in this loop. */
-  workspace?: string;
-  session?: string;
+  workspace?: string | undefined;
+  session?: string | undefined;
   /** PreToolUse + PostToolUse only — UserPromptSubmit / Stop live at the App boundary. */
-  hooks?: ResolvedHook[];
+  hooks?: ResolvedHook[] | undefined;
   /** `cwd` reported to hooks; `reasonix code` sets this to the sandbox root, not shell home. */
-  hookCwd?: string;
+  hookCwd?: string | undefined;
   /** PauseGate bridge — defaults to singleton, injectable for tests. */
-  confirmationGate?: PauseGate;
+  confirmationGate?: PauseGate | undefined;
   /** Re-runs the prompt builder (applyMemoryStack / codeSystemPrompt) on /new so REASONIX.md edits take effect without a restart. Accepting a cache miss is the price. */
-  rebuildSystem?: () => string;
+  rebuildSystem?: (() => string) | undefined;
   /** Pillar 5 opt-in pre-turn retrieval (off by default / undefined). Returns a
    * block to append to the append-only log AFTER the user message (never the
    * prefix — P1/C-003), or null to inject nothing. */
-  preTurnRetrieval?: (userInput: string) => Promise<PreTurnInjection | null>;
+  preTurnRetrieval?: ((userInput: string) => Promise<PreTurnInjection | null>) | undefined;
 }
 
 export interface PreTurnInjection {
   /** Becomes a role:"user" log entry appended after the user message. */
   content: string;
   /** Optional one-line cost/visibility note surfaced to the user. */
-  note?: string;
+  note?: string | undefined;
 }
 
 export interface ReconfigurableOptions {
-  model?: string;
-  stream?: boolean;
+  model?: string | undefined;
+  stream?: boolean | undefined;
   /** V4 thinking mode only. */
-  reasoningEffort?: "high" | "max";
+  reasoningEffort?: "high" | "max" | undefined;
   /** `false` pins to `model` — disables the model-marker scavenge that flips flash→pro. */
-  autoEscalate?: boolean;
+  autoEscalate?: boolean | undefined;
 }
 
 export class CacheFirstLoop {
   readonly client: DeepSeekClient;
   readonly prefix: ImmutablePrefix;
   readonly tools: ToolRegistry;
-  readonly log = new AppendOnlyLog();
-  readonly scratch = new VolatileScratch();
-  readonly stats = new SessionStats();
+  readonly log: AppendOnlyLog = new AppendOnlyLog();
+  readonly scratch: VolatileScratch = new VolatileScratch();
+  readonly stats: SessionStats = new SessionStats();
   readonly repair: ToolCallRepair;
   /** Session-scoped read-dedup — owned here so each loop (tab / ACP session /
    * subagent) is isolated, and so the active log can invalidate stub-eligible
    * entries the moment a fold/heal/shrink removes their output. */
-  readonly readDedup = new ReadDedupState();
-  readonly fileCache = new FileReadCache();
-  readonly parseCache = new ParseTreeCache();
-  readonly toolSchemaIndex = new ToolSchemaIndex();
-  readonly promptFingerprint = new PromptFingerprint(this.toolSchemaIndex);
-  readonly cacheMonitor = new PromptCacheMonitor();
-  readonly webFetchCache = new WebFetchCache();
+  readonly readDedup: ReadDedupState = new ReadDedupState();
+  readonly fileCache: FileReadCache = new FileReadCache();
+  readonly parseCache: ParseTreeCache = new ParseTreeCache();
+  readonly toolSchemaIndex: ToolSchemaIndex = new ToolSchemaIndex();
+  readonly promptFingerprint: PromptFingerprint = new PromptFingerprint(this.toolSchemaIndex);
+  readonly cacheMonitor: PromptCacheMonitor = new PromptCacheMonitor();
+  readonly webFetchCache: WebFetchCache = new WebFetchCache();
 
   // Mutable via configure() — slash commands in the TUI / library callers tweak
   // these mid-session so users don't have to restart.
@@ -292,8 +287,8 @@ export class CacheFirstLoop {
       allowedToolNames: allowedNames,
       isMutating: (call) => this.isMutating(call),
       isStormExempt,
-      stormThreshold: parsePositiveIntEnv(process.env.REASONIX_STORM_THRESHOLD),
-      stormWindow: parsePositiveIntEnv(process.env.REASONIX_STORM_WINDOW),
+      stormThreshold: parsePositiveIntEnv(process.env["REASONIX_STORM_THRESHOLD"]),
+      stormWindow: parsePositiveIntEnv(process.env["REASONIX_STORM_WINDOW"]),
     });
 
     // Heal-on-load: oversized tool results would 400 the next call before the user types.
@@ -490,7 +485,7 @@ export class CacheFirstLoop {
     const records = readUsageSince(now - maxDays * 24 * 60 * 60 * 1000);
     return checkBudgetWindows(records, this.budgetWindows, {
       now,
-      workspace: this.workspace,
+      ...(this.workspace !== undefined ? { workspace: this.workspace } : {}),
     });
   }
 
@@ -1355,9 +1350,9 @@ export class CacheFirstLoop {
           role: "status",
           content: t("loop.compactingHistoryStatus", { aggressiveTag }),
         };
-        const result = await this.compactHistory({
-          keepRecentTokens: decision.tailBudget,
-        });
+        const result = await this.compactHistory(
+          decision.tailBudget === undefined ? {} : { keepRecentTokens: decision.tailBudget },
+        );
         if (result.folded) {
           yield {
             turn: this._turn,
@@ -1395,8 +1390,8 @@ export class CacheFirstLoop {
       }
 
       const dispatchSerial =
-        (process.env.REASONIX_TOOL_DISPATCH ?? "auto").toLowerCase() === "serial";
-      const parallelMaxParsed = Number.parseInt(process.env.REASONIX_PARALLEL_MAX ?? "", 10);
+        (process.env["REASONIX_TOOL_DISPATCH"] ?? "auto").toLowerCase() === "serial";
+      const parallelMaxParsed = Number.parseInt(process.env["REASONIX_PARALLEL_MAX"] ?? "", 10);
       const parallelMax =
         Number.isFinite(parallelMaxParsed) && parallelMaxParsed >= 1
           ? Math.min(parallelMaxParsed, 16)

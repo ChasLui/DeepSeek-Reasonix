@@ -405,7 +405,7 @@ describe("searchMetaso", () => {
       const out = await webSearch("test query", { engine: "metaso", topK: 5 });
       expect(captured.url).toContain("metaso.cn/api/v1/search");
       expect(captured.method).toBe("POST");
-      expect(captured.headers.Authorization).toBe(`Bearer ${loadMetasoApiKey()}`);
+      expect(captured.headers["Authorization"]).toBe(`Bearer ${loadMetasoApiKey()}`);
       expect(captured.headers["Content-Type"]).toBe("application/json");
       const body = JSON.parse(captured.body);
       expect(body.q).toBe("test query");
@@ -536,22 +536,22 @@ describe("searchTavily", () => {
   };
 
   it("requires an API key — throws a setup-pointing error when none is set", async () => {
-    const origKey = process.env.TAVILY_API_KEY;
+    const origKey = process.env["TAVILY_API_KEY"];
     // biome-ignore lint/performance/noDelete: env var must be absent, not "undefined"
-    delete process.env.TAVILY_API_KEY;
+    delete process.env["TAVILY_API_KEY"];
     try {
       await expect(webSearch("q", { engine: "tavily" })).rejects.toThrow(/Tavily.*API key/i);
       // Plain-string match — checking the error message includes the signup URL,
       // not testing URL safety; using a regex here trips CodeQL's missing-anchor rule.
       await expect(webSearch("q", { engine: "tavily" })).rejects.toThrow("tavily.com");
     } finally {
-      if (origKey !== undefined) process.env.TAVILY_API_KEY = origKey;
+      if (origKey !== undefined) process.env["TAVILY_API_KEY"] = origKey;
     }
   });
 
   it("POSTs to Tavily with the api_key in the body", async () => {
-    const origKey = process.env.TAVILY_API_KEY;
-    process.env.TAVILY_API_KEY = "tvly-test-key";
+    const origKey = process.env["TAVILY_API_KEY"];
+    process.env["TAVILY_API_KEY"] = "tvly-test-key";
     const captured: { url: string; method: string; body: string } = {
       url: "",
       method: "",
@@ -585,16 +585,16 @@ describe("searchTavily", () => {
       globalThis.fetch = originalFetch;
       if (origKey === undefined) {
         // biome-ignore lint/performance/noDelete: same reason — must drop, not set to "undefined"
-        delete process.env.TAVILY_API_KEY;
+        delete process.env["TAVILY_API_KEY"];
       } else {
-        process.env.TAVILY_API_KEY = origKey;
+        process.env["TAVILY_API_KEY"] = origKey;
       }
     }
   });
 
   it("maps 401/403 to a key-rejected error", async () => {
-    const origKey = process.env.TAVILY_API_KEY;
-    process.env.TAVILY_API_KEY = "tvly-bad";
+    const origKey = process.env["TAVILY_API_KEY"];
+    process.env["TAVILY_API_KEY"] = "tvly-bad";
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(
       async () => new Response("forbidden", { status: 403 }),
@@ -605,16 +605,16 @@ describe("searchTavily", () => {
       globalThis.fetch = originalFetch;
       if (origKey === undefined) {
         // biome-ignore lint/performance/noDelete: same reason
-        delete process.env.TAVILY_API_KEY;
+        delete process.env["TAVILY_API_KEY"];
       } else {
-        process.env.TAVILY_API_KEY = origKey;
+        process.env["TAVILY_API_KEY"] = origKey;
       }
     }
   });
 
   it("maps 429 to a quota/rate-limit error", async () => {
-    const origKey = process.env.TAVILY_API_KEY;
-    process.env.TAVILY_API_KEY = "tvly-test-key";
+    const origKey = process.env["TAVILY_API_KEY"];
+    process.env["TAVILY_API_KEY"] = "tvly-test-key";
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(
       async () => new Response("too many", { status: 429 }),
@@ -625,16 +625,16 @@ describe("searchTavily", () => {
       globalThis.fetch = originalFetch;
       if (origKey === undefined) {
         // biome-ignore lint/performance/noDelete: same reason
-        delete process.env.TAVILY_API_KEY;
+        delete process.env["TAVILY_API_KEY"];
       } else {
-        process.env.TAVILY_API_KEY = origKey;
+        process.env["TAVILY_API_KEY"] = origKey;
       }
     }
   });
 
   it("returns empty array when results is empty", async () => {
-    const origKey = process.env.TAVILY_API_KEY;
-    process.env.TAVILY_API_KEY = "tvly-test-key";
+    const origKey = process.env["TAVILY_API_KEY"];
+    process.env["TAVILY_API_KEY"] = "tvly-test-key";
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(
       async () =>
@@ -650,9 +650,9 @@ describe("searchTavily", () => {
       globalThis.fetch = originalFetch;
       if (origKey === undefined) {
         // biome-ignore lint/performance/noDelete: same reason
-        delete process.env.TAVILY_API_KEY;
+        delete process.env["TAVILY_API_KEY"];
       } else {
-        process.env.TAVILY_API_KEY = origKey;
+        process.env["TAVILY_API_KEY"] = origKey;
       }
     }
   });
@@ -668,22 +668,22 @@ describe("searchPerplexity", () => {
   };
 
   it("requires an API key — throws a setup-pointing error when none is set", async () => {
-    const origKey = process.env.PERPLEXITY_API_KEY;
+    const origKey = process.env["PERPLEXITY_API_KEY"];
     // biome-ignore lint/performance/noDelete: env var must be absent, not "undefined"
-    delete process.env.PERPLEXITY_API_KEY;
+    delete process.env["PERPLEXITY_API_KEY"];
     try {
       await expect(webSearch("q", { engine: "perplexity" })).rejects.toThrow(
         /Perplexity.*API key/i,
       );
       await expect(webSearch("q", { engine: "perplexity" })).rejects.toThrow("perplexity.ai");
     } finally {
-      if (origKey !== undefined) process.env.PERPLEXITY_API_KEY = origKey;
+      if (origKey !== undefined) process.env["PERPLEXITY_API_KEY"] = origKey;
     }
   });
 
   it("POSTs to Perplexity with bearer auth and sonar model", async () => {
-    const origKey = process.env.PERPLEXITY_API_KEY;
-    process.env.PERPLEXITY_API_KEY = "pplx-test-key";
+    const origKey = process.env["PERPLEXITY_API_KEY"];
+    process.env["PERPLEXITY_API_KEY"] = "pplx-test-key";
     const captured: {
       url: string;
       method: string;
@@ -699,7 +699,7 @@ describe("searchPerplexity", () => {
     globalThis.fetch = vi.fn(async (url: string | URL, init?: RequestInit) => {
       captured.url = String(url);
       captured.method = init?.method ?? "GET";
-      captured.auth = String((init?.headers as Record<string, string>)?.Authorization ?? "");
+      captured.auth = String((init?.headers as Record<string, string>)?.["Authorization"] ?? "");
       captured.body = String(init?.body ?? "");
       return new Response(JSON.stringify(sampleResponse), {
         status: 200,
@@ -732,16 +732,16 @@ describe("searchPerplexity", () => {
       globalThis.fetch = originalFetch;
       if (origKey === undefined) {
         // biome-ignore lint/performance/noDelete: same reason
-        delete process.env.PERPLEXITY_API_KEY;
+        delete process.env["PERPLEXITY_API_KEY"];
       } else {
-        process.env.PERPLEXITY_API_KEY = origKey;
+        process.env["PERPLEXITY_API_KEY"] = origKey;
       }
     }
   });
 
   it("maps 401/403 to a key-rejected error", async () => {
-    const origKey = process.env.PERPLEXITY_API_KEY;
-    process.env.PERPLEXITY_API_KEY = "pplx-bad";
+    const origKey = process.env["PERPLEXITY_API_KEY"];
+    process.env["PERPLEXITY_API_KEY"] = "pplx-bad";
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(
       async () => new Response("forbidden", { status: 403 }),
@@ -754,16 +754,16 @@ describe("searchPerplexity", () => {
       globalThis.fetch = originalFetch;
       if (origKey === undefined) {
         // biome-ignore lint/performance/noDelete: same reason
-        delete process.env.PERPLEXITY_API_KEY;
+        delete process.env["PERPLEXITY_API_KEY"];
       } else {
-        process.env.PERPLEXITY_API_KEY = origKey;
+        process.env["PERPLEXITY_API_KEY"] = origKey;
       }
     }
   });
 
   it("maps 429 to a rate-limit error", async () => {
-    const origKey = process.env.PERPLEXITY_API_KEY;
-    process.env.PERPLEXITY_API_KEY = "pplx-test-key";
+    const origKey = process.env["PERPLEXITY_API_KEY"];
+    process.env["PERPLEXITY_API_KEY"] = "pplx-test-key";
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(
       async () => new Response("too many", { status: 429 }),
@@ -774,16 +774,16 @@ describe("searchPerplexity", () => {
       globalThis.fetch = originalFetch;
       if (origKey === undefined) {
         // biome-ignore lint/performance/noDelete: same reason
-        delete process.env.PERPLEXITY_API_KEY;
+        delete process.env["PERPLEXITY_API_KEY"];
       } else {
-        process.env.PERPLEXITY_API_KEY = origKey;
+        process.env["PERPLEXITY_API_KEY"] = origKey;
       }
     }
   });
 
   it("maps unparseable JSON to a parse error", async () => {
-    const origKey = process.env.PERPLEXITY_API_KEY;
-    process.env.PERPLEXITY_API_KEY = "pplx-test-key";
+    const origKey = process.env["PERPLEXITY_API_KEY"];
+    process.env["PERPLEXITY_API_KEY"] = "pplx-test-key";
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(
       async () => new Response("<html>not json</html>", { status: 200 }),
@@ -794,9 +794,9 @@ describe("searchPerplexity", () => {
       globalThis.fetch = originalFetch;
       if (origKey === undefined) {
         // biome-ignore lint/performance/noDelete: same reason
-        delete process.env.PERPLEXITY_API_KEY;
+        delete process.env["PERPLEXITY_API_KEY"];
       } else {
-        process.env.PERPLEXITY_API_KEY = origKey;
+        process.env["PERPLEXITY_API_KEY"] = origKey;
       }
     }
   });
@@ -820,20 +820,20 @@ describe("searchExa", () => {
   };
 
   it("requires an API key — throws a setup-pointing error when none is set", async () => {
-    const origKey = process.env.EXA_API_KEY;
+    const origKey = process.env["EXA_API_KEY"];
     // biome-ignore lint/performance/noDelete: env var must be absent, not "undefined"
-    delete process.env.EXA_API_KEY;
+    delete process.env["EXA_API_KEY"];
     try {
       await expect(webSearch("q", { engine: "exa" })).rejects.toThrow(/Exa.*API key/i);
       await expect(webSearch("q", { engine: "exa" })).rejects.toThrow("exa.ai");
     } finally {
-      if (origKey !== undefined) process.env.EXA_API_KEY = origKey;
+      if (origKey !== undefined) process.env["EXA_API_KEY"] = origKey;
     }
   });
 
   it("POSTs to Exa /answer with x-api-key header", async () => {
-    const origKey = process.env.EXA_API_KEY;
-    process.env.EXA_API_KEY = "exa-test-key";
+    const origKey = process.env["EXA_API_KEY"];
+    process.env["EXA_API_KEY"] = "exa-test-key";
     const captured: {
       url: string;
       method: string;
@@ -878,16 +878,16 @@ describe("searchExa", () => {
       globalThis.fetch = originalFetch;
       if (origKey === undefined) {
         // biome-ignore lint/performance/noDelete: same reason
-        delete process.env.EXA_API_KEY;
+        delete process.env["EXA_API_KEY"];
       } else {
-        process.env.EXA_API_KEY = origKey;
+        process.env["EXA_API_KEY"] = origKey;
       }
     }
   });
 
   it("maps 401/403 to a key-rejected error", async () => {
-    const origKey = process.env.EXA_API_KEY;
-    process.env.EXA_API_KEY = "exa-bad";
+    const origKey = process.env["EXA_API_KEY"];
+    process.env["EXA_API_KEY"] = "exa-bad";
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(
       async () => new Response("forbidden", { status: 403 }),
@@ -898,16 +898,16 @@ describe("searchExa", () => {
       globalThis.fetch = originalFetch;
       if (origKey === undefined) {
         // biome-ignore lint/performance/noDelete: same reason
-        delete process.env.EXA_API_KEY;
+        delete process.env["EXA_API_KEY"];
       } else {
-        process.env.EXA_API_KEY = origKey;
+        process.env["EXA_API_KEY"] = origKey;
       }
     }
   });
 
   it("maps 429 to a rate-limit/quota error", async () => {
-    const origKey = process.env.EXA_API_KEY;
-    process.env.EXA_API_KEY = "exa-test-key";
+    const origKey = process.env["EXA_API_KEY"];
+    process.env["EXA_API_KEY"] = "exa-test-key";
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(
       async () => new Response("too many", { status: 429 }),
@@ -918,16 +918,16 @@ describe("searchExa", () => {
       globalThis.fetch = originalFetch;
       if (origKey === undefined) {
         // biome-ignore lint/performance/noDelete: same reason
-        delete process.env.EXA_API_KEY;
+        delete process.env["EXA_API_KEY"];
       } else {
-        process.env.EXA_API_KEY = origKey;
+        process.env["EXA_API_KEY"] = origKey;
       }
     }
   });
 
   it("maps unparseable JSON to a parse error", async () => {
-    const origKey = process.env.EXA_API_KEY;
-    process.env.EXA_API_KEY = "exa-test-key";
+    const origKey = process.env["EXA_API_KEY"];
+    process.env["EXA_API_KEY"] = "exa-test-key";
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(
       async () => new Response("<html>not json</html>", { status: 200 }),
@@ -938,9 +938,9 @@ describe("searchExa", () => {
       globalThis.fetch = originalFetch;
       if (origKey === undefined) {
         // biome-ignore lint/performance/noDelete: same reason
-        delete process.env.EXA_API_KEY;
+        delete process.env["EXA_API_KEY"];
       } else {
-        process.env.EXA_API_KEY = origKey;
+        process.env["EXA_API_KEY"] = origKey;
       }
     }
   });
@@ -996,9 +996,9 @@ describe("searchAnysearch", () => {
   });
 
   it("omits the Authorization header when no key is configured (anonymous access)", async () => {
-    const origKey = process.env.ANYSEARCH_API_KEY;
+    const origKey = process.env["ANYSEARCH_API_KEY"];
     // biome-ignore lint/performance/noDelete: ensure anonymous path
-    delete process.env.ANYSEARCH_API_KEY;
+    delete process.env["ANYSEARCH_API_KEY"];
     let sawAuth = true;
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(async (_url: string | URL, init?: RequestInit) => {
@@ -1015,9 +1015,9 @@ describe("searchAnysearch", () => {
       globalThis.fetch = originalFetch;
       if (origKey === undefined) {
         // biome-ignore lint/performance/noDelete: restore
-        delete process.env.ANYSEARCH_API_KEY;
+        delete process.env["ANYSEARCH_API_KEY"];
       } else {
-        process.env.ANYSEARCH_API_KEY = origKey;
+        process.env["ANYSEARCH_API_KEY"] = origKey;
       }
     }
   });

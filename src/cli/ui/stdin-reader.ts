@@ -7,39 +7,39 @@ import { isMouseModeActive } from "./mouse-mode.js";
 export interface KeyEvent {
   /** Empty for control keys (arrows / Enter / Esc); holds the letter for Ctrl+/Alt+. */
   input: string;
-  upArrow?: boolean;
-  downArrow?: boolean;
-  leftArrow?: boolean;
-  rightArrow?: boolean;
-  pageUp?: boolean;
-  pageDown?: boolean;
-  home?: boolean;
-  end?: boolean;
-  delete?: boolean;
-  backspace?: boolean;
-  tab?: boolean;
-  return?: boolean;
-  escape?: boolean;
-  shift?: boolean;
-  ctrl?: boolean;
-  alt?: boolean;
-  super?: boolean;
-  hyper?: boolean;
-  meta?: boolean;
+  upArrow?: boolean | undefined;
+  downArrow?: boolean | undefined;
+  leftArrow?: boolean | undefined;
+  rightArrow?: boolean | undefined;
+  pageUp?: boolean | undefined;
+  pageDown?: boolean | undefined;
+  home?: boolean | undefined;
+  end?: boolean | undefined;
+  delete?: boolean | undefined;
+  backspace?: boolean | undefined;
+  tab?: boolean | undefined;
+  return?: boolean | undefined;
+  escape?: boolean | undefined;
+  shift?: boolean | undefined;
+  ctrl?: boolean | undefined;
+  alt?: boolean | undefined;
+  super?: boolean | undefined;
+  hyper?: boolean | undefined;
+  meta?: boolean | undefined;
   /** Bracketed-paste content; consumers MUST NOT re-interpret as keystrokes (e.g. `\n` ≠ submit). */
-  paste?: boolean;
+  paste?: boolean | undefined;
   /** xterm SGR mode 1006 wheel-up. */
-  mouseScrollUp?: boolean;
+  mouseScrollUp?: boolean | undefined;
   /** Mouse wheel down — symmetric to `mouseScrollUp`. */
-  mouseScrollDown?: boolean;
+  mouseScrollDown?: boolean | undefined;
   /** Left-button press; row/col are 1-based. */
-  mouseClick?: boolean;
+  mouseClick?: boolean | undefined;
   /** Left-button motion (button held during drag). Mode 1002 only. */
-  mouseDrag?: boolean;
+  mouseDrag?: boolean | undefined;
   /** Any-button release. Mode 1002 only. */
-  mouseRelease?: boolean;
-  mouseRow?: number;
-  mouseCol?: number;
+  mouseRelease?: boolean | undefined;
+  mouseRow?: number | undefined;
+  mouseCol?: number | undefined;
 }
 
 type Subscriber = (ev: KeyEvent) => void;

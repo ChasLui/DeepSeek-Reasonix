@@ -1,6 +1,6 @@
 export type NearestCommandOptions = {
-  max?: number;
-  maxDistance?: number;
+  max?: number | undefined;
+  maxDistance?: number | undefined;
 };
 
 export function nearestCommands(

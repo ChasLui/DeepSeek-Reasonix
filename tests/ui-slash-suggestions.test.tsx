@@ -15,7 +15,7 @@ function makeCommands(count: number): SlashCommandSpec[] {
   return Array.from({ length: count }, (_, i) => ({
     cmd: `cmd${i.toString().padStart(2, "0")}`,
     summary: `summary ${i}`,
-    group: groups[Math.floor(i / 5) % groups.length],
+    group: groups[Math.floor(i / 5) % groups.length]!,
   }));
 }
 

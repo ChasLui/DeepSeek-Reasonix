@@ -7,18 +7,18 @@ export interface Cell {
   /** 1 for ASCII / Latin / most BMP. 2 for CJK / emoji / fullwidth. */
   width: 1 | 2;
   /** Sentinel for the second cell of a 2-wide grapheme. */
-  tail?: boolean;
+  tail?: boolean | undefined;
   /** Foreground color: hex `#rrggbb` or named ANSI ("red", "cyan"). */
-  fg?: string;
+  fg?: string | undefined;
   /** Background color: hex `#rrggbb` or named ANSI. */
-  bg?: string;
-  bold?: boolean;
-  dim?: boolean;
-  italic?: boolean;
-  underline?: boolean;
-  inverse?: boolean;
+  bg?: string | undefined;
+  bold?: boolean | undefined;
+  dim?: boolean | undefined;
+  italic?: boolean | undefined;
+  underline?: boolean | undefined;
+  inverse?: boolean | undefined;
   /** OSC-8 hyperlink target (cell renders as a clickable link). */
-  href?: string;
+  href?: string | undefined;
 }
 
 /** INVARIANT: `cells.reduce((a, c) => a + (c.tail ? 0 : c.width), 0) === Frame.width`. */
@@ -32,12 +32,12 @@ export interface Frame {
 export interface TextOpts {
   /** Wrap column. Mandatory — text without a budget is a rendering bug. */
   width: number;
-  fg?: string;
-  bg?: string;
-  bold?: boolean;
-  dim?: boolean;
-  italic?: boolean;
-  underline?: boolean;
-  inverse?: boolean;
-  href?: string;
+  fg?: string | undefined;
+  bg?: string | undefined;
+  bold?: boolean | undefined;
+  dim?: boolean | undefined;
+  italic?: boolean | undefined;
+  underline?: boolean | undefined;
+  inverse?: boolean | undefined;
+  href?: string | undefined;
 }

@@ -25,8 +25,8 @@ export interface KeyCapabilities {
 }
 
 export interface KeyCapabilityInput {
-  platform?: NodeJS.Platform;
-  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform | undefined;
+  env?: NodeJS.ProcessEnv | undefined;
 }
 
 export function detectKeyCapabilities(input: KeyCapabilityInput = {}): KeyCapabilities {
@@ -35,7 +35,7 @@ export function detectKeyCapabilities(input: KeyCapabilityInput = {}): KeyCapabi
   const isMacOS = platform === "darwin";
   const isWindows = platform === "win32";
   const terminalFamily = detectTerminalFamily(env, isWindows);
-  const multiplexer = env.TMUX ? "tmux" : env.STY ? "screen" : null;
+  const multiplexer = env["TMUX"] ? "tmux" : env["STY"] ? "screen" : null;
   const extendedKeys = withMultiplexerCaution(detectExtendedKeys(terminalFamily), multiplexer);
   return {
     platform,
@@ -50,9 +50,9 @@ export function detectKeyCapabilities(input: KeyCapabilityInput = {}): KeyCapabi
 }
 
 function detectTerminalFamily(env: NodeJS.ProcessEnv, isWindows: boolean): TerminalFamily {
-  const termProgram = (env.TERM_PROGRAM ?? "").toLowerCase();
-  if (isWindows && env.WT_SESSION) return "windows-terminal";
-  if (isWindows && !env.TERM_PROGRAM) return "legacy-windows";
+  const termProgram = (env["TERM_PROGRAM"] ?? "").toLowerCase();
+  if (isWindows && env["WT_SESSION"]) return "windows-terminal";
+  if (isWindows && !env["TERM_PROGRAM"]) return "legacy-windows";
   if (termProgram === "apple_terminal") return "apple-terminal";
   if (termProgram === "iterm.app") return "iterm2";
   if (termProgram === "warpterminal") return "warp";
@@ -60,7 +60,7 @@ function detectTerminalFamily(env: NodeJS.ProcessEnv, isWindows: boolean): Termi
   if (termProgram === "ghostty") return "ghostty";
   if (termProgram === "vscode") return "vscode";
 
-  const term = (env.TERM ?? "").toLowerCase();
+  const term = (env["TERM"] ?? "").toLowerCase();
   if (term.includes("kitty")) return "kitty";
   if (term.includes("wezterm")) return "wezterm";
   if (term.includes("ghostty")) return "ghostty";

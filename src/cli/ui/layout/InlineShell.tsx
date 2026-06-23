@@ -22,7 +22,7 @@ export function InlineShell(): React.ReactElement {
   return (
     <>
       <Static items={staticItems}>
-        {(item, idx) =>
+        {(item) =>
           item.kind === "intro" ? (
             <SessionIntro key="intro" session={session} />
           ) : (

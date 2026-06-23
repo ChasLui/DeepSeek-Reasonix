@@ -15,15 +15,15 @@ export interface McpTransport {
 export interface StdioTransportOptions {
   /** Argv to spawn. First element is the command. */
   command: string;
-  args?: string[];
+  args?: string[] | undefined;
   /** Env overlay — merged over process.env unless replaceEnv=true. */
-  env?: Record<string, string>;
+  env?: Record<string, string> | undefined;
   /** When true, only the env above is visible to the child. Default false. */
-  replaceEnv?: boolean;
+  replaceEnv?: boolean | undefined;
   /** CWD for the child. Default: process.cwd(). */
-  cwd?: string;
+  cwd?: string | undefined;
   /** Default true on win32 to resolve `.cmd`/`.bat` wrappers (npx.cmd etc.). */
-  shell?: boolean;
+  shell?: boolean | undefined;
 }
 
 export class StdioTransport implements McpTransport {
@@ -143,7 +143,7 @@ export class StdioTransport implements McpTransport {
         // Malformed stdout lines are dropped — some servers emit startup
         // banners before the JSON-RPC loop begins. Surface only under
         // REASONIX_DEBUG_MCP=1; otherwise the noise corrupts the TUI render.
-        if (process.env.REASONIX_DEBUG_MCP === "1") {
+        if (process.env["REASONIX_DEBUG_MCP"] === "1") {
           process.stderr.write(`[mcp-stdio] dropped malformed line: ${line}\n`);
         }
       }
@@ -153,7 +153,7 @@ export class StdioTransport implements McpTransport {
   // Python MCP SDK writes info logs (`server.py:534 ListPromptsRequest`)
   // to stderr — letting those through would corrupt the TUI render.
   private onStderr(chunk: string): void {
-    if (process.env.REASONIX_DEBUG_MCP === "1") {
+    if (process.env["REASONIX_DEBUG_MCP"] === "1") {
       process.stderr.write(chunk);
     }
   }

@@ -13,14 +13,14 @@ import { writeConfig } from "../src/config.js";
 describe("resolveDefaults", () => {
   let home: string;
   let cwd: string;
-  const origHome = process.env.HOME;
-  const origUserProfile = process.env.USERPROFILE;
+  const origHome = process.env["HOME"];
+  const origUserProfile = process.env["USERPROFILE"];
   const origCwd = process.cwd();
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), "reasonix-resolve-"));
-    process.env.HOME = home;
-    process.env.USERPROFILE = home; // node:os homedir() uses this on Windows
+    process.env["HOME"] = home;
+    process.env["USERPROFILE"] = home; // node:os homedir() uses this on Windows
     // Isolate cwd too: resolveDefaults merges <cwd>/.mcp.json, so a real
     // project .mcp.json (e.g. serena) would otherwise leak into these cases.
     cwd = mkdtempSync(join(tmpdir(), "reasonix-resolve-cwd-"));
@@ -33,15 +33,15 @@ describe("resolveDefaults", () => {
     rmSync(home, { recursive: true, force: true });
     if (origHome === undefined) {
       // biome-ignore lint/performance/noDelete: process.env must lose the key, not hold "undefined"
-      delete process.env.HOME;
+      delete process.env["HOME"];
     } else {
-      process.env.HOME = origHome;
+      process.env["HOME"] = origHome;
     }
     if (origUserProfile === undefined) {
       // biome-ignore lint/performance/noDelete: same reason as HOME
-      delete process.env.USERPROFILE;
+      delete process.env["USERPROFILE"];
     } else {
-      process.env.USERPROFILE = origUserProfile;
+      process.env["USERPROFILE"] = origUserProfile;
     }
   });
 

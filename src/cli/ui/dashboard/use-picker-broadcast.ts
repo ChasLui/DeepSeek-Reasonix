@@ -10,19 +10,19 @@ import type {
 export interface PickerSnapshot {
   pickerKind: string;
   title: string;
-  query?: string;
+  query?: string | undefined;
   items: PickerItem[];
   actions: PickerAction[];
-  hasMore?: boolean;
-  hint?: string;
+  hasMore?: boolean | undefined;
+  hint?: string | undefined;
 }
 
 export interface ViewerSnapshot {
   viewerKind: string;
   title: string;
-  body?: string;
-  steps?: Array<{ id: string; title: string; status: "done" | "queued" }>;
-  meta?: string;
+  body?: string | undefined;
+  steps?: Array<{ id: string; title: string; status: "done" | "queued" }> | undefined;
+  meta?: string | undefined;
 }
 
 export interface ViewerBroadcastPorts {

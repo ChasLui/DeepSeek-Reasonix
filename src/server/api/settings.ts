@@ -15,16 +15,16 @@ import type { DashboardContext } from "../context.js";
 import type { ApiResult } from "../router.js";
 
 interface SettingsBody {
-  apiKey?: unknown;
-  baseUrl?: unknown;
-  lang?: unknown;
-  preset?: unknown;
-  reasoningEffort?: unknown;
-  search?: unknown;
-  model?: unknown;
-  proNext?: unknown;
-  budgetUsd?: unknown;
-  skillPaths?: unknown;
+  apiKey?: unknown | undefined;
+  baseUrl?: unknown | undefined;
+  lang?: unknown | undefined;
+  preset?: unknown | undefined;
+  reasoningEffort?: unknown | undefined;
+  search?: unknown | undefined;
+  model?: unknown | undefined;
+  proNext?: unknown | undefined;
+  budgetUsd?: unknown | undefined;
+  skillPaths?: unknown | undefined;
 }
 
 function parseBody(raw: string): SettingsBody {

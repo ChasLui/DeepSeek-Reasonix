@@ -92,13 +92,16 @@ function Row({ entry, focused }: { entry: UserTurnEntry; focused: boolean }): Re
   const fg = focused ? FG.strong : FG.body;
   return (
     <Box flexDirection="row" gap={1}>
-      <Text color={focused ? TONE.brand : FG.faint} backgroundColor={bg}>
+      <Text
+        color={focused ? TONE.brand : FG.faint}
+        {...(bg !== undefined ? { backgroundColor: bg } : {})}
+      >
         {marker}
       </Text>
-      <Text color={FG.meta} backgroundColor={bg}>
+      <Text color={FG.meta} {...(bg !== undefined ? { backgroundColor: bg } : {})}>
         {numLabel}
       </Text>
-      <Text color={fg} backgroundColor={bg}>
+      <Text color={fg} {...(bg !== undefined ? { backgroundColor: bg } : {})}>
         {preview}
       </Text>
     </Box>

@@ -25,7 +25,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../..");
 
 async function main(): Promise<void> {
-  if (!process.env.DEEPSEEK_API_KEY) {
+  if (!process.env["DEEPSEEK_API_KEY"]) {
     console.warn("skip: DEEPSEEK_API_KEY missing");
     return;
   }

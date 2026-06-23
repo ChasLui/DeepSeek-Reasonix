@@ -8,8 +8,8 @@ export interface MaskedInputProps {
   value: string;
   onChange: (next: string) => void;
   onSubmit: (final: string) => void;
-  mask?: string;
-  placeholder?: string;
+  mask?: string | undefined;
+  placeholder?: string | undefined;
 }
 
 /** Windows ConPTY splits bracketed-paste wrappers across stdin chunks; Ink's parser sees them as printable `[`, `2`, `0`, `0`, `~` and they leak into the buffer. Strip them at the input boundary and again at submit. */

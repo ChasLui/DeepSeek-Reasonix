@@ -3,12 +3,12 @@
 import picomatch from "picomatch";
 
 export interface IndexUserConfig {
-  excludeDirs?: string[];
-  excludeFiles?: string[];
-  excludeExts?: string[];
-  excludePatterns?: string[];
-  respectGitignore?: boolean;
-  maxFileBytes?: number;
+  excludeDirs?: string[] | undefined;
+  excludeFiles?: string[] | undefined;
+  excludeExts?: string[] | undefined;
+  excludePatterns?: string[] | undefined;
+  respectGitignore?: boolean | undefined;
+  maxFileBytes?: number | undefined;
 }
 
 /** Plain-data shape — JSON-safe so the dashboard endpoint can serialize. */
@@ -113,7 +113,7 @@ export const DEFAULT_INDEX_EXCLUDES = {
   ] as const,
 } as const;
 
-export const DEFAULT_MAX_FILE_BYTES = 256 * 1024;
+export const DEFAULT_MAX_FILE_BYTES: number = 256 * 1024;
 export const DEFAULT_RESPECT_GITIGNORE = true;
 
 export function defaultIndexConfig(): ResolvedIndexConfig {

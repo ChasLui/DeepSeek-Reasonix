@@ -1,8 +1,8 @@
 import { listSessions, pruneStaleSessions } from "../../memory/session.js";
 
 export interface PruneSessionsOptions {
-  days?: number;
-  dryRun?: boolean;
+  days?: number | undefined;
+  dryRun?: boolean | undefined;
 }
 
 export function pruneSessionsCommand(opts: PruneSessionsOptions): void {

@@ -10,7 +10,7 @@ export interface McpInspectOptions {
   /** The raw --mcp spec string (e.g. `fs=npx -y @modelcontextprotocol/server-filesystem .`). */
   spec: string;
   /** Emit JSON on stdout instead of the human-readable table. */
-  json?: boolean;
+  json?: boolean | undefined;
 }
 
 export async function mcpInspectCommand(opts: McpInspectOptions): Promise<void> {
@@ -151,20 +151,20 @@ function formatSection<T>(
   return lines.join("\n");
 }
 
-function toolLine(t: { name: string; description?: string }): string {
+function toolLine(t: { name: string; description?: string | undefined }): string {
   const desc = t.description ? ` — ${oneLine(t.description, 80)}` : "";
   return `· ${t.name}${desc}`;
 }
 
-function resourceLine(r: { uri: string; name: string; mimeType?: string }): string {
+function resourceLine(r: { uri: string; name: string; mimeType?: string | undefined }): string {
   const mime = r.mimeType ? ` [${r.mimeType}]` : "";
   return `· ${r.name}${mime}  ${r.uri}`;
 }
 
 function promptLine(p: {
   name: string;
-  description?: string;
-  arguments?: Array<{ name: string; required?: boolean }>;
+  description?: string | undefined;
+  arguments?: Array<{ name: string; required?: boolean | undefined }> | undefined;
 }): string {
   const argPart =
     p.arguments && p.arguments.length > 0

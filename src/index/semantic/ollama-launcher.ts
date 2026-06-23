@@ -28,7 +28,7 @@ export function findOllamaBinary(): string | null {
     if (first) return first.trim();
   }
   if (process.platform === "win32") {
-    const local = process.env.LOCALAPPDATA;
+    const local = process.env["LOCALAPPDATA"];
     if (local) {
       const candidate = join(local, "Programs", "Ollama", "ollama.exe");
       if (existsSync(candidate)) return candidate;
@@ -40,10 +40,12 @@ export function findOllamaBinary(): string | null {
 /** Treats `<model>` and `<model>:latest` as the same — Ollama appends `:latest` to plain pulls. */
 export async function checkOllamaStatus(
   modelName: string,
-  baseUrl?: string,
+  baseUrl?: string | undefined,
 ): Promise<OllamaStatus> {
   const binary = findOllamaBinary();
-  const probe = await probeOllama({ baseUrl });
+  const probe = await probeOllama({
+    ...(baseUrl !== undefined ? { baseUrl } : {}),
+  });
   const installedModels = probe.ok ? probe.models : [];
   const wanted = modelName.includes(":") ? modelName : `${modelName}:latest`;
   const modelPulled = installedModels.some((m) => m === modelName || m === wanted);
@@ -72,7 +74,10 @@ export async function startOllamaDaemon(
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     if (opts.signal?.aborted) return { ready: false, pid };
-    const probe = await probeOllama({ baseUrl: opts.baseUrl, signal: opts.signal });
+    const probe = await probeOllama({
+      ...(opts.baseUrl !== undefined ? { baseUrl: opts.baseUrl } : {}),
+      ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+    });
     if (probe.ok) return { ready: true, pid };
     await sleep(500);
   }

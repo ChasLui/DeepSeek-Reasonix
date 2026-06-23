@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from "react";
 import type { SessionInfo } from "../App";
 import { t, useLang } from "../i18n";
 import { I } from "../icons";
@@ -15,7 +15,7 @@ function prettyName(s: SessionInfo): string {
   if (s.summary && s.summary.trim()) return s.summary.trim();
   const m = s.name.match(/^desktop-(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(?:-(\d+))?$/);
   if (m) {
-    const [, , month, day, hh, mm, tab] = m;
+    const [, , month = "", day = "", hh = "", mm = "", tab] = m;
     return `${t("sidebarPanel.sessionTitle", {
       month,
       day,
@@ -57,16 +57,14 @@ export function Sidebar({
   onOpenRules: () => void;
   onOpenCommands: () => void;
   onOpenAbout: () => void;
-}) {
+}): ReactElement {
   useLang();
   const [query, setQuery] = useState("");
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const filtered = query
     ? sessions.filter((s) => {
         const q = query.toLowerCase();
-        return (
-          prettyName(s).toLowerCase().includes(q) || s.name.toLowerCase().includes(q)
-        );
+        return prettyName(s).toLowerCase().includes(q) || s.name.toLowerCase().includes(q);
       })
     : sessions;
 

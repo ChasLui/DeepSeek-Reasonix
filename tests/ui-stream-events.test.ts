@@ -6,7 +6,11 @@ import type { TurnTranslator } from "../src/cli/ui/state/TurnTranslator.js";
 import type { LoopEvent } from "../src/loop.js";
 
 type OngoingTool = { name: string; args?: string } | null;
-type ToolProgress = { progress: number; total?: number; message?: string } | null;
+type ToolProgress = {
+  progress: number;
+  total?: number | undefined;
+  message?: string | undefined;
+} | null;
 
 function applyState<T>(current: T, next: SetStateAction<T>): T {
   return typeof next === "function" ? (next as (prev: T) => T)(current) : next;
@@ -20,7 +24,7 @@ describe("stream event handlers", () => {
     const setOngoingTool = vi.fn((next: SetStateAction<OngoingTool>) => {
       ongoingTool = applyState(ongoingTool, next);
     });
-    const setToolProgress = vi.fn((next: SetStateAction<ToolProgress>) => {
+    const setToolProgress = vi.fn((next: SetStateAction<ToolProgress | null>) => {
       toolProgress = applyState(toolProgress, next);
     });
     const translator = {

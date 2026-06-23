@@ -9,8 +9,9 @@ export const handlers: Record<string, SlashHandler> = {
       return { openArgPickerFor: "language" };
     }
 
+    const langCode = lang as LanguageCode;
     const supported = getSupportedLanguages();
-    if (!supported.includes(lang as LanguageCode)) {
+    if (!supported.includes(langCode)) {
       return {
         info: t("slash.language.unsupported", {
           code: lang,
@@ -19,9 +20,9 @@ export const handlers: Record<string, SlashHandler> = {
       };
     }
 
-    setLanguage(lang as LanguageCode);
+    setLanguage(langCode);
     notifyLanguageChange();
-    ctx.dispatch?.({ type: "language.change", lang });
+    ctx.dispatch?.({ type: "language.change", lang: langCode });
 
     return { info: t("slash.language.success") };
   },

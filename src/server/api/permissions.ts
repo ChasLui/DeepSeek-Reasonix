@@ -11,8 +11,8 @@ import type { DashboardContext } from "../context.js";
 import type { ApiResult } from "../router.js";
 
 interface MutationBody {
-  prefix?: unknown;
-  confirm?: unknown;
+  prefix?: unknown | undefined;
+  confirm?: unknown | undefined;
 }
 
 function parseBody(raw: string): MutationBody {

@@ -20,12 +20,12 @@ export interface SearchResult {
   url: string;
   snippet: string;
   /** AI-generated answer text — set by AI-native engines (Perplexity, Exa); undefined for traditional engines. */
-  answer?: string;
+  answer?: string | undefined;
 }
 
 export interface PageContent {
   url: string;
-  title?: string;
+  title?: string | undefined;
   text: string;
   /** True when the extracted text was clipped to fit the cap. */
   truncated: boolean;
@@ -33,27 +33,35 @@ export interface PageContent {
 
 export interface WebFetchOptions {
   /** Max bytes of extracted text. Defaults to 32_000 to match tool-result cap. */
-  maxChars?: number;
+  maxChars?: number | undefined;
   /** Timeout in ms. Defaults to 15_000. */
-  timeoutMs?: number;
-  signal?: AbortSignal;
+  timeoutMs?: number | undefined;
+  signal?: AbortSignal | undefined;
 }
 
 interface WebFetchRuntimeOptions extends WebFetchOptions {
-  cache?: WebFetchCache;
+  cache?: WebFetchCache | undefined;
 }
 
 export interface WebSearchOptions {
-  topK?: number;
-  signal?: AbortSignal;
+  topK?: number | undefined;
+  signal?: AbortSignal | undefined;
   /** Backend engine: "mojeek" (scrapes Mojeek HTML), "searxng" (self-hosted SearXNG JSON API), "metaso" (Metaso API), "tavily" (LLM-friendly JSON API), "perplexity" (Perplexity AI), "exa" (Exa API), or "anysearch" (AnySearch remote MCP server; anonymous access, optional key). */
-  engine?: "mojeek" | "searxng" | "metaso" | "tavily" | "perplexity" | "exa" | "anysearch";
+  engine?:
+    | "mojeek"
+    | "searxng"
+    | "metaso"
+    | "tavily"
+    | "perplexity"
+    | "exa"
+    | "anysearch"
+    | undefined;
   /** Base URL for SearXNG. Default http://localhost:8080. */
-  endpoint?: string;
+  endpoint?: string | undefined;
   /** Max Mojeek fetch attempts before giving up (default 3). Other engines ignore this. */
-  maxAttempts?: number;
+  maxAttempts?: number | undefined;
   /** Base ms between Mojeek retries (default 400, grows linearly per attempt). 0 disables the wait. */
-  retryBackoffMs?: number;
+  retryBackoffMs?: number | undefined;
 }
 
 const DEFAULT_FETCH_MAX_CHARS = 32_000;
@@ -166,8 +174,8 @@ async function searchMojeek(query: string, opts: WebSearchOptions = {}): Promise
     try {
       resp = await fetch(url, {
         headers: MOJEEK_HEADERS,
-        signal: opts.signal,
         redirect: "follow",
+        ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
       });
     } catch (err) {
       if (opts.signal?.aborted || (err as { name?: string }).name === "AbortError") {
@@ -230,7 +238,7 @@ async function searchSearxng(query: string, opts: WebSearchOptions = {}): Promis
         "User-Agent": USER_AGENT,
         Accept: "text/html",
       },
-      signal: opts.signal,
+      ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     });
   } catch (err) {
     if (err instanceof TypeError && (err as Error).message.includes("fetch")) {
@@ -255,19 +263,19 @@ async function searchSearxng(query: string, opts: WebSearchOptions = {}): Promis
 interface MetasoWebpage {
   title: string;
   link: string;
-  snippet?: string;
-  summary?: string;
-  score?: string;
-  position?: number;
-  date?: string;
+  snippet?: string | undefined;
+  summary?: string | undefined;
+  score?: string | undefined;
+  position?: number | undefined;
+  date?: string | undefined;
 }
 
 interface MetasoSearchResponse {
-  credits?: number;
-  total?: number;
-  webpages?: MetasoWebpage[];
-  code?: number;
-  message?: string;
+  credits?: number | undefined;
+  total?: number | undefined;
+  webpages?: MetasoWebpage[] | undefined;
+  code?: number | undefined;
+  message?: string | undefined;
 }
 
 async function searchMetaso(query: string, opts: WebSearchOptions = {}): Promise<SearchResult[]> {
@@ -288,7 +296,7 @@ async function searchMetaso(query: string, opts: WebSearchOptions = {}): Promise
         scope: "webpage",
         size: topK,
       }),
-      signal: opts.signal,
+      ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     });
   } catch (err) {
     if (err instanceof TypeError && (err as Error).message.includes("fetch")) {
@@ -345,14 +353,14 @@ async function searchMetaso(query: string, opts: WebSearchOptions = {}): Promise
 interface TavilyResultItem {
   title: string;
   url: string;
-  content?: string;
-  score?: number;
+  content?: string | undefined;
+  score?: number | undefined;
 }
 
 interface TavilySearchResponse {
-  results?: TavilyResultItem[];
+  results?: TavilyResultItem[] | undefined;
   // Tavily error responses use { detail: { error: "..." } } shape.
-  detail?: { error?: string } | string;
+  detail?: { error?: string } | string | undefined;
 }
 
 async function searchTavily(query: string, opts: WebSearchOptions = {}): Promise<SearchResult[]> {
@@ -377,7 +385,7 @@ async function searchTavily(query: string, opts: WebSearchOptions = {}): Promise
         include_raw_content: false,
         include_images: false,
       }),
-      signal: opts.signal,
+      ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     });
   } catch (err) {
     if (err instanceof TypeError && (err as Error).message.includes("fetch")) {
@@ -414,8 +422,8 @@ interface PerplexityChoice {
 }
 
 interface PerplexityResponse {
-  choices?: PerplexityChoice[];
-  citations?: unknown[];
+  choices?: PerplexityChoice[] | undefined;
+  citations?: unknown[] | undefined;
 }
 
 async function searchPerplexity(
@@ -440,7 +448,7 @@ async function searchPerplexity(
         max_tokens: 1024,
         return_related_questions: false,
       }),
-      signal: opts.signal,
+      ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     });
   } catch (err) {
     if (err instanceof TypeError && (err as Error).message.includes("fetch")) {
@@ -483,12 +491,12 @@ async function searchPerplexity(
     } else if (
       c &&
       typeof c === "object" &&
-      typeof (c as Record<string, unknown>).url === "string"
+      typeof (c as Record<string, unknown>)["url"] === "string"
     ) {
       const item = c as Record<string, unknown>;
       results.push({
-        title: typeof item.title === "string" ? item.title : `Source ${i + 1}`,
-        url: item.url as string,
+        title: typeof item["title"] === "string" ? item["title"] : `Source ${i + 1}`,
+        url: item["url"] as string,
         snippet: "",
       });
     }
@@ -498,15 +506,15 @@ async function searchPerplexity(
 }
 
 interface ExaCitation {
-  url?: string;
-  title?: string;
-  text?: string;
-  publishedDate?: string;
+  url?: string | undefined;
+  title?: string | undefined;
+  text?: string | undefined;
+  publishedDate?: string | undefined;
 }
 
 interface ExaAnswerResponse {
-  answer?: string;
-  citations?: ExaCitation[];
+  answer?: string | undefined;
+  citations?: ExaCitation[] | undefined;
 }
 
 async function searchExa(query: string, opts: WebSearchOptions = {}): Promise<SearchResult[]> {
@@ -523,7 +531,7 @@ async function searchExa(query: string, opts: WebSearchOptions = {}): Promise<Se
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ query, text: true }),
-      signal: opts.signal,
+      ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     });
   } catch (err) {
     if (err instanceof TypeError && (err as Error).message.includes("fetch")) {
@@ -573,8 +581,8 @@ async function searchExa(query: string, opts: WebSearchOptions = {}): Promise<Se
 }
 
 interface AnysearchContentItem {
-  type?: string;
-  text?: string;
+  type?: string | undefined;
+  text?: string | undefined;
 }
 
 interface AnysearchRpcResponse {
@@ -595,7 +603,7 @@ async function searchAnysearch(
     "Content-Type": "application/json",
     Accept: "application/json",
   };
-  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
 
   let resp: Response;
   try {
@@ -611,7 +619,7 @@ async function searchAnysearch(
           arguments: { query, max_results: maxResults },
         },
       }),
-      signal: opts.signal,
+      ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     });
   } catch (err) {
     if (err instanceof TypeError && (err as Error).message.includes("fetch")) {
@@ -900,9 +908,9 @@ export function htmlToText(html: string): string {
 
 interface WalkableNode {
   nodeType: number;
-  rawText?: string;
-  text?: string;
-  rawTagName?: string;
+  rawText?: string | undefined;
+  text?: string | undefined;
+  rawTagName?: string | undefined;
   childNodes: WalkableNode[];
 }
 
@@ -955,13 +963,13 @@ function extractTitle(html: string): string | undefined {
 
 export interface WebToolsOptions {
   /** Default top-K for `web_search` when the model doesn't specify. */
-  defaultTopK?: number;
+  defaultTopK?: number | undefined;
   /** Override the configured search engine. Used by tests to avoid local config bleed-through. */
-  searchEngine?: WebSearchOptions["engine"];
+  searchEngine?: WebSearchOptions["engine"] | undefined;
   /** Override the configured SearXNG endpoint alongside `searchEngine: "searxng"`. */
-  searchEndpoint?: string;
+  searchEndpoint?: string | undefined;
   /** Byte cap for `web_fetch` extracted text. */
-  maxFetchChars?: number;
+  maxFetchChars?: number | undefined;
 }
 
 export function registerWebTools(registry: ToolRegistry, opts: WebToolsOptions = {}): ToolRegistry {

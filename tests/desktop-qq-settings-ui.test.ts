@@ -8,8 +8,6 @@ import {
 } from "../desktop/src/qq-settings";
 
 const DISCONNECTED: QQDesktopSettingsState = {
-  appId: undefined,
-  appSecret: undefined,
   sandbox: true,
   enabled: false,
   configured: false,

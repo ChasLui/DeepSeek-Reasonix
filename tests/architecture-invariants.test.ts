@@ -55,12 +55,22 @@ describe("Pillar 1 — ImmutablePrefix.fingerprint determinism", () => {
   it("same {system, tools, fewShots} inputs yield byte-identical fingerprint", () => {
     const a = new ImmutablePrefix({
       system: "you are a coder",
-      toolSpecs: [{ type: "function", function: { name: "echo", parameters: { type: "object" } } }],
+      toolSpecs: [
+        {
+          type: "function",
+          function: { name: "echo", description: "echo", parameters: { type: "object" } },
+        },
+      ],
       fewShots: [],
     });
     const b = new ImmutablePrefix({
       system: "you are a coder",
-      toolSpecs: [{ type: "function", function: { name: "echo", parameters: { type: "object" } } }],
+      toolSpecs: [
+        {
+          type: "function",
+          function: { name: "echo", description: "echo", parameters: { type: "object" } },
+        },
+      ],
       fewShots: [],
     });
     expect(a.fingerprint).toBe(b.fingerprint);
@@ -71,7 +81,7 @@ describe("Pillar 1 — ImmutablePrefix.fingerprint determinism", () => {
     const before = p.fingerprint;
     const ok = p.addTool({
       type: "function",
-      function: { name: "new", parameters: { type: "object" } },
+      function: { name: "new", description: "new", parameters: { type: "object" } },
     });
     expect(ok).toBe(true);
     expect(p.fingerprint).not.toBe(before);
@@ -86,7 +96,11 @@ describe("Pillar 1 — ImmutablePrefix.fingerprint determinism", () => {
 
     prefix.addTool({
       type: "function",
-      function: { name: "dynamic_tool", parameters: { type: "object", properties: {} } },
+      function: {
+        name: "dynamic_tool",
+        description: "dynamic tool",
+        parameters: { type: "object", properties: {} },
+      },
     });
     const repaired = loop.repair.process([], '{"name":"dynamic_tool","arguments":{"value":1}}');
 
@@ -143,7 +157,6 @@ describe("Pillar 1 — selective DeepSeek client singleton", () => {
     const allowed = new Set([
       "src/cli/ui/App.tsx",
       "src/cli/commands/acp.ts",
-      "src/cli/commands/desktop.ts",
       "src/code/setup.ts",
       "src/client-singleton.ts",
     ]);
@@ -164,5 +177,14 @@ describe("Pillar 1 — selective DeepSeek client singleton", () => {
       );
       expect(hasSingleton).toBe(allowed.has(file));
     }
+  });
+
+  it("keeps desktop daemon-backed instead of creating an in-process client", () => {
+    const desktop = readFileSync(join(process.cwd(), "src/cli/commands/desktop.ts"), "utf8");
+    const daemonHost = readFileSync(join(process.cwd(), "src/daemon/host.ts"), "utf8");
+
+    expect(desktop).toContain("openDesktopDaemonSession");
+    expect(desktop).not.toContain("getOrCreateDeepSeekClient");
+    expect(daemonHost).toContain("buildSession");
   });
 });

@@ -13,15 +13,15 @@ const COLD_START_TURNS = 3;
 
 export interface StatsPanelProps {
   summary: SessionSummary;
-  planMode?: boolean;
-  editMode?: EditMode;
-  balance?: { currency: string; total: number } | null;
-  updateAvailable?: string | null;
-  proArmed?: boolean;
-  escalated?: boolean;
-  budgetUsd?: number | null;
-  rootDir?: string;
-  sessionName?: string | null;
+  planMode?: boolean | undefined;
+  editMode?: EditMode | undefined;
+  balance?: { currency: string; total: number } | null | undefined;
+  updateAvailable?: string | null | undefined;
+  proArmed?: boolean | undefined;
+  escalated?: boolean | undefined;
+  budgetUsd?: number | null | undefined;
+  rootDir?: string | undefined;
+  sessionName?: string | null | undefined;
 }
 
 export function StatsPanel({
@@ -35,7 +35,7 @@ export function StatsPanel({
   budgetUsd,
   rootDir,
   sessionName,
-}: StatsPanelProps) {
+}: StatsPanelProps): React.ReactElement {
   const coldStart = summary.turns <= COLD_START_TURNS;
   return (
     <Box flexDirection="column" paddingX={1}>
@@ -71,17 +71,17 @@ function ChromeRow({
   updateAvailable,
   balance,
 }: {
-  editMode?: EditMode;
-  planMode?: boolean;
+  editMode?: EditMode | undefined;
+  planMode?: boolean | undefined;
   proArmed: boolean;
   escalated: boolean;
   summary: SessionSummary;
   coldStart: boolean;
-  rootDir?: string;
-  sessionName?: string | null;
-  updateAvailable?: string | null;
-  balance?: { currency: string; total: number } | null;
-}) {
+  rootDir?: string | undefined;
+  sessionName?: string | null | undefined;
+  updateAvailable?: string | null | undefined;
+  balance?: { currency: string; total: number } | null | undefined;
+}): React.ReactElement {
   const modePill = pickModePill(planMode, editMode);
   const proLabel = t("statsPanel.pro");
   const proPill = escalated
@@ -136,7 +136,7 @@ function ChromeRow({
 
   return (
     <Box>
-      <Text bold color={GRADIENT[0]}>
+      <Text bold {...(GRADIENT[0] !== undefined ? { color: GRADIENT[0] } : {})}>
         {"◈ "}
       </Text>
       <Text color={COLOR.brand} bold>
@@ -186,9 +186,9 @@ function ChromeRow({
         </>
       ) : null}
       <Text
-        color={
-          summary.turns === 0 || coldStart ? COLOR.info : sessionCostColor(summary.totalCostUsd)
-        }
+        {...(summary.turns === 0 || coldStart
+          ? { color: COLOR.info }
+          : { color: sessionCostColor(summary.totalCostUsd) ?? COLOR.info })}
         bold={summary.turns > 0 && !coldStart}
         dimColor={summary.turns === 0 || coldStart}
       >
@@ -214,7 +214,7 @@ function ChromeRow({
             dim={coldStart}
           />
           <Text> </Text>
-          <Text color={coldStart ? undefined : cacheColor} dimColor={coldStart}>
+          <Text {...(!coldStart ? { color: cacheColor } : {})} dimColor={coldStart}>
             {coldStart && summary.turns === 0 ? "—" : `${cachePct}%`}
           </Text>
           <Text dimColor>{"]"}</Text>

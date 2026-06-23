@@ -45,17 +45,17 @@ export type IndexUpdater = (root: string) => Promise<void>;
 export type SemanticUpdater = (root: string) => Promise<"built" | "skipped">;
 
 export interface IndexMaintainerOptions {
-  debounceMs?: number;
+  debounceMs?: number | undefined;
   /** Per-root throttle for the expensive lexical/semantic rebuilds. */
-  bgCooldownMs?: number;
-  watch?: WatchFactory;
-  updateGraph?: GraphUpdater;
-  updateLexical?: IndexUpdater;
-  updateSemantic?: SemanticUpdater;
+  bgCooldownMs?: number | undefined;
+  watch?: WatchFactory | undefined;
+  updateGraph?: GraphUpdater | undefined;
+  updateLexical?: IndexUpdater | undefined;
+  updateSemantic?: SemanticUpdater | undefined;
   /** Clock seam (default Date.now) — injected so throttling is testable without real time. */
-  now?: () => number;
+  now?: (() => number) | undefined;
   /** Surface background errors (default: swallow — best-effort maintenance must never crash the daemon). */
-  onError?: (root: string, err: unknown) => void;
+  onError?: ((root: string, err: unknown) => void) | undefined;
 }
 
 interface WorkspaceWatch {

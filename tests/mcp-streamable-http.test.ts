@@ -24,9 +24,11 @@ interface FakeOptions {
   /** Hand back this session id on the initialize response. Default "sess-1". */
   sessionId?: string;
   /** `{ stream: [...] }` → SSE frames; `undefined` → 202 ack; else single application/json body. */
-  reply?: (body: unknown) => unknown | { stream: unknown[] } | undefined;
+  reply?: ((body: unknown) => unknown | { stream: unknown[] } | undefined) | undefined;
   /** Failure injection lookup runs after `reply` so it can short-circuit the normal path. */
-  forceStatus?: (body: unknown) => { status: number; body?: string } | undefined;
+  forceStatus?:
+    | ((body: unknown) => { status: number; body?: string | undefined } | undefined)
+    | undefined;
 }
 
 function startFakeServer(opts: FakeOptions = {}): Promise<FakeServer> {

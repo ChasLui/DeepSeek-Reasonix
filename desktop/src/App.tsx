@@ -4,7 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { type Update, check } from "@tauri-apps/plugin-updater";
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState, type ReactElement } from "react";
 import { CommandPalette, Toast, buildCommands, useCommandPalette } from "./CommandPalette";
 import { WorkspaceProvider } from "./Markdown";
 import { getLang, setLang, t, useLang } from "./i18n";
@@ -212,7 +212,7 @@ type State = {
   needsSetup: boolean;
   busy: boolean;
   model?: string;
-  currentSession?: string;
+  currentSession: string | undefined;
   messages: ChatMessage[];
   pendingConfirms: PendingConfirm[];
   pendingPathAccess: PendingPathAccess[];
@@ -285,9 +285,7 @@ function fallbackSkillDesc(skill: SkillInfo): string {
         ? t("app.skill.scope.global")
         : t("app.skill.scope.project");
   const runAs =
-    skill.runAs === "subagent"
-      ? t("app.skill.runAs.subagent")
-      : t("app.skill.runAs.inline");
+    skill.runAs === "subagent" ? t("app.skill.runAs.subagent") : t("app.skill.runAs.inline");
   return t("app.skill.generic", { scope, runAs });
 }
 
@@ -307,7 +305,12 @@ export function reduce(state: State, action: Action): State {
         busy: true,
         messages: [
           ...state.messages,
-          { kind: "user", text: action.text, clientId: action.clientId, turn: nextMessageTurn(state.messages) },
+          {
+            kind: "user",
+            text: action.text,
+            clientId: action.clientId,
+            turn: nextMessageTurn(state.messages),
+          },
         ],
       };
     }
@@ -412,7 +415,7 @@ export function reduce(state: State, action: Action): State {
         const pendingSteps = (removed as PendingPlan & { steps?: PlanStep[] }).steps;
         activePlan = {
           plan: removed.plan,
-          summary: removed.summary,
+          ...(removed.summary ? { summary: removed.summary } : {}),
           steps: pendingSteps ?? [],
           completedStepIds: [],
           stepResults: {},
@@ -608,7 +611,12 @@ export function applyIncoming(state: State, ev: IncomingEvent): State {
         ...state,
         pendingPlans: [
           ...state.pendingPlans,
-          { id: ev.id, plan: ev.plan, summary: ev.summary, ...(steps ? { steps } : {}) },
+          {
+            id: ev.id,
+            plan: ev.plan,
+            ...(ev.summary ? { summary: ev.summary } : {}),
+            ...(steps ? { steps } : {}),
+          },
         ],
       };
     }
@@ -620,11 +628,11 @@ export function applyIncoming(state: State, ev: IncomingEvent): State {
           {
             id: ev.id,
             stepId: ev.stepId,
-            title: ev.title,
             result: ev.result,
-            notes: ev.notes,
             completed: ev.completed,
             total: ev.total,
+            ...(ev.title ? { title: ev.title } : {}),
+            ...(ev.notes ? { notes: ev.notes } : {}),
           },
         ],
       };
@@ -637,7 +645,7 @@ export function applyIncoming(state: State, ev: IncomingEvent): State {
             id: ev.id,
             reason: ev.reason,
             remainingSteps: ev.remainingSteps,
-            summary: ev.summary,
+            ...(ev.summary ? { summary: ev.summary } : {}),
           },
         ],
       };
@@ -698,15 +706,15 @@ export function applyIncoming(state: State, ev: IncomingEvent): State {
       return {
         ...state,
         qq: {
-          appId: ev.appId,
-          appSecret: ev.appSecret,
           sandbox: ev.sandbox,
           enabled: ev.enabled,
           configured: ev.configured,
           runtimeState: ev.runtimeState,
-          lastError: ev.lastError,
-          appIdPreview: ev.appIdPreview,
           access: ev.access,
+          ...(ev.appId ? { appId: ev.appId } : {}),
+          ...(ev.appSecret ? { appSecret: ev.appSecret } : {}),
+          ...(ev.lastError ? { lastError: ev.lastError } : {}),
+          ...(ev.appIdPreview ? { appIdPreview: ev.appIdPreview } : {}),
         },
       };
     case "$settings": {
@@ -730,14 +738,14 @@ export function applyIncoming(state: State, ev: IncomingEvent): State {
           reasoningEffort: ev.reasoningEffort,
           editMode: ev.editMode,
           budgetUsd: ev.budgetUsd,
-          baseUrl: ev.baseUrl,
-          apiKeyPrefix: ev.apiKeyPrefix,
           workspaceDir: ev.workspaceDir,
           recentWorkspaces: ev.recentWorkspaces,
           model: ev.model,
           preset: ev.preset,
-          editor: ev.editor,
           version: ev.version,
+          ...(ev.baseUrl ? { baseUrl: ev.baseUrl } : {}),
+          ...(ev.apiKeyPrefix ? { apiKeyPrefix: ev.apiKeyPrefix } : {}),
+          ...(ev.editor ? { editor: ev.editor } : {}),
         },
       };
     }
@@ -755,9 +763,9 @@ export function applyIncoming(state: State, ev: IncomingEvent): State {
               name: s.name,
               args: s.args,
               startedAt: 0,
-              result: s.result,
-              ok: s.ok,
               durationMs: 0,
+              ...(s.result !== undefined ? { result: s.result } : {}),
+              ...(s.ok !== undefined ? { ok: s.ok } : {}),
             };
           }
           return s;
@@ -955,10 +963,7 @@ export function applyIncoming(state: State, ev: IncomingEvent): State {
     case "$btw_result":
       return {
         ...state,
-        messages: [
-          ...state.messages,
-          { kind: "status", text: `≫ btw\n${ev.answer}` },
-        ],
+        messages: [...state.messages, { kind: "status", text: `≫ btw\n${ev.answer}` }],
       };
     case "status":
       return state;
@@ -996,7 +1001,12 @@ function formatConversationMarkdown(messages: ChatMessage[], userLabel: string):
 }
 
 function sanitizeFilename(name: string): string {
-  return name.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").replace(/^\.+/, "").slice(0, 200) || "session";
+  return (
+    name
+      .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
+      .replace(/^\.+/, "")
+      .slice(0, 200) || "session"
+  );
 }
 
 function defaultExportFilename(session: string): string {
@@ -1078,6 +1088,7 @@ function TabRuntime({
     ready: false,
     needsSetup: false,
     busy: false,
+    currentSession: undefined,
     messages: [],
     pendingConfirms: [],
     pendingPathAccess: [],
@@ -1187,7 +1198,7 @@ function TabRuntime({
         directory: true,
         multiple: false,
         title: t("workdir.title"),
-        defaultPath: state.settings?.workspaceDir,
+        ...(state.settings?.workspaceDir ? { defaultPath: state.settings.workspaceDir } : {}),
       });
       if (typeof picked === "string" && picked.length > 0) {
         saveSettings({ workspaceDir: picked });
@@ -1197,13 +1208,10 @@ function TabRuntime({
     }
   }, [saveSettings, state.settings?.workspaceDir]);
 
-  const flashToast = useCallback(
-    (msg: string, opts?: { yolo?: boolean; duration?: number }) => {
-      setToast({ msg, yolo: opts?.yolo });
-      window.setTimeout(() => setToast(null), opts?.duration ?? 1600);
-    },
-    [],
-  );
+  const flashToast = useCallback((msg: string, opts?: { yolo?: boolean; duration?: number }) => {
+    setToast({ msg, ...(opts?.yolo !== undefined ? { yolo: opts.yolo } : {}) });
+    window.setTimeout(() => setToast(null), opts?.duration ?? 1600);
+  }, []);
 
   // Drag-and-drop: dropping files/folders onto the window inserts them
   // as @-mentions in the draft (relative to workspaceDir when inside it).
@@ -1224,19 +1232,16 @@ function TabRuntime({
         const handle = await webview.onDragDropEvent((event) => {
           if (!dropActiveRef.current) return;
           if (event.payload.type === "enter") {
-            document.body.style.setProperty(
-              "--drop-overlay-label",
-              `"${t("dragDrop.overlay")}"`,
-            );
-            document.body.dataset.dragOver = "1";
+            document.body.style.setProperty("--drop-overlay-label", `"${t("dragDrop.overlay")}"`);
+            document.body.dataset["dragOver"] = "1";
             return;
           }
           if (event.payload.type === "leave") {
-            delete document.body.dataset.dragOver;
+            delete document.body.dataset["dragOver"];
             return;
           }
           if (event.payload.type !== "drop") return;
-          delete document.body.dataset.dragOver;
+          delete document.body.dataset["dragOver"];
           const paths = event.payload.paths ?? [];
           if (paths.length === 0) return;
           const mentions = paths.map((p) => {
@@ -1265,7 +1270,7 @@ function TabRuntime({
     return () => {
       cancelled = true;
       unlisten?.();
-      delete document.body.dataset.dragOver;
+      delete document.body.dataset["dragOver"];
     };
   }, [state.settings?.workspaceDir, markMentionPicked]);
 
@@ -1297,8 +1302,17 @@ function TabRuntime({
         if (skill) {
           const clientId = `skill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
           const trimmedArgs = args?.trim() ?? "";
-          dispatch({ t: "start_skill", skill: { name: skill.name, runAs: skill.runAs }, args: trimmedArgs, clientId });
-          sendRpc({ cmd: "skill_run", name: skill.name, args: trimmedArgs || undefined });
+          dispatch({
+            t: "start_skill",
+            skill: { name: skill.name, runAs: skill.runAs },
+            args: trimmedArgs,
+            clientId,
+          });
+          sendRpc({
+            cmd: "skill_run",
+            name: skill.name,
+            ...(trimmedArgs ? { args: trimmedArgs } : {}),
+          });
           if (!override) setDraft("");
           return;
         }
@@ -1533,7 +1547,12 @@ function TabRuntime({
         composerRef.current?.focus();
       },
     },
-    { cmd: "/new", desc: t("app.cmd.newSession"), run: () => newChat(), kb: shortcutText(["mod", "N"]) },
+    {
+      cmd: "/new",
+      desc: t("app.cmd.newSession"),
+      run: () => newChat(),
+      kb: shortcutText(["mod", "N"]),
+    },
     { cmd: "/clear", desc: t("app.cmd.clearChat"), run: () => dispatch({ t: "clear" }) },
     { cmd: "/abort", desc: t("app.cmd.abort"), run: () => abort(), kb: "esc" },
     {
@@ -1635,10 +1654,10 @@ function TabRuntime({
       const m = state.currentSession.match(/^desktop-(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})/);
       if (m)
         return t("app.session.format", {
-          month: m[2],
-          day: m[3],
-          hour: m[4],
-          minute: m[5],
+          month: m[2] ?? "",
+          day: m[3] ?? "",
+          hour: m[4] ?? "",
+          minute: m[5] ?? "",
         });
     }
     return state.messages.length === 0
@@ -1682,7 +1701,10 @@ function TabRuntime({
 
   return (
     <WorkspaceProvider
-      value={{ dir: state.settings?.workspaceDir, editor: state.settings?.editor }}
+      value={{
+        ...(state.settings?.workspaceDir ? { dir: state.settings.workspaceDir } : {}),
+        ...(state.settings?.editor ? { editor: state.settings.editor } : {}),
+      }}
     >
       <div
         className="app"
@@ -1694,7 +1716,7 @@ function TabRuntime({
       >
         <TitleBar
           session={session}
-          model={state.settings?.model}
+          {...(state.settings?.model ? { model: state.settings.model } : {})}
           sideOn={!sideCollapsed}
           ctxOn={!ctxCollapsed}
           onToggleSide={onToggleSide}
@@ -1723,7 +1745,7 @@ function TabRuntime({
 
         <Sidebar
           sessions={state.sessions}
-          activeName={state.currentSession}
+          {...(state.currentSession ? { activeName: state.currentSession } : {})}
           onNewChat={newChat}
           onLoadSession={(name) => sendRpc({ cmd: "session_load", name })}
           onDeleteSession={(name) => sendRpc({ cmd: "session_delete", name })}
@@ -1736,7 +1758,9 @@ function TabRuntime({
         <main className="main" style={{ position: "relative" }}>
           {state.needsSetup ? (
             <NeedsSetupView
-              workspaceDir={state.settings?.workspaceDir}
+              {...(state.settings?.workspaceDir
+                ? { workspaceDir: state.settings.workspaceDir }
+                : {})}
               onPickWorkspace={pickWorkspace}
               onSubmit={(key) => sendRpc({ cmd: "setup_save_key", key })}
             />
@@ -1744,8 +1768,10 @@ function TabRuntime({
             <>
               <MainHead
                 session={session}
-                model={state.settings?.model}
-                workspaceDir={state.settings?.workspaceDir}
+                {...(state.settings?.model ? { model: state.settings.model } : {})}
+                {...(state.settings?.workspaceDir
+                  ? { workspaceDir: state.settings.workspaceDir }
+                  : {})}
                 busy={state.busy}
                 hasMessages={state.messages.length > 0}
                 onAbort={abort}
@@ -1774,7 +1800,9 @@ function TabRuntime({
                     <>
                       <PlanBanner
                         plan={state.activePlan}
-                        onDismiss={state.busy ? undefined : () => dispatch({ t: "dismiss_plan" })}
+                        {...(state.busy
+                          ? {}
+                          : { onDismiss: () => dispatch({ t: "dismiss_plan" }) })}
                       />
                       <ActivePlanTaskCard plan={state.activePlan} />
                     </>
@@ -1794,7 +1822,9 @@ function TabRuntime({
                         }
                         send(text);
                       }}
-                      workspaceDir={state.settings?.workspaceDir}
+                      {...(state.settings?.workspaceDir
+                        ? { workspaceDir: state.settings.workspaceDir }
+                        : {})}
                     />
                   ) : null}
 
@@ -1806,7 +1836,7 @@ function TabRuntime({
                       return (
                         <div key={`u-${i}`}>
                           {needsDivider ? <TurnDivider label={dividerLabel} /> : null}
-                          <UserMsg text={m.text} skill={m.skill} />
+                          <UserMsg text={m.text} {...(m.skill ? { skill: m.skill } : {})} />
                         </div>
                       );
                     }
@@ -1816,7 +1846,7 @@ function TabRuntime({
                           key={`a-${m.turn}`}
                           segments={m.segments}
                           pending={m.pending}
-                          model={state.model}
+                          {...(state.model ? { model: state.model } : {})}
                           onApproveConfirm={onApproveConfirm}
                           onRejectConfirm={onRejectConfirm}
                           onAlwaysAllowConfirm={onAlwaysAllowConfirm}
@@ -1937,13 +1967,13 @@ function TabRuntime({
                 onAbort={abort}
                 disabled={!state.ready}
                 busy={state.busy}
-                busyLabel={
-                  state.busy
-                    ? state.activeSkill
-                      ? `Skill · ${state.activeSkill.name}`
-                      : "Reasoning"
-                    : undefined
-                }
+                {...(state.busy
+                  ? {
+                      busyLabel: state.activeSkill
+                        ? `Skill · ${state.activeSkill.name}`
+                        : "Reasoning",
+                    }
+                  : {})}
                 busyElapsedMs={elapsed}
                 textareaRef={composerRef}
                 preset={state.settings?.preset ?? "auto"}
@@ -1961,7 +1991,9 @@ function TabRuntime({
                     flashToast(t("app.toast.modeSwitched", { mode: mode.toUpperCase() }));
                   }
                 }}
-                workspaceDir={state.settings?.workspaceDir}
+                {...(state.settings?.workspaceDir
+                  ? { workspaceDir: state.settings.workspaceDir }
+                  : {})}
                 slashCommands={slashCommands}
                 onMentionQuery={queryMentions}
                 onMentionPreview={previewMention}
@@ -2018,8 +2050,8 @@ function TabRuntime({
           open={wdOpen}
           onClose={() => setWdOpen(false)}
           recent={state.settings?.recentWorkspaces ?? []}
-          current={state.settings?.workspaceDir}
-          anchor={wdAnchor}
+          {...(state.settings?.workspaceDir ? { current: state.settings.workspaceDir } : {})}
+          {...(wdAnchor ? { anchor: wdAnchor } : {})}
           onPick={(path) => saveSettings({ workspaceDir: path })}
           onBrowse={pickWorkspace}
         />
@@ -2089,23 +2121,63 @@ function WinMinimize() {
 function WinMaximize() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
-      <rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="1" />
+      <rect
+        x="0.5"
+        y="0.5"
+        width="9"
+        height="9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1"
+      />
     </svg>
   );
 }
 function WinRestore() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
-      <rect x="2.5" y="0.5" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1" />
-      <rect x="0.5" y="2.5" width="7" height="7" fill="var(--bg-2, #eee)" stroke="currentColor" strokeWidth="1" />
+      <rect
+        x="2.5"
+        y="0.5"
+        width="7"
+        height="7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1"
+      />
+      <rect
+        x="0.5"
+        y="2.5"
+        width="7"
+        height="7"
+        fill="var(--bg-2, #eee)"
+        stroke="currentColor"
+        strokeWidth="1"
+      />
     </svg>
   );
 }
 function WinClose() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
-      <line x1="0.5" y1="0.5" x2="9.5" y2="9.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="9.5" y1="0.5" x2="0.5" y2="9.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <line
+        x1="0.5"
+        y1="0.5"
+        x2="9.5"
+        y2="9.5"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+      <line
+        x1="9.5"
+        y1="0.5"
+        x2="0.5"
+        y2="9.5"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -2141,15 +2213,19 @@ function TitleBar({
   const [menuOpen, setMenuOpen] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const moreWrapRef = useRef<HTMLDivElement>(null);
-  const isMac = document.documentElement.dataset.platform === "macos";
+  const isMac = document.documentElement.dataset["platform"] === "macos";
 
   useEffect(() => {
     const win = getCurrentWindow();
     win.isMaximized().then(setIsMaximized);
     let unlisten: (() => void) | undefined;
-    win.listen("tauri://resize", async () => {
-      setIsMaximized(await win.isMaximized());
-    }).then((fn) => { unlisten = fn; });
+    win
+      .listen("tauri://resize", async () => {
+        setIsMaximized(await win.isMaximized());
+      })
+      .then((fn) => {
+        unlisten = fn;
+      });
     return () => unlisten?.();
   }, []);
 
@@ -2259,39 +2335,89 @@ function TitleBar({
           {menuOpen ? (
             <div
               className="popup"
-              style={{ top: "calc(100% + 6px)", right: 0, left: "auto", bottom: "auto", width: 220 }}
+              style={{
+                top: "calc(100% + 6px)",
+                right: 0,
+                left: "auto",
+                bottom: "auto",
+                width: 220,
+              }}
             >
               <div className="popup-list">
-                <div className="popup-item" onClick={() => { onOpenCommands(); setMenuOpen(false); }}>
-                  <span className="ico"><I.search size={12} /></span>
-                  <div className="nm"><span>{t("app.titlebar.commandPalette")}</span></div>
+                <div
+                  className="popup-item"
+                  onClick={() => {
+                    onOpenCommands();
+                    setMenuOpen(false);
+                  }}
+                >
+                  <span className="ico">
+                    <I.search size={12} />
+                  </span>
+                  <div className="nm">
+                    <span>{t("app.titlebar.commandPalette")}</span>
+                  </div>
                   <span className="kb">
                     <Shortcut keys={["mod", "K"]} />
                   </span>
                 </div>
                 <div
                   className="popup-item"
-                  onClick={() => { if (hasMessages) onCopy(); setMenuOpen(false); }}
+                  onClick={() => {
+                    if (hasMessages) onCopy();
+                    setMenuOpen(false);
+                  }}
                   style={{ opacity: hasMessages ? 1 : 0.5 }}
                 >
-                  <span className="ico"><I.copy size={12} /></span>
-                  <div className="nm"><span>{t("app.titlebar.copyMd")}</span></div>
+                  <span className="ico">
+                    <I.copy size={12} />
+                  </span>
+                  <div className="nm">
+                    <span>{t("app.titlebar.copyMd")}</span>
+                  </div>
                 </div>
                 <div
                   className="popup-item"
-                  onClick={() => { if (hasMessages) onExport(); setMenuOpen(false); }}
+                  onClick={() => {
+                    if (hasMessages) onExport();
+                    setMenuOpen(false);
+                  }}
                   style={{ opacity: hasMessages ? 1 : 0.5 }}
                 >
-                  <span className="ico"><I.download size={12} /></span>
-                  <div className="nm"><span>{t("app.titlebar.exportMd")}</span></div>
+                  <span className="ico">
+                    <I.download size={12} />
+                  </span>
+                  <div className="nm">
+                    <span>{t("app.titlebar.exportMd")}</span>
+                  </div>
                 </div>
-                <div className="popup-item" onClick={() => { onClear(); setMenuOpen(false); }}>
-                  <span className="ico"><I.x size={12} /></span>
-                  <div className="nm"><span>{t("app.titlebar.clearChat")}</span></div>
+                <div
+                  className="popup-item"
+                  onClick={() => {
+                    onClear();
+                    setMenuOpen(false);
+                  }}
+                >
+                  <span className="ico">
+                    <I.x size={12} />
+                  </span>
+                  <div className="nm">
+                    <span>{t("app.titlebar.clearChat")}</span>
+                  </div>
                 </div>
-                <div className="popup-item" onClick={() => { onOpenSettings(); setMenuOpen(false); }}>
-                  <span className="ico"><I.cog size={12} /></span>
-                  <div className="nm"><span>{t("app.titlebar.settings")}</span></div>
+                <div
+                  className="popup-item"
+                  onClick={() => {
+                    onOpenSettings();
+                    setMenuOpen(false);
+                  }}
+                >
+                  <span className="ico">
+                    <I.cog size={12} />
+                  </span>
+                  <div className="nm">
+                    <span>{t("app.titlebar.settings")}</span>
+                  </div>
                   <span className="kb">
                     <Shortcut keys={["mod", ","]} />
                   </span>
@@ -2308,7 +2434,10 @@ function TitleBar({
               type="button"
               className="win-ctrl"
               title={t("app.titlebar.minimize")}
-              onMouseDown={(e) => { e.stopPropagation(); win.minimize(); }}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                win.minimize();
+              }}
             >
               <WinMinimize />
             </button>
@@ -2316,7 +2445,10 @@ function TitleBar({
               type="button"
               className="win-ctrl"
               title={isMaximized ? t("app.titlebar.restore") : t("app.titlebar.maximize")}
-              onMouseDown={(e) => { e.stopPropagation(); win.toggleMaximize(); }}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                win.toggleMaximize();
+              }}
             >
               {isMaximized ? <WinRestore /> : <WinMaximize />}
             </button>
@@ -2324,7 +2456,10 @@ function TitleBar({
               type="button"
               className="win-ctrl close"
               title={t("app.titlebar.close")}
-              onMouseDown={(e) => { e.stopPropagation(); win.close(); }}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                win.close();
+              }}
             >
               <WinClose />
             </button>
@@ -2384,7 +2519,11 @@ function TabBar({
           </div>
         );
       })}
-      <div className="tab newtab" title={localizeShortcutText(t("app.tab.newTabTitle"))} onClick={onNew}>
+      <div
+        className="tab newtab"
+        title={localizeShortcutText(t("app.tab.newTabTitle"))}
+        onClick={onNew}
+      >
         <I.plus size={12} />
         <span style={{ fontSize: 11, marginLeft: 4 }}>{t("app.tab.newTab")}</span>
       </div>
@@ -2705,7 +2844,7 @@ function formatBytes(n: number): string {
 
 type TabMeta = { id: string; workspaceDir?: string; busy?: boolean };
 
-export function App() {
+export function App(): ReactElement {
   const [tabs, setTabs] = useState<TabMeta[]>([]);
   const [activeTabId, setActiveTabId] = useState<string>("");
   const dispatchersRef = useRef<Map<string, TabDispatcher>>(new Map());
@@ -2758,8 +2897,8 @@ export function App() {
   );
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    document.documentElement.dataset.themeStyle = themeStyle;
+    document.documentElement.dataset["theme"] = theme;
+    document.documentElement.dataset["themeStyle"] = themeStyle;
     localStorage.setItem("reasonix.theme", theme);
     localStorage.setItem("reasonix.themeStyle", themeStyle);
   }, [theme, themeStyle]);
@@ -2783,7 +2922,7 @@ export function App() {
     const stack =
       fontFamily === FONT_FAMILY.CUSTOM && custom
         ? custom
-        : FONT_FAMILY_STACK[fontFamily] ?? FONT_FAMILY_STACK.sans;
+        : (FONT_FAMILY_STACK[fontFamily] ?? FONT_FAMILY_STACK.sans);
     document.documentElement.style.setProperty("--font-sans", stack);
     localStorage.setItem("reasonix.fontFamily", fontFamily);
     localStorage.setItem("reasonix.customFontFamily", customFontFamily);

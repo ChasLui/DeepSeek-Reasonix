@@ -45,8 +45,8 @@ describe("settings API — combined POST persistence (#274)", () => {
     );
     expect(res.status).toBe(200);
     const cfg = readCfg(configPath);
-    expect(cfg.lang).toBe("EN");
-    expect(cfg.baseUrl).toBe("https://example.com");
+    expect(cfg["lang"]).toBe("EN");
+    expect(cfg["baseUrl"]).toBe("https://example.com");
   });
 
   it("preserves all fields in a multi-field POST", async () => {
@@ -64,11 +64,11 @@ describe("settings API — combined POST persistence (#274)", () => {
     );
     expect(res.status).toBe(200);
     const cfg = readCfg(configPath);
-    expect(cfg.lang).toBe("EN");
-    expect(cfg.baseUrl).toBe("https://example.com");
-    expect(cfg.preset).toBe("pro");
-    expect(cfg.reasoningEffort).toBe("high");
-    expect(cfg.search).toBe(false);
+    expect(cfg["lang"]).toBe("EN");
+    expect(cfg["baseUrl"]).toBe("https://example.com");
+    expect(cfg["preset"]).toBe("pro");
+    expect(cfg["reasoningEffort"]).toBe("high");
+    expect(cfg["search"]).toBe(false);
   });
 
   it("does not write to disk when no fields are provided", async () => {
@@ -88,8 +88,8 @@ describe("settings API — combined POST persistence (#274)", () => {
     );
     expect(res.status).toBe(400);
     const cfg = readCfg(configPath);
-    expect(cfg.lang).toBe("ZH");
-    expect(cfg.baseUrl).toBe("https://orig");
+    expect(cfg["lang"]).toBe("ZH");
+    expect(cfg["baseUrl"]).toBe("https://orig");
   });
 
   it("persists apiKey alongside other fields without losing them", async () => {
@@ -101,17 +101,17 @@ describe("settings API — combined POST persistence (#274)", () => {
     );
     expect(res.status).toBe(200);
     const cfg = readCfg(configPath);
-    expect(cfg.apiKey).toBe("sk-1234567890abcdef");
-    expect(cfg.lang).toBe("EN");
+    expect(cfg["apiKey"]).toBe("sk-1234567890abcdef");
+    expect(cfg["lang"]).toBe("EN");
   });
 
   it("GET persists search=true when the field is missing (issue #778)", async () => {
     writeFileSync(configPath, JSON.stringify({ lang: "EN" }), "utf8");
-    expect(readCfg(configPath).search).toBeUndefined();
+    expect(readCfg(configPath)["search"]).toBeUndefined();
     const res = await handleSettings("GET", [], "", makeCtx(configPath));
     expect(res.status).toBe(200);
     expect((res.body as { search: boolean }).search).toBe(true);
-    expect(readCfg(configPath).search).toBe(true);
+    expect(readCfg(configPath)["search"]).toBe(true);
   });
 
   it("GET does not rewrite the file when search is already explicit", async () => {
@@ -135,7 +135,7 @@ describe("settings API — combined POST persistence (#274)", () => {
     );
     expect(post.status).toBe(200);
     expect((post.body as { changed: string[] }).changed).toContain("skillPaths");
-    expect(readCfg(configPath).skills).toEqual({ paths: [customA, customB] });
+    expect(readCfg(configPath)["skills"]).toEqual({ paths: [customA, customB] });
 
     const get = await handleSettings("GET", [], "", {
       ...makeCtx(configPath),
@@ -155,7 +155,7 @@ describe("settings API — combined POST persistence (#274)", () => {
       { ...makeCtx(configPath), getCurrentCwd: () => dir },
     );
     expect(post.status).toBe(200);
-    expect(readCfg(configPath).skills).toEqual({
+    expect(readCfg(configPath)["skills"]).toEqual({
       paths: ["skills-local", "~/.agents/skills/find-skills", absolute],
     });
 
@@ -189,7 +189,7 @@ describe("settings API — combined POST persistence (#274)", () => {
       { ...makeCtx(configPath), getCurrentCwd: () => dir },
     );
     expect(res.status).toBe(200);
-    expect(readCfg(configPath).skills).toEqual({ paths: ["skills-a", "skills-b"] });
+    expect(readCfg(configPath)["skills"]).toEqual({ paths: ["skills-a", "skills-b"] });
     expect(loadResolvedSkillPaths(dir, configPath)).toEqual([
       join(dir, "skills-a"),
       join(dir, "skills-b"),
@@ -216,7 +216,7 @@ describe("settings API — combined POST persistence (#274)", () => {
       { ...makeCtx(configPath), getCurrentCwd: () => dir },
     );
     expect(post.status).toBe(200);
-    expect(readCfg(configPath).skills).toEqual({ paths: ["~/.agents/skills/find-skills"] });
+    expect(readCfg(configPath)["skills"]).toEqual({ paths: ["~/.agents/skills/find-skills"] });
 
     const get = await handleSettings("GET", [], "", {
       ...makeCtx(configPath),
@@ -274,7 +274,7 @@ describe("settings API — combined POST persistence (#274)", () => {
     expect(res.status).toBe(200);
     expect(calls).toEqual(["preset:flash", "effort:high"]);
     const cfg = readCfg(configPath);
-    expect(cfg.preset).toBe("flash");
-    expect(cfg.reasoningEffort).toBe("high");
+    expect(cfg["preset"]).toBe("flash");
+    expect(cfg["reasoningEffort"]).toBe("high");
   });
 });

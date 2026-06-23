@@ -16,40 +16,40 @@ import type {
 
 export interface BridgeOptions {
   /** Prefix for tool names — disambiguates collisions when bridging multiple servers. */
-  namePrefix?: string;
+  namePrefix?: string | undefined;
   /** Registry to populate. Creates a fresh one if omitted. */
-  registry?: ToolRegistry;
+  registry?: ToolRegistry | undefined;
   /** Session toolset gate — when present, a bridged tool whose name returns false is unregistered and excluded from `registeredNames` (never enters the prefix). Absent ⟹ all bridged tools kept. */
-  toolFilter?: (registeredName: string) => boolean;
+  toolFilter?: ((registeredName: string) => boolean | undefined) | undefined;
   /** Warm tools/list candidate loaded from the stdio schema cache after synchronous metadata verification. */
-  mcpToolsOverride?: McpTool[];
+  mcpToolsOverride?: McpTool[] | undefined;
   /** Auto-flatten deep schemas (Pillar 3). Defaults to the registry's own default (true). */
-  autoFlatten?: boolean;
+  autoFlatten?: boolean | undefined;
   /** Cap on tool result chars; head+tail truncation. Floor against context-poisoning oversized reads. */
-  maxResultChars?: number;
+  maxResultChars?: number | undefined;
   /** Absent → no `_meta.progressToken` sent and server won't emit progress. */
   onProgress?: (info: {
     toolName: string;
     progress: number;
-    total?: number;
-    message?: string;
+    total?: number | undefined;
+    message?: string | undefined;
   }) => void;
   /** Server name used to tag latency samples + slow events. Falls through to namePrefix without trailing `_`. */
-  serverName?: string;
+  serverName?: string | undefined;
   /** p95 cutoff in ms before a slow event fires — defaults to 4000. */
-  slowThresholdMs?: number;
+  slowThresholdMs?: number | undefined;
   /** Fired exactly when the per-server p95 transitions over `slowThresholdMs`. */
-  onSlow?: (ev: SlowEvent) => void;
+  onSlow?: ((ev: SlowEvent) => void) | undefined;
   /** Fired once when latency or error samples cross the unhealthy threshold. */
-  onUnhealthy?: (ev: UnhealthyEvent) => void;
+  onUnhealthy?: ((ev: UnhealthyEvent) => void) | undefined;
   /** Tier assigned to every bridged tool (FR-005). 0/undefined keeps current behavior — tools enter the prefix. Set 2 to make a server's tools deferred (catalog-only). */
-  mcpDefaultTier?: number;
+  mcpDefaultTier?: number | undefined;
   /** Indirection so reconnect can swap the underlying client without re-registering tools. */
-  host?: McpClientHost;
+  host?: McpClientHost | undefined;
   /** Awaited before each `callTool` — resolves on `connected`, rejects on `failed`, caps via `readyTimeoutMs`. */
-  ready?: Promise<void>;
+  ready?: Promise<void> | undefined;
   /** How long to wait on `ready` before failing the dispatch. Default 30_000ms. */
-  readyTimeoutMs?: number;
+  readyTimeoutMs?: number | undefined;
 }
 
 /** Mutable holder so `/mcp reconnect` can swap the underlying client without re-bridging tools. */
@@ -82,15 +82,15 @@ export interface BridgeEnv {
   prefix: string;
   maxResultChars: number;
   tracker: LatencyTracker | null;
-  onProgress?: BridgeOptions["onProgress"];
+  onProgress?: BridgeOptions["onProgress"] | undefined;
   /** Optional readiness gate awaited before each `callTool` dispatch. */
-  ready?: Promise<void>;
+  ready?: Promise<void> | undefined;
   /** Timeout for waiting on `ready` — milliseconds. Defaults to DEFAULT_READY_TIMEOUT_MS. */
-  readyTimeoutMs?: number;
+  readyTimeoutMs?: number | undefined;
   /** Server name surfaced in timeout errors. Defaults to the prefix or "anon". */
-  serverName?: string;
+  serverName?: string | undefined;
   /** Tier stamped on bridged tools (FR-005); 0/undefined = enters prefix as today. */
-  mcpDefaultTier?: number;
+  mcpDefaultTier?: number | undefined;
 }
 
 /** Register one MCP tool's bridged closure into the registry. Returns the registered name (or "" if skipped). */
@@ -121,10 +121,10 @@ export function registerSingleMcpTool(
       let toolResult: CallToolResult;
       try {
         toolResult = await live.callTool(mcpTool.name, args, {
-          onProgress: env.onProgress
-            ? (info) => env.onProgress!({ toolName: registeredName, ...info })
-            : undefined,
-          signal: ctx?.signal,
+          ...(env.onProgress
+            ? { onProgress: (info) => env.onProgress!({ toolName: registeredName, ...info }) }
+            : {}),
+          ...(ctx?.signal !== undefined ? { signal: ctx.signal } : {}),
         });
         if (env.tracker) env.tracker.record({ ok: true, elapsedMs: Date.now() - t0 });
       } catch (err) {
@@ -401,8 +401,8 @@ export async function bridgeMcpPrompts(
 
 export interface FlattenOptions {
   /** Cap the flattened string at this many characters. Default: no cap. */
-  maxChars?: number;
-  toonMode?: ToonMode;
+  maxChars?: number | undefined;
+  toonMode?: ToonMode | undefined;
   /** Shield kill-switch override — false bypasses MCP response shielding regardless of REASONIX_SHIELD. */
   mcpShield?: { enabled?: boolean };
 }
@@ -412,7 +412,7 @@ export function flattenMcpResult(result: CallToolResult, opts: FlattenOptions = 
   // Shield pre-pass: shape-aware reduction before head+tail truncation.
   // Bypass via REASONIX_SHIELD=0 (env) or opts.mcpShield.enabled===false (config).
   let shielded = result;
-  if (process.env.REASONIX_SHIELD !== "0" && opts.mcpShield?.enabled !== false) {
+  if (process.env["REASONIX_SHIELD"] !== "0" && opts.mcpShield?.enabled !== false) {
     try {
       shielded = shieldMcpResult(result);
     } catch {
@@ -433,7 +433,7 @@ function validateResultShape(result: CallToolResult): void {
     throw new Error(`MCP server returned non-object result: ${typeof result}`);
   const { content, isError: _isError } = result as {
     content: unknown;
-    isError?: unknown;
+    isError?: unknown | undefined;
   };
   if (!Array.isArray(content))
     throw new Error(`MCP server returned result with non-array content: ${typeof content}`);
@@ -441,22 +441,22 @@ function validateResultShape(result: CallToolResult): void {
     const block = content[i] as Record<string, unknown> | null | undefined;
     if (typeof block !== "object" || !block)
       throw new Error(`MCP server returned result.content[${i}] is not an object`);
-    if (block.type !== "text" && block.type !== "image")
+    if (block["type"] !== "text" && block["type"] !== "image")
       throw new Error(
-        `MCP server returned result.content[${i}] with unknown type ${JSON.stringify(block.type)}`,
+        `MCP server returned result.content[${i}] with unknown type ${JSON.stringify(block["type"])}`,
       );
-    if (block.type === "text" && typeof block.text !== "string")
+    if (block["type"] === "text" && typeof block["text"] !== "string")
       throw new Error(
-        `MCP server returned result.content[${i}] with non-string text (${typeof block.text})`,
+        `MCP server returned result.content[${i}] with non-string text (${typeof block["text"]})`,
       );
-    if (block.type === "image") {
-      if (typeof block.data !== "string")
+    if (block["type"] === "image") {
+      if (typeof block["data"] !== "string")
         throw new Error(
-          `MCP server returned result.content[${i}] with non-string data (${typeof block.data})`,
+          `MCP server returned result.content[${i}] with non-string data (${typeof block["data"]})`,
         );
-      if (typeof block.mimeType !== "string")
+      if (typeof block["mimeType"] !== "string")
         throw new Error(
-          `MCP server returned result.content[${i}] with non-string mimeType (${typeof block.mimeType})`,
+          `MCP server returned result.content[${i}] with non-string mimeType (${typeof block["mimeType"]})`,
         );
     }
   }

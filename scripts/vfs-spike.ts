@@ -28,21 +28,21 @@ const PROBES: Record<string, Probe[]> = {
     { cmd: "cat {ROOT}/.gitignore" },
     { cmd: "cat {ROOT}/README.md" },
     { cmd: "cat {ROOT}/tsconfig.json" },
-    { cmd: "cat {ROOT}/biome.json" },
+    { cmd: "cat {ROOT}/.oxlintrc.json" },
   ],
   head: [
     { cmd: "head -1 {ROOT}/package.json" },
     { cmd: "head -5 {ROOT}/README.md" },
     { cmd: "head -3 {ROOT}/.gitignore" },
     { cmd: "head -10 {ROOT}/tsconfig.json" },
-    { cmd: "head -2 {ROOT}/biome.json" },
+    { cmd: "head -2 {ROOT}/.oxlintrc.json" },
   ],
   tail: [
     { cmd: "tail -1 {ROOT}/package.json" },
     { cmd: "tail -5 {ROOT}/README.md" },
     { cmd: "tail -3 {ROOT}/.gitignore" },
     { cmd: "tail -10 {ROOT}/tsconfig.json" },
-    { cmd: "tail -2 {ROOT}/biome.json" },
+    { cmd: "tail -2 {ROOT}/.oxlintrc.json" },
   ],
   wc: [
     { cmd: "wc -l {ROOT}/package.json" },
@@ -98,7 +98,7 @@ const PROBES: Record<string, Probe[]> = {
     { cmd: "file {ROOT}/README.md" },
     { cmd: "file {ROOT}/src" },
     { cmd: "file {ROOT}/.gitignore" },
-    { cmd: "file {ROOT}/biome.json" },
+    { cmd: "file {ROOT}/.oxlintrc.json" },
   ],
 };
 

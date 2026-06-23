@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { I } from "../icons";
 import { t, useLang } from "../i18n";
 import type { JobInfo } from "../protocol";
@@ -16,7 +16,7 @@ export function JobsPop({
   jobs: JobInfo[];
   onStop: (jobId: number) => void;
   onStopAll: () => void;
-}) {
+}): ReactElement | null {
   useLang();
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -97,8 +97,8 @@ export function JobsPop({
             </span>
             <span className="grow" />
             <span>
-              <Shortcut keys={["mod", "J"]} /> {t("jobs.kbToggle")} ·{" "}
-              <Shortcut keys={["esc"]} /> {t("jobs.kbClose")}
+              <Shortcut keys={["mod", "J"]} /> {t("jobs.kbToggle")} · <Shortcut keys={["esc"]} />{" "}
+              {t("jobs.kbClose")}
             </span>
           </div>
         </div>

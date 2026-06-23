@@ -7,12 +7,12 @@ export interface WorkspaceInfo {
   path: string;
   current: boolean;
   sessions: number;
-  lastActive?: Date;
+  lastActive?: Date | undefined;
 }
 
 interface WorkspaceStats {
   sessions: number;
-  lastActive?: Date;
+  lastActive?: Date | undefined;
 }
 
 export function listKnownWorkspaces(currentRoot: string, configPath?: string): WorkspaceInfo[] {
@@ -48,7 +48,7 @@ export function listKnownWorkspaces(currentRoot: string, configPath?: string): W
   add(currentRoot, true);
   add(loadWorkspaceDir(configPath));
   for (const p of loadRecentWorkspaces(configPath)) add(p);
-  for (const [key, s] of stats) {
+  for (const [key] of stats) {
     const path = pathByKey.get(key);
     if (!path) continue;
     add(path);

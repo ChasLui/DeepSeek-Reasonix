@@ -11,7 +11,7 @@ export async function applyEdit(
   rootDir: string,
   abs: string,
   args: { search: string; replace: string },
-  ctx?: ToolCallContext,
+  ctx?: ToolCallContext | undefined,
 ): Promise<string> {
   if (args.search.length === 0) {
     throw new Error("edit_file: search cannot be empty");
@@ -53,7 +53,7 @@ export interface MultiEditEntry {
 export async function applyMultiEdit(
   rootDir: string,
   edits: ReadonlyArray<MultiEditEntry>,
-  ctx?: ToolCallContext,
+  ctx?: ToolCallContext | undefined,
 ): Promise<string> {
   if (edits.length === 0) {
     throw new Error("multi_edit: edits must contain at least one entry");

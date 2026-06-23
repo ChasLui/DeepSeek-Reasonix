@@ -35,7 +35,7 @@ export function handleEvents(
   // Send a snapshot busy-change immediately so the client's button
   // state is correct on first paint (instead of inheriting whatever
   // the prior connection's last delta said).
-  if (ctx.isBusy) writeEvent({ kind: "busy-change", busy: ctx.isBusy() });
+  if (ctx.isBusy) writeEvent({ kind: "busy-change", busy: ctx.isBusy() === true });
 
   const unsubscribe = ctx.subscribeEvents(writeEvent);
 

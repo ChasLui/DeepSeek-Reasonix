@@ -20,8 +20,8 @@ describe("code lexical index", () => {
   });
 
   it("persists BM25 docs under .reasonix/index/lexical/code.json", async () => {
-    const previous = process.env.REASONIX_CJK_JIEBA;
-    process.env.REASONIX_CJK_JIEBA = "0";
+    const previous = process.env["REASONIX_CJK_JIEBA"];
+    process.env["REASONIX_CJK_JIEBA"] = "0";
     try {
       const count = await writeCodeLexicalIndex(root, [
         {
@@ -48,8 +48,8 @@ describe("code lexical index", () => {
       expect(index?.search(["prefixcache"], 1)[0]?.docId).toBe("src/cache.ts:1-3");
       expect(index?.search(["缓存"], 1)[0]?.docId).toBe("src/notes.ts:4-8");
     } finally {
-      if (previous === undefined) process.env.REASONIX_CJK_JIEBA = undefined;
-      else process.env.REASONIX_CJK_JIEBA = previous;
+      if (previous === undefined) process.env["REASONIX_CJK_JIEBA"] = undefined;
+      else process.env["REASONIX_CJK_JIEBA"] = previous;
     }
   });
 

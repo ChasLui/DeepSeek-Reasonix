@@ -12,12 +12,12 @@ import { indexImportedClaudeSessions } from "./memory.js";
 
 export interface SessionsOptions {
   /** When present, inspect that session instead of listing. */
-  name?: string;
-  target?: string;
+  name?: string | undefined;
+  target?: string | undefined;
   /** Include assistant tool-call metadata in the inspect output. */
-  verbose?: boolean;
-  source?: string;
-  index?: boolean;
+  verbose?: boolean | undefined;
+  source?: string | undefined;
+  index?: boolean | undefined;
 }
 
 export async function sessionsCommand(opts: SessionsOptions): Promise<void> {

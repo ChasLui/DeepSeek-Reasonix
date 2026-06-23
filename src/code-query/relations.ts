@@ -48,35 +48,35 @@ export type ConfidenceTier = "EXTRACTED" | "INFERRED" | "AMBIGUOUS";
 export interface FindReferencesArgs {
   symbol: string;
   relation: FindReferenceRelation;
-  scope?: string;
+  scope?: string | undefined;
 }
 
 export interface DetectChangesArgs {
-  scope?: DetectChangesScope;
-  includeCallers?: boolean;
+  scope?: DetectChangesScope | undefined;
+  includeCallers?: boolean | undefined;
 }
 
 export interface ImpactArgs {
   symbol: string;
-  direction?: "callers";
-  maxDepth?: number;
-  minConfidence?: ConfidenceTier;
-  scope?: string;
+  direction?: "callers" | undefined;
+  maxDepth?: number | undefined;
+  minConfidence?: ConfidenceTier | undefined;
+  scope?: string | undefined;
 }
 
 export interface CodeRelationRuntimeOptions {
-  parseCache?: ParseTreeCache;
-  codeGraph?: boolean;
-  codeGraphBuildTimeoutMs?: number;
-  codeGraphStaleTimeoutMs?: number;
+  parseCache?: ParseTreeCache | undefined;
+  codeGraph?: boolean | undefined;
+  codeGraphBuildTimeoutMs?: number | undefined;
+  codeGraphStaleTimeoutMs?: number | undefined;
 }
 
 export interface SymbolRef {
   name: string;
   file: string;
   line: number;
-  kind?: string;
-  parent?: string;
+  kind?: string | undefined;
+  parent?: string | undefined;
 }
 
 export interface CodeRelationRecord {
@@ -88,12 +88,12 @@ export interface CodeRelationRecord {
   confidence: ConfidenceTier;
   score: number;
   reason: string;
-  from?: SymbolRef;
-  to?: SymbolRef;
-  module?: string;
-  resolvedPath?: string;
-  names?: string[];
-  snippet?: string;
+  from?: SymbolRef | undefined;
+  to?: SymbolRef | undefined;
+  module?: string | undefined;
+  resolvedPath?: string | undefined;
+  names?: string[] | undefined;
+  snippet?: string | undefined;
 }
 
 export interface FindReferencesResult {
@@ -120,14 +120,14 @@ export interface ChangedSymbol {
   kind: string;
   line: number;
   endLine: number;
-  parent?: string;
+  parent?: string | undefined;
 }
 
 export interface ChangedFile {
   path: string;
   hunks: DiffHunk[];
   symbols: ChangedSymbol[];
-  error?: string;
+  error?: string | undefined;
 }
 
 export interface DetectChangesResult {
@@ -178,8 +178,8 @@ interface CallOccurrence {
   column: number;
   name: string;
   snippet: string;
-  owner?: SymbolRef;
-  receiverName?: string;
+  owner?: SymbolRef | undefined;
+  receiverName?: string | undefined;
 }
 
 interface ImportRecord {
@@ -191,14 +191,14 @@ interface ImportRecord {
   names: string[];
   bindings: ImportBinding[];
   raw: string;
-  resolvedPath?: string;
+  resolvedPath?: string | undefined;
 }
 
 interface ImportBinding {
   importedName: string;
   localName: string;
   kind: "default" | "named" | "namespace";
-  typeOnly?: boolean;
+  typeOnly?: boolean | undefined;
 }
 
 const MAX_SCAN_FILES = 5000;
@@ -330,7 +330,7 @@ async function tryFindReferencesInGraph(
     codeGraphBuildCooldownUntil.delete(absRoot);
     return findReferencesInGraph(graph, args);
   } catch (err) {
-    if (process.env.REASONIX_CODE_GRAPH_DEBUG === "1") {
+    if (process.env["REASONIX_CODE_GRAPH_DEBUG"] === "1") {
       process.stderr.write(`code-graph query fallback: ${(err as Error).message}\n`);
     }
     return null;
@@ -338,7 +338,7 @@ async function tryFindReferencesInGraph(
 }
 
 function resolveCodeGraphCooldownMs(): number {
-  const raw = process.env.REASONIX_CODE_GRAPH_BUILD_COOLDOWN_MS?.trim();
+  const raw = process.env["REASONIX_CODE_GRAPH_BUILD_COOLDOWN_MS"]?.trim();
   if (!raw) return DEFAULT_CODE_GRAPH_BUILD_COOLDOWN_MS;
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_CODE_GRAPH_BUILD_COOLDOWN_MS;
@@ -353,7 +353,7 @@ async function listCodeGraphFiles(root: string): Promise<string[]> {
 
 function resolveCodeGraphBuildTimeoutMs(opts: CodeRelationRuntimeOptions): number {
   if (opts.codeGraphBuildTimeoutMs !== undefined) return opts.codeGraphBuildTimeoutMs;
-  const raw = process.env.REASONIX_CODE_GRAPH_BUILD_TIMEOUT_MS?.trim();
+  const raw = process.env["REASONIX_CODE_GRAPH_BUILD_TIMEOUT_MS"]?.trim();
   if (!raw) return DEFAULT_CODE_GRAPH_BUILD_TIMEOUT_MS;
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_CODE_GRAPH_BUILD_TIMEOUT_MS;
@@ -903,7 +903,7 @@ function namespaceImportTarget(
 function bestDefinitionRef(
   snapshot: ProjectSnapshot,
   symbol: string,
-  preferredFile?: string,
+  preferredFile?: string | undefined,
 ): SymbolRef | undefined {
   const all = definitionRefs(snapshot, symbol);
   const preferred = preferredFile

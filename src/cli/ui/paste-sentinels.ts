@@ -1,8 +1,8 @@
 /** PUA range U+E100..U+E1FF (BMP, no surrogate pairs) so each sentinel is one codepoint and cursor arithmetic stays trivial. */
 
-export const PASTE_SENTINEL_BASE = 0xe100;
-export const PASTE_SENTINEL_RANGE = 256;
-export const PASTE_SENTINEL_END = PASTE_SENTINEL_BASE + PASTE_SENTINEL_RANGE;
+export const PASTE_SENTINEL_BASE = 0xe100 as const;
+export const PASTE_SENTINEL_RANGE = 256 as const;
+export const PASTE_SENTINEL_END: number = PASTE_SENTINEL_BASE + PASTE_SENTINEL_RANGE;
 
 export interface PasteEntry {
   id: number;

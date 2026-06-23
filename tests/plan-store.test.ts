@@ -31,15 +31,15 @@ let originalUserProfile: string | undefined;
 
 beforeEach(() => {
   tempHome = mkdtempSync(join(tmpdir(), "reasonix-plan-store-"));
-  originalHome = process.env.HOME;
-  originalUserProfile = process.env.USERPROFILE;
-  process.env.HOME = tempHome;
-  process.env.USERPROFILE = tempHome;
+  originalHome = process.env["HOME"];
+  originalUserProfile = process.env["USERPROFILE"];
+  process.env["HOME"] = tempHome;
+  process.env["USERPROFILE"] = tempHome;
 });
 
 afterEach(() => {
-  process.env.HOME = originalHome;
-  process.env.USERPROFILE = originalUserProfile;
+  process.env["HOME"] = originalHome;
+  process.env["USERPROFILE"] = originalUserProfile;
   rmSync(tempHome, { recursive: true, force: true });
 });
 
@@ -243,9 +243,9 @@ describe("archivePlanState", () => {
     const archive = archivePlanState("payload-test");
     expect(archive).not.toBeNull();
     const parsed = readStructuredFileSync<Record<string, unknown>>(archive!);
-    expect(parsed?.steps).toEqual(steps);
-    expect(parsed?.completedStepIds).toEqual(["step-1"]);
-    expect(parsed?.version).toBe(2);
+    expect(parsed?.["steps"]).toEqual(steps);
+    expect(parsed?.["completedStepIds"]).toEqual(["step-1"]);
+    expect(parsed?.["version"]).toBe(2);
   });
 
   it("persists step completion evidence in active and archived plan state", () => {

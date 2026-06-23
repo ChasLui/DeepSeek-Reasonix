@@ -148,7 +148,7 @@ describe("telemetry + sticky fallback", () => {
     resetVfsStats();
     await runInVfs(`cat ${fileA}`, { cwd: root, rootDir: root });
     const s = getVfsStats();
-    expect(s.hits.cat).toBe(1);
+    expect(s.hits["cat"]).toBe(1);
   });
 
   it("bumps fallback counter + blacklists on throw", async () => {
@@ -157,7 +157,7 @@ describe("telemetry + sticky fallback", () => {
     // Unsupported flag triggers a throw inside the handler
     const r = await runInVfs("cat --color a", { cwd: root, rootDir: root });
     expect(r).toBeNull();
-    expect(getVfsStats().fallbacks.cat).toBe(1);
+    expect(getVfsStats().fallbacks["cat"]).toBe(1);
     expect(isVfsBlacklisted("cat")).toBe(true);
   });
 });

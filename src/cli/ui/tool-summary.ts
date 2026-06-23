@@ -53,9 +53,9 @@ function summarizeStructured(content: string): ToolSummary | null {
   // Plan / choice signals come through as errors carrying structured
   // payloads — the App-level handlers extract the structured part.
   // For the tool row here we just want the tag.
-  if (typeof obj.error === "string") {
-    const tag = obj.error.split(":", 1)[0]?.trim() ?? "error";
-    const detail = obj.error.slice(tag.length + 1).trim();
+  if (typeof obj["error"] === "string") {
+    const tag = obj["error"].split(":", 1)[0]?.trim() ?? "error";
+    const detail = obj["error"].slice(tag.length + 1).trim();
     // The tag-only case (no colon body) — show the bare tag.
     const summary = detail ? `${tag} — ${detail}` : tag;
     // Plan / Choice errors are control-flow signals, not real errors.
@@ -68,10 +68,10 @@ function summarizeStructured(content: string): ToolSummary | null {
   }
   // step_completed payload (when used outside the error path, kept
   // for forward-compat with non-throwing variants).
-  if (obj.kind === "step_completed" && typeof obj.stepId === "string") {
-    const result = typeof obj.result === "string" ? obj.result : "";
+  if (obj["kind"] === "step_completed" && typeof obj["stepId"] === "string") {
+    const result = typeof obj["result"] === "string" ? obj["result"] : "";
     return {
-      summary: clip(`✓ ${obj.stepId}: ${result}`, MAX_SUMMARY_CHARS),
+      summary: clip(`✓ ${obj["stepId"]}: ${result}`, MAX_SUMMARY_CHARS),
       isError: false,
     };
   }

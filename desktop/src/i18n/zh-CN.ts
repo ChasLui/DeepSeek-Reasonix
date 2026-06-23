@@ -637,7 +637,7 @@ export const zhCN: typeof en = {
     riskMedium: "risk · 中 · {kind}",
     execute: "执行",
     reject: "拒绝",
-    alwaysAllow: "始终允许 \"{prefix}\"",
+    alwaysAllow: '始终允许 "{prefix}"',
     pathAccessKind: "路径访问",
     read: "读取",
     write: "写入",

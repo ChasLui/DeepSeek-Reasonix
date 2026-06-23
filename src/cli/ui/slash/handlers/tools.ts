@@ -78,4 +78,4 @@ const tools: SlashHandler = (args, loop) => {
   };
 };
 
-export const handlers = { tools };
+export const handlers: { tools: SlashHandler } = { tools };

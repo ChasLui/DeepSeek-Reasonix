@@ -11,16 +11,16 @@ export interface DiffStaleStampsResult {
 }
 
 export interface DiffStaleStampsOptions {
-  timeoutMs?: number;
-  statFile?: (path: string) => Promise<CodeGraphFileStat>;
-  listFiles?: (root: string) => Promise<readonly string[]>;
+  timeoutMs?: number | undefined;
+  statFile?: ((path: string) => Promise<CodeGraphFileStat>) | undefined;
+  listFiles?: ((root: string) => Promise<readonly string[]>) | undefined;
 }
 
 const DEFAULT_STALE_TIMEOUT_MS = 200;
 
 type CodeGraphFileStat = Pick<CodeGraphFileStamp, "mtimeMs" | "size"> & {
-  isFile?: () => boolean;
-  isSymbolicLink?: () => boolean;
+  isFile?: (() => boolean) | undefined;
+  isSymbolicLink?: (() => boolean) | undefined;
 };
 
 export async function diffStaleStamps(
@@ -121,7 +121,7 @@ async function timeoutResult(
 }
 
 function parseTimeoutEnv(): number {
-  const raw = process.env.REASONIX_CODE_GRAPH_STALE_TIMEOUT_MS?.trim();
+  const raw = process.env["REASONIX_CODE_GRAPH_STALE_TIMEOUT_MS"]?.trim();
   if (!raw) return DEFAULT_STALE_TIMEOUT_MS;
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) ? parsed : DEFAULT_STALE_TIMEOUT_MS;

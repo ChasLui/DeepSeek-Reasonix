@@ -13,11 +13,11 @@ const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 
 export interface StartDashboardOptions {
   /** Force a specific port. 0 = ephemeral. Default: 0. */
-  port?: number;
+  port?: number | undefined;
   /** Host to bind. Default 127.0.0.1. Set to 0.0.0.0 / :: / a LAN IP to expose to other devices (#968) — the URL token then becomes the only auth. */
-  host?: string;
+  host?: string | undefined;
   /** Pin a token across boots (#968). When unset, mintToken() generates a fresh 32-byte hex string. Min 16 chars; the caller enforces. */
-  token?: string;
+  token?: string | undefined;
 }
 
 export interface DashboardServerHandle {

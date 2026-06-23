@@ -416,7 +416,7 @@ duplicate ids.
 | `vitest` / `jest` | runner output | failures-only with stack | 90-99% on pass, 70% on fail |
 | `pytest` | session output | failures section only | 85-95% |
 | `cargo-test` / `go-test` | runner output | failures-only | 85-95% |
-| `eslint` / `biome` / `tsc` | diagnostics | grouped by file + top rules | 60-85% |
+| `eslint` / `oxlint` / `tsgo` | diagnostics | grouped by file + top rules | 60-85% |
 | `ls` / `tree` / `find` | listings | extension counts + truncated head | 60-80% |
 
 Below ~50 lines listings pass through unchanged — compaction overhead isn't

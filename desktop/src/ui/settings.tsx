@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactElement, type ReactNode, useEffect, useState } from "react";
 import type { Balance, Settings as SettingsType, UsageStats } from "../App";
 import { setLang, t, useLang } from "../i18n";
 import { I } from "../icons";
@@ -22,6 +22,8 @@ import {
 } from "../theme";
 import { Shortcut, type ShortcutKey } from "./shortcut";
 
+type TKey = Parameters<typeof t>[0];
+
 export type PageId =
   | "general"
   | "models"
@@ -42,6 +44,26 @@ const PAGE_META: ReadonlyArray<{ id: PageId; icon: keyof typeof I }> = [
   { id: "billing", icon: "coin" },
   { id: "shortcuts", icon: "cpu" },
 ];
+
+function titleCase(value: string): string {
+  return `${value[0]!.toUpperCase()}${value.slice(1)}`;
+}
+
+function pageLabelKey(id: PageId): TKey {
+  return `settings.page${titleCase(id)}Label` as TKey;
+}
+
+function pageDescKey(id: PageId): TKey {
+  return `settings.page${titleCase(id)}Desc` as TKey;
+}
+
+function themeStyleKey(style: ThemeStyle): TKey {
+  return `settings.themeStyle${titleCase(style)}` as TKey;
+}
+
+function themeStyleDescKey(style: ThemeStyle): TKey {
+  return `settings.themeStyle${titleCase(style)}Desc` as TKey;
+}
 
 export function SettingsModal({
   settings,
@@ -105,7 +127,7 @@ export function SettingsModal({
   onPickWorkspace: () => void;
   onAddMcpSpec: (spec: string) => void;
   onRemoveMcpSpec: (spec: string) => void;
-}) {
+}): ReactElement {
   const [page, setPage] = useState<PageId>(initialPage ?? "general");
   const [qqConfigureOpen, setQQConfigureOpen] = useState(false);
   const currentMeta = PAGE_META.find((p) => p.id === page) ?? PAGE_META[0]!;
@@ -122,23 +144,15 @@ export function SettingsModal({
               onClick={() => setPage(p.id)}
             >
               <span className="ico">{I[p.icon]({ size: 13 })}</span>
-              <span>{t(`settings.page${p.id[0]!.toUpperCase()}${p.id.slice(1)}Label` as any)}</span>
+              <span>{t(pageLabelKey(p.id))}</span>
             </div>
           ))}
         </nav>
         <div className="settings-main">
           <div className="settings-head">
             <div>
-              <h2>
-                {t(
-                  `settings.page${currentMeta.id[0]!.toUpperCase()}${currentMeta.id.slice(1)}Label` as any,
-                )}
-              </h2>
-              <div className="desc">
-                {t(
-                  `settings.page${currentMeta.id[0]!.toUpperCase()}${currentMeta.id.slice(1)}Desc` as any,
-                )}
-              </div>
+              <h2>{t(pageLabelKey(currentMeta.id))}</h2>
+              <div className="desc">{t(pageDescKey(currentMeta.id))}</div>
             </div>
             <span className="grow" />
             <button type="button" className="close-btn" onClick={onClose}>
@@ -182,8 +196,8 @@ export function SettingsModal({
             {page === "general" ? (
               <>
                 <ApiKeySection
-                  baseUrl={settings.baseUrl}
-                  apiKeyPrefix={settings.apiKeyPrefix}
+                  {...(settings.baseUrl ? { baseUrl: settings.baseUrl } : {})}
+                  {...(settings.apiKeyPrefix ? { apiKeyPrefix: settings.apiKeyPrefix } : {})}
                   onSave={onSave}
                   onSaveApiKey={onSaveApiKey}
                 />
@@ -233,10 +247,8 @@ export function QQChannelSection({
   onSaveConfig: (patch: { appId?: string; appSecret?: string; sandbox: boolean }) => void;
   onSaveAndConnect: (patch: { appId?: string; appSecret?: string; sandbox: boolean }) => void;
   onOpenApplyLink: () => void;
-}) {
+}): ReactElement {
   const current = qq ?? {
-    appId: undefined,
-    appSecret: undefined,
     sandbox: true,
     enabled: false,
     configured: false,
@@ -460,9 +472,7 @@ function PageGeneral({
                 onClick={() => onSetThemeStyle(style)}
               >
                 <span className="style-card-head">
-                  <span className="style-name">
-                    {t(`settings.themeStyle${style[0]!.toUpperCase()}${style.slice(1)}` as any)}
-                  </span>
+                  <span className="style-name">{t(themeStyleKey(style))}</span>
                   <span className="style-mode">
                     {themeForStyle(style) === THEME.DARK
                       ? t("settings.themeDark")
@@ -474,9 +484,7 @@ function PageGeneral({
                   <span />
                   <span />
                 </span>
-                <span className="style-desc">
-                  {t(`settings.themeStyle${style[0]!.toUpperCase()}${style.slice(1)}Desc` as any)}
-                </span>
+                <span className="style-desc">{t(themeStyleDescKey(style))}</span>
               </button>
             ))}
           </div>
@@ -575,11 +583,7 @@ function PageGeneral({
             <div className="h">{t("settings.languageHint")}</div>
           </div>
           <div className="seg-ctrl">
-            <button
-              type="button"
-              data-on={lang === "zh-CN"}
-              onClick={() => setLang("zh-CN")}
-            >
+            <button type="button" data-on={lang === "zh-CN"} onClick={() => setLang("zh-CN")}>
               {t("settings.langZhCn")}
             </button>
             <button type="button" data-on={lang === "en"} onClick={() => setLang("en")}>
@@ -610,7 +614,7 @@ function PageGeneral({
             value={editorDraft}
             placeholder="cursor --goto"
             onChange={(e) => setEditorDraft(e.target.value)}
-            onBlur={() => onSave({ editor: editorDraft || undefined })}
+            onBlur={() => onSave(editorDraft ? { editor: editorDraft } : {})}
           />
         </div>
       </section>
@@ -734,7 +738,10 @@ function ApiKeySection({
           className="field mono"
           value={urlDraft}
           onChange={(e) => setUrlDraft(e.target.value)}
-          onBlur={() => onSave({ baseUrl: urlDraft.trim() || undefined })}
+          onBlur={() => {
+            const baseUrl = urlDraft.trim();
+            onSave(baseUrl ? { baseUrl } : {});
+          }}
         />
       </div>
     </section>

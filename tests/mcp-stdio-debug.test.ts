@@ -36,9 +36,11 @@ describe("StdioTransport REASONIX_DEBUG_MCP", { timeout: 5_000 }, () => {
     await awaitChildExit(t);
     await t.close();
 
-    const stderrCalls = writeSpy.mock.calls.map((c) => String(c[0]));
+    const stderrCalls = writeSpy.mock.calls.map((c: unknown[]) => String(c[0]));
     expect(
-      stderrCalls.some((s) => s.includes("[mcp-stdio] dropped malformed line: not-json-banner")),
+      stderrCalls.some((s: string) =>
+        s.includes("[mcp-stdio] dropped malformed line: not-json-banner"),
+      ),
     ).toBe(true);
   });
 
@@ -52,8 +54,10 @@ describe("StdioTransport REASONIX_DEBUG_MCP", { timeout: 5_000 }, () => {
     await awaitChildExit(t);
     await t.close();
 
-    const stderrCalls = writeSpy.mock.calls.map((c) => String(c[0]));
-    expect(stderrCalls.some((s) => s.includes("[mcp-stdio] dropped malformed line"))).toBe(false);
+    const stderrCalls = writeSpy.mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(stderrCalls.some((s: string) => s.includes("[mcp-stdio] dropped malformed line"))).toBe(
+      false,
+    );
   });
 
   it("stays silent when REASONIX_DEBUG_MCP is set to '0'", async () => {
@@ -66,8 +70,10 @@ describe("StdioTransport REASONIX_DEBUG_MCP", { timeout: 5_000 }, () => {
     await awaitChildExit(t);
     await t.close();
 
-    const stderrCalls = writeSpy.mock.calls.map((c) => String(c[0]));
-    expect(stderrCalls.some((s) => s.includes("[mcp-stdio] dropped malformed line"))).toBe(false);
+    const stderrCalls = writeSpy.mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(stderrCalls.some((s: string) => s.includes("[mcp-stdio] dropped malformed line"))).toBe(
+      false,
+    );
   });
 
   it("stays silent when REASONIX_DEBUG_MCP is set to a truthy non-'1' value", async () => {
@@ -80,7 +86,9 @@ describe("StdioTransport REASONIX_DEBUG_MCP", { timeout: 5_000 }, () => {
     await awaitChildExit(t);
     await t.close();
 
-    const stderrCalls = writeSpy.mock.calls.map((c) => String(c[0]));
-    expect(stderrCalls.some((s) => s.includes("[mcp-stdio] dropped malformed line"))).toBe(false);
+    const stderrCalls = writeSpy.mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(stderrCalls.some((s: string) => s.includes("[mcp-stdio] dropped malformed line"))).toBe(
+      false,
+    );
   });
 });

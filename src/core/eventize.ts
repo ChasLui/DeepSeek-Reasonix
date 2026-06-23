@@ -177,7 +177,7 @@ export class Eventizer {
     turn: number,
     kind: "run_command" | "run_background",
     payload: { command: string },
-    denyContext?: string,
+    denyContext?: string | undefined,
   ): ToolConfirmDenyEvent {
     return {
       id: ++this.nextId,
@@ -377,7 +377,7 @@ function looksLikeToolError(content: string, _toolName: string | undefined): boo
   if (content.startsWith("ERROR:")) return true;
   if (content.startsWith("[hook block]")) return true;
   if (/^\{"error"\s*:/.test(content)) return true;
-  if (typeof decodeToolResultObject(content)?.error === "string") return true;
+  if (typeof decodeToolResultObject(content)?.["error"] === "string") return true;
   if (/\bConfirmationError:|\bNeedsConfirmationError\b/.test(content)) return true;
   return false;
 }

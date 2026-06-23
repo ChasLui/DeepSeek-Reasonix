@@ -17,7 +17,7 @@ export interface McpBrowserProps {
   /** Pushed by the modal when a key triggers async work (`r` reconnect). */
   postInfo: (text: string) => void;
   /** Optional — opt-in to append-drift acceptance on `r`. Without it, append-drift refuses. */
-  applyAppend?: ApplyAppend;
+  applyAppend?: ApplyAppend | undefined;
 }
 
 export function McpBrowser({
@@ -26,7 +26,7 @@ export function McpBrowser({
   onClose,
   postInfo,
   applyAppend,
-}: McpBrowserProps) {
+}: McpBrowserProps): React.ReactElement {
   const [index, setIndex] = useState(0);
   const max = Math.max(0, servers.length - 1);
 
@@ -89,8 +89,8 @@ function ServerRow({ server, active }: { server: McpServerSummary; active: boole
   return (
     <Box flexDirection="column" marginBottom={active ? 1 : 0}>
       <Box>
-        <Text color={active ? COLOR.brand : undefined}>{active ? "▸  " : "   "}</Text>
-        <Text bold={active} color={active ? "#e6edf3" : undefined}>
+        <Text {...(active ? { color: COLOR.brand } : {})}>{active ? "▸  " : "   "}</Text>
+        <Text bold={active} {...(active ? { color: "#e6edf3" } : {})}>
           {label.padEnd(14)}
         </Text>
         <Text color={health.color}>{`${health.glyph} ${health.label}`}</Text>

@@ -101,8 +101,8 @@ describe("Claude Code session import", () => {
 
     expect(result.added).toBe(1);
     expect(result.skipped).toBe(2);
-    expect(result.reasons.invalid_message).toBe(1);
-    expect(result.reasons.invalid_json).toBe(1);
+    expect(result.reasons["invalid_message"]).toBe(1);
+    expect(result.reasons["invalid_json"]).toBe(1);
   });
 
   it("normalizes tool_use content blocks into assistant tool calls", () => {
@@ -153,7 +153,7 @@ describe("Claude Code session import", () => {
 
     expect(result.added).toBe(1);
     expect(result.skipped).toBe(1);
-    expect(result.reasons.invalid_tool_call).toBe(1);
+    expect(result.reasons["invalid_tool_call"]).toBe(1);
     expect(loadSessionMessages("bad-declared-tool")).toEqual([
       { role: "user", content: "keep me" },
     ]);
@@ -177,7 +177,7 @@ describe("Claude Code session import", () => {
 
     expect(result.added).toBe(0);
     expect(result.skipped).toBe(1);
-    expect(result.reasons.invalid_tool_call).toBe(1);
+    expect(result.reasons["invalid_tool_call"]).toBe(1);
     expect(loadSessionMessages("bad-tool-use")).toEqual([]);
   });
 

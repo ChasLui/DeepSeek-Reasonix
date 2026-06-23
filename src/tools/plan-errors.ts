@@ -4,8 +4,8 @@ import type { PlanStep } from "./plan-types.js";
 
 export class PlanProposedError extends Error {
   readonly plan: string;
-  readonly steps?: PlanStep[];
-  readonly summary?: string;
+  readonly steps?: PlanStep[] | undefined;
+  readonly summary?: string | undefined;
   constructor(plan: string, steps?: PlanStep[], summary?: string) {
     super(
       "PlanProposedError: plan submitted. STOP calling tools now — the TUI has shown the plan to the user. Wait for their next message; it will either approve (you'll then implement the plan), request a refinement (you should explore more and submit an updated plan), or cancel (drop the plan and ask what they want instead). Don't call any tools in the meantime.",
@@ -31,7 +31,7 @@ export class PlanProposedError extends Error {
 export class PlanRevisionProposedError extends Error {
   readonly reason: string;
   readonly remainingSteps: PlanStep[];
-  readonly summary?: string;
+  readonly summary?: string | undefined;
   constructor(reason: string, remainingSteps: PlanStep[], summary?: string) {
     super(
       "PlanRevisionProposedError: revision submitted. STOP calling tools now — the TUI has paused for the user to review your proposed change. Wait for their next message; it will say 'revision accepted' (proceed with the new step list), 'revision rejected' (keep the original plan and continue), or 'revision cancelled' (drop the proposal entirely). Don't call any tools in the meantime.",
@@ -46,13 +46,13 @@ export class PlanRevisionProposedError extends Error {
     error: string;
     reason: string;
     remainingSteps: PlanStep[];
-    summary?: string;
+    summary?: string | undefined;
   } {
     const payload: {
       error: string;
       reason: string;
       remainingSteps: PlanStep[];
-      summary?: string;
+      summary?: string | undefined;
     } = {
       error: `${this.name}: ${this.message}`,
       reason: this.reason,

@@ -2,7 +2,6 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { McpClient } from "../src/mcp/client.js";
-import { reconnectMcpServer } from "../src/mcp/reconnect.js";
 import { type McpClientHost, bridgeMcpTools } from "../src/mcp/registry.js";
 import { StdioTransport } from "../src/mcp/stdio.js";
 import { ToolRegistry } from "../src/tools.js";

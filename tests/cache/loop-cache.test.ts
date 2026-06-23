@@ -64,7 +64,7 @@ describe("CacheFirstLoop cache ownership", () => {
   });
 
   it("keeps prompt-cache monitors isolated across loops", async () => {
-    process.env.REASONIX_CACHE_BREAK_DIFF = "0";
+    process.env["REASONIX_CACHE_BREAK_DIFF"] = "0";
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const a = makeLoop([usageResponse(10000, 100), usageResponse(5000, 5100)]);
     const b = makeLoop([usageResponse(10000, 100)]);

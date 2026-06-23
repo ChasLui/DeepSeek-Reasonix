@@ -26,13 +26,13 @@ export interface RepairReport {
 
 export interface ToolCallRepairOptions {
   allowedToolNames: ReadonlySet<string>;
-  stormWindow?: number;
-  stormThreshold?: number;
-  maxScavenge?: number;
+  stormWindow?: number | undefined;
+  stormThreshold?: number | undefined;
+  maxScavenge?: number | undefined;
   /** Mutating calls clear the storm window so a post-edit verify-read isn't seen as a repeat. */
-  isMutating?: IsMutating;
+  isMutating?: IsMutating | undefined;
   /** Cheap state-inspection calls that should never trip repeat-loop suppression. */
-  isStormExempt?: IsStormExempt;
+  isStormExempt?: IsStormExempt | undefined;
 }
 
 export class ToolCallRepair {

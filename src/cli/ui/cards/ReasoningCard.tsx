@@ -5,7 +5,7 @@ import { t } from "../../../i18n/index.js";
 import { Card } from "../primitives/Card.js";
 import { CardHeader, type MetaItem } from "../primitives/CardHeader.js";
 import { CursorBlock } from "../primitives/CursorBlock.js";
-import { PILL_MODEL, PILL_SECTION, Pill, modelBadgeFor } from "../primitives/Pill.js";
+import { PILL_MODEL, Pill, modelBadgeFor } from "../primitives/Pill.js";
 import { Spinner } from "../primitives/Spinner.js";
 import type { ReasoningCard as ReasoningCardData } from "../state/cards.js";
 import { VerboseContext } from "../state/verbose-context.js";
@@ -74,7 +74,6 @@ function ReasoningHeader({
     : card.aborted
       ? t("cardTitles.reasoningAborted")
       : t("cardTitles.reasoning");
-  const pill = isEmpty ? PILL_SECTION.empty : PILL_SECTION.reason;
   const meta: MetaItem[] = [];
   const m = headerMeta(card);
   if (m) meta.push(m);
@@ -183,10 +182,10 @@ interface BodyLinesProps {
   card: ReasoningCardData;
   lines: string[];
   lineCells: number;
-  cursorOnLast?: boolean;
-  indexOffset?: number;
+  cursorOnLast?: boolean | undefined;
+  indexOffset?: number | undefined;
   /** Render ↳ before the first line — only when this slice is the absolute body start. */
-  anchor?: boolean;
+  anchor?: boolean | undefined;
 }
 
 function BodyLines({

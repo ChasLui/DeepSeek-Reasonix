@@ -9,7 +9,7 @@ const marks: PhaseMark[] = [];
 let dumped = false;
 
 function envFlag(): boolean {
-  const v = process.env.REASONIX_PROFILE_STARTUP;
+  const v = process.env["REASONIX_PROFILE_STARTUP"];
   return v === "1" || v === "true" || v === "yes";
 }
 

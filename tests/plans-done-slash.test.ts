@@ -8,7 +8,6 @@ function makeLoop(sessionName: string | null = "test-session"): CacheFirstLoop {
     client: new DeepSeekClient({ apiKey: "sk-test" }),
     prefix: new ImmutablePrefix({ system: "s", toolSpecs: [] }),
     tools: new ToolRegistry(),
-    maxToolIters: 1,
     stream: false,
   });
   Object.defineProperty(loop, "sessionName", { value: sessionName, writable: true });

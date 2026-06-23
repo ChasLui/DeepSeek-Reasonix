@@ -13,16 +13,16 @@ import type { DashboardContext } from "../context.js";
 import type { ApiResult } from "../router.js";
 
 interface SpecBody {
-  spec?: unknown;
+  spec?: unknown | undefined;
 }
 interface InvokeBody {
-  server?: unknown;
-  tool?: unknown;
-  args?: unknown;
+  server?: unknown | undefined;
+  tool?: unknown | undefined;
+  args?: unknown | undefined;
 }
 interface InstallBody {
-  name?: unknown;
-  maxPages?: unknown;
+  name?: unknown | undefined;
+  maxPages?: unknown | undefined;
 }
 
 function parseBody<T>(raw: string): T {

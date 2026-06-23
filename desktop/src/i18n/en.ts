@@ -651,7 +651,7 @@ export const en = {
     riskMedium: "risk · medium · {kind}",
     execute: "Execute",
     reject: "Reject",
-    alwaysAllow: "Always allow \"{prefix}\"",
+    alwaysAllow: 'Always allow "{prefix}"',
     pathAccessKind: "path access",
     read: "read",
     write: "write",

@@ -19,14 +19,16 @@ export interface McpHubProps {
   configPath: string;
   onClose: () => void;
   postInfo: (text: string) => void;
-  applyAppend?: ApplyAppend;
-  reloadMcp?: () => Promise<{
-    added: string[];
-    removed: string[];
-    failed: Array<{ spec: string; reason: string }>;
-  }>;
+  applyAppend?: ApplyAppend | undefined;
+  reloadMcp?:
+    | (() => Promise<{
+        added: string[];
+        removed: string[];
+        failed: Array<{ spec: string; reason: string }>;
+      }>)
+    | undefined;
   /** Forwarded to the marketplace tab so the web dashboard can drive install / uninstall / refine / load-more. */
-  pickerPorts?: PickerBroadcastPorts;
+  pickerPorts?: PickerBroadcastPorts | undefined;
 }
 
 export function McpHub({
@@ -38,7 +40,7 @@ export function McpHub({
   applyAppend,
   reloadMcp,
   pickerPorts,
-}: McpHubProps) {
+}: McpHubProps): React.ReactElement {
   const [tab, setTab] = useState<McpHubTab>(initialTab);
 
   // Hub-level: Tab key cycles tabs. Inner components don't bind Tab
@@ -76,8 +78,8 @@ export function McpHub({
         <McpMarketplace
           onClose={onClose}
           postInfo={postInfo}
-          reloadMcp={reloadMcp}
-          pickerPorts={pickerPorts}
+          {...(reloadMcp !== undefined ? { reloadMcp } : {})}
+          {...(pickerPorts !== undefined ? { pickerPorts } : {})}
         />
       )}
     </Box>

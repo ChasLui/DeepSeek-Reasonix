@@ -15,9 +15,9 @@ export interface CodeGraphNode {
   file: string;
   startLine: number;
   endLine: number;
-  exportKind?: "default";
-  signature?: string;
-  docstring?: string;
+  exportKind?: "default" | undefined;
+  signature?: string | undefined;
+  docstring?: string | undefined;
 }
 
 export interface CodeGraphEdge {
@@ -27,7 +27,7 @@ export interface CodeGraphEdge {
   line: number;
   col: number;
   provenance: CodeGraphEdgeProvenance;
-  candidates?: string[];
+  candidates?: string[] | undefined;
 }
 
 export interface CodeGraphFileStamp {
@@ -39,7 +39,7 @@ export interface CodeGraphImportBinding {
   importedName: string;
   localName: string;
   kind: "default" | "named" | "namespace";
-  typeOnly?: boolean;
+  typeOnly?: boolean | undefined;
 }
 
 export interface CodeGraphImport {
@@ -51,7 +51,7 @@ export interface CodeGraphImport {
   names: string[];
   bindings: CodeGraphImportBinding[];
   raw: string;
-  resolvedPath?: string;
+  resolvedPath?: string | undefined;
 }
 
 export interface CodeGraphUnresolvedRef {
@@ -61,8 +61,8 @@ export interface CodeGraphUnresolvedRef {
   file: string;
   line: number;
   col: number;
-  receiverName?: string;
-  importSource?: string;
+  receiverName?: string | undefined;
+  importSource?: string | undefined;
 }
 
 export interface CodeGraphData {
@@ -103,7 +103,7 @@ export interface SerializedCodeGraphEdges {
   edges: CodeGraphEdge[];
   imports: CodeGraphImport[];
   /** Persisted so incremental updates can re-resolve when new files arrive. */
-  unresolvedRefs?: CodeGraphUnresolvedRef[];
+  unresolvedRefs?: CodeGraphUnresolvedRef[] | undefined;
 }
 
 export interface SerializedCodeGraphFileStamps {

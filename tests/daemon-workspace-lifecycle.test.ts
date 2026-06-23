@@ -185,16 +185,16 @@ describe("DaemonHost — workspace lifecycle wiring", () => {
     await wait();
     const roots = host.workspaceLifecycle.activeRoots();
     expect(roots.length).toBe(1);
-    expect(host.workspaceLifecycle.refcountOf(roots[0])).toBe(1);
+    expect(host.workspaceLifecycle.refcountOf(roots[0]!)).toBe(1);
 
     await host.detach(server);
-    expect(host.workspaceLifecycle.refcountOf(roots[0])).toBe(0);
+    expect(host.workspaceLifecycle.refcountOf(roots[0]!)).toBe(0);
     expect(closed).toEqual(roots);
     await host.closeAll();
   });
 
   it("session/cancel keeps the session alive — refcount unchanged (B2)", async () => {
-    const { host, server, send } = makeHost();
+    const { host, send } = makeHost();
     const closed: string[] = [];
     host.workspaceLifecycle.onClosed((r) => closed.push(r));
     send({
@@ -204,7 +204,7 @@ describe("DaemonHost — workspace lifecycle wiring", () => {
       params: { cwd: "/tmp" },
     });
     await wait();
-    const root = host.workspaceLifecycle.activeRoots()[0];
+    const root = host.workspaceLifecycle.activeRoots()[0]!;
 
     send({
       jsonrpc: "2.0",

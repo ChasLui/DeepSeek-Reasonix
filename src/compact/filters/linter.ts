@@ -1,4 +1,4 @@
-/** Linter / typechecker output compactors: eslint, biome, tsc. Group diagnostics by file. */
+/** Linter / typechecker output compactors: eslint, oxlint, tsc. Group diagnostics by file. */
 
 import stripAnsi from "strip-ansi";
 import type { CompactInput, CompactorEntry } from "../registry.js";
@@ -63,14 +63,14 @@ function eslintFilter(input: CompactInput): string | null {
   return formatGroups("eslint", groups);
 }
 
-/** biome diagnostic header: "src/foo.ts:12:5 lint/suspicious/x  ━━" */
-function biomeFilter(input: CompactInput): string | null {
+/** oxlint unix: "src/foo.ts:12:5: rule: message" */
+function oxlintFilter(input: CompactInput): string | null {
   const text = stripAnsi(input.output);
   const lines = text.split(/\r?\n/);
   const groups = new Map<string, FileGroup>();
   let detected = false;
   for (const l of lines) {
-    const m = l.match(/^([^\s:][^\s]*?):\d+:\d+\s+([a-z][a-zA-Z\/-]+)\s/);
+    const m = l.match(/^([^\s:][^\s]*?):\d+:\d+:\s+([@\w/-]+):/);
     if (!m) continue;
     detected = true;
     const file = m[1]!;
@@ -80,7 +80,7 @@ function biomeFilter(input: CompactInput): string | null {
     groups.set(file, g);
   }
   if (!detected) return null;
-  return formatGroups("biome", groups);
+  return formatGroups("oxlint", groups);
 }
 
 /** tsc errors: "src/foo.ts(12,5): error TS2304: Cannot find name 'X'." */
@@ -120,12 +120,12 @@ export const eslintCompactor: CompactorEntry = {
   filter: eslintFilter,
 };
 
-export const biomeCompactor: CompactorEntry = {
-  id: "biome",
+export const oxlintCompactor: CompactorEntry = {
+  id: "oxlint",
   match: (argv) =>
-    argv.some((t) => t === "biome" || t.endsWith("/biome")) &&
-    argv.some((t) => t === "check" || t === "lint" || t === "ci"),
-  filter: biomeFilter,
+    argv.some((t) => t === "oxlint" || t.endsWith("/oxlint")) &&
+    !argv.some((t) => t.startsWith("--format=json") || t === "json"),
+  filter: oxlintFilter,
 };
 
 export const tscCompactor: CompactorEntry = {
@@ -136,6 +136,6 @@ export const tscCompactor: CompactorEntry = {
 
 export const linterCompactors: readonly CompactorEntry[] = [
   eslintCompactor,
-  biomeCompactor,
+  oxlintCompactor,
   tscCompactor,
 ];

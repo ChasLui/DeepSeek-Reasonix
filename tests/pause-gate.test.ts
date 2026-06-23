@@ -55,7 +55,7 @@ describe("PauseGate", () => {
 
     for (const { opts } of entries) {
       const p = gate.ask(opts as any);
-      const req = listener.mock.lastCall?.[0] as { kind: string };
+      const req = listener.mock.lastCall?.[0] as { id: number; kind: string };
       expect(req.kind).toBe(opts.kind);
       gate.resolve(req.id, { type: "run_once" } as ConfirmationChoice);
       await expect(p).resolves.toBeDefined();

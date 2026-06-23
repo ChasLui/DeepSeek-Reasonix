@@ -13,7 +13,7 @@ import {
 import { serializePromptPayload, toonPrefixEnabled } from "./toon/prompt-payload.js";
 
 /** Caps match tool-result dispatch truncation (0.5.2). */
-export const DEFAULT_AT_MENTION_MAX_BYTES = 64 * 1024;
+export const DEFAULT_AT_MENTION_MAX_BYTES: number = 64 * 1024;
 
 /** Cap on entries returned for a `@<dir>` listing. ~200 paths × ~50 chars ≈ 10 KB — fits inside DEFAULT_AT_MENTION_MAX_BYTES with room for the rest of the prompt. */
 export const DEFAULT_AT_DIR_MAX_ENTRIES = 200;
@@ -38,11 +38,11 @@ export const DEFAULT_PICKER_IGNORE_DIRS: readonly string[] = [
 
 export interface ListFilesOptions {
   /** Cap the walk once we've collected this many entries. Default 2000. */
-  maxResults?: number;
+  maxResults?: number | undefined;
   /** Directory names to skip entirely. Defaults to {@link DEFAULT_PICKER_IGNORE_DIRS}. */
-  ignoreDirs?: readonly string[];
+  ignoreDirs?: readonly string[] | undefined;
   /** Walk nested .gitignores (root + every subdir). Default true. */
-  respectGitignore?: boolean;
+  respectGitignore?: boolean | undefined;
 }
 
 /** Sync on purpose — fits the TUI's single-turn-per-tick model. Skips dot-DIRS but keeps dotfiles. */
@@ -135,15 +135,15 @@ export async function listFilesWithStatsAsync(
 }
 
 export interface StreamWalkOptions {
-  ignoreDirs?: readonly string[];
-  respectGitignore?: boolean;
-  signal?: AbortSignal;
+  ignoreDirs?: readonly string[] | undefined;
+  respectGitignore?: boolean | undefined;
+  signal?: AbortSignal | undefined;
   /** Called per file entry. Return false to halt the walk. */
   onEntry: (entry: FileWithStats) => boolean | undefined;
   /** Called periodically with the running file-count. */
-  onProgress?: (scanned: number) => void;
+  onProgress?: ((scanned: number) => void) | undefined;
   /** Default 100ms — minimum gap between onProgress calls. */
-  progressIntervalMs?: number;
+  progressIntervalMs?: number | undefined;
 }
 
 /** Cancelable, streaming walker. Drives `listFilesWithStatsAsync` and the picker's search-mode walk. */
@@ -256,8 +256,8 @@ export interface DirEntry {
 }
 
 export interface ListDirectoryOptions {
-  ignoreDirs?: readonly string[];
-  respectGitignore?: boolean;
+  ignoreDirs?: readonly string[] | undefined;
+  respectGitignore?: boolean | undefined;
 }
 
 /** One-level browse for the @-picker. Folders first then files, alpha within each group. Resolves outside-root to []. */
@@ -360,7 +360,7 @@ export function parseAtQuery(query: string): ParsedAtQuery {
 }
 
 /** Trailing-token only, anchored at end-of-input — distinct from `AT_MENTION_PATTERN` which scans all. `\p{L}\p{N}` for CJK and other non-ASCII filenames. */
-export const AT_PICKER_PREFIX = /(?:^|\s)@([\p{L}\p{N}_./\\-]*)$/u;
+export const AT_PICKER_PREFIX: RegExp = /(?:^|\s)@([\p{L}\p{N}_./\\-]*)$/u;
 
 export function detectAtPicker(input: string): { query: string; atOffset: number } | null {
   const m = AT_PICKER_PREFIX.exec(input);
@@ -378,14 +378,14 @@ export type PickerCandidate = string | FileWithStats;
 
 export interface RankPickerOptions {
   /** Upper bound on returned entries. Default 40. */
-  limit?: number;
-  recentlyUsed?: readonly string[];
+  limit?: number | undefined;
+  recentlyUsed?: readonly string[] | undefined;
 }
 
 export function rankPickerCandidates(
   files: readonly PickerCandidate[],
   query: string,
-  limitOrOpts?: number | RankPickerOptions,
+  limitOrOpts?: number | RankPickerOptions | undefined,
 ): string[] {
   const opts: RankPickerOptions =
     typeof limitOrOpts === "number" ? { limit: limitOrOpts } : (limitOrOpts ?? {});
@@ -477,7 +477,7 @@ function fuzzySubseqScore(needle: string, target: string): number | null {
 }
 
 /** Word-boundary anchor rejects `@` embedded in emails / social handles; trailing `.` stripped before lookup. */
-export const AT_MENTION_PATTERN = /(?<=^|\s)@([\p{L}\p{N}_./\\-]+)/gu;
+export const AT_MENTION_PATTERN: RegExp = /(?<=^|\s)@([\p{L}\p{N}_./\\-]+)/gu;
 
 export interface AtMentionExpansion {
   /** The raw `@path` token as it appeared in the text. */
@@ -487,34 +487,32 @@ export interface AtMentionExpansion {
   /** True if the content was inlined. False = skipped (reason in `skip`). */
   ok: boolean;
   /** Bytes read (only for ok=true and isDirectory=false). */
-  bytes?: number;
+  bytes?: number | undefined;
   /** True when the mention resolved to a directory (ok=true). Block uses `<directory>` instead of `<file>`. */
-  isDirectory?: boolean;
+  isDirectory?: boolean | undefined;
   /** Number of files listed when isDirectory=true. */
-  entries?: number;
+  entries?: number | undefined;
   /** True iff the directory listing was clipped at maxDirEntries. */
-  truncated?: boolean;
+  truncated?: boolean | undefined;
   /** Why the mention was skipped. Set when ok=false. */
-  skip?: "missing" | "not-file" | "too-large" | "escape" | "read-error";
+  skip?: "missing" | "not-file" | "too-large" | "escape" | "read-error" | undefined;
 }
 
 export interface AtMentionOptions {
   /** Max file size in bytes before a mention is skipped. */
-  maxBytes?: number;
+  maxBytes?: number | undefined;
   /** Cap on entries returned for a `@<dir>` listing. Default {@link DEFAULT_AT_DIR_MAX_ENTRIES}. */
-  maxDirEntries?: number;
-  toonMode?: ToonMode;
+  maxDirEntries?: number | undefined;
+  toonMode?: ToonMode | undefined;
   fs?: {
     exists: (path: string) => boolean;
     isFile: (path: string) => boolean;
     /** Optional — when omitted, directories are skipped as `not-file`. */
-    isDir?: (path: string) => boolean;
+    isDir?: ((path: string) => boolean | undefined) | undefined;
     /** Optional — receives the directory's absolute path and the project root, returns relative paths and a truncated flag. */
-    listDir?: (
-      dirAbs: string,
-      root: string,
-      max: number,
-    ) => { files: string[]; truncated: boolean };
+    listDir?:
+      | ((dirAbs: string, root: string, max: number) => { files: string[]; truncated: boolean })
+      | undefined;
     size: (path: string) => number;
     read: (path: string) => string;
   };

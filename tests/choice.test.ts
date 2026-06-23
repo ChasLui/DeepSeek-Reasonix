@@ -162,7 +162,7 @@ describe("registerChoiceTool + ask_choice", () => {
         ],
       }),
     );
-    expect(parseToolResult(out).error).toMatch(/question is required/);
+    expect(parseToolResult(out)["error"]).toMatch(/question is required/);
   });
 
   it("rejects when fewer than 2 well-formed options remain", async () => {
@@ -175,7 +175,7 @@ describe("registerChoiceTool + ask_choice", () => {
         options: [{ id: "A", title: "only one" }],
       }),
     );
-    expect(parseToolResult(out).error).toMatch(/at least 2 well-formed options/);
+    expect(parseToolResult(out)["error"]).toMatch(/at least 2 well-formed options/);
   });
 
   it("rejects runaway option lists (>6 entries)", async () => {
@@ -186,7 +186,7 @@ describe("registerChoiceTool + ask_choice", () => {
       title: `option ${i}`,
     }));
     const out = await reg.dispatch("ask_choice", JSON.stringify({ question: "too many", options }));
-    expect(parseToolResult(out).error).toMatch(/too many options/);
+    expect(parseToolResult(out)["error"]).toMatch(/too many options/);
   });
 
   it("keeps the tool passable in plan mode (branching questions can fire mid-plan)", async () => {

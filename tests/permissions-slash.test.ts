@@ -12,43 +12,40 @@ function makeLoop(): CacheFirstLoop {
     client: new DeepSeekClient({ apiKey: "sk-test" }),
     prefix: new ImmutablePrefix({ system: "s", toolSpecs: [] }),
     tools: new ToolRegistry(),
-    maxToolIters: 1,
     stream: false,
   });
 }
 
 describe("/permissions slash handler", () => {
   let dir: string;
-  let cfgPath: string;
   let projectRoot: string;
-  const originalHome = process.env.HOME;
-  const originalUserProfile = process.env.USERPROFILE;
+  const originalHome = process.env["HOME"];
+  const originalUserProfile = process.env["USERPROFILE"];
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "reasonix-perms-slash-"));
-    cfgPath = join(dir, "config.json");
     projectRoot = join(dir, "project");
     // Redirect ~/.reasonix → temp dir so the handler's calls (which use
     // defaultConfigPath) land in `cfgPath`. config.test.ts skips this by
     // passing `path` explicitly to every helper, but the slash handler
     // hardcodes the default — so we have to redirect HOME instead.
-    process.env.HOME = dir;
-    process.env.USERPROFILE = dir;
+    process.env["HOME"] = dir;
+    process.env["USERPROFILE"] = dir;
   });
 
   afterEach(() => {
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
     if (originalHome === undefined) {
       // biome-ignore lint/performance/noDelete: the string "undefined" leaks into process.env otherwise
-      delete process.env.HOME;
+      delete process.env["HOME"];
     } else {
-      process.env.HOME = originalHome;
+      process.env["HOME"] = originalHome;
     }
     if (originalUserProfile === undefined) {
       // biome-ignore lint/performance/noDelete: same reason
-      delete process.env.USERPROFILE;
+      delete process.env["USERPROFILE"];
     } else {
-      process.env.USERPROFILE = originalUserProfile;
+      process.env["USERPROFILE"] = originalUserProfile;
     }
   });
 

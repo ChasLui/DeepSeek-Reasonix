@@ -43,7 +43,7 @@ describe("teeRawOutput", () => {
   });
 
   it("REASONIX_TEE=0 disables the layer entirely", async () => {
-    process.env.REASONIX_TEE = "0";
+    process.env["REASONIX_TEE"] = "0";
     resetTeeCache();
     // No overrideDir → resolveTeeDir checks env first.
     const p = await teeRawOutput("ls", "stuff");

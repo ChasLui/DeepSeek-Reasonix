@@ -10,7 +10,7 @@ import type { AgentEvent } from "../src/cli/ui/state/events.js";
 import { parseEvent } from "../src/cli/ui/state/events.js";
 import { reduce } from "../src/cli/ui/state/reducer.js";
 import { type AgentState, type SessionInfo, initialState } from "../src/cli/ui/state/state.js";
-import { USD_TO_CNY, balanceColor, formatBalance, formatCost } from "../src/cli/ui/theme/tokens.js";
+import { balanceColor, formatBalance, formatCost } from "../src/cli/ui/theme/tokens.js";
 
 const session: SessionInfo = {
   id: "test-session",

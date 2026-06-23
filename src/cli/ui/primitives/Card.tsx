@@ -1,11 +1,11 @@
 import { Box } from "ink";
 import React from "react";
 
-export const ActiveCardContext = React.createContext(true);
+export const ActiveCardContext: React.Context<boolean> = React.createContext(true);
 
 export interface CardProps {
   /** Kept for API compatibility with CardHeader's tone arg; no longer drives a left stripe. */
-  tone?: string;
+  tone?: string | undefined;
   children: React.ReactNode;
 }
 

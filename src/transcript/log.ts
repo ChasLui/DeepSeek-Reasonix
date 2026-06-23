@@ -14,28 +14,28 @@ export interface TranscriptRecord {
   /** For assistant events, the final (or delta) text; for tool events, the tool result. */
   content: string;
   /** Tool name (role === "tool"). */
-  tool?: string;
+  tool?: string | undefined;
   /** JSON-string args the model sent for a tool call (role === "tool"). Persisted so diff can explain *why* two runs made different calls. */
-  args?: string;
+  args?: string | undefined;
   /** DeepSeek token-usage snapshot (role === "assistant_final"). */
-  usage?: RawUsage;
+  usage?: RawUsage | undefined;
   /** USD cost of this turn (role === "assistant_final"). */
-  cost?: number;
+  cost?: number | undefined;
   /** Model id that produced this turn. */
-  model?: string;
+  model?: string | undefined;
   /** Lets diff attribute cache-hit delta to log stability vs prompt change. */
-  prefixHash?: string;
+  prefixHash?: string | undefined;
   /** Optional error message (role === "error"). */
-  error?: string;
+  error?: string | undefined;
 }
 
 export interface TranscriptMeta {
   version: 1;
   source: string; // e.g. "reasonix chat", "bench/baseline", "bench/reasonix"
-  model?: string;
-  task?: string;
-  mode?: string;
-  repeat?: number;
+  model?: string | undefined;
+  task?: string | undefined;
+  mode?: string | undefined;
+  repeat?: number | undefined;
   startedAt: string;
 }
 
@@ -130,15 +130,15 @@ export function parseTranscript(raw: string): ReadTranscriptResult {
     }
     if (!obj || typeof obj !== "object") continue;
     const rec = obj as Record<string, unknown>;
-    if (rec.role === "_meta" && rec.meta && typeof rec.meta === "object") {
-      out.meta = rec.meta as TranscriptMeta;
+    if (rec["role"] === "_meta" && rec["meta"] && typeof rec["meta"] === "object") {
+      out.meta = rec["meta"] as TranscriptMeta;
       continue;
     }
     if (
-      typeof rec.ts === "string" &&
-      typeof rec.turn === "number" &&
-      typeof rec.role === "string" &&
-      typeof rec.content === "string"
+      typeof rec["ts"] === "string" &&
+      typeof rec["turn"] === "number" &&
+      typeof rec["role"] === "string" &&
+      typeof rec["content"] === "string"
     ) {
       out.records.push(rec as unknown as TranscriptRecord);
     }

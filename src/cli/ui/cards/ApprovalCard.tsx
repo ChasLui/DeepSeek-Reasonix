@@ -2,7 +2,7 @@ import { Box, Text, useStdout } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
 import { t } from "../../../i18n/index.js";
-import { CARD, type CardTone, FG, SURFACE } from "../theme/tokens.js";
+import { CARD, type CardTone, FG } from "../theme/tokens.js";
 
 const SEPARATOR_PAD = 6;
 const MIN_SEPARATOR = 20;
@@ -13,13 +13,13 @@ export interface ApprovalCardProps {
     | "ok"
     | "accent"
     | "info";
-  glyph?: string;
+  glyph?: string | undefined;
   title: string;
-  metaRight?: string;
+  metaRight?: string | undefined;
   /** Override metaRight color — defaults to FG.faint. Use the tone color to match design's status indicator (e.g. "awaiting" in accent for plan-confirm). */
-  metaRightColor?: string;
-  children?: React.ReactNode;
-  footerHint?: string;
+  metaRightColor?: string | undefined;
+  children?: React.ReactNode | undefined;
+  footerHint?: string | undefined;
 }
 
 const TONE_PALETTE = {

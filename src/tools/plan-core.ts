@@ -1,6 +1,5 @@
 import { pauseGate } from "../core/pause-gate.js";
 import type { ToolRegistry } from "../tools.js";
-import { PlanProposedError, PlanRevisionProposedError } from "./plan-errors.js";
 import type { PlanStep, PlanStepRisk, StepCompletion, StepEvidence } from "./plan-types.js";
 
 const SUBMIT_PLAN_DESCRIPTION =
@@ -46,13 +45,12 @@ const STEP_ITEM_SCHEMA = {
 // Registration options
 
 export interface PlanToolOptions {
-  onPlanSubmitted?: (plan: string, steps?: PlanStep[]) => void;
-  onStepCompleted?: (update: StepCompletion) => void;
-  onPlanRevisionProposed?: (reason: string, remainingSteps: PlanStep[], summary?: string) => void;
-  requireStepEvidence?: (args: {
-    stepId: string;
-    title?: string;
-  }) => string | null | undefined;
+  onPlanSubmitted?: ((plan: string, steps?: PlanStep[]) => void) | undefined;
+  onStepCompleted?: ((update: StepCompletion) => void) | undefined;
+  onPlanRevisionProposed?:
+    | ((reason: string, remainingSteps: PlanStep[], summary?: string) => void)
+    | undefined;
+  requireStepEvidence?: (args: { stepId: string; title?: string }) => string | null | undefined;
 }
 
 // Arg sanitizers — defensive cleanup shared between submit_plan and revise_plan
@@ -68,18 +66,18 @@ function sanitizeSteps(raw: unknown): PlanStep[] | undefined {
   for (const entry of raw) {
     if (!entry || typeof entry !== "object") continue;
     const e = entry as Record<string, unknown>;
-    const id = typeof e.id === "string" ? e.id.trim() : "";
-    const title = typeof e.title === "string" ? e.title.trim() : "";
-    const action = typeof e.action === "string" ? e.action.trim() : "";
+    const id = typeof e["id"] === "string" ? e["id"].trim() : "";
+    const title = typeof e["title"] === "string" ? e["title"].trim() : "";
+    const action = typeof e["action"] === "string" ? e["action"].trim() : "";
     if (!id || !title || !action) continue;
     const step: PlanStep = { id, title, action };
-    const risk = sanitizeRisk(e.risk);
+    const risk = sanitizeRisk(e["risk"]);
     if (risk) step.risk = risk;
-    const targets = sanitizeStringList(e.targets);
+    const targets = sanitizeStringList(e["targets"]);
     if (targets) step.targets = targets;
-    const acceptance = typeof e.acceptance === "string" ? e.acceptance.trim() : "";
+    const acceptance = typeof e["acceptance"] === "string" ? e["acceptance"].trim() : "";
     if (acceptance) step.acceptance = acceptance;
-    const verification = sanitizeStringList(e.verification);
+    const verification = sanitizeStringList(e["verification"]);
     if (verification) step.verification = verification;
     steps.push(step);
   }
@@ -100,16 +98,16 @@ function sanitizeEvidence(raw: unknown): StepEvidence[] | undefined {
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
     const e = item as Record<string, unknown>;
-    const kind = e.kind;
+    const kind = e["kind"];
     if (kind !== "verification" && kind !== "diff" && kind !== "checkpoint" && kind !== "manual") {
       continue;
     }
-    const summary = typeof e.summary === "string" ? e.summary.trim() : "";
+    const summary = typeof e["summary"] === "string" ? e["summary"].trim() : "";
     if (!summary) continue;
     const evidence: StepEvidence = { kind, summary };
-    const command = typeof e.command === "string" ? e.command.trim() : "";
+    const command = typeof e["command"] === "string" ? e["command"].trim() : "";
     if (command) evidence.command = command;
-    const paths = sanitizeStringList(e.paths);
+    const paths = sanitizeStringList(e["paths"]);
     if (paths) evidence.paths = paths;
     out.push(evidence);
   }
@@ -174,7 +172,11 @@ function registerSubmitPlan(registry: ToolRegistry, opts: PlanToolOptions): void
       // Block until the user approves, refines, or cancels
       const verdict = await (ctx?.confirmationGate ?? pauseGate).ask({
         kind: "plan_proposed",
-        payload: { plan, steps, summary },
+        payload: {
+          plan,
+          ...(steps !== undefined ? { steps } : {}),
+          ...(summary !== undefined ? { summary } : {}),
+        },
       });
       const fb = verdict.feedback?.trim();
       if (verdict.type === "approve") {
@@ -236,10 +238,10 @@ function registerMarkStepComplete(registry: ToolRegistry, opts: PlanToolOptions)
     fn: async (
       args: {
         stepId: string;
-        title?: string;
+        title?: string | undefined;
         result: string;
-        notes?: string;
-        evidence?: unknown;
+        notes?: string | undefined;
+        evidence?: unknown | undefined;
       },
       ctx,
     ) => {
@@ -256,7 +258,10 @@ function registerMarkStepComplete(registry: ToolRegistry, opts: PlanToolOptions)
       const title = typeof args?.title === "string" ? args.title.trim() || undefined : undefined;
       const notes = typeof args?.notes === "string" ? args.notes.trim() || undefined : undefined;
       const evidence = sanitizeEvidence(args?.evidence);
-      const evidenceReason = opts.requireStepEvidence?.({ stepId, title });
+      const evidenceReason = opts.requireStepEvidence?.({
+        stepId,
+        ...(title !== undefined ? { title } : {}),
+      });
       if (evidenceReason && (!evidence || evidence.length === 0)) {
         throw new Error(`mark_step_complete: evidence required — ${evidenceReason}`);
       }
@@ -324,7 +329,11 @@ function registerRevisePlan(registry: ToolRegistry, opts: PlanToolOptions): void
       // Block until the user accepts, rejects, or cancels the revision
       const verdict = await (ctx?.confirmationGate ?? pauseGate).ask({
         kind: "plan_revision",
-        payload: { reason, remainingSteps, summary },
+        payload: {
+          reason,
+          remainingSteps,
+          ...(summary !== undefined ? { summary } : {}),
+        },
       });
       if (verdict.type === "accepted") return "revision accepted";
       if (verdict.type === "rejected") throw new Error("revision rejected");

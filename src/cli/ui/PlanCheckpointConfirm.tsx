@@ -13,13 +13,13 @@ export type CheckpointChoice = "continue" | "revise" | "stop";
 
 export interface PlanCheckpointConfirmProps {
   stepId: string;
-  title?: string;
+  title?: string | undefined;
   completed: number;
   total: number;
   /** Full step list from the approved plan, when available. */
-  steps?: PlanStep[];
+  steps?: PlanStep[] | undefined;
   /** Set of stepIds the model has marked complete so far. */
-  completedStepIds?: Set<string>;
+  completedStepIds?: Set<string> | undefined;
   onChoose: (choice: CheckpointChoice) => void;
 }
 
@@ -31,7 +31,7 @@ function PlanCheckpointConfirmInner({
   steps,
   completedStepIds,
   onChoose,
-}: PlanCheckpointConfirmProps) {
+}: PlanCheckpointConfirmProps): React.ReactElement {
   const stepRows = steps?.length ?? 0;
   useReserveRows("modal", { min: 10, max: Math.max(14, stepRows + 12) });
 
@@ -73,7 +73,8 @@ function PlanCheckpointConfirmInner({
   );
 }
 
-export const PlanCheckpointConfirm = React.memo(PlanCheckpointConfirmInner);
+export const PlanCheckpointConfirm: React.MemoExoticComponent<typeof PlanCheckpointConfirmInner> =
+  React.memo(PlanCheckpointConfirmInner);
 
 /** Current step renders as "done" — flush order isn't guaranteed at picker time. */
 function buildStatusMap(

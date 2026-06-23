@@ -8,8 +8,8 @@ import { daemonSocketPath } from "../../storage/path.js";
 import { RemoteApp } from "../ui/RemoteApp.js";
 
 export interface CodeRemoteOptions {
-  cwd?: string;
-  socketPath?: string;
+  cwd?: string | undefined;
+  socketPath?: string | undefined;
 }
 
 export async function codeRemoteCommand(opts: CodeRemoteOptions): Promise<void> {

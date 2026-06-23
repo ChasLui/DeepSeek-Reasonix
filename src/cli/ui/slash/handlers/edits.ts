@@ -164,7 +164,7 @@ const checkpoint: SlashHandler = (args, _loop, ctx) => {
   if (!name) {
     return { info: t("handlers.edits.checkpointSaveUsage") };
   }
-  const paths = ctx.touchedFiles();
+  const paths = ctx.touchedFiles() ?? [];
   const meta = createCheckpoint({
     rootDir: ctx.codeRoot,
     name,
